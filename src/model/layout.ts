@@ -136,6 +136,7 @@ export type LayoutDoc = z.infer<typeof LayoutDoc>;
 
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
 export const STYLE_WHITELIST = [
+  "align-content",
   "align-items",
   "align-self",
   "aspect-ratio",

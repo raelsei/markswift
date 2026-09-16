@@ -74,3 +74,12 @@ test("a height cap clipping the first line keeps its top rather than its center"
     if (mode === "fidelity") expect(code).toContain("height: 10.0, alignment: .topLeading");
   }
 });
+
+test("a measured fallback keeps its captured height in app mode instead of accepting extra space", () => {
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  screen.root.height = { kind: "fixed", px: 100 };
+  screen.root.padding = [0, 0, 0, 0];
+  screen.root.measured = { width: 200, height: 100, frames: [{ x: 0, y: 0, w: 200, h: 30 }] };
+  expect(emitSwift(screen, "ConstraintView", { mode: "app" }).view).toContain(".frame(height: 100.0, alignment: .topLeading)");
+});

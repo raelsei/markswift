@@ -5,13 +5,15 @@ import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
-  // the screen width is "fill" (the device decides), and a fixed height on a text-only container
-  // is a floor (`minHeight`) so native text metrics can grow it without clipping.
+  // the screen width is "fill" (the device decides), and a fixed height on an ordinary
+  // text-only stack is a floor (`minHeight`) so native text metrics can grow it without clipping.
+  // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
   const w = n.width.kind === "fixed" ? n.width.px : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
-  const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack" && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
+  const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack"
+    && !n.measured && !n.wrap && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && textFloor === undefined ? `height: ${num(h)}` : undefined;
   const fillW = n.width.kind === "fill" || screenWide;
@@ -44,6 +46,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
 function fillAlignment(n: SemNode, mode: EmitMode): string {
   if (n.kind === "text") return textBoxAlignment(n, clipsFirstLine(n));
   if (n.kind === "stack") {
+    if (n.wrap) return ".topLeading";
     // Horizontal: cross alignment for columns, distribution for rows. Vertical: distribution
     // for columns; rows follow their cross alignment in app mode — in fidelity always .top,
     // because their children carry measured top offsets (see `containerExpr`).

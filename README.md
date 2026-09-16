@@ -162,7 +162,19 @@ Equal flex allocations can use native fill sizing. Unequal growth, bases or meas
 and growth factors totaling less than one, retain captured dimensions with approximation
 diagnostics. Percentage height constraints and unresolved intrinsic/complex limits also retain
 captured bounds with diagnostics. These limits are measured pixels, not reconstructed responsive
-CSS constraints. Unequal grid tracks, wrapping and tables remain layout work.
+CSS constraints. Intrinsic sizing and tables remain layout work.
+
+Regular full-cell grids use native `Grid` when captured geometry matches the resolved tracks;
+unequal tracks retain measured widths. Holes, spans, empty tracks, aligned intrinsic items,
+overlap and RTL use captured child positions, preserving padding, borders and paint order.
+These grid paths report that responsive track definitions are not reconstructed.
+
+Row wrapping now uses a native layout that chooses rows again at the component's available
+width. It supports captured fixed-size items with growth and shrink disabled, pixel gaps,
+and start/center/end alignment. It does not reevaluate source CSS or media queries. Reverse
+and column wrapping, intrinsic sizes, grow/shrink allocation, margins, baseline alignment,
+CSS order and unsupported cross-row distribution retain captured positions with an explicit
+reflow limitation. Chrome regression tests cover these cases at three widths in both themes.
 
 Development proceeds by feature family, with reusable fixtures and regression checks:
 

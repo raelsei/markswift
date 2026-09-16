@@ -1,9 +1,8 @@
 /** Flow, float, stack and grid layout inference. */
-import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis, type GridNode } from "../model/semantic.ts";
+import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis } from "../model/semantic.ts";
 import { px, round2 } from "../css/index.ts";
-import { type LayoutNode } from "../model/layout.ts";
 import { type AnalyzedChild } from "./context.ts";
-import { floating, lineTops, renders, hangsLeading, fillsWidthInside, unionRect } from "./geometry.ts";
+import { floating, lineTops, renders, hangsLeading, fillsWidthInside } from "./geometry.ts";
 import { finish } from "./node-base.ts";
 
 /**
@@ -178,38 +177,4 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
   }
   for (const l of lines) l.sort((a, b) => a.sem.frame.x - b.sem.frame.x);
   return lines;
-}
-
-/**
- * Grid from the snapshot: columns are the distinct cell x positions, spacing the measured
- * gaps (falling back to the computed `gap`). Cells get their measured width so the Grid lays
- * tracks out as the browser did; equal tracks that fill the row are `fr`-like and fill instead.
- */
-export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[], declared: Record<string, string>): GridNode {
-  const items = all.filter((i) => renders(i.node));
-  const lines = linesOf(items);
-  const xs: number[] = [];
-  for (const it of items) if (!xs.some((x) => Math.abs(x - it.sem.frame.x) <= 0.5)) xs.push(it.sem.frame.x);
-  const columns = Math.max(1, xs.length);
-  const hGaps: number[] = [];
-  const vGaps: number[] = [];
-  for (const line of lines) for (let i = 1; i < line.length; i++) hGaps.push(line[i]!.sem.frame.x - (line[i - 1]!.sem.frame.x + line[i - 1]!.sem.frame.w));
-  for (let i = 1; i < lines.length; i++) {
-    const a = lines[i - 1]!.map((it) => it.sem.frame).reduce(unionRect);
-    vGaps.push(lines[i]![0]!.sem.frame.y - (a.y + a.h));
-  }
-  const hSpacing = round2(hGaps.length ? Math.max(0, Math.min(...hGaps)) : px(n.styles["column-gap"]));
-  const vSpacing = round2(vGaps.length ? Math.max(0, Math.min(...vGaps)) : px(n.styles["row-gap"]));
-  const contentW = n.bounds.w - base.padding[1] - base.padding[3];
-  const widths = items.map((it) => it.sem.frame.w);
-  const equal = widths.every((w) => Math.abs(w - widths[0]!) <= 0.5);
-  const fills = equal && Math.abs(columns * widths[0]! + (columns - 1) * hSpacing - contentW) <= 1;
-  const children = lines.flat().map((it) => {
-    if (it.sem.width.kind !== "fill") it.sem.width = fills ? { kind: "fill" } : { kind: "fixed", px: round2(it.sem.frame.w) };
-    return it.sem;
-  });
-  const tpl = declared["grid-template-columns"] ?? "";
-  if (/auto-fit|auto-fill/.test(tpl)) base.notes.push("approximated: grid auto-fit → fixed column count from the snapshot");
-  else base.notes.push("approximated: grid mapped to fixed-column Grid");
-  return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
 }

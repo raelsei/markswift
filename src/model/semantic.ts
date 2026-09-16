@@ -11,6 +11,13 @@ export type Confidence = "mapped" | "approximated" | "unmapped";
 
 export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
 
+/** Captured content extent and child border boxes for layouts whose native rules differ. */
+export interface MeasuredLayout {
+  width: number;
+  height: number;
+  frames: Rect[];
+}
+
 export type Axis = "v" | "h";
 
 /** Cross-axis alignment of children inside a stack. */
@@ -251,6 +258,10 @@ export interface StackNode extends SemBase {
   /** Leading offset before the first child that padding does not explain. */
   leadInset: number;
   scroll?: Axis;
+  /** Fixed-size row items that reflow natively when available width changes. */
+  wrap?: { columnGap: number; rowGap: number };
+  /** Captured positions for wrapping combinations without a native layout mapping. */
+  measured?: MeasuredLayout;
   children: SemNode[];
 }
 
@@ -259,6 +270,7 @@ export interface GridNode extends SemBase {
   columns: number;
   hSpacing: number;
   vSpacing: number;
+  measured?: MeasuredLayout;
   children: SemNode[];
 }
 

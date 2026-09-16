@@ -2,9 +2,13 @@ import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { indent, num } from "./format.ts";
 import { modifiers } from "./modifiers.ts";
+import { measuredLayoutExpr } from "./measured-layout.ts";
+import { wrappingExpr } from "./wrapping.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
-  if (n.kind === "grid") {
+  if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
+  else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
+  else if (n.kind === "grid") {
     out.push(`Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`);
     for (let i = 0; i < n.children.length; i += n.columns) {
       out.push("    GridRow {");

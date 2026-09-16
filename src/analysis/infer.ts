@@ -9,7 +9,9 @@ import { type InferOptions, type InferenceContext, type SourceTextRun, type Anal
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
 import { isInlineText, collectRuns, groupRuns } from "./text-runs.ts";
-import { buildGrid, linesOf, stackOf } from "./flow-layout.ts";
+import { linesOf, stackOf } from "./flow-layout.ts";
+import { buildGrid } from "./grid.ts";
+import { buildWrapping } from "./wrapping.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading } from "./geometry.ts";
@@ -120,23 +122,27 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const base = makeBase(n, ctx, declared);
   const notes = base.notes;
 
-  if (display === "grid" || display === "inline-grid") return finish(buildGrid(n, base, items, declared));
+  if (display === "grid" || display === "inline-grid") {
+    const grid = buildGrid(n, base, items);
+    grid.overlays = buildOverlays(n, abs, flow[0], ctx);
+    return finish(grid);
+  }
 
   const align = crossAlign(n, axis);
   const distribution = distributionOf(n.styles["justify-content"], display);
-  // Measured lines: a wrapping flex row puts its children on several lines; a block container
-  // does the same with floats and inline-blocks. Neither has a native stack, so each line becomes
-  // a horizontal stack inside a vertical one.
-  const wraps = axis === "h" && /^wrap/.test(n.styles["flex-wrap"] ?? "");
-  const lines = axis === "h" && !wraps ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
+  // Ordinary float/inline-block lines become measured rows. Flex wrapping has its own native
+  // reflow path and a captured-position fallback, including column and reverse wrapping.
+  const wraps = /flex/.test(display) && /^(wrap|wrap-reverse)$/.test(n.styles["flex-wrap"] ?? "");
+  const lines = axis === "h" ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
   let stack: StackNode;
   const multi = lines.some((l) => l.length > 1);
-  if (multi && lines.length === 1 && axis === "v") {
+  if (wraps) {
+    stack = buildWrapping(n, base, items, axis, align, distribution);
+  } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
     if (lines[0]!.some((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""))) notes.push("approximated: float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0]!, "start", "start");
   } else if (multi && lines.length > 1) {
-    if (wraps) notes.push("approximated: flex-wrap → fixed rows from the snapshot");
     const floats = items.filter((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""));
     if (floats.length) notes.push("approximated: float → side-by-side row; text does not wrap around it");
     const rows: AnalyzedChild[] = lines.map((line, i) => {
@@ -153,7 +159,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
         notes: [],
         overlays: [],
       };
-      const row = finish(stackOf(rowBase, "h", line, wraps ? align : "start", wraps ? distribution : "start"));
+      const row = finish(stackOf(rowBase, "h", line, "start", "start"));
       return { node: n, sem: row };
     });
     stack = stackOf(base, "v", rows, "stretch", "start");
