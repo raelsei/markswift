@@ -91,6 +91,7 @@ logic are not translated into Swift application logic.
 | --- | --- |
 | `src/api/` | Public conversion options and resource lifecycle |
 | `src/input/` | HTML sources, root selection and node identity |
+| `src/html/` | Shared element policies, atomic inline boundaries and input-control routing |
 | `src/browser/` | Browser capture, computed styles, images and fonts |
 | `src/model/` | Serializable layout, semantic and font contracts |
 | `src/css/` | Pure CSS value parsers, grouped by property family |
@@ -114,16 +115,59 @@ an older generated bundle, remove its old `DesignSupport.swift`, `DesignTokens.s
 
 ## Quality and next steps
 
+HTML tags share compiler strategies; they do not need a separate renderer for every tag.
+For example, `article`, `section` and `div` use the same measured block/flex/grid rules.
+The browser resolves the CSS cascade before conversion, so ordinary CSS, compiled Tailwind
+and compiled CSS Modules use the same pipeline.
+
+`HTML_ELEMENTS` classifies every standard element in the WHATWG index (checked 2026-09-16),
+including the SVG and MathML entry points. `classifyElement(tag, attrs)` applies attribute-specific
+exceptions such as links and input types. The analyzer and inline-text collector use this same
+policy. Its support states describe implementation strategy, **not visual verification**:
+
+| State | Meaning |
+| --- | --- |
+| `implemented` | A compiler path exists; individual CSS combinations and native behavior need verification |
+| `approximated` | Captured content is rendered with an explicit limitation in `diagnostics` |
+| `unsupported` | A measured placeholder or visible object fallback is emitted with an `unmapped` diagnostic |
+| `nonvisual` | Metadata/resources are consumed by the browser rather than emitted as views |
+
+Tables, ruby annotations and modal lifecycle currently have explicit approximation policies.
+Canvas, embedded documents/resources, MathML and audio/video content need dedicated renderers.
+Custom/unknown elements retain measured content and report missing semantics/behavior.
+Prose links remain styled inline runs and report their dropped destination; block/atomic links
+use native controls. Interactive attributed-text links remain a typography roadmap item.
+The report covers captured nodes: hidden, non-rendering and flattened wrappers may not survive
+capture. Element classification alone does not cover all CSS, accessibility or JavaScript.
+
 ```sh
 bun run test:browser           # actual Chrome integration tests
 bun run test:native            # Chrome + Xcode; compile public API output in both modes
 bun run quality baseline.json current.json
 ```
 
+Portable tests assert that no standard element lacks a policy, that input routing stays consistent,
+and that unsupported inline content cannot silently disappear. Chrome tests exercise nine semantic
+container tags across block/flex/grid and compare their geometry and generated Swift. These checks
+establish routing and layout consistency; they do not replace native rendering comparisons.
+
+Development proceeds by feature family, with reusable fixtures and regression checks:
+
+1. Layout: intrinsic sizing, flex/grid combinations, tables, wrapping, overlays, clipping and scroll.
+2. Text: fonts, mixed inline content, line breaking, RTL, ruby and accessibility semantics.
+3. Paint: layered gradients, borders, shadows, masks, filters and transforms.
+4. Native behavior: control state, navigation callbacks, media, animation and responsive resizing.
+
+Each family needs parser/inference tests, real Chrome capture, generated Swift compilation,
+and representative native/browser visual comparisons at multiple widths and themes. Behavior
+and accessibility need their own native assertions; a good screenshot score cannot prove them.
+An unsupported feature must first report its loss, then gain a tested implementation. The release
+scope will follow that verified matrix rather than claiming every HTML/CSS combination is covered.
+
 Successful compilation is not proof of visual correctness. Complex layout, rich inline text,
 font metrics, native resizing and accessibility still need improvement. Capture observes one
 viewport and state; it does not infer all responsive or interactive behavior. A multi-component
-bundle linker and a separate HTML/Swift example remain planned work.
+bundle linker remains planned work; the separate preview playground is kept locally.
 
 Research corpora, local simulator fixtures, generated screenshots and development state notes
 are intentionally excluded from this repository. The checked-in unit and integration tests

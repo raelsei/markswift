@@ -6,6 +6,7 @@ import { type InferenceContext } from "./context.ts";
 import { styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf } from "./geometry.ts";
+import { classifyElement } from "../html/policy.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = worst(node.notes);
@@ -25,6 +26,8 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
   const notes: string[] = [];
+  const policy = classifyElement(n.tag, n.attrs);
+  if (policy.note) notes.push(policy.note);
   const style = styleOf(n, notes);
   const { width, height, maxWidth, selfAlign } = sizeOf(n, declared, ctx, notes);
   const padding = insetsOf(n.styles);

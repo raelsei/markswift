@@ -6,6 +6,7 @@
  * Nothing here reads geometry: `input[type=range]` is a slider however the design paints it.
  */
 import type { LayoutNode } from "../model/layout.ts";
+import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
 
@@ -26,47 +27,6 @@ export interface ControlSpec {
   /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
   notes: string[];
 }
-
-/** `<input type>` → control kind. Types absent here render nothing native (see `unrenderableNote`). */
-const INPUT_KINDS: Record<string, ControlKind> = {
-  button: "button",
-  checkbox: "toggle",
-  color: "colorPicker",
-  date: "datePicker",
-  "datetime-local": "datePicker",
-  email: "textField",
-  // A file picker is a button that presents `.fileImporter`; `spec.files` carries the rest.
-  file: "button",
-  month: "datePicker",
-  number: "textField",
-  password: "secureField",
-  radio: "radio",
-  range: "slider",
-  reset: "button",
-  search: "textField",
-  submit: "button",
-  tel: "textField",
-  text: "textField",
-  time: "datePicker",
-  url: "textField",
-  week: "datePicker",
-};
-
-/**
- * `<input type>`s with no control of their own. `image` is a submit button painted from `@src`,
- * which needs an image node the control path cannot build; `hidden` never reaches the IR
- * (`display: none`), and is here so an unexpected one reports rather than becoming a field.
- */
-const UNMAPPED_INPUTS: Record<string, string> = {
-  hidden: "no box of its own",
-  image: "an image submit button; the button is here but the `@src` image is not",
-};
-
-/** Elements whose content the browser draws but the capture cannot reach or a phone cannot host. */
-const UNRENDERABLE: Record<string, string> = {
-  canvas: "script-drawn bitmap; the DOM holds no content to translate",
-  iframe: "nested document, outside the capture root",
-};
 
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
@@ -142,11 +102,11 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     }
     case "input": {
       const type = (a["type"] ?? "text").toLowerCase();
-      if (UNMAPPED_INPUTS[type]) return undefined;
+      if (Object.hasOwn(INPUT_PLACEHOLDERS, type)) return undefined;
       // HTML's missing/invalid value default for `@type` is Text, so a type nobody recognises is
       // a text field — and the box the capture measured is the one Chrome gave a text field.
-      const control = INPUT_KINDS[type] ?? "textField";
-      if (!INPUT_KINDS[type]) notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
+      const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
+      if (!Object.hasOwn(INPUT_CONTROLS, type)) notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
       const spec: ControlSpec = { control, notes };
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
@@ -174,20 +134,6 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     default:
       return undefined;
   }
-}
-
-/**
- * Why this element cannot be rendered natively, for the `unmapped:` note the report shows. The
- * caller attaches it to the placeholder box it emits in the element's measured frame.
- */
-export function unrenderableNote(n: LayoutNode): string | undefined {
-  const why = UNRENDERABLE[n.tag];
-  if (why) return `unmapped: <${n.tag}> content cannot be rendered natively — ${why}`;
-  if (n.tag !== "input") return undefined;
-  const type = (n.attrs["type"] ?? "text").toLowerCase();
-  const unmapped = UNMAPPED_INPUTS[type];
-  if (!unmapped) return undefined;
-  return `unmapped: <input type="${type}"> has no native equivalent — ${unmapped}; placeholder box only`;
 }
 
 /** A control's laid-out surroundings, as the generic container path produced them. */

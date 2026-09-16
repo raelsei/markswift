@@ -3,7 +3,8 @@ import { type LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import { type Screen, type SemNode, type Axis, type StackNode, type SemBase, type Overlay } from "../model/semantic.ts";
 import { parseColor, parseDeclared, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg.ts";
-import { controlOf, buildControl, unrenderableNote } from "./controls.ts";
+import { controlOf, buildControl } from "./controls.ts";
+import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
@@ -25,9 +26,10 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
 }
 
 function build(n: LayoutNode, ctx: InferenceContext): SemNode {
-  if (n.tag === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
+  const policy = classifyElement(n.tag, n.attrs);
+  if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
-  if (n.tag === "img")
+  if (policy.route === "image")
     return withBase(n, ctx, {
       kind: "image",
       src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
@@ -53,8 +55,16 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     else flow.push(c);
   }
 
+  // Embedded content needs a dedicated renderer. Keep its own paint and positioned decoration.
+  // An object's captured descendants are its visible fallback, so preserve that content below.
+  if (policy.route === "placeholder" && !(n.tag === "object" && n.children.length)) {
+    const box = withBase(n, ctx, { kind: "box" });
+    box.overlays = buildOverlays(n, abs, undefined, ctx);
+    return finish(box);
+  }
+
   // Controls come before the generic container path: same measured box, native control inside.
-  const spec = controlOf(n);
+  const spec = policy.route === "control" ? controlOf(n) : undefined;
   if (spec) {
     const childAxis: Axis = /flex/.test(n.styles["display"] ?? "block") && /^row/.test(n.styles["flex-direction"] ?? "row") ? "h" : "v";
     const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n, childAxis) };
@@ -68,15 +78,6 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     node.overlays = buildOverlays(n, abs, flow[0], ctx);
     return finish(node);
   }
-  // Elements the browser paints from something the capture cannot see (script canvases, frames).
-  const unrenderable = unrenderableNote(n);
-  if (unrenderable) {
-    const box = withBase(n, ctx, { kind: "box" });
-    box.notes.push(unrenderable);
-    box.overlays = buildOverlays(n, abs, undefined, ctx);
-    return finish(box);
-  }
-
   // A run group can collapse to nothing at all: every run in it is collapsible whitespace that
   // the browser also collapsed away — the newline between two inline controls, a `<div> </div>`.
   // Such a node has no glyphs, no advance and no measured inline box, so it is not text; it is

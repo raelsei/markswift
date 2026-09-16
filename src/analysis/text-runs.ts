@@ -3,15 +3,13 @@ import { type LayoutNode } from "../model/layout.ts";
 import { type Color, parseColor } from "../css/index.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
-
-/** Elements whose box is a replaced/atomic thing rather than inline text, whatever `display` says. */
-const ATOMIC_TAGS: Record<string, true> = { img: true, svg: true, video: true, audio: true, canvas: true, iframe: true, input: true, select: true, textarea: true, button: true, progress: true, meter: true };
+import { classifyElement } from "../html/policy.ts";
 
 // ---------- text ----------
 
 /** Inline (non-atomic) element whose subtree is nothing but text: merged into the parent's runs. */
 export function isInlineText(c: LayoutNode): boolean {
-  if (ATOMIC_TAGS[c.tag]) return false;
+  if (classifyElement(c.tag, c.attrs).atomic) return false;
   if ((c.styles["display"] ?? "inline") !== "inline") return false;
   const pos = c.styles["position"];
   if (pos === "absolute" || pos === "fixed") return false;
