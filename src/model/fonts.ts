@@ -1,0 +1,25 @@
+/** Font data passed explicitly through one conversion. No process-wide state. */
+export interface BundledFamily {
+  /** `font-weight` range the family covers; `[400, 400]` for a single static face. */
+  weight: [number, number];
+  /** `opsz` axis range, when the file has one — `font-size` is clamped into it. */
+  opsz?: [number, number];
+}
+
+export type BundledFamilies = Readonly<Record<string, BundledFamily>>;
+
+/**
+ * Vertical metrics of a packaged face, in font units (`upem`). `descent` is absolute
+ * (positive-down). The pair is the one the rendering engine uses: `OS/2` sTypo* when
+ * `fsSelection` bit 7 (USE_TYPO_METRICS) is set, else `hhea`.
+ */
+export interface FaceMetrics {
+  upem: number;
+  ascent: number;
+  descent: number;
+  lineGap: number;
+  useTypoMetrics: boolean;
+}
+
+/** Lowercase CSS family name to packaged font metrics. */
+export type FontMetrics = Readonly<Record<string, FaceMetrics>>;

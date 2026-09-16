@@ -1,0 +1,34 @@
+# Dependencies, caches and local secrets
+node_modules/
+.markswift-cache/
+.DS_Store
+__pycache__/
+.env
+.env.*
+!.env.example
+
+# Local research, measurements and development history
+/research/
+/STATE.md
+/package.local.json
+/tsconfig.local.json
+/tests/local/
+/tests/conformance/
+/docs/*
+!/docs/architecture.md
+
+# Keep only portable verification helpers in the repository
+/tools/*
+!/tools/quality.ts
+!/tools/verify/
+/tools/verify/*
+!/tools/verify/typecheck.ts
+
+# Generated output and editor/agent state
+/generated/
+/coverage/
+/out/
+/.agents/
+/.codex/
+/.claude/
+/.omp/
