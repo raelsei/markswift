@@ -9,7 +9,8 @@ import { collectFontFaces, readFontBytes } from "./fonts.ts";
  */
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
 import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
-import { snapshotToTree, findByAttr, toLayout, type DomSnapshot } from "./snapshot.ts";
+import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
+import { readPreferredSizes } from "./sizing.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
 
@@ -122,6 +123,7 @@ export class BrowserCapture {
         { sel: spec.root, mark: ROOT_MARK },
       );
       const cdp = await this.context.newCDPSession(page);
+      const preferredSizes = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
@@ -139,6 +141,7 @@ export class BrowserCapture {
       const tree = snapshotToTree(snapA, snapB);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
+      attachPreferredSizes(rootRaw, preferredSizes);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
       if (!root) throw new Error(`capture root ${spec.root} has no layout`);

@@ -29,7 +29,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.note) notes.push(policy.note);
   const style = styleOf(n, notes);
-  const { width, height, maxWidth, selfAlign } = sizeOf(n, declared, ctx, notes);
+  const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, notes);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
   return {
@@ -37,7 +37,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     frame: n.bounds,
     width,
     height,
-    ...(maxWidth !== undefined ? { maxWidth } : {}),
+    ...constraints,
     ...(selfAlign !== undefined ? { selfAlign } : {}),
     padding,
     style,

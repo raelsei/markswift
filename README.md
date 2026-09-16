@@ -151,6 +151,19 @@ and that unsupported inline content cannot silently disappear. Chrome tests exer
 container tags across block/flex/grid and compare their geometry and generated Swift. These checks
 establish routing and layout consistency; they do not replace native rendering comparisons.
 
+The first sizing pass normalizes `min/max-width` and `min/max-height` to border-box dimensions,
+including padding, borders, percentage width limits and simple `calc()` expressions. Capture
+retains cascaded width/height intent, so fixed stylesheet sizes and overridden inline sizes use
+the same rules as compiled utility selectors. Finite caps preserve intrinsic boxes without
+expanding their backgrounds; height floors and clipping preserve block text's top placement.
+Chrome sizing tests cover 320, 390 and 768px in both themes.
+
+Equal flex allocations can use native fill sizing. Unequal growth, bases or measured sizes,
+and growth factors totaling less than one, retain captured dimensions with approximation
+diagnostics. Percentage height constraints and unresolved intrinsic/complex limits also retain
+captured bounds with diagnostics. These limits are measured pixels, not reconstructed responsive
+CSS constraints. Unequal grid tracks, wrapping and tables remain layout work.
+
 Development proceeds by feature family, with reusable fixtures and regression checks:
 
 1. Layout: intrinsic sizing, flex/grid combinations, tables, wrapping, overlays, clipping and scroll.

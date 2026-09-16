@@ -208,14 +208,20 @@ export interface Overlay {
   covers: boolean;
 }
 
-export interface SemBase {
+/** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
+export interface SizeConstraints {
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+}
+
+export interface SemBase extends SizeConstraints {
   /** Template path id; stable across regenerations. */
   id: string;
   frame: Rect;
   width: Size;
   height: Size;
-  /** Cap on the box width in px: declared `max-width`, or the width its horizontal margins leave. */
-  maxWidth?: number;
   /**
    * Cross-axis placement inside the parent's content box when the box does not span it
    * (CSS auto or asymmetric margins). Default: leading.

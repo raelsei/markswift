@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { STYLE_WHITELIST } from "../../../src/model/layout.ts";
-import { snapshotToTree, srcsetUrls, toLayout, type DomSnapshot } from "../../../src/browser/snapshot.ts";
+import { attachPreferredSizes, snapshotToTree, srcsetUrls, toLayout, type DomSnapshot } from "../../../src/browser/snapshot.ts";
 
 describe("srcsetUrls", () => {
   test("data URLs keep their comma; descriptors are skipped; bare trailing commas are stripped", () => {
@@ -63,6 +63,34 @@ function synth(root: Spec): DomSnapshot {
 const pathIdentity = (_tag: string, _attrs: Record<string, string>, path: string) => path || "root";
 
 describe("toLayout", () => {
+  test("size intent follows DOM element paths through pseudo-elements, text and flattened wrappers", () => {
+    const snap = synth(["html", {}, undefined, [["main", {}, { b: [0, 0, 200, 100] }, [
+      ["style", {}, undefined, []],
+      ["::before", {}, { b: [0, 0, 20, 20], pseudo: "before", text: "x" }, []],
+      "Text",
+      ["div", {}, undefined, [["section", {}, { b: [0, 20, 120, 40] }, []]]],
+      ["div", { hidden: "" }, undefined, []],
+      ["aside", {}, { b: [0, 60, 80, 40] }, []],
+    ]]]]);
+    const root = snapshotToTree(snap).children[0]!;
+    attachPreferredSizes(root, {
+      "": { width: "auto", height: "auto" },
+      "0": { width: "auto", height: "auto" },
+      "1": { width: "auto", height: "auto" },
+      "1/0": { width: "120px", height: "40px" },
+      "2": { width: "999px", height: "999px" },
+      "3": { width: "80px", height: "40px" },
+    });
+    const node = toLayout(root, { x: 0, y: 0 }, pathIdentity)!;
+    expect(node.preferredSize).toEqual({ width: "auto", height: "auto" });
+    expect(node.children.map(child => [child.tag, child.preferredSize])).toEqual([
+      ["::before", undefined], ["#text", undefined],
+      ["section", { width: "120px", height: "40px" }],
+      ["aside", { width: "80px", height: "40px" }],
+    ]);
+    expect(node.children.find(child => child.tag === "section")!.id).toBe("1/0");
+  });
+
   test("display: contents children are hoisted in order and keep DOM-based paths", () => {
     const snap = synth([
       "html", {}, { b: [0, 0, 100, 100] }, [

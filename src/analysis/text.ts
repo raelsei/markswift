@@ -158,7 +158,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const [pt, pr, pb, pl] = base.padding;
     const surplus = round2(frame.h - pt - pb - lines * lh);
     const ai = /flex|-webkit-box/.test(host.styles["display"] ?? "") ? host.styles["align-items"] : undefined;
-    if (surplus > Math.max(2, lh / 2) && ai !== "center") {
+    if (surplus > 2 && ai !== "center") {
       base.padding = ai === "flex-end" || ai === "end" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
     }
   }

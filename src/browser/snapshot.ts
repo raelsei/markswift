@@ -8,6 +8,7 @@
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { STYLE_WHITELIST } from "../model/layout.ts";
 import type { NodeIdentity } from "../input/types.ts";
+import type { PreferredSizes } from "./sizing.ts";
 
 /** CDP `RareStringData`: sparse per-node strings (`value[k]` belongs to node `index[k]`). */
 interface RareStringData {
@@ -51,6 +52,7 @@ interface Raw {
   value: string;
   attrs: Record<string, string>;
   styles: Record<string, string>;
+  preferredSize?: LayoutNode["preferredSize"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
   bounds?: Rect;
   /** CSSOM offset rect (relative to the offsetParent's padding edge). */
@@ -76,6 +78,20 @@ const SKIP_TAGS: Record<string, true> = { script: true, style: true, link: true,
 const KEEP_WITHOUT_LAYOUT: Record<string, true> = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true };
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
+
+/** Join CSS size intent while wrappers still exist, before display:contents is flattened. */
+export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
+  const walk = (raw: Raw, path: string) => {
+    if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
+    let i = 0;
+    for (const child of raw.children) {
+      if (child.type !== 1 || child.pseudo !== undefined) continue;
+      const childPath = path ? `${path}/${i++}` : String(i++);
+      walk(child, childPath);
+    }
+  };
+  walk(root, "");
+}
 /** Written on `<img>` when the browser chose a `srcset`/`<picture>` candidate other than `src`. */
 export const CURRENT_SRC_ATTR = "data-h2s-src";
 
@@ -295,6 +311,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
     styles: raw.styles,
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
+    ...(raw.preferredSize ? { preferredSize: raw.preferredSize } : {}),
   };
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined) node.id = id;

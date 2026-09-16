@@ -4,6 +4,7 @@ import type { EmitMode } from "./context.ts";
 import { colorExpr, fontExpr, num, str, type ColorCtx } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
+import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 /**
  * Natural line height of a face, as a multiple of `font-size`: the height SwiftUI gives one
  * `Text` line before `.lineSpacing`. Measured, not assumed — a `UIHostingController` was asked
@@ -109,8 +110,7 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     // fits by construction, because `lineLimit` drops the rest before it is laid out.
     const written = 1 + runs.reduce((k, r) => k + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
     const shown = n.lineLimit === undefined ? written : Math.min(written, n.lineLimit);
-    const h = n.align === "center" ? "center" : n.align === "trailing" ? "trailing" : "leading";
-    const align = shown <= n.lines ? `.${h}` : h === "center" ? ".top" : `.top${h[0]!.toUpperCase()}${h.slice(1)}`;
+    const align = textBoxAlignment(n, shown > n.lines || clipsFirstLine(n));
     // The measured width is pinned only for text the browser itself broke: there the box has to
     // stay where the division was measured. A single line that fit is held together by
     // `fixedSize` alone — pinning its width as well makes it inflexible inside a row that has

@@ -1,11 +1,13 @@
 /** Intrinsic versus fixed sizing inferred from measured content. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type Size, type Axis } from "../model/semantic.ts";
+import { type Size, type Axis, type SizeConstraints } from "../model/semantic.ts";
 import { round2, px } from "../css/index.ts";
 import { insetsOf, renders, hangsLeading, EDGES, unionRect } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
 import { type InferenceContext } from "./context.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
+import { constraintsOf } from "./size-constraints.ts";
+import { flexGrowthSize } from "./flex-sizing.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -80,16 +82,15 @@ function hugs(n: LayoutNode, axis: Axis): boolean {
 }
 
 /**
- * Size intent. Declared inline `width`/`height` wins (Vacu tokens); otherwise the measured
- * box tells: equal to the parent's content box → fill, equal to its own content → hug,
- * anything else (stylesheet px/%, min-/max- binding, flex-shrink) → the measured px.
+ * Cascaded preferred width/height retain fixed-size intent; older captures use inline styles.
+ * Otherwise geometry tells: parent content box → fill, own content → hug, other sizes →
+ * measured pixels. Flex allocation and constraints share the same border-box contract.
  */
-export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, notes: string[]): { width: Size; height: Size; maxWidth?: number; selfAlign?: "center" | "end" } {
+export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, notes: string[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "center" | "end" } {
   const s = n.styles;
-  const grow = px(s["flex-grow"]);
   const abs = s["position"] === "absolute" || s["position"] === "fixed";
-  const declW = d["width"];
-  const declH = d["height"];
+  const declW = n.preferredSize?.width ?? d["width"];
+  const declH = n.preferredSize?.height ?? d["height"];
 
   const hugsW = hugs(n, "h");
   let hugsH = hugs(n, "v");
@@ -114,23 +115,14 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   }
   const measuredW: Size = { kind: "fixed", px: round2(n.bounds.w) };
   const measuredH: Size = { kind: "fixed", px: round2(n.bounds.h) };
+  const growthW = flexGrowthSize(n, "h", ctx, notes);
+  const growthH = flexGrowthSize(n, "v", ctx, notes);
 
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
-  else if (declW === "100%") width = { kind: "fill" };
-  else if (ctx.parentAxis === "h" && grow > 0) {
-    // Equal grow among siblings → fill; unequal ratios have no native equivalent → pin measured width.
-    const sibs = (ctx.parent?.children ?? []).filter((c) => c.tag !== "#text" && c.styles["position"] !== "absolute");
-    const grows = sibs.map((c) => px(c.styles["flex-grow"]));
-    // Only growers share the leftover space; a lone grower or equal growers → fill.
-    const growers = grows.filter((g) => g > 0);
-    const allSame = growers.every((g) => Math.abs(g - grow) < 0.01);
-    if (allSame) width = { kind: "fill" };
-    else {
-      width = measuredW;
-      notes.push(`approximated: flex-grow ${grow} vs siblings [${grows.join(",")}]; width pinned`);
-    }
-  } else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
+  else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
+  else if (growthW) width = growthW;
+  else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
   } else if (hugsW || !ctx.parent) width = { kind: "hug" };
   else if (fillsW && !abs) width = { kind: "fill" };
@@ -138,15 +130,13 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
 
   let height: Size;
   if (declH && /px$/.test(declH)) height = measuredH;
-  else if (declH === "100%") height = { kind: "fill" };
-  else if (ctx.parentAxis === "v" && grow > 0 && /flex/.test(ctx.parentDisplay ?? "")) height = { kind: "fill" };
+  else if (declH === "100%") height = fillsH && !abs ? { kind: "fill" } : measuredH;
+  else if (growthH) height = growthH;
   else if (ctx.parentAxis === "h" && ctx.parentAlign === "stretch" && !abs && fillsH) height = { kind: "fill" };
   else if (hugsH || !ctx.parent) height = { kind: "hug" };
   else height = measuredH;
 
-  let maxWidth: number | undefined;
-  if (d["max-width"] && /px$/.test(d["max-width"])) maxWidth = px(d["max-width"]);
-  else if (s["max-width"] && s["max-width"] !== "none") maxWidth = px(s["max-width"]);
+  const constraints = constraintsOf(n, d, ctx, notes);
 
   // Horizontal margins on a block child are not part of the IR: the used `auto` margins of a
   // centred box, like plain side margins, make the margin box fill the parent while the border
@@ -157,10 +147,10 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
     const ml = px(s["margin-left"]);
     const mr = px(s["margin-right"]);
     if (ml + mr > 1) {
-      maxWidth = Math.min(maxWidth ?? Number.POSITIVE_INFINITY, round2(n.bounds.w));
+      constraints.maxWidth = Math.min(constraints.maxWidth ?? Number.POSITIVE_INFINITY, round2(n.bounds.w));
       if (Math.abs(ml - mr) <= 1) selfAlign = "center";
       else if (ml > mr) selfAlign = "end";
     }
   }
-  return { width, height, ...(maxWidth !== undefined ? { maxWidth } : {}), ...(selfAlign !== undefined ? { selfAlign } : {}) };
+  return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}) };
 }

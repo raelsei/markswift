@@ -7,6 +7,9 @@ import { z } from "zod";
 
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
+/** CSS Typed OM preserves auto/percent/px intent before used values become measured pixels. */
+export const PreferredSize = z.object({ width: z.string(), height: z.string() });
+export type PreferredSize = z.infer<typeof PreferredSize>;
 
 /**
  * One laid-out DOM node. `display: contents` elements are not here — their
@@ -31,6 +34,8 @@ export interface LayoutNode {
   attrs: Record<string, string>;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
+  /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
+  preferredSize?: PreferredSize;
   /** Box relative to the capture root, CSS px. */
   bounds: Rect;
   /** Laid-out text for `#text` nodes. */
@@ -53,6 +58,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
     styles: z.record(z.string(), z.string()),
+    preferredSize: PreferredSize.optional(),
     bounds: Rect,
     text: z.string().optional(),
     lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number() })).optional(),
