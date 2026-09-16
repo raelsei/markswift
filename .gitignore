@@ -14,8 +14,7 @@ __pycache__/
 /tsconfig.local.json
 /tests/local/
 /tests/conformance/
-/docs/*
-!/docs/architecture.md
+/docs/
 
 # Keep only portable verification helpers in the repository
 /tools/*

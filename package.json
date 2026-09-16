@@ -29,8 +29,7 @@
   },
   "files": [
     "src",
-    "README.md",
-    "docs"
+    "README.md"
   ],
   "engines": {
     "bun": ">=1.4.2"

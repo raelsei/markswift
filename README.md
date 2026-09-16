@@ -105,8 +105,7 @@ logic are not translated into Swift application logic.
 
 There is one conversion pipeline. Supply compiled CSS or a running page URL for framework
 inputs. Small utilities stay with their domain (`css/syntax`, `analysis/geometry`,
-`swift/format`) rather than a global miscellaneous utilities folder. See
-[architecture](docs/architecture.md).
+`swift/format`) rather than a global miscellaneous utilities folder.
 
 The canonical HTML marker is `data-markswift-root`; `data-h2s-root` remains accepted for
 existing inputs. Generated helper names now use `Markswift` and `.markswift`. When replacing
