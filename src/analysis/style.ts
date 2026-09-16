@@ -129,12 +129,15 @@ export function styleOf(n: LayoutNode, notes: string[]): Style {
     }
   }
 
-  const r = ["top-left", "top-right", "bottom-right", "bottom-left"].map((c) => {
-    const [rx, ry] = parseRadiusXY(s[`border-${c}-radius`], w, h);
-    if (Math.abs(rx - ry) > 0.5) notes.push(`approximated: elliptical radius ${s[`border-${c}-radius`]} → circular`);
+  const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
+  const cornerRadii = corners.map(c => parseRadiusXY(s[`border-${c}-radius`], w, h));
+  const ellipse = w > 0 && h > 0 && cornerRadii.every(([rx, ry]) => Math.abs(rx - w / 2) < 0.5 && Math.abs(ry - h / 2) < 0.5);
+  const r = cornerRadii.map(([rx, ry], i) => {
+    if (!ellipse && Math.abs(rx - ry) > 0.5) notes.push(`approximated: elliptical radius ${s[`border-${corners[i]}-radius`]} → circular`);
     return round2(Math.min((rx + ry) / 2, Math.min(w, h) / 2));
   }) as [number, number, number, number];
   const style: Style = { fills, shadows: parseShadows(s["box-shadow"]) };
+  if (ellipse) style.ellipse = true;
   if (r.some((v) => v > 0)) style.radius = r;
 
   const edges: Partial<Record<EdgeName, Edge>> = {};
@@ -189,7 +192,7 @@ export function styleOf(n: LayoutNode, notes: string[]): Style {
     const origin = parseOrigin(s["transform-origin"]);
     if (origin) style.transform.origin = origin;
   } else if (s["transform"] && s["transform"] !== "none" && !tf) notes.push(`unmapped: transform ${s["transform"].slice(0, 40)}`);
-  for (const sh of style.shadows) if (sh.inset) notes.push("approximated: inset shadow → edge highlight");
+  if (style.shadows.some(sh => sh.inset && sh.blur > 0)) notes.push("approximated: inset shadow blur → native Gaussian blur");
   // Every CSS `<blend-mode>` is a PDF blend function, and so is every SwiftUI `BlendMode`, so a
   // recognised keyword maps by name with no loss; the emitter does the naming. Anything outside
   // the spec's list is reported rather than silently painted `normal`.

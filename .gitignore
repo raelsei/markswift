@@ -31,3 +31,6 @@ __pycache__/
 /.codex/
 /.claude/
 /.omp/
+
+# Local preview application and native render workspace
+/playground/

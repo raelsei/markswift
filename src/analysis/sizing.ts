@@ -5,7 +5,7 @@ import { round2, px } from "../css/index.ts";
 import { insetsOf, renders, hangsLeading, EDGES, unionRect } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
 import { type InferenceContext } from "./context.ts";
-import { crossAlign } from "./alignment.ts";
+import { crossAlign, distributionOf } from "./alignment.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -21,7 +21,20 @@ export function trailingInset(n: LayoutNode, height: Size, padBottom: number): n
   if (n.tag === "svg") return padBottom;
   if (n.children.some((c) => c.tag === "#text" || c.tag === "br")) return padBottom;
   const ext = contentExtent(n, false);
-  return ext ? round2(Math.max(padBottom, n.bounds.y + n.bounds.h - (ext.y + ext.h))) : padBottom;
+  if (!ext) return padBottom;
+  let inset = n.bounds.y + n.bounds.h - (ext.y + ext.h);
+  const display = n.styles["display"] ?? "block";
+  const row = /^row/.test(n.styles["flex-direction"] ?? "row");
+  const verticalAlignment = row ? crossAlign(n, "h") : distributionOf(n.styles["justify-content"], display);
+  if (/flex/.test(display) && (row ? verticalAlignment === "center" || verticalAlignment === "end" : verticalAlignment !== "start")) {
+    // Center/end alignment and distributed flex gaps already place the children. Turning the
+    // remaining bottom space into padding applies that placement a second time, notably on a
+    // viewport root that becomes fill-sized after inference. Only its real end margin remains.
+    const margins = contentExtent(n, true)!;
+    const free = n.bounds.y + n.bounds.h - padBottom - (margins.y + margins.h);
+    inset -= Math.max(0, free);
+  }
+  return round2(Math.max(padBottom, inset));
 }
 
 /**

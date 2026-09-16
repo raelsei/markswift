@@ -4,6 +4,7 @@ import type { EmitContext } from "./context.ts";
 import { colorExpr, indent, num, type ColorCtx } from "./format.ts";
 import { imageLayer } from "./images.ts";
 export function shapeExpr(st: Style, w: number, h: number): string {
+  if (st.ellipse) return "Ellipse()";
   const r = st.radius;
   if (!r || r.every((v) => v === 0)) return "Rectangle()";
   const allSame = r.every((v) => Math.abs(v - r[0]) < 0.01);

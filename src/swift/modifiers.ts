@@ -6,6 +6,7 @@ import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./pain
 import { borderSideModifiers } from "./borders.ts";
 import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "./effects.ts";
 import { note } from "./diagnostics.ts";
+import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
@@ -21,6 +22,8 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
   // puts B behind A, so apply the front-most background first.
   for (const o of [...n.overlays.filter((o) => o.layer === "background")].reverse()) m.push(...overlayModifier(o, "background", ctx));
+  // Inset shadows are part of the box paint: above fills, below every child.
+  m.push(...insetShadowModifiers(n, ctx));
   // Fills are bottom-most first in the IR; the same chain rule means the top-most goes first.
   // Unless a layer carries a `background-blend-mode`: blending is against the layers *below it
   // inside this node*, so the whole stack has to live in one compositing group instead of a
@@ -46,16 +49,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     const dash = o.style === "dashed" ? `, dash: [${num(o.width * 3)}, ${num(o.width * 2)}]` : o.style === "dotted" ? `, lineCap: .round, dash: [0.01, ${num(o.width * 2)}]` : "";
     m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: StrokeStyle(lineWidth: ${num(o.width)}${dash})))`);
   }
-  // Spread-only shadows (`0 0 0 2px c`) are rings: a larger filled shape behind the node.
-  const rings = st.shadows.filter((s) => !s.inset && s.blur === 0 && s.x === 0 && s.y === 0 && s.spread > 0);
-  // CSS lists the top-most ring first; `.background` chains put later ones further back.
-  for (const s of rings) m.push(`.background(${shape}.fill(${colorExpr(s.color, ctx, n.id)}).padding(${num(-s.spread)}))`);
-  for (const s of st.shadows) {
-    if (rings.includes(s)) continue;
-    if (s.inset) {
-      if (s.x === 0 && s.y > 0 && s.blur <= 2) m.push(`.overlay(${shape}.strokeBorder(LinearGradient(colors: [${colorExpr(s.color, ctx, n.id)}, .clear], startPoint: .top, endPoint: .center), lineWidth: ${num(s.y)}))`);
-    } else if (s.color.a > 0) m.push(`.shadow(color: ${colorExpr(s.color, ctx, n.id)}, radius: ${num(s.blur / 2)}, x: ${num(s.x)}, y: ${num(s.y)})`);
-  }
+  m.push(...outerShadowModifiers(n, ctx));
   for (const o of n.overlays.filter((o) => o.layer === "overlay")) m.push(...overlayModifier(o, "overlay", ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
   if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, n, ctx));

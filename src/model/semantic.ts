@@ -46,6 +46,8 @@ export interface Style {
   fills: Paint[];
   /** Corner radii: top-left, top-right, bottom-right, bottom-left (px). */
   radius?: [number, number, number, number];
+  /** All four corners meet at half-width/half-height: CSS 50% radii form an ellipse. */
+  ellipse?: true;
   /** Uniform border (all four edges equal). */
   border?: { width: number; color: Color; dashed?: boolean };
   /** Per-edge borders when the edges differ; `border` is unset then. Missing edge = none. */
