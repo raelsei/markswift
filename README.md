@@ -162,14 +162,17 @@ comparisons and explicit geometry/text/paint checks, not from compiler coverage 
 
 A separate local seven-case text pilot completed 56 native comparisons across two widths, two themes
 and both modes. The isolated `<pre>` case preserved its spaces and three lines but reached only
-0.8998 SSIM at worst because `ui-monospace` maps to a different native system face. At 320px, a
-paragraph's `app` output broke words differently (0.9030 worst), while captured-size `fidelity`
-forced Chrome's division (0.9899 worst). Rendering the same Swift generated at 390px at 320px
-confirmed that `app` reflows but `fidelity` retains the captured one-line treatment. A local
-bundled webfont reached 0.9523 at worst; its presence does not guarantee identical glyph pixels.
-These are measured limits, not approved visual support. Missing webfont bytes produce resource
-warnings and a fallback diagnostic. The next text work is native word division at constrained
-width; generic platform-font substitutions remain explicit approximations.
+0.8998 SSIM at worst because `ui-monospace` maps to a different native system face. A narrow,
+plain system-font `<p>` now uses word-level flow in `app` mode. Its 320px Chrome/iOS ink rows
+differ by at most 1px, and its SSIM is 0.9951 light / 0.9915 dark, up from 0.9068 / 0.9030.
+The same Swift generated at 390px reflows at 320px and 768px without recompilation; the 768px
+comparison scores 0.9976 light / 0.9961 dark. `fidelity` still retains its captured-size line
+division. The second 56-capture matrix found no score drop in the six other isolated text cases.
+This scoped fix does not cover styled runs, RTL, missing fonts or arbitrary prose; those keep
+their existing text path. A local bundled webfont reached 0.9523 at worst; its presence does not
+guarantee identical glyph pixels.
+Missing webfont bytes produce resource warnings and a fallback diagnostic. Generic platform-font
+substitutions remain explicit approximations; complex text needs more native visual work.
 
 For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
 can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
