@@ -13,6 +13,8 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
   dpr?: number;
   /** Installed Playwright browser channel; defaults to chrome. */
   browserChannel?: string;
+  /** For publicly submitted pasted markup: block page scripts and outbound resource requests. */
+  untrustedInput?: boolean;
   /** Mounted selector to await before capture. */
   waitFor?: string;
   /** Optional application-specific setup, such as opening a menu or selecting a dark theme. */

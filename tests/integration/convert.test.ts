@@ -59,6 +59,21 @@ browserTest("resource failures are returned to the caller", async () => {
   expect(result.warnings.some(message => message.includes("missing.png"))).toBe(true);
 }, 30000);
 
+browserTest("restricted pasted HTML cannot run scripts or request server-side resources", async () => {
+  let requests = 0;
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => { requests++; return new Response("blocked"); } });
+  try {
+    const remote = `http://127.0.0.1:${server.port}`;
+    const html = `<style>@font-face{font-family:Probe;src:url(${remote}/font.woff2)}main{font-family:Probe}</style>`
+      + `<main data-markswift-root style="width:180px;height:80px">Original<img src="${remote}/pixel.png"></main>`
+      + `<script>document.querySelector("main").textContent="Executed";fetch("${remote}/script")</script>`;
+    const result = await convertHtml(html, { name: "RestrictedView", untrustedInput: true });
+    expect(result.code).toContain("Original");
+    expect(result.code).not.toContain("Executed");
+    expect(requests).toBe(0);
+  } finally { server.stop(true); }
+}, 30000);
+
 browserTest("a failed preparation closes the browser and local asset server", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-cleanup-test-"));
   let origin = "";
@@ -81,4 +96,6 @@ test("invalid API options fail before browser startup", async () => {
   await expect(convertHtml("<div/>", { name: "Text" })).rejects.toThrow();
   await expect(convertHtml("<div/>", { viewport: { width: 0, height: 100 } })).rejects.toThrow();
   await expect(convert({ url: "file:///private/file.html" })).rejects.toThrow("http");
+  await expect(convert({ url: "https://example.com" }, { untrustedInput: true })).rejects.toThrow("pasted HTML");
+  await expect(convert({ html: "<main>Hi</main>", assetsDir: "." }, { untrustedInput: true })).rejects.toThrow("assetsDir");
 });

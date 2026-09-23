@@ -21,9 +21,12 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     throw new Error("viewport dimensions must be positive integers and dpr must be positive and finite");
   }
   if (["html", "file", "url"].filter((key) => key in source).length !== 1) throw new Error("provide exactly one of html, file or url");
+  if (options.untrustedInput && (!("html" in source) || source.assetsDir || source.baseURL)) {
+    throw new Error("untrustedInput accepts pasted HTML without assetsDir or baseURL only");
+  }
   const work = await mkdtemp(join(tmpdir(), "markswift-"));
   let prepared: ResolvedSource | undefined;
-  const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel });
+  const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel, restricted: options.untrustedInput });
   try {
     prepared = await resolveSource(source);
     const { html, url, label } = prepared;

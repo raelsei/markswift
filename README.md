@@ -85,6 +85,12 @@ HTML scripts execute in Chrome during capture. Use trusted local inputs; this AP
 isolation boundary for hosting arbitrary uploads. Source JavaScript and navigation/business
 logic are not translated into Swift application logic.
 
+For a hosted paste-only converter, `convertHtml(html, { untrustedInput: true })` blocks page
+scripts and outbound resource requests during capture. It rejects file/URL sources and
+`assetsDir`/`baseURL`; inline CSS and data-URL assets remain usable. Host the browser process
+in an isolated environment as well. The separate playground frontend and conversion service
+are kept locally rather than included in this library repository.
+
 ## Repository map
 
 | Directory | Responsibility |

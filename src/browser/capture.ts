@@ -39,7 +39,7 @@ export class BrowserCapture {
   private browser!: Browser;
   private context!: BrowserContext;
 
-  constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string }) {}
+  constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string; restricted?: boolean }) {}
 
   async start(): Promise<void> {
     this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome" });
@@ -81,10 +81,15 @@ export class BrowserCapture {
     });
     try {
       await page.emulateMedia({ colorScheme: spec.theme });
+      // Public pasted markup is captured as a document, but cannot reach the host's network.
+      // The exact document route below is registered last and fulfills that one request.
+      if (this.opts.restricted) await page.route("**/*", route => route.abort());
       if (spec.html !== undefined) {
         const documentURL = new URL(spec.url); documentURL.hash = "";
         await page.route((url) => url.href === documentURL.href, (route) => route.request().isNavigationRequest()
-          ? route.fulfill({ contentType: "text/html; charset=utf-8", body: spec.html! }) : route.continue());
+          ? route.fulfill({ contentType: "text/html; charset=utf-8", body: spec.html!,
+            ...(this.opts.restricted ? { headers: { "Content-Security-Policy": "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'" } } : {}) })
+          : this.opts.restricted ? route.abort() : route.continue());
       }
       await page.goto(spec.url, { waitUntil: "load" });
       await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
@@ -95,7 +100,7 @@ export class BrowserCapture {
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-h2s-harness", ""));
       await settle(page, spec.hide ?? []);
       const fonts = await collectFontFaces(page);
-      const fontFiles = await readFontBytes(fonts);
+      const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(
         ({ sel, mark }) => {
           const el = document.querySelector(sel);

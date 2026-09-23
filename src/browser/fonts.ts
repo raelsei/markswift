@@ -110,12 +110,13 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
  * A source that cannot be read keeps its `url` and gets no `file` — packaging reports it rather
  * than guessing.
  */
-export async function readFontBytes(faces: FontFaceRecord[]): Promise<Array<{ name: string; bytes: Uint8Array }>> {
+export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true): Promise<Array<{ name: string; bytes: Uint8Array }>> {
   const files: Array<{ name: string; bytes: Uint8Array }> = [];
   const byHash: Record<string, string> = {};
   for (const face of faces) {
     for (const src of face.src) {
       if (src.url.startsWith("data:")) continue;
+      if (!allowRemote) continue;
       let bytes: Uint8Array;
       try {
         const res = await fetch(src.url);
