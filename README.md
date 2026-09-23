@@ -160,6 +160,17 @@ grid fixture reached 0.9546 or better in `app` mode, but its diagnostics still s
 track definitions were not reconstructed. The accepted subset will grow from repeatable native
 comparisons and explicit geometry/text/paint checks, not from compiler coverage alone.
 
+A separate local seven-case text pilot completed 56 native comparisons across two widths, two themes
+and both modes. The isolated `<pre>` case preserved its spaces and three lines but reached only
+0.8998 SSIM at worst because `ui-monospace` maps to a different native system face. At 320px, a
+paragraph's `app` output broke words differently (0.9030 worst), while captured-size `fidelity`
+forced Chrome's division (0.9899 worst). Rendering the same Swift generated at 390px at 320px
+confirmed that `app` reflows but `fidelity` retains the captured one-line treatment. A local
+bundled webfont reached 0.9523 at worst; its presence does not guarantee identical glyph pixels.
+These are measured limits, not approved visual support. Missing webfont bytes produce resource
+warnings and a fallback diagnostic. The next text work is native word division at constrained
+width; generic platform-font substitutions remain explicit approximations.
+
 For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
 can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
 valid mismatch and source/runtime metadata, an expected source revision, a per-feature absolute
