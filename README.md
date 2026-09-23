@@ -146,6 +146,27 @@ bun run test:native            # Chrome + Xcode; compile public API output in bo
 bun run quality baseline.json current.json
 ```
 
+A fresh local iOS Simulator pilot on 2026-09-23 compared 64 captures: eight small HTML/CSS
+fixtures at 320px and 390px, in light/dark and `app`/`fidelity` modes. **The currently approved
+visual subset is the six-tile box-shadow fixture at those captured sizes.** Across its eight
+captures, the lowest SSIM was 0.9539 in `app` mode and 0.9642 in `fidelity` mode. A separate
+pixel assertion checked all six painted tiles, the green spread ring, the blue hard-offset
+shadow, and their measured positions. This verifies that fixture's static paint output; it
+does not establish responsive grid tracks or every possible shadow combination.
+
+Flex wrapping, background layers, font families, inline text and image fitting showed material
+browser/iOS differences in the same pilot and are outside the approved visual subset. A simple
+grid fixture reached 0.9546 or better in `app` mode, but its diagnostics still say responsive
+track definitions were not reconstructed. The accepted subset will grow from repeatable native
+comparisons and explicit geometry/text/paint checks, not from compiler coverage alone.
+
+For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
+can additionally require complete browser/iOS/diff images, matching dimensions,
+valid mismatch and source/runtime metadata, an expected source revision, a per-feature absolute
+SSIM floor and a maximum regression from the baseline. A strict policy uses `requireEvidence`,
+`expectedSourceRevision`, `features.<feature>.minSsim`, and `maxDrop`. Keep the reviewed baseline
+separate from new output; the quality command never updates it.
+
 Portable tests assert that no standard element lacks a policy, that input routing stays consistent,
 and that unsupported inline content cannot silently disappear. Chrome tests exercise nine semantic
 container tags across block/flex/grid and compare their geometry and generated Swift. These checks
