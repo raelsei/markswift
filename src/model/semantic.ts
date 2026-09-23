@@ -276,6 +276,8 @@ export interface GridNode extends SemBase {
 
 export interface TextNode extends SemBase {
   kind: "text";
+  /** Source element, retained so emitters can scope text-layout strategies safely. */
+  sourceTag?: string;
   runs: TextRun[];
   align: "leading" | "center" | "trailing";
   lineLimit?: number;

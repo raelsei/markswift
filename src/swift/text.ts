@@ -32,6 +32,16 @@ function naturalLineHeight(f: TextRun["font"], metrics: FontMetrics): number {
 
 export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
   const runs = n.runs;
+  if (ctx.mode === "app" && usesGreedyWords(n)) {
+    const run = runs[0]!;
+    const natural = naturalLineHeight(run.font, ctx.fontMetrics);
+    const leading = run.font.lineHeight! - natural;
+    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num(run.font.size)}, lineGap: ${num(leading)})`];
+    if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * run.font.lineHeight! - 0.5) {
+      out.push(`.padding(.vertical, ${num(leading / 2)})`);
+    }
+    return out;
+  }
   // Gap runs paint nothing, so the whole-text decisions below — case, line height, shadow —
   // are taken from the runs that actually carry glyphs.
   const glyphs = runs.filter((r) => r.gap === undefined);
@@ -132,6 +142,18 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     out.push(`.padding(.vertical, ${num(leading / 2)})`);
   }
   return out;
+}
+
+/** Keep word layout on a narrow, static subset; styled/interactive text retains native Text. */
+function usesGreedyWords(n: TextNode): boolean {
+  if (n.sourceTag !== "p" || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate) return false;
+  if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden) return false;
+  const r = n.runs[0]!;
+  if (r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined) return false;
+  if (r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
+  if (n.notes.some((note) => note.includes("font-family"))) return false;
+  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)+$/.test(r.text);
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */

@@ -203,6 +203,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     ...base,
     frame,
     kind: "text",
+    sourceTag: host.tag,
     runs: withInlineGaps(built, host),
     align:
       ta === "center" || (/flex/.test(host.styles["display"] ?? "") && host.styles["justify-content"] === "center")
