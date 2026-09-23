@@ -161,7 +161,7 @@ track definitions were not reconstructed. The accepted subset will grow from rep
 comparisons and explicit geometry/text/paint checks, not from compiler coverage alone.
 
 For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
-can additionally require complete browser/iOS/diff images, matching dimensions,
+can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
 valid mismatch and source/runtime metadata, an expected source revision, a per-feature absolute
 SSIM floor and a maximum regression from the baseline. A strict policy uses `requireEvidence`,
 `expectedSourceRevision`, `features.<feature>.minSsim`, and `maxDrop`. Keep the reviewed baseline

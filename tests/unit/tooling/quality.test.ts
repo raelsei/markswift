@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { assessQuality, loadComparisons } from "../../../tools/quality.ts";
 
@@ -69,11 +70,14 @@ test("CLI rejects incomplete capture artifacts and exits nonzero for regression"
 });
 
 const files = { "browser.png": true, "ios.png": true, "diff.png": true, "layout.json": true, "diagnostics.json": true, "warnings.json": true, "typecheck.json": true };
+const artifactHashes = Object.fromEntries(Object.keys(files).map(name => [name, "a".repeat(64)]));
 const evidence = (overrides: Record<string, unknown> = {}) => ({
   ssim: 0.98, mismatch: 0.03, width: 640, height: 200, caseId: "display-flex", mode: "app", theme: "light",
   viewportWidth: 320, viewportHeight: 2000, dpr: 2, loadedFonts: 0, rootWidthOverride: "[data-h2s-root] { width:100% !important }",
   sourceRevision: "a".repeat(40), capturedAt: "2026-09-23T04:00:00.000Z", chrome: "Chrome 140", xcode: "Xcode 26", simulator: "iPhone iOS-26",
-  _files: { ...files }, _images: { "browser.png": { width: 640, height: 200 }, "ios.png": { width: 640, height: 200 }, "diff.png": { width: 640, height: 200 } },
+  fixtureHash: "c".repeat(64), harnessHash: "d".repeat(64),
+  artifactHashes: { ...artifactHashes }, _hashes: { ...artifactHashes }, _files: { ...files },
+  _images: { "browser.png": { width: 640, height: 200 }, "ios.png": { width: 640, height: 200 }, "diff.png": { width: 640, height: 200 } },
   ...overrides,
 });
 
@@ -96,7 +100,15 @@ test("strict gate rejects missing provenance, stale revision and changed capture
   expect(assessQuality(before, { a: evidence() }, policy).issues.some(i => i.code === "provenance")).toBe(true);
   expect(assessQuality(before, { a: evidence({ sourceRevision: "b".repeat(40), dpr: 3 }) }, policy).issues.some(i => i.code === "provenance")).toBe(true);
   expect(assessQuality(before, { a: evidence({ sourceRevision: "b".repeat(40), loadedFonts: 1 }) }, policy).issues.some(i => i.code === "provenance")).toBe(true);
+  expect(assessQuality(before, { a: evidence({ sourceRevision: "b".repeat(40), fixtureHash: "e".repeat(64) }) }, policy).issues.some(i => i.code === "provenance")).toBe(true);
+  expect(assessQuality(before, { a: evidence({ sourceRevision: "b".repeat(40), harnessHash: "e".repeat(64) }) }, policy).issues.some(i => i.code === "provenance")).toBe(true);
   expect(assessQuality(before, { a: evidence({ sourceRevision: "b".repeat(40), chrome: "Chrome 141" }) }, policy).issues.some(i => i.code === "provenance")).toBe(true);
+});
+
+test("strict gate binds comparison scores to exact artifact contents", () => {
+  const before = { a: evidence() };
+  const altered = evidence({ _hashes: { ...artifactHashes, "ios.png": "b".repeat(64) } });
+  expect(assessQuality(before, { a: altered }, { requireEvidence: true }).issues.some(i => i.code === "artifact")).toBe(true);
 });
 
 test("feature floors reject an unchanged but unacceptable score", () => {
@@ -126,12 +138,17 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
   const before = join(dir, "before"), after = join(dir, "after"), revision = "b".repeat(40);
   const policy = join(dir, "policy.json");
   const png = await sharp({ create: { width: 640, height: 200, channels: 4, background: "#fff" } }).png().toBuffer();
+  const replacement = await sharp({ create: { width: 640, height: 200, channels: 4, background: "#f0f" } }).png().toBuffer();
+  let afterHashes: Record<string, string> = {};
   const create = async (root: string, comparison: Record<string, unknown>) => {
     const capture = join(root, "a");
     await mkdir(capture, { recursive: true });
     await Bun.write(join(capture, "compare.json"), JSON.stringify(comparison));
     for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"]) await Bun.write(join(capture, file), "{}");
     for (const file of ["browser.png", "ios.png", "diff.png"]) await Bun.write(join(capture, file), png);
+    const hashes = Object.fromEntries(await Promise.all(Object.keys(files).map(async name => [name, createHash("sha256").update(Buffer.from(await Bun.file(join(capture, name)).arrayBuffer())).digest("hex")])));
+    await Bun.write(join(capture, "compare.json"), JSON.stringify({ ...comparison, artifactHashes: hashes }));
+    return hashes;
   };
   const invoke = async () => {
     const run = Bun.spawn([process.execPath, join(import.meta.dir, "../../../tools/quality.ts"), before, after, policy], { stdout: "pipe", stderr: "pipe" });
@@ -140,15 +157,18 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
   };
   try {
     await create(before, evidence());
-    await create(after, evidence({ sourceRevision: revision }));
+    afterHashes = await create(after, evidence({ sourceRevision: revision }));
     await Bun.write(policy, JSON.stringify({ requireEvidence: true, expectedSourceRevision: revision, features: { "display-flex": { minSsim: 0.95 } } }));
     expect((await invoke()).exit).toBe(0);
+    await Bun.write(join(after, "a", "ios.png"), replacement);
+    expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "artifact")).toBe(true);
+    await Bun.write(join(after, "a", "ios.png"), png);
     await rm(join(after, "a", "ios.png"));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "artifact")).toBe(true);
     await Bun.write(join(after, "a", "ios.png"), png);
-    await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, ssim: 0.90 })));
+    await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, ssim: 0.90, artifactHashes: afterHashes })));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "floor")).toBe(true);
-    await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, chrome: "Chrome 141" })));
+    await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, chrome: "Chrome 141", artifactHashes: afterHashes })));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

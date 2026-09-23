@@ -1,6 +1,7 @@
 /** Compare saved visual measurements without invoking a browser or simulator. */
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 
 export interface CasePolicy { maxDrop?: number; minSsim?: number }
@@ -19,7 +20,8 @@ const positiveNumber = (v: unknown): v is number => typeof v === "number" && Num
 const nonempty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 const imageFiles = ["browser.png", "ios.png", "diff.png"] as const;
 const requiredFiles = [...imageFiles, "layout.json", "diagnostics.json", "warnings.json", "typecheck.json"] as const;
-const configuration = ["chrome", "xcode", "simulator", "dpr", "viewportWidth", "viewportHeight", "loadedFonts", "rootWidthOverride", "caseId", "mode", "theme"] as const;
+const configuration = ["chrome", "xcode", "simulator", "dpr", "viewportWidth", "viewportHeight", "loadedFonts", "rootWidthOverride", "fixtureHash", "harnessHash", "caseId", "mode", "theme"] as const;
+const sha256 = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
 
 function validRule(rule: unknown): rule is CasePolicy {
   return record(rule) && Object.keys(rule).every(key => key === "maxDrop" || key === "minSsim") &&
@@ -33,6 +35,10 @@ function validateEvidence(value: Record<string, unknown>, capture: string, issue
   if (!record(files) || requiredFiles.some(file => files[file] !== true)) {
     issues.push({ code: "artifact", capture, message: "Browser, iOS, diff, layout, diagnostics, warnings and typecheck artifacts are required." });
   }
+  const declaredHashes = value.artifactHashes, actualHashes = value._hashes;
+  if (!record(declaredHashes) || !record(actualHashes) || requiredFiles.some(file => !sha256(declaredHashes[file]) || declaredHashes[file] !== actualHashes[file])) {
+    issues.push({ code: "artifact", capture, message: "Artifact contents do not match the hashes recorded with the comparison." });
+  }
   const images = value._images;
   if (!record(images) || imageFiles.some(file => !record(images[file]) || images[file].width !== value.width || images[file].height !== value.height)) {
     issues.push({ code: "dimensions", capture, message: "Browser, iOS and diff PNGs must have the declared identical dimensions." });
@@ -40,7 +46,8 @@ function validateEvidence(value: Record<string, unknown>, capture: string, issue
   if (!/^[a-f0-9]{40}$/i.test(String(value.sourceRevision ?? "")) || !nonempty(value.capturedAt) ||
       Number.isNaN(Date.parse(value.capturedAt)) || configuration.some(key =>
         key === "dpr" ? !positiveNumber(value[key]) : key === "loadedFonts" ? !nonnegativeInteger(value[key]) :
-        ["viewportWidth", "viewportHeight"].includes(key) ? !positiveInteger(value[key]) : !nonempty(value[key]))) {
+        ["viewportWidth", "viewportHeight"].includes(key) ? !positiveInteger(value[key]) :
+        ["fixtureHash", "harnessHash"].includes(key) ? !sha256(value[key]) : !nonempty(value[key]))) {
     issues.push({ code: "provenance", capture, message: "Source revision, capture time and complete runtime/capture configuration are required." });
   }
 }
@@ -142,6 +149,8 @@ export async function loadComparisons(path: string): Promise<unknown> {
     if (!record(comparison)) { captures[entry.name] = comparison; continue; }
     const directory = join(path, entry.name);
     const files = Object.fromEntries(await Promise.all(requiredFiles.map(async name => [name, await Bun.file(join(directory, name)).exists()])));
+    const hashes = Object.fromEntries(await Promise.all(requiredFiles.map(async name => [name, files[name]
+      ? createHash("sha256").update(Buffer.from(await Bun.file(join(directory, name)).arrayBuffer())).digest("hex") : null])));
     const images = Object.fromEntries(await Promise.all(imageFiles.map(async name => {
       if (!files[name]) return [name, null];
       try {
@@ -149,7 +158,7 @@ export async function loadComparisons(path: string): Promise<unknown> {
         return [name, { width: metadata.width, height: metadata.height }];
       } catch { return [name, null]; }
     })));
-    captures[entry.name] = { ...comparison, _files: files, _images: images };
+    captures[entry.name] = { ...comparison, _files: files, _images: images, _hashes: hashes };
   }
   return captures;
 }
