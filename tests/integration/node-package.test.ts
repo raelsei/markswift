@@ -35,18 +35,19 @@ test("packed compiler imports and compiles in a Node consumer with declarations"
   size: { w: 200, h: 80 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [],
   root: { id: "root", tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 200, h: 80 }, children: [] },
 }`;
-    const consumer = `import { compileLayout } from "markswift/compiler";
-import { convertHtml } from "markswift";
+    const consumer = `import { compileLayout, compileResponsiveLayouts } from "markswift/compiler";
+import { convertHtml, convertResponsive } from "markswift";
 const layout = ${layoutSource};
 const result = compileLayout(layout, { name: "CardView" });
 if (!result.code.includes("struct CardView: View") || Object.keys(result.files).length !== 4) throw new Error("invalid Swift output");
 if (typeof convertHtml !== "function") throw new Error("Node root export is missing");
+if (typeof convertResponsive !== "function" || typeof compileResponsiveLayouts !== "function") throw new Error("responsive exports are missing");
 `;
     await writeFile(join(directory, "consumer.mjs"), consumer);
     const node = await run(["node", "consumer.mjs"], directory);
     expect(node.exitCode, node.stderr).toBe(0);
 
-    await writeFile(join(directory, "consumer.ts"), `import { compileLayout, type LayoutDoc } from "markswift/compiler";\nimport { convertHtml, type ConvertOptions } from "markswift";\nconst layout: LayoutDoc = ${layoutSource};\nconst result: string = compileLayout(layout).code;\nvoid result;\nconst options: ConvertOptions = { name: "CardView" };\nvoid convertHtml("<main>Hi</main>", options);\n// @ts-expect-error Swift type names must be strings\ncompileLayout(layout, { name: 42 });\n// @ts-expect-error LayoutDoc version must be numeric\nconst invalid: LayoutDoc = { ...layout, version: "broken" };\nvoid invalid;\n`);
+    await writeFile(join(directory, "consumer.ts"), `import { compileLayout, compileResponsiveLayouts, type LayoutDoc } from "markswift/compiler";\nimport { convertHtml, convertResponsive, type ConvertOptions, type ResponsiveConvertOptions } from "markswift";\nconst layout: LayoutDoc = ${layoutSource};\nconst result: string = compileLayout(layout).code;\nvoid result;\nconst options: ConvertOptions = { name: "CardView" };\nvoid convertHtml("<main>Hi</main>", options);\nconst responsive: ResponsiveConvertOptions = { name: "PageView", breakpoint: 350, compact: { viewport: { width: 320, height: 568 } }, regular: { viewport: { width: 390, height: 844 } } };\nvoid convertResponsive({ html: "<main>Hi</main>" }, responsive);\nvoid compileResponsiveLayouts({ name: "PageView", breakpoint: 350, compact: { layout, viewportWidth: 320 }, regular: { layout, viewportWidth: 390 } });\n// @ts-expect-error Swift type names must be strings\ncompileLayout(layout, { name: 42 });\n// @ts-expect-error LayoutDoc version must be numeric\nconst invalid: LayoutDoc = { ...layout, version: "broken" };\nvoid invalid;\n`);
     await writeFile(join(directory, "tsconfig.json"), JSON.stringify({ compilerOptions: {
       strict: true, target: "ES2022", lib: ["ES2022", "DOM", "ESNext.Disposable"], types: ["node"],
       module: "NodeNext", moduleResolution: "NodeNext", noEmit: true,
@@ -96,7 +97,7 @@ test("plain Git install exposes committed Node compiler and root API without lif
   const directory = await mkdtemp(join(tmpdir(), "markswift-git-consumer-"));
   try {
     const consumer = await installGitConsumer(directory);
-    const node = await run(["node", "--input-type=module", "-e", 'import { compileLayout } from "markswift/compiler"; import { convertHtml } from "markswift"; if (typeof compileLayout !== "function" || typeof convertHtml !== "function") process.exit(1)'], consumer);
+    const node = await run(["node", "--input-type=module", "-e", 'import { compileLayout, compileResponsiveLayouts } from "markswift/compiler"; import { convertHtml, convertResponsive } from "markswift"; if (typeof compileLayout !== "function" || typeof convertHtml !== "function" || typeof compileResponsiveLayouts !== "function" || typeof convertResponsive !== "function") process.exit(1)'], consumer);
     expect(node.exitCode, node.stderr).toBe(0);
     const bun = await run(["bun", "-e", 'import { convertHtml } from "markswift"; if (typeof convertHtml !== "function") process.exit(1)'], consumer);
     expect(bun.exitCode, bun.stderr).toBe(0);

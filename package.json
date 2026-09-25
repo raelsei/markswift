@@ -14,7 +14,7 @@
     "test": "bun test tests/unit tests/architecture tests/integration",
     "quality": "bun run tools/quality.ts",
     "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration",
-    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts",
+    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/integration/responsive-compile.test.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture"
   },

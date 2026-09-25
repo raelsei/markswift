@@ -47,6 +47,28 @@ console.log(result.code, result.mapping, result.diagnostics, result.warnings);
 
 `convert({ file: "./page.html" })` and `convert({ url: "http://localhost:5173/" }, { root: "#component" })` use the same pipeline. `css` must already be compiled. Default capture size is 390 × 844; `viewport`, `theme`, `mode`, `waitFor` and `prepare(page)` can select a state. The default root is `[data-markswift-root]`, otherwise `body`; the old `data-h2s-root` marker remains accepted.
 
+For a page with one known width breakpoint, capture each side and generate one SwiftUI view:
+
+```ts
+import { convertResponsive } from "markswift";
+
+const result = await convertResponsive(
+  { file: "./page.html" },
+  {
+    name: "PageView",
+    breakpoint: 350,
+    compact: { viewport: { width: 320, height: 844 } },
+    regular: { viewport: { width: 390, height: 844 } },
+  },
+);
+
+// Add every result.files entry and result.assets to one iOS target.
+// PageView chooses the compact branch at offered widths up to 350 points.
+console.log(result.code, result.views, result.warnings);
+```
+
+Both captures use the same source, stylesheet, theme and `prepare(page)` hook; the hook runs once per capture. The compact width must be at or below the breakpoint, and the regular width above it. `result.layouts` retains both measured documents, `result.views` reports each generated branch, and `result.branchWarnings` keeps capture warnings separately. The wrapper selects from two captured layouts using its offered SwiftUI width. It does not interpolate CSS at intermediate widths, reconstruct every `@media` condition, or react to orientation and container queries. This API is available in the library; the CLI and playground still convert one captured state per request.
+
 `compileLayout(layout)` is a synchronous browser-free compiler for an already measured `LayoutDoc`; import it from `markswift/compiler`. For several captured components in one Swift target, use `compileLayouts([{ layout: first, name: "FirstView" }, { layout: second, name: "SecondView" }])`. It returns one `files` bundle with shared runtime, tokens and shapes, plus per-view diagnostics in `views`; duplicate view names or conflicting resource paths fail explicitly. Give light and dark captures of the same component one `componentId` and distinct view names to pair their colors. The package includes built JavaScript, type declarations and a `markswift` CLI for Node.js, plus Bun source exports. Both runtimes still need Chrome for HTML/CSS capture. Building or repacking from source requires Bun.
 
 TypeScript consumers using the Playwright `prepare(page)` hook need Node type declarations and the `ESNext.Disposable` library in their TypeScript configuration.
@@ -83,7 +105,7 @@ PLAYGROUND_ORIGIN=https://your-pages-origin.example PORT=8787 bun run start:api
 
 Deploy the API from the whole repository checkout after the root `bun install --frozen-lockfile`; it imports the package's public source entry. `PLAYGROUND_ORIGIN` must exactly match the deployed frontend origin (scheme, host and optional port, without a path). The service listens on `0.0.0.0` and accepts the host's `PORT` variable; `PLAYGROUND_PORT` overrides it. Use a Linux or macOS service host and set a client rate limit at its public edge before opening the API to everyone. The frontend alone remains usable for HTML reference preview, but cannot convert without the service. Actual SwiftUI rendering requires an iOS target or simulator, so this browser app does not claim to preview the native result.
 
-The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. A `<video poster>` retains its static poster image, while playback and controls remain unsupported; audio and videos without posters keep their diagnosed placeholders. Embedded PNG, JPEG, GIF and WebP backgrounds retain their intrinsic size and position. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from one captured state. Active animation and transition styles receive node diagnostics; readable `@keyframes` and `@media` rules receive capture warnings even when they are dormant at the chosen viewport. Simple in-flow block percentage widths and equal `calc()`-sized flex tracks that fill their row resize in app mode; other complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note.
+The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. A `<video poster>` retains its static poster image, while playback and controls remain unsupported; audio and videos without posters keep their diagnosed placeholders. Embedded PNG, JPEG, GIF and WebP backgrounds retain their intrinsic size and position. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from captured states. Active animation and transition styles receive node diagnostics; readable `@keyframes` and `@media` rules receive capture warnings even when they are dormant at the chosen viewport. Simple in-flow block percentage widths and equal `calc()`-sized flex tracks that fill their row resize in app mode; other complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note.
 
 ## Roadmap and release gates
 
@@ -91,7 +113,7 @@ The checked-in HTML policy lists 115 tags from a September 2026 element inventor
 2. **No silent element loss:** conformance fixtures by element family and CSS family; captured state for controls, inline break opportunities, placeholders and unknown elements. Every unsupported visible case must leave content or a diagnosed fallback.
 3. **Smaller modules:** split long text inference, semantic dispatch and browser snapshot responsibilities while keeping generated output stable on existing fixtures.
 4. **Portable package:** ship built JavaScript, types and CLI; exercise the full capture API in installed Bun and Node consumers. Keep generated files in Git so a private Git dependency works without a build hook.
-5. **Responsive states:** capture both sides of an explicitly supplied viewport breakpoint, compile one shared Swift bundle and select the matching view at native runtime. Start with one width breakpoint; orientation, container queries and other state axes need separate coverage.
+5. **Responsive states:** the library now captures both sides of one explicit width breakpoint, compiles one shared Swift bundle and selects the matching view at native runtime. Orientation, container queries, intermediate widths, additional breakpoints, CLI and playground controls need separate coverage.
 6. **Visual acceptance:** compare representative components and full pages in Chrome and an iOS Simulator at multiple widths, themes and both output modes. Publish explicit per-family quality gates and known limits before a public alpha.
 7. **Playground:** the separate static frontend and bounded conversion service are in place. Public hosting needs Chrome on the service, edge rate limiting and deployment checks; native SwiftUI preview is a later capability.
 

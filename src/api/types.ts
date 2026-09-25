@@ -28,3 +28,29 @@ export interface ConversionResult extends CompileResult {
   warnings: string[];
   layout: LayoutDoc;
 }
+
+export interface ResponsiveConvertOptions extends Omit<ConvertOptions, "name" | "viewport"> {
+  /** Public Swift view name for the two captured variants. */
+  name: string;
+  /** Inclusive upper width of the compact branch in SwiftUI points. */
+  breakpoint: number;
+  compact: { viewport: { width: number; height: number } };
+  regular: { viewport: { width: number; height: number } };
+}
+
+export interface ResponsiveConversionResult {
+  name: string;
+  /** Swift source for the public responsive wrapper. */
+  code: string;
+  /** Wrapper, both captured views, and their shared Swift support sources. */
+  files: Record<string, string>;
+  /** Binary resources shared by both branches. */
+  assets: Record<string, Uint8Array>;
+  /** Mapping and diagnostics for each captured view; these are not visual-accuracy scores. */
+  views: Array<Omit<CompileResult, "files">>;
+  layouts: { compact: LayoutDoc; regular: LayoutDoc };
+  /** Deduplicated capture and font-packaging notes. See branchWarnings for capture provenance. */
+  warnings: string[];
+  /** Browser warnings for each viewport; a warning can occur in both branches. */
+  branchWarnings: { compact: string[]; regular: string[] };
+}
