@@ -11202,6 +11202,71 @@ function flexGrowthSize(n, axis, ctx, notes) {
   return { kind: "fixed", px: round2(axis === "h" ? n.bounds.w : n.bounds.h) };
 }
 
+// src/analysis/responsive-width.ts
+function equalCalculatedFlexWidth(n, declared, ctx) {
+  const match = /^calc\(\s*(\d+(?:\.\d+)?)%\s*([+-])\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(declared.trim());
+  const parent = ctx.parent;
+  if (!match || !parent || ctx.parentAxis !== "h" || !/flex/.test(ctx.parentDisplay ?? ""))
+    return false;
+  if (!/^row$/.test(parent.styles["flex-direction"] ?? "row") || !/^(?:nowrap|none)$/.test(parent.styles["flex-wrap"] ?? "nowrap"))
+    return false;
+  if (parent.children.some((child) => child.tag === "#text" && child.text?.trim()))
+    return false;
+  const siblings = parent.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none");
+  if (siblings.length < 2 || !siblings.includes(n))
+    return false;
+  if (siblings.some((child) => child.preferredSize?.width !== declared || child.styles.position && child.styles.position !== "static" || child.styles.float && child.styles.float !== "none" || !/^(?:auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none" || (child.styles["flex-basis"] ?? "auto") !== "auto" || insetsOf(child.styles).some((inset) => inset !== 0) || ["flex-grow", "flex-shrink", "flex-basis"].some((property) => child.styles[property] !== n.styles[property]) || ["left", "right"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0)))
+    return false;
+  const [, right, , left] = insetsOf(parent.styles);
+  const available = parent.bounds.w - left - right;
+  const fraction = Number(match[1]) / 100;
+  const offset = Number(match[3]) * (match[2] === "-" ? -1 : 1);
+  const gap = px(parent.styles["column-gap"] ?? parent.styles.gap);
+  if (Math.abs(siblings.length * fraction - 1) > 0.000001 || Math.abs(siblings.length * offset + gap * (siblings.length - 1)) > 0.000001)
+    return false;
+  if (!(available > 0) || siblings.some((child) => Math.abs(child.bounds.w - (available * fraction + offset)) > 1))
+    return false;
+  return Math.abs(siblings.reduce((sum, child) => sum + child.bounds.w, 0) + gap * (siblings.length - 1) - available) <= 1;
+}
+function responsiveFraction(n, declared, ctx) {
+  const match = /^(?:([0-9]+(?:\.[0-9]+)?)|(\.[0-9]+))%$/.exec(declared.trim());
+  if (!match || !ctx.parent || ctx.parentDisplay !== "block" || ctx.parentAxis !== "v")
+    return;
+  const fraction = Number(match[1] ?? match[2]) / 100;
+  if (!(fraction > 0 && fraction < 1))
+    return;
+  const parent = ctx.parent;
+  if (n.styles.display !== "block" || parent.styles.display !== "block")
+    return;
+  if ([n, parent].some((box) => box.styles.direction === "rtl" || box.styles["writing-mode"] !== undefined && box.styles["writing-mode"] !== "horizontal-tb"))
+    return;
+  if (hasCapturedPaintGeometry(n))
+    return;
+  if (![n, parent].every((box) => {
+    const s = box.styles;
+    return (!s.position || s.position === "static") && (!s.float || s.float === "none") && (!s.transform || s.transform === "none") && (!s["min-width"] || /^(?:auto|0(?:px)?)$/.test(s["min-width"])) && (!s["max-width"] || s["max-width"] === "none") && insetsOf(s).every((inset) => inset === 0) && ["left", "right", "top", "bottom"].every((edge) => px(s[`margin-${edge}`]) === 0);
+  }))
+    return;
+  if (parent.children.some((child) => child.tag === "#text" ? Boolean(child.text?.trim()) : child.styles.display !== "block" || child.styles.float && child.styles.float !== "none" || child.styles.position && child.styles.position !== "static"))
+    return;
+  if (Math.abs(n.bounds.w - parent.bounds.w * fraction) > 1)
+    return;
+  return fraction;
+}
+function hasCapturedPaintGeometry(n) {
+  const s = n.styles;
+  if (["svg", "img", "canvas", "video", "iframe", "object", "embed"].includes(n.tag))
+    return true;
+  if (["background-image", "mask-image", "clip-path", "box-shadow", "filter", "backdrop-filter"].some((property) => s[property] !== undefined && s[property] !== "none"))
+    return true;
+  if (["top-left", "top-right", "bottom-right", "bottom-left"].some((corner) => !zeroRadius(s[`border-${corner}-radius`])))
+    return true;
+  return n.children.some(hasCapturedPaintGeometry);
+}
+function zeroRadius(value) {
+  return value === undefined || value.trim().split(/\s+/).every((part) => /^0(?:\.0+)?(?:px|%)?$/.test(part));
+}
+
 // src/analysis/sizing.ts
 function trailingInset(n, height, padBottom) {
   if (height.kind !== "hug" || n.children.length === 0)
@@ -11340,69 +11405,6 @@ function sizeOf(n, d, ctx, notes) {
     }
   }
   return { width, height, ...constraints, ...selfAlign !== undefined ? { selfAlign } : {} };
-}
-function equalCalculatedFlexWidth(n, declared, ctx) {
-  const match = /^calc\(\s*(\d+(?:\.\d+)?)%\s*([+-])\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(declared.trim());
-  const parent = ctx.parent;
-  if (!match || !parent || ctx.parentAxis !== "h" || !/flex/.test(ctx.parentDisplay ?? ""))
-    return false;
-  if (!/^row$/.test(parent.styles["flex-direction"] ?? "row") || !/^(?:nowrap|none)$/.test(parent.styles["flex-wrap"] ?? "nowrap"))
-    return false;
-  if (parent.children.some((child) => child.tag === "#text" && child.text?.trim()))
-    return false;
-  const siblings = parent.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none");
-  if (siblings.length < 2 || !siblings.includes(n))
-    return false;
-  if (siblings.some((child) => child.preferredSize?.width !== declared || child.styles.position && child.styles.position !== "static" || child.styles.float && child.styles.float !== "none" || !/^(?:auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none" || (child.styles["flex-basis"] ?? "auto") !== "auto" || insetsOf(child.styles).some((inset) => inset !== 0) || ["flex-grow", "flex-shrink", "flex-basis"].some((property) => child.styles[property] !== n.styles[property]) || ["left", "right"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0)))
-    return false;
-  const [, right, , left] = insetsOf(parent.styles);
-  const available = parent.bounds.w - left - right;
-  const fraction = Number(match[1]) / 100;
-  const offset = Number(match[3]) * (match[2] === "-" ? -1 : 1);
-  const gap = px(parent.styles["column-gap"] ?? parent.styles.gap);
-  if (Math.abs(siblings.length * fraction - 1) > 0.000001 || Math.abs(siblings.length * offset + gap * (siblings.length - 1)) > 0.000001)
-    return false;
-  if (!(available > 0) || siblings.some((child) => Math.abs(child.bounds.w - (available * fraction + offset)) > 1))
-    return false;
-  return Math.abs(siblings.reduce((sum, child) => sum + child.bounds.w, 0) + gap * (siblings.length - 1) - available) <= 1;
-}
-function responsiveFraction(n, declared, ctx) {
-  const match = /^(?:([0-9]+(?:\.[0-9]+)?)|(\.[0-9]+))%$/.exec(declared.trim());
-  if (!match || !ctx.parent || ctx.parentDisplay !== "block" || ctx.parentAxis !== "v")
-    return;
-  const fraction = Number(match[1] ?? match[2]) / 100;
-  if (!(fraction > 0 && fraction < 1))
-    return;
-  const parent = ctx.parent;
-  if (n.styles.display !== "block" || parent.styles.display !== "block")
-    return;
-  if ([n, parent].some((box) => box.styles.direction === "rtl" || box.styles["writing-mode"] !== undefined && box.styles["writing-mode"] !== "horizontal-tb"))
-    return;
-  if (hasCapturedPaintGeometry(n))
-    return;
-  if (![n, parent].every((box) => {
-    const s = box.styles;
-    return (!s.position || s.position === "static") && (!s.float || s.float === "none") && (!s.transform || s.transform === "none") && (!s["min-width"] || /^(?:auto|0(?:px)?)$/.test(s["min-width"])) && (!s["max-width"] || s["max-width"] === "none") && insetsOf(s).every((inset) => inset === 0) && ["left", "right", "top", "bottom"].every((edge) => px(s[`margin-${edge}`]) === 0);
-  }))
-    return;
-  if (parent.children.some((child) => child.tag === "#text" ? Boolean(child.text?.trim()) : child.styles.display !== "block" || child.styles.float && child.styles.float !== "none" || child.styles.position && child.styles.position !== "static"))
-    return;
-  if (Math.abs(n.bounds.w - parent.bounds.w * fraction) > 1)
-    return;
-  return fraction;
-}
-function hasCapturedPaintGeometry(n) {
-  const s = n.styles;
-  if (["svg", "img", "canvas", "video", "iframe", "object", "embed"].includes(n.tag))
-    return true;
-  if (["background-image", "mask-image", "clip-path", "box-shadow", "filter", "backdrop-filter"].some((property) => s[property] !== undefined && s[property] !== "none"))
-    return true;
-  if (["top-left", "top-right", "bottom-right", "bottom-left"].some((corner) => !zeroRadius(s[`border-${corner}-radius`])))
-    return true;
-  return n.children.some(hasCapturedPaintGeometry);
-}
-function zeroRadius(value) {
-  return value === undefined || value.trim().split(/\s+/).every((part) => /^0(?:\.0+)?(?:px|%)?$/.test(part));
 }
 
 // src/analysis/node-base.ts

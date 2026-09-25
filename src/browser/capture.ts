@@ -15,6 +15,7 @@ import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
 import { generatedContentWarnings } from "./generated-content.ts";
 import { readKeyframeNames, readTransitionProperties, restoreTransitionProperties } from "./motion.ts";
+import { mediaWarning, readMediaConditions } from "./media.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-h2s-root-capture";
@@ -64,7 +65,7 @@ export class BrowserCapture {
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
     const page = await this.context.newPage();
     const errors: string[] = [];
-    const motionWarnings: string[] = [];
+    const styleWarnings: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
     // Chromium probes /favicon.ico on its own; a static directory rarely has one.
@@ -104,7 +105,9 @@ export class BrowserCapture {
       const noTransition = await page.addStyleTag({ content: "*, *::before, *::after, *::marker { transition-property: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-h2s-harness", ""));
       await settle(page, spec.hide ?? []);
-      for (const name of await readKeyframeNames(page)) motionWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
+      for (const name of await readKeyframeNames(page)) styleWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
+      const media = mediaWarning(await readMediaConditions(page));
+      if (media) styleWarnings.push(media);
       const fonts = await collectFontFaces(page);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(
@@ -184,7 +187,7 @@ export class BrowserCapture {
       }
       if (errors.length && !spec.inlineImages) console.warn(`[render] ${spec.screen}/${spec.theme}: page errors:\n  ${errors.join("\n  ")}`);
       return {
-        warnings: [...errors, ...motionWarnings],
+        warnings: [...errors, ...styleWarnings],
         layout: {
           version: 1,
           source,

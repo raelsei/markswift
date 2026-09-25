@@ -12,7 +12,9 @@ for (const width of [320, 390, 768]) {
   for (const theme of ["light", "dark"] as const) {
     browserTest(`grid placement and wrapping preserve Chrome geometry at ${width}px in ${theme}`, async () => {
       const result = await convertHtml(FLOW_HTML, { css: FLOW_CSS, viewport: { width, height: 1800 }, theme, name: "LayoutFlow", mode: "fidelity" });
-      expect(result.warnings).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("@media");
+      expect(result.warnings[0]).toContain("prefers-color-scheme");
       const captured = new Map<string, LayoutNode>();
       const walk = (n: LayoutNode) => { if (n.attrs.id) captured.set(n.attrs.id, n); n.children.forEach(walk); };
       walk(result.layout.root);

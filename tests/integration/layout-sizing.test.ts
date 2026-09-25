@@ -62,7 +62,9 @@ for (const width of [320, 390, 768]) {
   for (const theme of ["light", "dark"] as const) {
     browserTest(`sizing constraints and flex allocation remain correct at ${width}px in ${theme} theme`, async () => {
       const result = await convertHtml(HTML, { name: "LayoutSizing", css: CSS, mode: "fidelity", theme, viewport: { width, height: 1200 } });
-      expect(result.warnings).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("@media");
+      expect(result.warnings[0]).toContain("prefers-color-scheme");
       expect(result.layout.size.w).toBe(width);
       expect(result.layout.combo.theme).toBe(theme);
       expect(result.layout.canvas).toBe(theme === "dark" ? "rgb(24, 24, 30)" : "rgb(248, 249, 251)");
