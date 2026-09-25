@@ -15,6 +15,27 @@ bun run typecheck
 bun run test
 ```
 
+## Command-line conversion
+
+The alpha CLI runs with Bun from this checkout; it does not require the playground API.
+Give it a new output directory because one conversion produces several Swift sources and may
+include font assets. An existing directory is never overwritten.
+
+```sh
+bun src/cli.ts convert ./card.html --css ./card.css --name CardView --out ./generated
+cat ./card.html | bun src/cli.ts convert - --css ./card.css --out ./generated-from-stdin
+bun src/cli.ts convert --url http://localhost:5173/card --root '#preview' --out ./generated-page
+bun src/cli.ts --help
+```
+
+The source can be a full HTML document, a fragment, stdin (`-`), or a running HTTP(S) page.
+`--css` takes a **compiled** CSS file. File inputs resolve relative assets beside the HTML;
+stdin is for self-contained markup and data-URL assets. `--width`, `--height`, `--theme`, and
+`--mode` select the captured state. Normal output prints the destination; warnings and
+approximation notes go to stderr. Exit status is 0 for a completed conversion, 2 for invalid
+command options, and 1 for a conversion or file error. Run `bun src/cli.ts convert --help` for
+the complete option list.
+
 Create a script in this checkout:
 
 ```ts
@@ -95,6 +116,7 @@ are kept locally rather than included in this library repository.
 
 | Directory | Responsibility |
 | --- | --- |
+| `src/cli.ts`, `src/cli/` | Command parsing, diagnostics and complete bundle writing |
 | `src/api/` | Public conversion options and resource lifecycle |
 | `src/input/` | HTML sources, root selection and node identity |
 | `src/html/` | Shared element policies, atomic inline boundaries and input-control routing |
