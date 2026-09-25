@@ -5,10 +5,18 @@ import { ensureVacant, writeBundle } from "./output.ts";
 
 export async function runConversion(command: ConversionCommand): Promise<void> {
   await ensureVacant(command.outDir);
+  if ("file" in command.source && !(await Bun.file(command.source.file).exists())) {
+    throw new Error(`HTML file not found: ${command.source.file}`);
+  }
   const source: HtmlSource = "stdin" in command.source
     ? { html: await Bun.stdin.text() }
     : command.source;
-  const css = command.cssPath ? await Bun.file(command.cssPath).text() : undefined;
+  let css: string | undefined;
+  if (command.cssPath) {
+    const cssFile = Bun.file(command.cssPath);
+    if (!(await cssFile.exists())) throw new Error(`CSS file not found: ${command.cssPath} (--css is optional)`);
+    css = await cssFile.text();
+  }
   const result = await convert(source, { ...command.options, css });
   const files = await writeBundle(result, command.outDir);
   process.stdout.write(`Wrote ${files.length} files for ${result.name} to ${command.outDir}\n`);

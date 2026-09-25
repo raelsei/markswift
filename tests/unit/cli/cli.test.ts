@@ -64,6 +64,25 @@ test("CLI leaves an existing output directory untouched", async () => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test("CLI explains missing input files before starting Chrome", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-cli-missing-"));
+  try {
+    const html = join(directory, "card.html");
+    const css = join(directory, "card.css");
+    const output = join(directory, "generated");
+    const missingHtml = await invoke("convert", html, "--out", output);
+    expect(missingHtml.code).toBe(1);
+    expect(missingHtml.stderr).toContain(`HTML file not found: ${html}`);
+
+    await Bun.write(html, "<main>Card</main>");
+    const missingCss = await invoke("convert", html, "--css", css, "--out", output);
+    expect(missingCss.code).toBe(1);
+    expect(missingCss.stderr).toContain(`CSS file not found: ${css}`);
+    expect(missingCss.stderr).toContain("--css is optional");
+    expect(await Bun.file(join(output, "CardView.swift")).exists()).toBe(false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("invalid Swift names are usage errors before Chrome starts", async () => {
   const result = await invoke("convert", "card.html", "--name", "bad name", "--out", "generated");
   expect(result.code).toBe(2);

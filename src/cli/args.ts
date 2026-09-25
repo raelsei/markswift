@@ -24,7 +24,7 @@ Inputs:
   <file.html>       HTML document or fragment; relative assets use its directory
   -                 Read HTML from stdin (inline/data assets only)
   --url <url>       Capture a running HTTP or HTTPS page
-  --css <file>      Add compiled CSS from a file
+  --css <file>      Optional compiled CSS file
 
 Options:
   --out <directory> Required. Must not already exist; writes every Swift file and asset

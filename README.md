@@ -22,14 +22,20 @@ Give it a new output directory because one conversion produces several Swift sou
 include font assets. An existing directory is never overwritten.
 
 ```sh
-bun src/cli.ts convert ./card.html --css ./card.css --name CardView --out ./generated
-cat ./card.html | bun src/cli.ts convert - --css ./card.css --out ./generated-from-stdin
-bun src/cli.ts convert --url http://localhost:5173/card --root '#preview' --out ./generated-page
+printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18px system-ui">Hello Markswift</main>' \
+  | bun src/cli.ts convert - --name HelloCard --out ./generated-hello
 bun src/cli.ts --help
 ```
 
+The first command works without creating any input files. For your own files, run
+`bun src/cli.ts convert ./path/to/page.html --out ./generated-page`; add
+`--css ./path/to/compiled.css` only when you have a separate compiled stylesheet.
+You can also capture a running site with
+`bun src/cli.ts convert --url http://localhost:5173/card --root '#preview' --out ./generated-card`.
+Choose a new output directory for each run.
+
 The source can be a full HTML document, a fragment, stdin (`-`), or a running HTTP(S) page.
-`--css` takes a **compiled** CSS file. File inputs resolve relative assets beside the HTML;
+`--css` is optional and takes a **compiled** CSS file. File inputs resolve relative assets beside the HTML;
 stdin is for self-contained markup and data-URL assets. `--width`, `--height`, `--theme`, and
 `--mode` select the captured state. Normal output prints the destination; warnings and
 approximation notes go to stderr. Exit status is 0 for a completed conversion, 2 for invalid
