@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { convertHtml } from "../../src/index.ts";
+import sharp from "sharp";
+import { convert, convertHtml } from "../../src/index.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
@@ -91,4 +92,30 @@ browserTest("image-map hit regions are reported on the image even though area ha
     confidence: "approximated",
     notes: expect.arrayContaining([expect.stringContaining("hit regions")]),
   }));
+}, 30000);
+
+browserTest("video poster survives browser capture as a static image with playback loss reported", async () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="45"><rect width="80" height="45" fill="red"/></svg>';
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  let requests = 0;
+  let origin = "";
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (request) => {
+    if (new URL(request.url).pathname === "/poster.png") {
+      requests++;
+      return new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } });
+    }
+    return new Response(`<main data-markswift-root><video id="poster-video" poster="${origin}/poster.png" controls style="width:160px;height:90px;object-fit:cover"></video><video id="plain-video" style="width:80px;height:45px"></video></main>`, { headers: { "content-type": "text/html" } });
+  } });
+  try {
+    origin = `http://127.0.0.1:${server.port}`;
+    const result = await convert({ url: origin }, { name: "VideoPoster" });
+    expect(requests).toBeGreaterThan(0);
+    expect(findById(result.layout.root, "poster-video")?.attrs.poster).toMatch(/^data:image\/png;base64,/);
+    expect(result.diagnostics.find(item => item.id === "#poster-video")).toEqual(expect.objectContaining({
+      kind: "image", confidence: "approximated", notes: expect.arrayContaining([expect.stringContaining("playback")]),
+    }));
+    expect(result.diagnostics.find(item => item.id === "#plain-video")).toEqual(expect.objectContaining({ kind: "box", confidence: "unmapped" }));
+    expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)/);
+    expect(result.code).not.toContain("poster.png");
+  } finally { server.stop(true); }
 }, 30000);

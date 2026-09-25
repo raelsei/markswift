@@ -17,6 +17,10 @@ export function classifyElement(tag: string, attrs: Record<string, string> = {})
     route: "image", support: "approximated", atomic: true, known: true,
     note: "approximated: <img usemap> image-map hit regions and navigation are not translated",
   };
+  if (tag === "video" && attrs["poster"]?.trim()) return {
+    route: "image", support: "approximated", atomic: true, known: true,
+    note: "approximated: <video poster> → static poster image; playback and controls are not translated",
+  };
   if (tag === "input") {
     const type = (attrs["type"] ?? "text").toLowerCase();
     const why = Object.hasOwn(INPUT_PLACEHOLDERS, type) ? INPUT_PLACEHOLDERS[type] : undefined;

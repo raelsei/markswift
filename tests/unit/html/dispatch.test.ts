@@ -62,3 +62,21 @@ test("an object's visible fallback remains usable while its resource loss is rep
   expect(result.code).toContain("Resource unavailable");
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ id: "object", confidence: "unmapped" }));
 });
+
+test("video poster reuses the measured image path in both modes", () => {
+  const poster = "data:image/png;base64,iVBORw0KGgo=";
+  const input = document(element("video", [], { "object-fit": "cover" }, { poster, controls: "" }));
+  const semantic = inferScreen(input, "video").root;
+  expect(semantic.kind).toBe("image");
+  if (semantic.kind !== "image") throw new Error("Video poster was not an image");
+  expect(semantic.src).toBe(poster);
+  expect(semantic.contentMode).toBe("fill");
+  for (const mode of ["app", "fidelity"] as const) {
+    const result = compileLayout(input, { mode });
+    expect(result.code).toContain('Image.markswiftData("iVBORw0KGgo=")');
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      id: "video", kind: "image", confidence: "approximated",
+      notes: expect.arrayContaining([expect.stringContaining("playback")]),
+    }));
+  }
+});

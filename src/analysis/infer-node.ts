@@ -24,7 +24,7 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     const position = n.styles["object-position"] ?? "50% 50%";
     const image = withBase(n, ctx, {
       kind: "image",
-      src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src: n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });

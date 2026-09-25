@@ -6,7 +6,7 @@ export declare function parseBackgroundRepeat(s: string | undefined): Background
  * Natural viewport of a `data:image/svg+xml` URL. A viewBox-only resource has an aspect
  * ratio but no absolute dimensions: without `boxW`/`boxH` this uses the browser's 300×150
  * default object, while a background fits that ratio inside its positioning area.
- * Raster and external images are unknown here.
+ * Embedded raster resources use their encoded pixel dimensions. External images are unknown.
  */
 export declare function imageSize(url: string, boxW?: number, boxH?: number): {
     w: number;

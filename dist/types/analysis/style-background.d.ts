@@ -11,8 +11,8 @@ export declare function textPaintOf(el: LayoutNode, run: Rect): Paint | undefine
 /**
  * `url()` layer `i` of `background-*` / `mask-*` → image paint with its size, top-left
  * position and repeat resolved in px. The position needs the drawn size: explicit
- * `background-size`, the intrinsic size of a data: svg, or the cover/contain scaling of
- * that; unknown (raster files) → only a `0% 0%` position is certain.
+ * `background-size`, the intrinsic size of an embedded image, or the cover/contain scaling of
+ * that; unresolved external files can only establish a `0% 0%` position.
  */
 export declare function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number): Paint;
 export declare function backgroundFills(s: Record<string, string>, w: number, h: number, notes: string[]): Paint[];

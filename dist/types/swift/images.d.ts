@@ -9,7 +9,7 @@ type ImagePaint = Extract<Paint, {
  * the image as an overlay so cover/contain overflow is aligned to the box and clipped by the
  * caller. Vector sources are scaled here (cover/contain/explicit size against the intrinsic SVG viewport);
  * raster ones let SwiftUI scale. Repeats tile through `MarkswiftTile` whenever the tile size is
- * known (vector viewBox or explicit size); a raster at its intrinsic size uses `.tile`.
+ * known (vector viewport, decoded raster header or explicit size). Unresolved raster sizes use `.tile`.
  * `undefined` when the source cannot be shown (noted on the node).
  */
 export declare function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitContext): string[] | undefined;

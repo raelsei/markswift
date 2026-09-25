@@ -19,3 +19,10 @@ test("uncaptured images report an explicit warning rather than imply an existing
   expect(inlineCapturedImages(root, "http://localhost/", new Map())).toHaveLength(1);
   expect(root.attrs["data-h2s-src"]).toBe("http://localhost/missing.png");
 });
+
+test("video poster embeds the image resource that Chrome loaded", () => {
+  const root: LayoutNode = { tag: "video", attrs: { poster: "poster.png" }, styles: {}, bounds: { x: 0, y: 0, w: 80, h: 45 }, children: [] };
+  const images = new Map([["http://localhost/assets/poster.png", "data:image/png;base64,AAAA"]]);
+  expect(inlineCapturedImages(root, "http://localhost/assets/", images)).toEqual([]);
+  expect(root.attrs.poster).toBe("data:image/png;base64,AAAA");
+});

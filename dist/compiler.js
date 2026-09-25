@@ -9436,6 +9436,47 @@ class DomHandler {
     this.lastNode = null;
   }
 }
+// src/css/raster-dimensions.ts
+function rasterDimensions(bytes) {
+  const size = (w, h) => w > 0 && h > 0 ? { w, h } : undefined;
+  if (bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && bytes.toString("ascii", 12, 16) === "IHDR")
+    return size(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
+  if (bytes.length >= 10 && /^(GIF87a|GIF89a)$/.test(bytes.toString("ascii", 0, 6)))
+    return size(bytes.readUInt16LE(6), bytes.readUInt16LE(8));
+  if (bytes.length >= 12 && bytes[0] === 255 && bytes[1] === 216) {
+    let at = 2;
+    while (at + 3 < bytes.length) {
+      if (bytes[at++] !== 255)
+        break;
+      while (bytes[at] === 255)
+        at++;
+      const marker = bytes[at++];
+      if (marker === 217 || marker === 218)
+        break;
+      if (marker === 1 || marker >= 208 && marker <= 215)
+        continue;
+      if (at + 2 > bytes.length)
+        break;
+      const length = bytes.readUInt16BE(at);
+      if (length < 2 || at + length > bytes.length)
+        break;
+      if ((marker >= 192 && marker <= 195 || marker >= 197 && marker <= 199 || marker >= 201 && marker <= 203 || marker >= 205 && marker <= 207) && length >= 7)
+        return size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
+      at += length;
+    }
+  }
+  if (bytes.length >= 30 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") {
+    const chunk = bytes.toString("ascii", 12, 16);
+    if (chunk === "VP8 " && bytes[23] === 157 && bytes[24] === 1 && bytes[25] === 42)
+      return size(bytes.readUInt16LE(26) & 16383, bytes.readUInt16LE(28) & 16383);
+    if (chunk === "VP8L" && bytes[20] === 47)
+      return size(1 + bytes[21] + ((bytes[22] & 63) << 8), 1 + (bytes[22] >> 6) + (bytes[23] << 2) + ((bytes[24] & 15) << 10));
+    if (chunk === "VP8X")
+      return size(1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16), 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16));
+  }
+  return;
+}
+
 // src/css/background.ts
 function parseBackgroundRepeat(s) {
   const layer = splitTop(s ?? "", ",")[0];
@@ -9452,6 +9493,15 @@ function parseBackgroundRepeat(s) {
   return;
 }
 function imageSize(url, boxW, boxH) {
+  if (/^data:image\//i.test(url) && !/^data:image\/svg\+xml/i.test(url)) {
+    const comma = url.indexOf(",");
+    if (comma < 0)
+      return;
+    const header = url.slice(0, comma);
+    const payload = url.slice(comma + 1);
+    const bytes = /;base64(?:;|$)/i.test(header) ? Buffer.from(payload, "base64") : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))), "latin1");
+    return rasterDimensions(bytes);
+  }
   if (!/^data:image\/svg\+xml/i.test(url))
     return;
   const comma = url.indexOf(",");
@@ -10494,6 +10544,14 @@ function classifyElement(tag, attrs = {}) {
       atomic: true,
       known: true,
       note: "approximated: <img usemap> image-map hit regions and navigation are not translated"
+    };
+  if (tag === "video" && attrs["poster"]?.trim())
+    return {
+      route: "image",
+      support: "approximated",
+      atomic: true,
+      known: true,
+      note: "approximated: <video poster> → static poster image; playback and controls are not translated"
     };
   if (tag === "input") {
     const type = (attrs["type"] ?? "text").toLowerCase();
@@ -12176,7 +12234,7 @@ function build(n, ctx) {
     const position = n.styles["object-position"] ?? "50% 50%";
     const image = withBase(n, ctx, {
       kind: "image",
-      src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src: n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}
     });

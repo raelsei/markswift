@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { imageSize, parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize, type BackgroundRepeat, type BackgroundSize } from "../../../src/css/background.ts";
 import { svgRootDimensions } from "../../../src/css/svg-intrinsic.ts";
+import sharp from "sharp";
 
 
 describe("parseBackgroundSize", () => {
@@ -79,7 +80,21 @@ describe("parseBackgroundRepeat", () => {
 
 
 describe("imageSize", () => {
-  test("reads width/height or viewBox from a data: svg, nothing from rasters", () => {
+  test("reads a PNG's natural CSS-pixel dimensions for background positioning", async () => {
+    const png = await sharp({ create: { width: 32, height: 16, channels: 4, background: "#ff0000" } }).png().toBuffer();
+    expect(imageSize(`data:image/png;base64,${png.toString("base64")}`)).toEqual({ w: 32, h: 16 });
+  });
+  test("reads common encoded raster dimensions without decoding pixels", async () => {
+    const source = sharp({ create: { width: 37, height: 19, channels: 4, background: "#0000ff" } });
+    const samples = await Promise.all([
+      source.clone().jpeg().toBuffer(),
+      source.clone().gif().toBuffer(),
+      source.clone().webp().toBuffer(),
+    ]);
+    for (const [index, mime] of ["image/jpeg", "image/gif", "image/webp"].entries())
+      expect(imageSize(`data:${mime};base64,${samples[index]!.toString("base64")}`)).toEqual({ w: 37, h: 19 });
+  });
+  test("reads width/height or viewBox from a data: svg; rejects malformed raster data", () => {
     const svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
     expect(imageSize(svg)).toEqual({ w: 160, h: 100 });
     expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")).toEqual({ w: 300, h: 150 });

@@ -24,8 +24,8 @@ function layerValue(list: string | undefined, i: number): string | undefined {
 /**
  * `url()` layer `i` of `background-*` / `mask-*` → image paint with its size, top-left
  * position and repeat resolved in px. The position needs the drawn size: explicit
- * `background-size`, the intrinsic size of a data: svg, or the cover/contain scaling of
- * that; unknown (raster files) → only a `0% 0%` position is certain.
+ * `background-size`, the intrinsic size of an embedded image, or the cover/contain scaling of
+ * that; unresolved external files can only establish a `0% 0%` position.
  */
 export function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number): Paint {
   const img = imageSize(url, w, h);

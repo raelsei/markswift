@@ -66,3 +66,12 @@ test("an image-map limitation is attached to its visible image", () => {
   expect(policy.note).toContain("hit regions");
   expect(classifyElement("img").support).toBe("implemented");
 });
+
+test("a video poster is a static image while video without a poster stays unsupported", () => {
+  const poster = classifyElement("video", { poster: "data:image/png;base64,AAAA", controls: "" });
+  expect(poster).toMatchObject({ route: "image", support: "approximated", atomic: true });
+  expect(poster.note).toContain("playback");
+  expect(poster.note).toContain("controls");
+  expect(classifyElement("video").route).toBe("placeholder");
+  expect(classifyElement("video", { poster: "" }).support).toBe("unsupported");
+});

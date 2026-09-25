@@ -18,6 +18,7 @@ export function inlineCapturedImages(root: LayoutNode, baseURL: string, images: 
       const source = node.attrs["data-h2s-src"] ?? node.attrs.src;
       if (source) node.attrs["data-h2s-src"] = resolve(source);
     }
+    if (node.tag === "video" && node.attrs.poster) node.attrs.poster = resolve(node.attrs.poster);
     for (const property of ["background-image", "mask-image", "-webkit-mask-image", "border-image-source", "list-style-image"]) {
       const value = node.styles[property];
       if (value) node.styles[property] = value.replace(/url\(\s*(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|([^)]*))\s*\)/g,

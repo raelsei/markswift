@@ -2,6 +2,7 @@
 import { splitTop, resolveLength } from "./syntax.ts";
 import { svgRootDimensions } from "./svg-intrinsic.ts";
 import { Parser } from "htmlparser2";
+import { rasterDimensions } from "./raster-dimensions.ts";
 
 
 /** `background-repeat` per layer; `space`/`round` collapse to `repeat`. */
@@ -26,9 +27,19 @@ export function parseBackgroundRepeat(s: string | undefined): BackgroundRepeat |
  * Natural viewport of a `data:image/svg+xml` URL. A viewBox-only resource has an aspect
  * ratio but no absolute dimensions: without `boxW`/`boxH` this uses the browser's 300×150
  * default object, while a background fits that ratio inside its positioning area.
- * Raster and external images are unknown here.
+ * Embedded raster resources use their encoded pixel dimensions. External images are unknown.
  */
 export function imageSize(url: string, boxW?: number, boxH?: number): { w: number; h: number } | undefined {
+  if (/^data:image\//i.test(url) && !/^data:image\/svg\+xml/i.test(url)) {
+    const comma = url.indexOf(",");
+    if (comma < 0) return undefined;
+    const header = url.slice(0, comma);
+    const payload = url.slice(comma + 1);
+    const bytes = /;base64(?:;|$)/i.test(header)
+      ? Buffer.from(payload, "base64")
+      : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))), "latin1");
+    return rasterDimensions(bytes);
+  }
   if (!/^data:image\/svg\+xml/i.test(url)) return undefined;
   const comma = url.indexOf(",");
   let svg = url.slice(comma + 1);
