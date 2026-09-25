@@ -61,6 +61,29 @@ HTML scripts run during normal capture. Use trusted local pages. For a hosted pa
 
 Chrome is needed to resolve the CSS cascade, fonts and geometry before conversion. Visual fidelity requires an additional comparison between a browser image and the rendered iOS component, at specified sizes and themes. Compile success, tag classification and a single screenshot score are different checks.
 
+## Playground
+
+The playground lives in `apps/playground`. It is a separate application that calls the public `markswift` library through a small Bun service. Its HTML preview shows the **browser source**, not rendered SwiftUI. The output panel shows every generated Swift file, a downloadable bundle and the mapping report. Pasted scripts and external requests are blocked in the preview and conversion service.
+
+Run it locally after installing the root and app dependencies:
+
+```sh
+bun install --frozen-lockfile
+cd apps/playground
+bun install --frozen-lockfile
+bun run dev
+```
+
+Open `http://127.0.0.1:4325/`. This local server serves both the static frontend and `/api/convert`; installed Google Chrome is required for conversion. `bun run typecheck`, `bun run test` and `MARKSWIFT_BROWSER_TESTS=1 bun run test` check the app and service. The service accepts pasted HTML and compiled CSS only, with bounded inputs, two concurrent conversions and a 60-second conversion deadline.
+
+The frontend can be deployed as **static files**, including to GitHub Pages. Build it with `PLAYGROUND_API_ORIGIN=https://your-api-origin.example bun run build` from `apps/playground`, then publish `apps/playground/dist/`. [GitHub Pages from a private repository requires an eligible GitHub plan](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site), and its published site is public even when the source repository is private. Start the service separately on a Bun host with Chrome installed:
+
+```sh
+PLAYGROUND_ORIGIN=https://your-pages-origin.example PORT=8787 bun run start:api
+```
+
+`PLAYGROUND_ORIGIN` must exactly match the deployed frontend origin (scheme, host and optional port, without a path). The service listens on `0.0.0.0` and accepts the host's `PORT` variable; `PLAYGROUND_PORT` overrides it. Use a Linux or macOS service host and set a client rate limit at its public edge before opening the API to everyone. The frontend alone remains usable for HTML reference preview, but cannot convert without the service. Actual SwiftUI rendering requires an iOS target or simulator, so this browser app does not claim to preview the native result.
+
 The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from one captured state. Active animation and transition styles receive node diagnostics; readable `@keyframes` declarations receive a capture warning even when dormant. Simple in-flow block percentage widths resize in app mode; complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note.
 
 ## Roadmap and release gates
@@ -70,7 +93,7 @@ The checked-in HTML policy lists 115 tags from a September 2026 element inventor
 3. **Smaller modules:** split long text inference, semantic dispatch and browser snapshot responsibilities while keeping generated output stable on existing fixtures.
 4. **Portable package:** ship built JavaScript, types and CLI; exercise the full capture API in installed Bun and Node consumers. Keep generated files in Git so a private Git dependency works without a build hook.
 5. **Visual acceptance:** compare representative components and full pages in Chrome and an iOS Simulator at multiple widths, themes and both output modes. Publish explicit per-family quality gates and known limits before a public alpha.
-6. **Playground:** a separate frontend consuming the stable package and conversion service. Browser capture requires a runtime with Chrome, so a paste-and-convert deployment cannot be only static files; its frontend can be static.
+6. **Playground:** the separate static frontend and bounded conversion service are in place. Public hosting needs Chrome on the service, edge rate limiting and deployment checks; native SwiftUI preview is a later capability.
 
 Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome; `bun run test:native` compiles generated Swift with Xcode on macOS. The normal test command skips the browser/native suites. A release must pass all three classes and an installed-package smoke test; visual acceptance is tracked separately.
 
@@ -81,6 +104,7 @@ Run the portable checks with `bun run typecheck` and `bun run test`. `bun run te
 | `src/analysis`, `src/compiler`, `src/swift` | Semantic inference and Swift generation |
 | `src/fonts` | Font capture and packaging |
 | `src/cli.ts`, `src/cli` | Command parsing and bundle writing |
+| `apps/playground/web`, `apps/playground/service` | Static playground frontend and isolated conversion service |
 | `tests/unit`, `tests/architecture`, `tests/integration` | Local behavior, dependency boundaries and real conversion checks |
 
-Only source, built package files, tests, tools needed for portable checks and this README are tracked. Local research, visual baselines, the older playground and generated output stay outside the distributed package.
+Only source, built package files, tests, the new playground app, tools needed for portable checks and this README are tracked. Local research, visual baselines, the older playground and generated output stay outside the distributed package.

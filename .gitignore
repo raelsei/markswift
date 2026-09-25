@@ -34,3 +34,4 @@ __pycache__/
 
 # Local preview application and native render workspace
 /playground/
+/apps/playground/dist/

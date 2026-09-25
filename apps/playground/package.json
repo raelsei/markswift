@@ -1,0 +1,20 @@
+{
+  "name": "@markswift/playground",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.ts",
+    "dev": "bun --watch dev.ts",
+    "start:api": "bun service/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "markswift": "file:../.."
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  }
+}

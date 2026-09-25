@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="markswift-api-origin" content="__MARKSWIFT_API_ORIGIN__">
+    <link rel="icon" href="data:,">
+    <title>Markswift Playground</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="masthead">
+        <div class="brand" aria-label="Markswift Playground">
+          <span class="wordmark">markswift</span>
+          <span class="brand-divider" aria-hidden="true"></span>
+          <span class="brand-context">Playground</span>
+        </div>
+        <div class="service-state" id="service-state" role="status" aria-live="polite">
+          <span class="service-dot" aria-hidden="true"></span>
+          <span id="service-label">Checking converter</span>
+        </div>
+      </header>
+
+      <main>
+        <div class="intro">
+          <div>
+            <h1>HTML in. SwiftUI out.</h1>
+            <p>Paste a component or a complete page. Add compiled CSS if you have it.</p>
+          </div>
+          <p class="environment-note">Chrome measures the layout; SwiftUI code is generated from that capture.</p>
+        </div>
+
+        <form id="convert-form" class="settings" novalidate>
+          <label class="setting setting-name">
+            <span>View name</span>
+            <input id="view-name" name="name" value="ExampleCard" autocomplete="off" spellcheck="false" required>
+          </label>
+          <div class="setting viewport-setting">
+            <span id="viewport-label">Viewport</span>
+            <div class="dimensions" role="group" aria-labelledby="viewport-label">
+              <label><span class="sr-only">Viewport width in pixels</span><input id="viewport-width" type="number" min="240" max="1920" value="393" inputmode="numeric" aria-label="Width in pixels"></label>
+              <span aria-hidden="true">×</span>
+              <label><span class="sr-only">Viewport height in pixels</span><input id="viewport-height" type="number" min="240" max="2400" value="852" inputmode="numeric" aria-label="Height in pixels"></label>
+              <span class="unit">px</span>
+            </div>
+          </div>
+          <label class="setting setting-select">
+            <span>Theme</span>
+            <select id="theme" name="theme"><option value="light">Light</option><option value="dark">Dark</option></select>
+          </label>
+          <label class="setting setting-select">
+            <span>Output</span>
+            <select id="mode" name="mode"><option value="app">App layout</option><option value="fidelity">Fixed capture</option></select>
+          </label>
+          <button id="convert-button" class="convert-button" type="submit"><span>Convert to SwiftUI</span><span class="button-arrow" aria-hidden="true">↗</span></button>
+        </form>
+
+        <div class="workspace">
+          <section class="panel source-panel" aria-labelledby="source-heading">
+            <div class="panel-heading">
+              <div><h2 id="source-heading">Source</h2><span class="panel-subtitle">Paste HTML and CSS</span></div>
+              <button type="button" class="text-button" id="load-example">Load example</button>
+            </div>
+            <div class="tab-bar" role="tablist" aria-label="Source files">
+              <button class="tab is-active" type="button" role="tab" id="html-tab" aria-controls="html-pane" aria-selected="true" tabindex="0" data-source-tab="html">HTML</button>
+              <button class="tab" type="button" role="tab" id="css-tab" aria-controls="css-pane" aria-selected="false" tabindex="-1" data-source-tab="css">CSS</button>
+              <span id="source-count" class="tab-spacer" aria-live="off"></span>
+            </div>
+            <div class="editor-pane" id="html-pane" role="tabpanel" aria-labelledby="html-tab">
+              <label class="sr-only" for="html-input">HTML document or component</label>
+              <textarea id="html-input" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Paste HTML here…"></textarea>
+            </div>
+            <div class="editor-pane" id="css-pane" role="tabpanel" aria-labelledby="css-tab" hidden>
+              <label class="sr-only" for="css-input">Compiled CSS</label>
+              <textarea id="css-input" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Paste compiled CSS here…"></textarea>
+            </div>
+            <div class="panel-foot">CSS Modules and Tailwind output work after compilation to CSS. <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd> converts.</div>
+          </section>
+
+          <div class="conversion-rail" aria-hidden="true"><span class="rail-line"></span><span class="rail-arrow">→</span><span class="rail-line"></span></div>
+
+          <section class="panel result-panel" aria-labelledby="result-heading">
+            <div class="panel-heading result-heading">
+              <div><h2 id="result-heading">Output</h2><span class="panel-subtitle" id="result-subtitle">Ready to convert</span></div>
+              <div class="output-actions">
+                <button type="button" class="text-button" id="copy-file" disabled>Copy file</button>
+                <button type="button" class="text-button" id="download-bundle" disabled>Download bundle</button>
+              </div>
+            </div>
+            <div class="tab-bar" role="tablist" aria-label="Output views">
+              <button class="tab is-active" type="button" role="tab" id="swift-tab" aria-controls="swift-pane" aria-selected="true" tabindex="0" data-result-tab="swift">Swift</button>
+              <button class="tab" type="button" role="tab" id="preview-tab" aria-controls="preview-pane" aria-selected="false" tabindex="-1" data-result-tab="preview">HTML preview</button>
+              <button class="tab" type="button" role="tab" id="report-tab" aria-controls="report-pane" aria-selected="false" tabindex="-1" data-result-tab="report">Report <span id="report-count" class="tab-count" hidden>0</span></button>
+              <span class="tab-spacer" id="mapping-summary" aria-live="polite">No result</span>
+            </div>
+            <div class="result-body" id="swift-pane" role="tabpanel" aria-labelledby="swift-tab">
+              <div class="file-toolbar">
+                <label for="file-select">File</label>
+                <select id="file-select" disabled><option>Convert to see files</option></select>
+                <button type="button" id="download-file" class="file-action" disabled>Download file</button>
+              </div>
+              <div class="code-scroller"><pre id="swift-code" class="code-output"><code>Generated Swift files will appear here.</code></pre></div>
+            </div>
+            <div class="result-body preview-pane" id="preview-pane" role="tabpanel" aria-labelledby="preview-tab" hidden>
+              <p class="preview-disclaimer">Browser HTML reference only, not SwiftUI. Scripts and external resources are blocked.</p>
+              <div class="preview-scroller"><iframe id="html-preview" title="Sandboxed HTML source preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
+            </div>
+            <div class="result-body report-pane" id="report-pane" role="tabpanel" aria-labelledby="report-tab" hidden>
+              <div id="report-content" class="report-content"><p class="empty-report">Convert to inspect mapping notes and browser warnings.</p></div>
+            </div>
+            <div class="panel-foot result-foot"><span id="status-message" role="status" aria-live="polite">Ready. Your HTML stays in this browser until you convert.</span><span class="mode-help">Node mapping ≠ visual accuracy</span></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

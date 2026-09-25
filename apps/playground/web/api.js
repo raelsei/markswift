@@ -1,0 +1,44 @@
+const metaOrigin = document.querySelector('meta[name="markswift-api-origin"]')?.content.trim() ?? "";
+const apiOrigin = metaOrigin.startsWith("__") ? "" : metaOrigin.replace(/\/$/, "");
+
+function endpoint(path) {
+  return `${apiOrigin}${path}`;
+}
+
+export async function checkHealth() {
+  try {
+    const response = await fetch(endpoint("/health"), { cache: "no-store", credentials: "omit" });
+    if (!response.ok) return false;
+    return (await response.json()).status === "ok";
+  } catch {
+    return false;
+  }
+}
+
+export async function convertSource(payload, signal) {
+  let response;
+  try {
+    response = await fetch(endpoint("/api/convert"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "omit",
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new Error("Converter is unreachable. Check the API service and playground origin.");
+  }
+
+  let body;
+  try { body = await response.json(); }
+  catch { throw new Error(`Converter returned ${response.status} without a JSON response.`); }
+  if (!response.ok) {
+    const detail = typeof body?.error === "string" ? body.error : typeof body?.message === "string" ? body.message : `Converter returned ${response.status}.`;
+    throw new Error(detail);
+  }
+  if (!body || typeof body.files !== "object" || !body.mapping || !Array.isArray(body.diagnostics)) {
+    throw new Error("Converter returned an incomplete result.");
+  }
+  return body;
+}
