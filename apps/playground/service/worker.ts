@@ -1,4 +1,4 @@
-import { convert } from "markswift";
+import { convert } from "./core.ts";
 import { conversionOptions, parseConversionInput } from "./input.ts";
 import { serializeResult } from "./output.ts";
 

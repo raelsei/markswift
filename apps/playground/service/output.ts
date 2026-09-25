@@ -1,4 +1,4 @@
-import type { ConversionResult } from "markswift";
+import type { ConversionResult } from "./core.ts";
 
 export type PublicResult = Pick<ConversionResult, "name" | "files" | "mapping" | "diagnostics" | "warnings" | "assets">;
 export type ServiceResult = Omit<PublicResult, "assets"> & { assets: Record<string, string> };

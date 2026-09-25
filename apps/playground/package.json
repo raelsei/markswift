@@ -9,12 +9,5 @@
     "start:api": "bun service/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test tests"
-  },
-  "dependencies": {
-    "markswift": "file:../.."
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.9.0"
   }
 }

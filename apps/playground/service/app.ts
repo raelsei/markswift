@@ -1,4 +1,4 @@
-import type { ConvertOptions } from "markswift";
+import type { ConvertOptions } from "./core.ts";
 import { conversionOptions, InputError, parseConversionInput } from "./input.ts";
 import { convertIsolated, WorkerError } from "./isolated.ts";
 import { serializeResult, type PublicResult, type ServiceResult } from "./output.ts";

@@ -65,12 +65,11 @@ Chrome is needed to resolve the CSS cascade, fonts and geometry before conversio
 
 The playground lives in `apps/playground`. It is a separate application that calls the public `markswift` library through a small Bun service. Its HTML preview shows the **browser source**, not rendered SwiftUI. The output panel shows every generated Swift file, a downloadable bundle and the mapping report. Pasted scripts and external requests are blocked in the preview and conversion service.
 
-Run it locally after installing the root and app dependencies:
+Run it locally after installing the repository workspace dependencies:
 
 ```sh
 bun install --frozen-lockfile
 cd apps/playground
-bun install --frozen-lockfile
 bun run dev
 ```
 
@@ -82,9 +81,9 @@ The frontend can be deployed as **static files**, including to GitHub Pages. Bui
 PLAYGROUND_ORIGIN=https://your-pages-origin.example PORT=8787 bun run start:api
 ```
 
-`PLAYGROUND_ORIGIN` must exactly match the deployed frontend origin (scheme, host and optional port, without a path). The service listens on `0.0.0.0` and accepts the host's `PORT` variable; `PLAYGROUND_PORT` overrides it. Use a Linux or macOS service host and set a client rate limit at its public edge before opening the API to everyone. The frontend alone remains usable for HTML reference preview, but cannot convert without the service. Actual SwiftUI rendering requires an iOS target or simulator, so this browser app does not claim to preview the native result.
+Deploy the API from the whole repository checkout after the root `bun install --frozen-lockfile`; it imports the package's public source entry. `PLAYGROUND_ORIGIN` must exactly match the deployed frontend origin (scheme, host and optional port, without a path). The service listens on `0.0.0.0` and accepts the host's `PORT` variable; `PLAYGROUND_PORT` overrides it. Use a Linux or macOS service host and set a client rate limit at its public edge before opening the API to everyone. The frontend alone remains usable for HTML reference preview, but cannot convert without the service. Actual SwiftUI rendering requires an iOS target or simulator, so this browser app does not claim to preview the native result.
 
-The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from one captured state. Active animation and transition styles receive node diagnostics; readable `@keyframes` declarations receive a capture warning even when dormant. Simple in-flow block percentage widths resize in app mode; complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note.
+The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. A `<video poster>` retains its static poster image, while playback and controls remain unsupported; audio and videos without posters keep their diagnosed placeholders. Embedded PNG, JPEG, GIF and WebP backgrounds retain their intrinsic size and position. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from one captured state. Active animation and transition styles receive node diagnostics; readable `@keyframes` declarations receive a capture warning even when dormant. Simple in-flow block percentage widths resize in app mode; complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note.
 
 ## Roadmap and release gates
 

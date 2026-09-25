@@ -1,4 +1,4 @@
-import type { ConvertOptions } from "markswift";
+import type { ConvertOptions } from "./core.ts";
 
 export interface ConversionInput {
   html: string;
