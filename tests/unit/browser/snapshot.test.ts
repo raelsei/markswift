@@ -204,4 +204,18 @@ describe("toLayout", () => {
     const options = layout.children[2]!.children.filter((child) => child.tag === "option");
     expect(options.map((option) => "selected" in option.attrs)).toEqual([false, true]);
   });
+
+  test("button input values keep missing defaults distinct from explicit empty and live changes", () => {
+    const snap = synth(["html", {}, { b: [0, 0, 100, 100] }, [
+      ["main", {}, { b: [0, 0, 100, 100] }, [
+        ["input", { type: "submit" }, { b: [0, 0, 20, 20] }, []],
+        ["input", { type: "reset" }, { b: [0, 20, 20, 20] }, []],
+        ["input", { type: "button", value: "" }, { b: [0, 40, 20, 20] }, []],
+        ["input", { type: "button", value: "Before" }, { b: [0, 60, 20, 20] }, []],
+      ]],
+    ]]);
+    snap.documents[0]!.nodes.inputValue = { index: [2, 3, 4, 5], value: [-1, -1, -1, snap.strings.push("After") - 1] };
+    const inputs = snapshotToTree(snap).children[0]!.children;
+    expect(inputs.map(input => input.attrs.value)).toEqual([undefined, undefined, "", "After"]);
+  });
 });

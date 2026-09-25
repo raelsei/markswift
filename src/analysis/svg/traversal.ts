@@ -5,7 +5,7 @@ import { parseColor, round2, px } from "../../css/index.ts";
 import { type SvgScope, type SvgContext, type SvgMatrix } from "./context.ts";
 import { IDENTITY, multiply, ownTransform, bake } from "./transforms.ts";
 import { inherit, num, styleProp, parseDash, reference } from "./attributes.ts";
-import { collectText } from "./text.ts";
+import { collectText, textContent } from "./text.ts";
 import { pathBounds, ringOf } from "./geometry.ts";
 import { gradientOf } from "./gradients.ts";
 
@@ -43,6 +43,11 @@ function visitOne(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
   } else if (c.tag === "use") instantiate(c, scope, ctx);
   else if (c.tag === "text") collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
   else if (c.tag === "image") ctx.notes.push("unmapped: svg image");
+  else if (c.tag === "foreignobject") {
+    const text = textContent(c).replace(/\s+/g, " ").trim();
+    const sample = text ? ` (text: ${JSON.stringify(text.slice(0, 80))}${text.length > 80 ? "…" : ""})` : "";
+    ctx.notes.push(`unmapped: svg <foreignObject> HTML content omitted${sample}`);
+  }
 }
 
 /** `<use href="#id">`: draw the target (symbol, group or shape) translated by x/y, sized like a nested viewport for symbols. */

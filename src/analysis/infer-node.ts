@@ -19,13 +19,22 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
-  if (policy.route === "image")
-    return withBase(n, ctx, {
+  if (policy.route === "image") {
+    const fit = n.styles["object-fit"] ?? "fill";
+    const position = n.styles["object-position"] ?? "50% 50%";
+    const image = withBase(n, ctx, {
       kind: "image",
       src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
-      contentMode: n.styles["object-fit"] === "contain" ? "fit" : "fill",
+      contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });
+    if (fit === "scale-down") image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
+    if (fit === "none") image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");
+    if (fit !== "fill" && position !== "50% 50%" && position !== "center center" && position !== "center") {
+      image.notes.push(`approximated: object-position: ${position} → centered image content`);
+    }
+    return finish(image);
+  }
 
   const { flow, abs, runs } = partitionChildren(n, ctx);
 

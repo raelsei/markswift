@@ -8,12 +8,13 @@
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
-import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
+import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
 export interface ControlSpec {
   control: ControlKind;
   value?: string;
+  captionTransform?: TextTransform;
   placeholder?: string;
   checked?: boolean;
   disabled?: boolean;
@@ -112,6 +113,17 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
       } else if (a["value"] !== undefined) spec.value = a["value"];
+      else if (type === "submit") spec.value = "Submit";
+      else if (type === "reset") spec.value = "Reset";
+      if (type === "submit") notes.push('approximated: <input type="submit"> form submission and validation require an app action');
+      if (type === "reset") notes.push('approximated: <input type="reset"> form reset requires an app action');
+      if (type === "button" || type === "submit" || type === "reset") {
+        const transform = n.styles["text-transform"];
+        if (transform === "uppercase" || transform === "lowercase" || transform === "capitalize") {
+          spec.captionTransform = transform;
+          if (transform === "capitalize") notes.push("approximated: text-transform: capitalize on input button caption is not translated");
+        }
+      }
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;
         const max = num(a["max"]) ?? 100;
@@ -179,7 +191,7 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
   }
   const node: ControlNode = { ...base, kind: "control", control, content, ...state };
   if (label) node.label = label;
-  if (parts.font && SELF_DRAWN_TEXT[control]) {
+  if (parts.font && (SELF_DRAWN_TEXT[control] || (control === "button" && state.value !== undefined && !state.files))) {
     node.font = parts.font;
     if (parts.color) node.color = parts.color;
   }

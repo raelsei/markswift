@@ -13,6 +13,7 @@ import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSna
 import { readPreferredSizes } from "./sizing.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
+import { generatedContentWarnings } from "./generated-content.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-h2s-root-capture";
@@ -146,6 +147,7 @@ export class BrowserCapture {
       const tree = snapshotToTree(snapA, snapB);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
+      errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);

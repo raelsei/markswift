@@ -58,7 +58,14 @@ function normalizeFormState(nodes: DomSnapshot["documents"][number]["nodes"], ra
     if (!field) continue;
     for (let k = 0; k < field.index.length; k++) {
       const raw = raws[field.index[k]!]!;
-      if (raw.name === name) raw.attrs.value = str(field.value[k]!);
+      if (raw.name !== name) continue;
+      const live = str(field.value[k]!);
+      // CDP reports an empty `inputValue` even when a submit/reset button has no `value`
+      // attribute. That missing attribute means the browser paints its default caption; an
+      // explicit empty attribute means a deliberately blank caption. Keep the distinction.
+      const type = (raw.attrs.type ?? "text").toLowerCase();
+      const defaultCaption = raw.name === "input" && (type === "submit" || type === "reset" || type === "button");
+      if (!defaultCaption || live !== "" || raw.attrs.value !== undefined) raw.attrs.value = live;
     }
   }
   if (nodes.inputChecked) {

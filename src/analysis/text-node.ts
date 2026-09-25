@@ -99,7 +99,26 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
   // so overriding the direction on a stack would mirror it a second time.
   if (dir === "rtl") node.layoutDirection = "rtl";
   if (ta === "justify") note("approximated: text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  noteUnsupportedTextFlow(host, runs, note);
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb") note(`unmapped: writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+
+/** CSS line breaking can look correct at capture width yet diverge when an app view resizes. */
+function noteUnsupportedTextFlow(host: LayoutNode, runs: SourceTextRun[], note: (s: string) => void): void {
+  const indent = host.styles["text-indent"];
+  if (indent && !/^[+-]?0+(?:\.0+)?(?:[a-z%]+)?(?:\s+(?:hanging|each-line))*$/i.test(indent.trim())) {
+    note(`approximated: text-indent: ${indent} → first-line indentation is not emitted by SwiftUI Text`);
+  }
+  for (const styles of [host.styles, ...runs.map(run => run.styleOf.styles)]) {
+    const wordBreak = styles["word-break"];
+    if (wordBreak && wordBreak !== "normal") {
+      note(`approximated: word-break: ${wordBreak} → SwiftUI Text uses native line breaking; narrower-width reflow may differ`);
+    }
+    const overflowWrap = styles["overflow-wrap"];
+    if (overflowWrap && overflowWrap !== "normal") {
+      note(`approximated: overflow-wrap: ${overflowWrap} → SwiftUI Text uses native line breaking; narrower-width reflow may differ`);
+    }
+  }
 }

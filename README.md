@@ -16,6 +16,15 @@ printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18p
 
 `generated-hello/` contains the view and shared Swift files. Add **all** generated `.swift` files to one iOS 18+ target. The output directory must not exist before conversion; choose a new name for another run.
 
+For private GitHub testing from another project with repository access, install the current alpha branch and run its built CLI:
+
+```sh
+bun add 'git+ssh://git@github.com/raelsei/markswift.git#codex/core-alpha'
+./node_modules/.bin/markswift --help
+```
+
+The package is not published to npm.
+
 For an existing HTML file, use `bun src/cli.ts convert ./page.html --out ./generated-page`. Add `--css ./compiled.css` only when you have a separate compiled stylesheet. Local relative assets are resolved beside the HTML file. A stylesheet already linked by that file is loaded by Chrome. For a running application, use `bun src/cli.ts convert --url http://localhost:5173/ --root '#component' --out ./generated-component`. Piped HTML (`-`) should use inline CSS and self-contained/data-URL assets. Run `bun src/cli.ts --help` for viewport, theme, mode and other options.
 
 The CLI exits with 0 on conversion, 2 on invalid options and 1 on input/conversion errors. Warnings and specific approximation notes go to stderr. It also prints a node-mapping summary; **that percentage is not visual accuracy**.
@@ -48,11 +57,11 @@ HTML scripts run during normal capture. Use trusted local pages. For a hosted pa
 
 ## What the numbers mean
 
-`result.mapping` counts **emitted semantic nodes** as `total`, `mapped`, `approximated` and `unmapped`. Its denominator is not every DOM element or CSS declaration: invisible and flattened nodes may not be emitted. `result.diagnostics` explains known approximations and missing mappings by node; `result.warnings` reports resource and font problems. A high mapped percentage does not prove that the Swift view looks right.
+`result.mapping` counts **emitted semantic nodes** as `total`, `mapped`, `approximated` and `unmapped`. Its denominator is not every DOM element or CSS declaration: invisible and flattened nodes may not be emitted. `result.diagnostics` explains known approximations and missing mappings by node; `result.warnings` reports capture, resource and font problems. A high mapped percentage does not prove that the Swift view looks right. Read the diagnostics **and** warnings with the count.
 
 Chrome is needed to resolve the CSS cascade, fonts and geometry before conversion. Visual fidelity requires an additional comparison between a browser image and the rendered iOS component, at specified sizes and themes. Compile success, tag classification and a single screenshot score are different checks.
 
-The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML and audio/video content need dedicated renderers and currently use diagnosed fallbacks. Source JavaScript behavior, navigation and full responsive CSS rules are not reconstructed from one captured state. Unknown custom elements retain measured content with a limitation note.
+The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. Source JavaScript behavior, navigation and full responsive CSS rules are not reconstructed from one captured state. Percentage widths other than simple fill are measured at the capture viewport and carry a resize limitation note. Unknown custom elements retain measured content with a limitation note.
 
 ## Roadmap and release gates
 

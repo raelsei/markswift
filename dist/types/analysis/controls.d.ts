@@ -7,11 +7,12 @@
  */
 import type { LayoutNode } from "../model/layout.ts";
 import type { Color } from "../css/index.ts";
-import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
+import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
 export interface ControlSpec {
     control: ControlKind;
     value?: string;
+    captionTransform?: TextTransform;
     placeholder?: string;
     checked?: boolean;
     disabled?: boolean;

@@ -51,7 +51,7 @@ type ImageSource =
   /** A raster view; `sizing` is spliced where the resizable modifiers belong. */
   | { kind: "raster"; expr: (sizing: string) => string }
   /** Standalone SVG drawn as Shapes; `size` is the viewBox, `view` renders it at a given size. */
-  | { kind: "vector"; size: [number, number]; view: (w: number, h: number) => string[] };
+  | { kind: "vector"; size: [number, number]; view: (w: number, h: number, stretch?: boolean) => string[] };
 
 /**
  * Image source for a URL. Inline `data:` payloads: SVG markup becomes vector Shapes (UIImage
@@ -82,8 +82,9 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   return {
     kind: "vector",
     size: [svg.viewBox[2], svg.viewBox[3]],
-    view: (w, h) => {
+    view: (w, h, stretch = false) => {
       svg.frame = { x: 0, y: 0, w, h };
+      if (stretch) svg.stretch = true;
       // No node id: the extractor does not enumerate the colours of an SVG inlined through a
       // `data:` URL, so they stay literals.
       return [...svgExpr(svg, ctx.shapes, ctx), `.frame(width: ${num(w)}, height: ${num(h)})`];
@@ -135,10 +136,15 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
       ...a11y,
     ];
   }
-  if (src.kind === "raster") return [src.expr(`.resizable().aspectRatio(contentMode: .${n.contentMode})`), ...a11y];
-  // Vector: `fit` draws inside the box (the SVG centres itself); `fill` scales to cover it and
-  // relies on the `.clipped()` the modifier chain adds for covering images.
+  if (src.kind === "raster") {
+    const sizing = n.contentMode === "stretch" ? ".resizable()" : n.contentMode === "none" ? "" : `.resizable().aspectRatio(contentMode: .${n.contentMode})`;
+    return [src.expr(sizing), ...a11y];
+  }
+  // Vector: `fit` draws inside the box; `fill` covers it; `stretch` scales both axes
+  // independently, and `none` leaves the viewBox at intrinsic size.
   const [vw, vh] = src.size;
+  if (n.contentMode === "stretch") return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
+  if (n.contentMode === "none") return [...src.view(vw, vh), ...a11y];
   const s = n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return [...src.view(vw * s, vh * s), ...a11y];
 }

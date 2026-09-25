@@ -218,6 +218,13 @@ function barHeight(n: ControlNode): number {
 /** The control's label/content view: its laid-out children, or nothing. */
 function body(n: ControlNode, deps: ControlDeps): string[] {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
+  // `<input type=button|submit|reset>` has no child text; the browser paints its `value` (or
+  // submit/reset default caption) in the native control. Preserve that caption in SwiftUI.
+  if (n.control === "button" && !n.files && !nodes.length && n.value !== undefined) {
+    const caption = painted(n.value, ".center");
+    if (n.captionTransform === "uppercase" || n.captionTransform === "lowercase") caption.splice(1, 0, `.textCase(.${n.captionTransform})`);
+    return caption;
+  }
   return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
 }
 

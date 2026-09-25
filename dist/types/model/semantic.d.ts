@@ -356,7 +356,8 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
     kind: "image";
     src: string;
-    contentMode: "fill" | "fit";
+    /** CSS object-fit: cover/contain/fill/none. `scale-down` is captured as fit with a diagnostic. */
+    contentMode: "fill" | "fit" | "stretch" | "none";
     /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
     alt?: string;
     /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
@@ -388,6 +389,8 @@ export interface ControlNode extends SemBase {
     content: SemNode[];
     /** Initial text/number the design shows (`@value`, `<textarea>` text, the selected `<option>`). */
     value?: string;
+    /** CSS casing for a value-painted input button caption. */
+    captionTransform?: TextTransform;
     /** `@placeholder`: the prompt drawn while the field is empty. */
     placeholder?: string;
     /** `@checked`: initial on state of a toggle/radio. */

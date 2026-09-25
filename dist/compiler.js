@@ -8147,6 +8147,11 @@ function visitOne(c, scope, ctx) {
     collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
   else if (c.tag === "image")
     ctx.notes.push("unmapped: svg image");
+  else if (c.tag === "foreignobject") {
+    const text = textContent(c).replace(/\s+/g, " ").trim();
+    const sample = text ? ` (text: ${JSON.stringify(text.slice(0, 80))}${text.length > 80 ? "…" : ""})` : "";
+    ctx.notes.push(`unmapped: svg <foreignObject> HTML content omitted${sample}`);
+  }
 }
 function instantiate(c, scope, ctx) {
   const href = c.attrs["href"] ?? c.attrs["xlink:href"] ?? "";
@@ -10264,6 +10269,22 @@ function controlOf(n) {
           spec.checked = true;
       } else if (a["value"] !== undefined)
         spec.value = a["value"];
+      else if (type === "submit")
+        spec.value = "Submit";
+      else if (type === "reset")
+        spec.value = "Reset";
+      if (type === "submit")
+        notes.push('approximated: <input type="submit"> form submission and validation require an app action');
+      if (type === "reset")
+        notes.push('approximated: <input type="reset"> form reset requires an app action');
+      if (type === "button" || type === "submit" || type === "reset") {
+        const transform = n.styles["text-transform"];
+        if (transform === "uppercase" || transform === "lowercase" || transform === "capitalize") {
+          spec.captionTransform = transform;
+          if (transform === "capitalize")
+            notes.push("approximated: text-transform: capitalize on input button caption is not translated");
+        }
+      }
       if (control === "slider") {
         const min = num2(a["min"]) ?? 0;
         const max = num2(a["max"]) ?? 100;
@@ -10314,7 +10335,7 @@ function buildControl(spec, parts) {
   const node = { ...base, kind: "control", control, content, ...state };
   if (label)
     node.label = label;
-  if (parts.font && SELF_DRAWN_TEXT[control]) {
+  if (parts.font && (SELF_DRAWN_TEXT[control] || control === "button" && state.value !== undefined && !state.files)) {
     node.font = parts.font;
     if (parts.color)
       node.color = parts.color;
@@ -11145,6 +11166,9 @@ function sizeOf(n, d, ctx, notes) {
     width = { kind: "fill" };
   else
     width = measuredW;
+  if (declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+    notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
+  }
   let height;
   if (declH && /px$/.test(declH))
     height = measuredH;
@@ -11618,10 +11642,27 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
     node.layoutDirection = "rtl";
   if (ta === "justify")
     note("approximated: text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  noteUnsupportedTextFlow(host, runs, note);
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb")
     note(`unmapped: writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+function noteUnsupportedTextFlow(host, runs, note) {
+  const indent = host.styles["text-indent"];
+  if (indent && !/^[+-]?0+(?:\.0+)?(?:[a-z%]+)?(?:\s+(?:hanging|each-line))*$/i.test(indent.trim())) {
+    note(`approximated: text-indent: ${indent} → first-line indentation is not emitted by SwiftUI Text`);
+  }
+  for (const styles of [host.styles, ...runs.map((run) => run.styleOf.styles)]) {
+    const wordBreak = styles["word-break"];
+    if (wordBreak && wordBreak !== "normal") {
+      note(`approximated: word-break: ${wordBreak} → SwiftUI Text uses native line breaking; narrower-width reflow may differ`);
+    }
+    const overflowWrap = styles["overflow-wrap"];
+    if (overflowWrap && overflowWrap !== "normal") {
+      note(`approximated: overflow-wrap: ${overflowWrap} → SwiftUI Text uses native line breaking; narrower-width reflow may differ`);
+    }
+  }
 }
 
 // src/analysis/text.ts
@@ -12007,13 +12048,24 @@ function build(n, ctx) {
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
-  if (policy.route === "image")
-    return withBase(n, ctx, {
+  if (policy.route === "image") {
+    const fit = n.styles["object-fit"] ?? "fill";
+    const position = n.styles["object-position"] ?? "50% 50%";
+    const image = withBase(n, ctx, {
       kind: "image",
       src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
-      contentMode: n.styles["object-fit"] === "contain" ? "fit" : "fill",
+      contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}
     });
+    if (fit === "scale-down")
+      image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
+    if (fit === "none")
+      image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");
+    if (fit !== "fill" && position !== "50% 50%" && position !== "center center" && position !== "center") {
+      image.notes.push(`approximated: object-position: ${position} → centered image content`);
+    }
+    return finish(image);
+  }
   const { flow, abs, runs } = partitionChildren(n, ctx);
   if (policy.route === "placeholder" && !(n.tag === "object" && n.children.length)) {
     const box = withBase(n, ctx, { kind: "box" });
@@ -12439,8 +12491,10 @@ function imageSource(url, n, prop, ctx) {
   return {
     kind: "vector",
     size: [svg.viewBox[2], svg.viewBox[3]],
-    view: (w, h) => {
+    view: (w, h, stretch = false) => {
       svg.frame = { x: 0, y: 0, w, h };
+      if (stretch)
+        svg.stretch = true;
       return [...svgExpr(svg, ctx.shapes, ctx), `.frame(width: ${num3(w)}, height: ${num3(h)})`];
     }
   };
@@ -12479,9 +12533,15 @@ function imageNodeExpr(n, ctx) {
       ...a11y
     ];
   }
-  if (src.kind === "raster")
-    return [src.expr(`.resizable().aspectRatio(contentMode: .${n.contentMode})`), ...a11y];
+  if (src.kind === "raster") {
+    const sizing = n.contentMode === "stretch" ? ".resizable()" : n.contentMode === "none" ? "" : `.resizable().aspectRatio(contentMode: .${n.contentMode})`;
+    return [src.expr(sizing), ...a11y];
+  }
   const [vw, vh] = src.size;
+  if (n.contentMode === "stretch")
+    return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
+  if (n.contentMode === "none")
+    return [...src.view(vw, vh), ...a11y];
   const s = n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return [...src.view(vw * s, vh * s), ...a11y];
 }
@@ -13061,6 +13121,12 @@ function barHeight(n) {
 }
 function body(n, deps) {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
+  if (n.control === "button" && !n.files && !nodes.length && n.value !== undefined) {
+    const caption = painted(n.value, ".center");
+    if (n.captionTransform === "uppercase" || n.captionTransform === "lowercase")
+      caption.splice(1, 0, `.textCase(.${n.captionTransform})`);
+    return caption;
+  }
   return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
 }
 function wrap(open, inner, close) {
@@ -13375,7 +13441,7 @@ function modifiers(n, ctx) {
       m.push(`.padding(EdgeInsets(top: ${num3(pt)}, leading: ${num3(pl)}, bottom: ${num3(pb)}, trailing: ${num3(pr)}))`);
   }
   m.push(...frameModifier(n, ctx));
-  if (n.kind === "image" && n.contentMode === "fill" && !st.clip)
+  if (n.kind === "image" && (n.contentMode === "fill" || n.contentMode === "none") && !st.clip)
     m.push(".clipped()");
   const shape = shapeExpr(st, n.frame.w, n.frame.h);
   for (const o of [...n.overlays.filter((o) => o.layer === "background")].reverse())

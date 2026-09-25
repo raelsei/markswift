@@ -128,6 +128,13 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   else if (fillsW && !abs) width = { kind: "fill" };
   else width = measuredW;
 
+  // The IR can express fill and fixed widths, but not an arbitrary fraction of a
+  // changing parent proposal. Keep the measured width for this capture and make
+  // the loss visible instead of reporting a responsive mapping as exact.
+  if (declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+    notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
+  }
+
   let height: Size;
   if (declH && /px$/.test(declH)) height = measuredH;
   else if (declH === "100%") height = fillsH && !abs ? { kind: "fill" } : measuredH;
