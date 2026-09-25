@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
@@ -68,12 +68,12 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
     const dst = join(fontsDir, file);
     const tmp = join(fontsDir, `.${stem}.src`);
-    await Bun.write(tmp, bytes);
+    await writeFile(tmp, bytes);
     const tool = await runFontTool(tmp, dst, chosen.family, subfamily, true);
     if (typeof tool === "string") {
       // No converter: ship what we have and say exactly what is wrong with it. WOFF2 will not
       // register, so the note has to name the format, not just the failure.
-      await Bun.write(dst, bytes);
+      await writeFile(dst, bytes);
       await rm(tmp, { force: true });
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
       notes.push(
@@ -82,7 +82,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
       );
       continue;
     }
-    if (!tool.wrote) await Bun.write(dst, bytes); // Already an sfnt with a matching name: copy verbatim.
+    if (!tool.wrote) await writeFile(dst, bytes); // Already an sfnt with a matching name: copy verbatim.
     await rm(tmp, { force: true });
     const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
     packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });

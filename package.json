@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "markswift": "./src/cli.ts"
+    "markswift": "./dist/cli.js"
   },
   "scripts": {
+    "build": "bun -e 'require(\"node:fs\").rmSync(\"dist\", { recursive: true, force: true })' && bun build ./src/compiler/index.ts --target=node --format=esm --outfile=dist/compiler.js && bun build ./src/index.ts --target=node --format=esm --outfile=dist/index.js --external playwright-core && bun build ./src/cli.ts --target=node --format=esm --outfile=dist/cli.js --external playwright-core && bun -e 'require(\"node:fs\").chmodSync(\"dist/cli.js\", 0o755)' && tsc -p tsconfig.build.json",
+    "build:compiler": "bun run build",
+    "prepack": "bun run build",
     "typecheck": "tsc --noEmit -p .",
     "test": "bun test tests/unit tests/architecture tests/integration",
     "quality": "bun run tools/quality.ts",
@@ -28,14 +31,24 @@
     "typescript": "^5.9.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./compiler": "./src/compiler/index.ts"
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./compiler": {
+      "types": "./dist/types/compiler/index.d.ts",
+      "bun": "./src/compiler/index.ts",
+      "import": "./dist/compiler.js"
+    }
   },
   "files": [
     "src",
+    "dist",
     "README.md"
   ],
   "engines": {
+    "node": ">=20",
     "bun": ">=1.4.2"
   },
   "description": "Measured HTML and CSS to native SwiftUI components"

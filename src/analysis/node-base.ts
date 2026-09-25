@@ -28,6 +28,9 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const notes: string[] = [];
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.note) notes.push(policy.note);
+  for (const custom of n.flattenedCustomElements ?? []) {
+    notes.push(`approximated: <${custom.tag}>${custom.id ? ` #${custom.id}` : ""} display: contents wrapper has no box; custom semantics and behavior are not translated`);
+  }
   const style = styleOf(n, notes);
   const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, notes);
   const padding = insetsOf(n.styles);

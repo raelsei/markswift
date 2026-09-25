@@ -11,7 +11,7 @@ browserTest("CLI converts an HTML file and compiled CSS into a complete Swift bu
     const source = join(directory, "card.html");
     const css = join(directory, "card.css");
     const output = join(directory, "generated");
-    await Bun.write(source, '<main data-markswift-root class="card">Hello CLI</main>');
+    await Bun.write(source, '<main data-markswift-root class="card"><span>Hello CLI</span><canvas></canvas><profile-card>Hi</profile-card></main>');
     await Bun.write(css, "body{margin:0}.card{width:220px;height:80px;background:#ffcc00;font:18px system-ui}");
     const child = Bun.spawn([
       process.execPath, join(import.meta.dir, "../../src/cli.ts"), "convert", source,
@@ -21,8 +21,10 @@ browserTest("CLI converts an HTML file and compiled CSS into a complete Swift bu
       new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
     ]);
     expect(code).toBe(0);
-    expect(stderr).toBe("");
+    expect(stderr).toContain("Note 1: unmapped: <canvas>");
+    expect(stderr).toContain("Note 2: approximated: <profile-card>");
     expect(stdout).toContain("AlphaCard");
+    expect(stdout).toContain("Node mapping: 2/4 mapped (50.0%); 1 approximated; 1 unmapped. Visual fidelity not measured.");
     expect(await Bun.file(join(output, "AlphaCard.swift")).text()).toContain("Hello CLI");
     for (const file of ["MarkswiftRuntime.swift", "MarkswiftTokens.swift", "MarkswiftShapes.swift"]) {
       expect(await Bun.file(join(output, file)).exists()).toBe(true);

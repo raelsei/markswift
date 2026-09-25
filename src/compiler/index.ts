@@ -20,6 +20,8 @@ export interface CompileResult {
   /** All Swift sources needed by this view, including shared runtime helpers. */
   files: Record<string, string>;
   diagnostics: SwiftOutput["report"];
+  /** Emitted semantic nodes by mapping confidence; does not measure visual fidelity. */
+  mapping: SwiftOutput["mapping"];
 }
 
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
@@ -33,7 +35,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     mode: options.mode ?? "app", tokens: screenTokens(tokens, screen), fontMetrics: options.fontMetrics,
   });
   return {
-    name, code: result.view, diagnostics: result.report,
+    name, code: result.view, diagnostics: result.report, mapping: result.mapping,
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,

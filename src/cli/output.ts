@@ -1,4 +1,4 @@
-import { lstat, mkdir, rm } from "node:fs/promises";
+import { lstat, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import type { ConversionResult } from "../api/types.ts";
 
@@ -38,7 +38,7 @@ export async function writeBundle(result: Pick<ConversionResult, "files" | "asse
     for (const [name, contents] of entries) {
       const file = join(output, name);
       await mkdir(dirname(file), { recursive: true });
-      await Bun.write(file, contents);
+      await writeFile(file, contents, { flag: "wx" });
     }
   } catch (error) {
     await rm(output, { recursive: true, force: true });

@@ -1,4 +1,5 @@
 import type { Page } from "playwright-core";
+import { createHash } from "node:crypto";
 import type { FontFace as FontFaceRecord } from "../model/layout.ts";
 
 /**
@@ -125,7 +126,7 @@ export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true)
       } catch {
         continue;
       }
-      const hash = new Bun.CryptoHasher("sha256").update(bytes).digest("hex").slice(0, 12);
+      const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
       if (!byHash[hash]) {
         const sig = new TextDecoder("latin1").decode(bytes.subarray(0, 4));
         const ext = sig === "wOF2" ? "woff2" : sig === "wOFF" ? "woff" : sig === "OTTO" ? "otf" : "ttf";

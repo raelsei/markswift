@@ -37,7 +37,7 @@ Options:
   -h, --help        Show this help
   -v, --version     Show version
 
-Requires Bun and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
+Requires Bun or Node.js and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
 const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--mode"]);

@@ -1,0 +1,2 @@
+# Bundles preserve whitespace inside dependency template literals.
+dist/*.js -whitespace

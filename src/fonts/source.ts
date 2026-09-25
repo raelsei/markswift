@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 
@@ -23,8 +23,12 @@ export async function srcBytes(src: FontFace["src"][number], outDir: string): Pr
   if (data) return Uint8Array.from(Buffer.from(data[1]!, "base64"));
   if (src.url.startsWith("data:")) return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
   if (!src.file) return undefined;
-  const f = Bun.file(resolve(outDir, src.file));
-  return (await f.exists()) ? new Uint8Array(await f.arrayBuffer()) : undefined;
+  try {
+    return new Uint8Array(await readFile(resolve(outDir, src.file)));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 

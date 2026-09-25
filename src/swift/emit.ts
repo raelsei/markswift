@@ -2,7 +2,7 @@
 import type { Screen, SemNode, StackNode, GridNode } from "../model/semantic.ts";
 import { Writer, colorArgs, num } from "./format.ts";
 import { controlMembers } from "./control-state.ts";
-import type { EmitContext, EmitOptions, SwiftOutput } from "./context.ts";
+import type { EmitContext, EmitOptions, NodeMapping, SwiftOutput } from "./context.ts";
 import { refOf } from "./nodes.ts";
 import { containerExpr } from "./layout.ts";
 import { visit } from "./traversal.ts";
@@ -11,6 +11,7 @@ export { SWIFT_RUNTIME } from "./runtime.ts";
 export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): SwiftOutput {
   const shapes: Record<string, string> = {};
   const report: SwiftOutput["report"] = [];
+  const mapping: NodeMapping = { total: 0, mapped: 0, approximated: 0, unmapped: 0 };
   const props: Array<{ name: string; node: SemNode }> = [];
   const seen: Record<string, number> = {};
 
@@ -56,9 +57,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   });
   // After emission: `note()` may have downgraded nodes for emit-time approximations.
   visit(screen.root, (n) => {
+    mapping.total++;
+    mapping[n.confidence]++;
     if (n.confidence !== "mapped") report.push({ id: n.id, kind: n.kind, confidence: n.confidence, notes: n.notes });
   });
-  return { view: w.toString(), shapes, report };
+  return { view: w.toString(), shapes, report, mapping };
 }
 
 function propName(id: string, i: number): string {

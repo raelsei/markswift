@@ -59,7 +59,8 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     }
     case "textarea": {
       const spec: ControlSpec = { control: "textEditor", notes };
-      const text = textOf(n).trim();
+      // CDP's live textValue is normalized onto `value`; child text is only the authored default.
+      const text = a["value"] ?? textOf(n).trim();
       if (text) spec.value = text;
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (disabled) spec.disabled = true;

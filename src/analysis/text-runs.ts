@@ -13,12 +13,12 @@ export function isInlineText(c: LayoutNode): boolean {
   if ((c.styles["display"] ?? "inline") !== "inline") return false;
   const pos = c.styles["position"];
   if (pos === "absolute" || pos === "fixed") return false;
-  return c.children.every((k) => k.tag === "#text" || k.tag === "br" || isInlineText(k));
+  return c.children.every((k) => k.tag === "#text" || k.tag === "br" || k.tag === "wbr" || isInlineText(k));
 }
 
 export function collectRuns(el: LayoutNode, runs: SourceTextRun[]): void {
   for (const k of el.children) {
-    if (k.tag === "#text" || k.tag === "br") runs.push({ node: k, styleOf: el });
+    if (k.tag === "#text" || k.tag === "br" || k.tag === "wbr") runs.push({ node: k, styleOf: el });
     else collectRuns(k, runs);
   }
 }

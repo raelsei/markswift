@@ -1,6 +1,6 @@
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BrowserCapture } from "../browser/capture.ts";
@@ -42,14 +42,15 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
         await options.prepare?.(page);
       },
     }, htmlIdentity, label);
-    for (const font of capture.fontFiles) await Bun.write(join(work, "_fonts", font.name), font.bytes);
+    if (capture.fontFiles.length) await mkdir(join(work, "_fonts"), { recursive: true });
+    for (const font of capture.fontFiles) await writeFile(join(work, "_fonts", font.name), font.bytes);
     const fontDir = join(work, "output");
     const fonts = await packageFonts(capture.layout.fonts ?? [], fontDir, work);
     const compiled = compileLayout(capture.layout, {
       name, mode: options.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts),
     });
     const assets: Record<string, Uint8Array> = {};
-    for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(fontDir, "Fonts", face.file)).arrayBuffer());
+    for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await readFile(join(fontDir, "Fonts", face.file)));
     if (fonts.faces.length) {
       compiled.files["Font+Markswift.swift"] = fonts.swift;
       compiled.files["UIAppFonts.plist.fragment"] = fonts.plist;
@@ -57,7 +58,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     return { ...compiled, assets, warnings: [...capture.warnings, ...fonts.notes], layout: capture.layout };
   } finally {
     try { await renderer.stop(); }
-    finally { prepared?.close(); await rm(work, { recursive: true, force: true }); }
+    finally { await prepared?.close(); await rm(work, { recursive: true, force: true }); }
   }
 }
 

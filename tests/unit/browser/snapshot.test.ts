@@ -180,4 +180,28 @@ describe("toLayout", () => {
     const imgs = node.children.flatMap((c) => (c.tag === "img" ? [c] : c.children));
     expect(imgs.map((i) => i.attrs["data-h2s-src"])).toEqual(["b.png", "d.webp", undefined]);
   });
+
+  test("sparse live form columns replace stale attributes, including empty values", () => {
+    const snap = synth(["html", {}, { b: [0, 0, 100, 100] }, [
+      ["main", {}, { b: [0, 0, 100, 100] }, [
+        ["input", { value: "old", checked: "" }, { b: [0, 0, 20, 20] }, []],
+        ["textarea", {}, { b: [0, 20, 20, 20] }, ["old"]],
+        ["select", {}, { b: [0, 40, 20, 20] }, [
+          ["option", { selected: "" }, undefined, ["Old"]],
+          ["option", {}, undefined, ["New"]],
+        ]],
+      ]],
+    ]]);
+    const nodes = snap.documents[0]!.nodes;
+    nodes.inputValue = { index: [2], value: [-1] };
+    nodes.textValue = { index: [3], value: [snap.strings.push("live") - 1] };
+    nodes.inputChecked = { index: [] };
+    nodes.optionSelected = { index: [8] };
+    const layout = toLayout(snapshotToTree(snap).children[0]!, { x: 0, y: 0 }, pathIdentity)!;
+    expect(layout.children[0]!.attrs).toMatchObject({ value: "" });
+    expect("checked" in layout.children[0]!.attrs).toBe(false);
+    expect(layout.children[1]!.attrs.value).toBe("live");
+    const options = layout.children[2]!.children.filter((child) => child.tag === "option");
+    expect(options.map((option) => "selected" in option.attrs)).toEqual([false, true]);
+  });
 });

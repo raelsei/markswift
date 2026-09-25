@@ -89,3 +89,27 @@ describe("line height", () => {
     expect(text?.runs[0]?.font.lineHeight).toBeUndefined();
   });
 });
+
+test("flow, inline break, native control and positioned decoration keep semantic order", () => {
+  const row = el("section", { x: 0, y: 0, w: 180, h: 30 }, { display: "block" }, [
+    el("div", { x: 0, y: 0, w: 80, h: 30 }, { display: "inline-block", float: "left" }),
+    el("div", { x: 90, y: 0, w: 80, h: 30 }, { display: "inline-block" }),
+  ], { id: "row" });
+  const copy = el("p", { x: 0, y: 40, w: 180, h: 20 }, { display: "block" }, [
+    textNode("Alpha", { x: 0, y: 40, w: 40, h: 20 }),
+    el("wbr", { x: 40, y: 40, w: 0, h: 20 }, {}),
+    textNode("Beta", { x: 40, y: 40, w: 35, h: 20 }),
+  ], { id: "copy" });
+  const input = el("input", { x: 0, y: 70, w: 120, h: 28 }, {}, [], { id: "field", type: "text", value: "Ada" });
+  const badge = el("div", { x: 140, y: 5, w: 30, h: 20 }, { position: "absolute" }, [], { id: "badge" });
+  badge.id = "#badge";
+  const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 120 }, { display: "block" }, [row, copy, input, badge])), "s");
+  expect(screen.root.kind).toBe("stack");
+  if (screen.root.kind !== "stack") return;
+  expect(screen.root.children.map((child) => child.kind)).toEqual(["stack", "text", "control"]);
+  expect(screen.root.overlays.map((overlay) => [overlay.node.id, overlay.offset])).toEqual([["#badge", [140, 5]]]);
+  expect(flatten(screen.root).filter((node) => node.notes.length).map((node) => node.notes[0])).toEqual([
+    "approximated: float → side-by-side row; text does not wrap around it",
+    "approximated: <wbr> → zero-width break opportunity; native line breaking may differ",
+  ]);
+});

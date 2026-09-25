@@ -58,3 +58,11 @@ test("unknown and custom elements keep measured layout and report the fallback",
     expect(isInlineText(element(tag))).toBe(false);
   }
 });
+
+test("an image-map limitation is attached to its visible image", () => {
+  const policy = classifyElement("img", { usemap: "#zones" });
+  expect(policy.route).toBe("image");
+  expect(policy.support).toBe("approximated");
+  expect(policy.note).toContain("hit regions");
+  expect(classifyElement("img").support).toBe("implemented");
+});

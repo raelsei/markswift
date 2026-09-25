@@ -34,6 +34,8 @@ export interface LayoutNode {
   attrs: Record<string, string>;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
+  /** Boxless custom ancestors flattened by `display: contents`; their semantics need a diagnostic. */
+  flattenedCustomElements?: Array<{ tag: string; id?: string }>;
   /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
   preferredSize?: PreferredSize;
   /** Box relative to the capture root, CSS px. */
@@ -58,6 +60,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
     styles: z.record(z.string(), z.string()),
+    flattenedCustomElements: z.array(z.object({ tag: z.string(), id: z.string().optional() })).optional(),
     preferredSize: PreferredSize.optional(),
     bounds: Rect,
     text: z.string().optional(),

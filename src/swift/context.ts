@@ -1,6 +1,13 @@
 import type { Color } from "../css/index.ts";
 import type { Screen, SemNode } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
+/** Counts of emitted semantic nodes by mapping confidence. This is not visual fidelity. */
+export interface NodeMapping {
+  total: number;
+  mapped: number;
+  approximated: number;
+  unmapped: number;
+}
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
   view: string;
@@ -8,6 +15,8 @@ export interface SwiftOutput {
   shapes: Record<string, string>;
   /** Nodes whose confidence is not `mapped`. */
   report: Array<{ id: string; kind: string; confidence: string; notes: string[] }>;
+  /** Emitted semantic-node mapping, measured after emitter diagnostics. Not a DOM or visual score. */
+  mapping: NodeMapping;
 }
 
 /**

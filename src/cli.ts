@@ -1,4 +1,5 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { runConversion } from "./cli/run.ts";
 
@@ -7,7 +8,7 @@ async function main(): Promise<number> {
     const command = parseArgs(process.argv.slice(2));
     if (command.kind === "help") { process.stdout.write(HELP); return 0; }
     if (command.kind === "version") {
-      const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
+      const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
       process.stdout.write(`${manifest.version}\n`);
       return 0;
     }

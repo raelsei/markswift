@@ -1,271 +1,77 @@
 # Markswift
 
-Convert rendered HTML and CSS into SwiftUI source. **Experimental:** common UI patterns work,
-but complex layout and typography still have visible limitations. This is a development repository, not an npm release.
+Markswift captures HTML and computed CSS in Chrome, then generates SwiftUI source and the resources it needs. It accepts a full document, an HTML fragment, a local file or a running page URL. Regular CSS, compiled Tailwind and compiled CSS Modules follow the same capture pipeline. Raw Tailwind directives, JSX and JavaScript behavior are not translated.
 
-## Start locally
+**Status: experimental alpha.** An HTML tag having a route through the compiler does not mean its appearance, resizing or interaction matches the browser. The repository is private and no public release license has been selected.
 
-Requirements: Bun (tested with 1.4.2) and installed Google Chrome. Custom webfonts additionally
-require `python3` with `fontTools` and `brotli`. Xcode is needed to compile/test the generated
-Swift, not to perform conversion. The generated code targets SwiftUI on iOS 18+.
+## Try the CLI
+
+Requires Google Chrome. The source checkout uses Bun 1.4.2+ for installation and build; the built CLI and library also run on Node.js 20+ (verified with Node 20 and 26). Xcode is required to compile or test the generated Swift, not to run the converter. From this checkout:
 
 ```sh
 bun install --frozen-lockfile
-bun run typecheck
-bun run test
-```
-
-## Command-line conversion
-
-The alpha CLI runs with Bun from this checkout; it does not require the playground API.
-Give it a new output directory because one conversion produces several Swift sources and may
-include font assets. An existing directory is never overwritten.
-
-```sh
 printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18px system-ui">Hello Markswift</main>' \
   | bun src/cli.ts convert - --name HelloCard --out ./generated-hello
-bun src/cli.ts --help
 ```
 
-The first command works without creating any input files. For your own files, run
-`bun src/cli.ts convert ./path/to/page.html --out ./generated-page`; add
-`--css ./path/to/compiled.css` only when you have a separate compiled stylesheet.
-You can also capture a running site with
-`bun src/cli.ts convert --url http://localhost:5173/card --root '#preview' --out ./generated-card`.
-Choose a new output directory for each run.
+`generated-hello/` contains the view and shared Swift files. Add **all** generated `.swift` files to one iOS 18+ target. The output directory must not exist before conversion; choose a new name for another run.
 
-The source can be a full HTML document, a fragment, stdin (`-`), or a running HTTP(S) page.
-`--css` is optional and takes a **compiled** CSS file. File inputs resolve relative assets beside the HTML;
-stdin is for self-contained markup and data-URL assets. `--width`, `--height`, `--theme`, and
-`--mode` select the captured state. Normal output prints the destination; warnings and
-approximation notes go to stderr. Exit status is 0 for a completed conversion, 2 for invalid
-command options, and 1 for a conversion or file error. Run `bun src/cli.ts convert --help` for
-the complete option list.
+For an existing HTML file, use `bun src/cli.ts convert ./page.html --out ./generated-page`. Add `--css ./compiled.css` only when you have a separate compiled stylesheet. Local relative assets are resolved beside the HTML file. A stylesheet already linked by that file is loaded by Chrome. For a running application, use `bun src/cli.ts convert --url http://localhost:5173/ --root '#component' --out ./generated-component`. Piped HTML (`-`) should use inline CSS and self-contained/data-URL assets. Run `bun src/cli.ts --help` for viewport, theme, mode and other options.
 
-Create a script in this checkout:
+The CLI exits with 0 on conversion, 2 on invalid options and 1 on input/conversion errors. Warnings and specific approximation notes go to stderr. It also prints a node-mapping summary; **that percentage is not visual accuracy**.
+
+## Use the library
+
+The installed package exposes the same API to Bun and Node.js. It measures and converts a document, fragment, file or URL:
 
 ```ts
-import { convertHtml } from "./src/index.ts";
+import { convert } from "markswift";
 
-const result = await convertHtml(
-  '<article data-markswift-root class="card"><h2>Hello SwiftUI</h2><p>Made from HTML.</p></article>',
-  {
-    name: "WelcomeCard",
-    css: `
-      body { margin: 0; }
-      .card { width: 320px; padding: 24px; background: #f4f4f5; border-radius: 16px; }
-      h2, p { font-family: system-ui; }
-    `,
-  },
+const result = await convert(
+  { html: '<main data-markswift-root class="card">Hello</main>' },
+  { name: "CardView", css: ".card { width: 240px; background: gold; }" },
 );
 
-console.log(result.code);
-console.log(result.diagnostics, result.warnings);
-for (const [path, content] of Object.entries(result.files)) {
-  await Bun.write(`generated/${path}`, content);
-}
-for (const [path, bytes] of Object.entries(result.assets)) {
-  await Bun.write(`generated/${path}`, bytes);
-}
+console.log(result.code, result.mapping, result.diagnostics, result.warnings);
+// result.files: all Swift sources; result.assets: binary resources such as fonts
 ```
 
-Add **all generated `.swift` files** to the same iOS target, not just `result.code`.
-When fonts are returned, add `Fonts/` resources and merge `UIAppFonts.plist.fragment` into
-the app's Info.plist, or call `MarkswiftFonts.register(in:)` with the resource bundle before rendering.
-One conversion returns one standalone set of shared helper/token definitions. Combining
-independent conversion results into the same target needs shared-file/token merging; do not
-blindly copy duplicate helpers. Multi-component bundle generation remains a roadmap item.
+`convert({ file: "./page.html" })` and `convert({ url: "http://localhost:5173/" }, { root: "#component" })` use the same pipeline. `css` must already be compiled. Default capture size is 390 × 844; `viewport`, `theme`, `mode`, `waitFor` and `prepare(page)` can select a state. The default root is `[data-markswift-root]`, otherwise `body`; the old `data-h2s-root` marker remains accepted.
 
-## Inputs and output
+`compileLayout(layout)` is a synchronous browser-free compiler for an already measured `LayoutDoc`; import it from `markswift/compiler`. The package includes built JavaScript, type declarations and a `markswift` CLI for Node.js, plus Bun source exports. Both runtimes still need Chrome for HTML/CSS capture. Building or repacking from source requires Bun.
 
-```ts
-import { convert, compileLayout } from "./src/index.ts";
+TypeScript consumers using the Playwright `prepare(page)` hook need Node type declarations and the `ESNext.Disposable` library in their TypeScript configuration.
 
-await convert({ file: "./card.html" }, { name: "CardView" });
-await convert({ html: "<main>...</main>", assetsDir: "./public" });
-await convert({ html: "<main>...</main>", baseURL: "https://example.com/components/" });
-await convert({ url: "http://localhost:5173/card" }, { root: "#preview" });
+Add every entry in `result.files` to the same Swift target. Add `result.assets` to its resources. If fonts are included, merge `UIAppFonts.plist.fragment` into Info.plist or call `MarkswiftFonts.register(in:)` before rendering. Separate conversion results each contain shared helper files; combining them in one target needs a future bundle-linking step.
 
-// Recompile an already measured layout without launching Chrome or running font packaging.
-const result = compileLayout(savedLayout, { name: "CardView", mode: "app" });
-```
+HTML scripts run during normal capture. Use trusted local pages. For a hosted paste-only converter, `convert({ html }, { untrustedInput: true })` blocks page scripts and outbound resource requests, but the browser process should still run in an isolated environment.
 
-- Full documents and fragments use the same API. Default root: `[data-markswift-root]`, otherwise
-  `body` (the legacy `data-h2s-root` marker is also accepted). Supply `root` to select a component. Fragment HTML keeps browser defaults; provide
-  your reset CSS when needed.
-- `css` accepts ordinary **compiled CSS**. Compiled Tailwind selectors and CSS Modules
-  selectors work when their class names match the HTML. Bare utility classes do not provide
-  styles by themselves. Raw JSX, CSS Modules imports and Tailwind build directives must run
-  through the source project's build first; a dev-server URL is often the easiest input.
-- `viewport` defaults to 390 × 844, `dpr` to 1, `theme` to `light`. Theme selects the browser's
-  color-scheme media query. Class-based themes require the appropriate class in the markup
-  or an optional `prepare(page)` callback. Use `waitFor` for client-mounted content.
-- `mode: "app"` emits native layout; `"fidelity"` aims at the captured geometry for visual
-  comparison. One viewport is one observed state, not an inferred set of responsive rules.
-- The result contains `code`, `files`, font `assets`, node `diagnostics`, resource/font
-  `warnings`, and measured `layout`. Loaded images are embedded in the captured layout so
-  generated code does not depend on a temporary local server. Unavailable images are reported.
-- `compileLayout` accepts prepared `bundledFamilies` and `fontMetrics` for custom fonts.
-  Without them it uses native system fonts and reports substitutions. It does not package assets.
+## What the numbers mean
 
-HTML scripts execute in Chrome during capture. Use trusted local inputs; this API is not an
-isolation boundary for hosting arbitrary uploads. Source JavaScript and navigation/business
-logic are not translated into Swift application logic.
+`result.mapping` counts **emitted semantic nodes** as `total`, `mapped`, `approximated` and `unmapped`. Its denominator is not every DOM element or CSS declaration: invisible and flattened nodes may not be emitted. `result.diagnostics` explains known approximations and missing mappings by node; `result.warnings` reports resource and font problems. A high mapped percentage does not prove that the Swift view looks right.
 
-For a hosted paste-only converter, `convertHtml(html, { untrustedInput: true })` blocks page
-scripts and outbound resource requests during capture. It rejects file/URL sources and
-`assetsDir`/`baseURL`; inline CSS and data-URL assets remain usable. Host the browser process
-in an isolated environment as well. The separate playground frontend and conversion service
-are kept locally rather than included in this library repository.
+Chrome is needed to resolve the CSS cascade, fonts and geometry before conversion. Visual fidelity requires an additional comparison between a browser image and the rendered iOS component, at specified sizes and themes. Compile success, tag classification and a single screenshot score are different checks.
 
-## Repository map
+The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Tables, ruby, modal lifecycle, links and some controls have explicit approximations. Canvas, embedded documents, MathML and audio/video content need dedicated renderers and currently use diagnosed fallbacks. Source JavaScript behavior, navigation and full responsive CSS rules are not reconstructed from one captured state. Unknown custom elements retain measured content with a limitation note.
 
-| Directory | Responsibility |
+## Roadmap and release gates
+
+1. **Core and CLI:** reproducible clean install; file, stdin and URL input; complete non-overwriting Swift bundle; diagnostics and node-mapping counts.
+2. **No silent element loss:** conformance fixtures by element family and CSS family; captured state for controls, inline break opportunities, placeholders and unknown elements. Every unsupported visible case must leave content or a diagnosed fallback.
+3. **Smaller modules:** split long text inference, semantic dispatch and browser snapshot responsibilities while keeping generated output stable on existing fixtures.
+4. **Portable package:** ship built JavaScript, types and CLI; exercise the full capture API in installed Bun and Node consumers. Keep generated files in Git so a private Git dependency works without a build hook.
+5. **Visual acceptance:** compare representative components and full pages in Chrome and an iOS Simulator at multiple widths, themes and both output modes. Publish explicit per-family quality gates and known limits before a public alpha.
+6. **Playground:** a separate frontend consuming the stable package and conversion service. Browser capture requires a runtime with Chrome, so a paste-and-convert deployment cannot be only static files; its frontend can be static.
+
+Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome; `bun run test:native` compiles generated Swift with Xcode on macOS. The normal test command skips the browser/native suites. A release must pass all three classes and an installed-package smoke test; visual acceptance is tracked separately.
+
+| Path | Responsibility |
 | --- | --- |
-| `src/cli.ts`, `src/cli/` | Command parsing, diagnostics and complete bundle writing |
-| `src/api/` | Public conversion options and resource lifecycle |
-| `src/input/` | HTML sources, root selection and node identity |
-| `src/html/` | Shared element policies, atomic inline boundaries and input-control routing |
-| `src/browser/` | Browser capture, computed styles, images and fonts |
-| `src/model/` | Serializable layout, semantic and font contracts |
-| `src/css/` | Pure CSS value parsers, grouped by property family |
-| `src/analysis/` | Geometry, sizing, flow, text, controls and SVG inference |
-| `src/compiler/` | Synchronous measured-layout → Swift compilation |
-| `src/swift/` | Swift layout, paint, text, controls, tokens and runtime generation |
-| `src/fonts/` | Font metadata, packaging and Python conversion |
-| `tests/unit/`, `tests/helpers/` | Tests by source responsibility and shared test assertions |
-| `tests/architecture/` | Dependency boundaries and runtime-cycle checks |
-| `tests/integration/` | Public API, Chrome and native compilation tests |
-| `tools/verify/typecheck.ts`, `tools/quality.ts` | Swift compiler checks and comparison-score validation |
+| `src/api`, `src/input`, `src/browser` | Source resolution and measured browser capture |
+| `src/html`, `src/css`, `src/model` | Element policy, CSS values and intermediate contracts |
+| `src/analysis`, `src/compiler`, `src/swift` | Semantic inference and Swift generation |
+| `src/fonts` | Font capture and packaging |
+| `src/cli.ts`, `src/cli` | Command parsing and bundle writing |
+| `tests/unit`, `tests/architecture`, `tests/integration` | Local behavior, dependency boundaries and real conversion checks |
 
-There is one conversion pipeline. Supply compiled CSS or a running page URL for framework
-inputs. Small utilities stay with their domain (`css/syntax`, `analysis/geometry`,
-`swift/format`) rather than a global miscellaneous utilities folder.
-
-The canonical HTML marker is `data-markswift-root`; `data-h2s-root` remains accepted for
-existing inputs. Generated helper names now use `Markswift` and `.markswift`. When replacing
-an older generated bundle, remove its old `DesignSupport.swift`, `DesignTokens.swift`,
-`H2SShapes.swift` and `Font+H2S.swift` before adding the new complete bundle.
-
-## Quality and next steps
-
-HTML tags share compiler strategies; they do not need a separate renderer for every tag.
-For example, `article`, `section` and `div` use the same measured block/flex/grid rules.
-The browser resolves the CSS cascade before conversion, so ordinary CSS, compiled Tailwind
-and compiled CSS Modules use the same pipeline.
-
-`HTML_ELEMENTS` classifies every standard element in the WHATWG index (checked 2026-09-16),
-including the SVG and MathML entry points. `classifyElement(tag, attrs)` applies attribute-specific
-exceptions such as links and input types. The analyzer and inline-text collector use this same
-policy. Its support states describe implementation strategy, **not visual verification**:
-
-| State | Meaning |
-| --- | --- |
-| `implemented` | A compiler path exists; individual CSS combinations and native behavior need verification |
-| `approximated` | Captured content is rendered with an explicit limitation in `diagnostics` |
-| `unsupported` | A measured placeholder or visible object fallback is emitted with an `unmapped` diagnostic |
-| `nonvisual` | Metadata/resources are consumed by the browser rather than emitted as views |
-
-Tables, ruby annotations and modal lifecycle currently have explicit approximation policies.
-Canvas, embedded documents/resources, MathML and audio/video content need dedicated renderers.
-Custom/unknown elements retain measured content and report missing semantics/behavior.
-Prose links remain styled inline runs and report their dropped destination; block/atomic links
-use native controls. Interactive attributed-text links remain a typography roadmap item.
-The report covers captured nodes: hidden, non-rendering and flattened wrappers may not survive
-capture. Element classification alone does not cover all CSS, accessibility or JavaScript.
-
-```sh
-bun run test:browser           # actual Chrome integration tests
-bun run test:native            # Chrome + Xcode; compile public API output in both modes
-bun run quality baseline.json current.json
-```
-
-A fresh local iOS Simulator pilot on 2026-09-23 compared 64 captures: eight small HTML/CSS
-fixtures at 320px and 390px, in light/dark and `app`/`fidelity` modes. **The currently approved
-visual subset is the six-tile box-shadow fixture at those captured sizes.** Across its eight
-captures, the lowest SSIM was 0.9539 in `app` mode and 0.9642 in `fidelity` mode. A separate
-pixel assertion checked all six painted tiles, the green spread ring, the blue hard-offset
-shadow, and their measured positions. This verifies that fixture's static paint output; it
-does not establish responsive grid tracks or every possible shadow combination.
-
-Flex wrapping, background layers, font families, inline text and image fitting showed material
-browser/iOS differences in the same pilot and are outside the approved visual subset. A simple
-grid fixture reached 0.9546 or better in `app` mode, but its diagnostics still say responsive
-track definitions were not reconstructed. The accepted subset will grow from repeatable native
-comparisons and explicit geometry/text/paint checks, not from compiler coverage alone.
-
-A separate local seven-case text pilot completed 56 native comparisons across two widths, two themes
-and both modes. The isolated `<pre>` case preserved its spaces and three lines but reached only
-0.8998 SSIM at worst because `ui-monospace` maps to a different native system face. A narrow,
-plain system-font `<p>` now uses word-level flow in `app` mode. Its 320px Chrome/iOS ink rows
-differ by at most 1px, and its SSIM is 0.9951 light / 0.9915 dark, up from 0.9068 / 0.9030.
-The same Swift generated at 390px reflows at 320px and 768px without recompilation; the 768px
-comparison scores 0.9976 light / 0.9961 dark. `fidelity` still retains its captured-size line
-division. The second 56-capture matrix found no score drop in the six other isolated text cases.
-This scoped fix does not cover styled runs, RTL, missing fonts or arbitrary prose; those keep
-their existing text path. A local bundled webfont reached 0.9523 at worst; its presence does not
-guarantee identical glyph pixels.
-Missing webfont bytes produce resource warnings and a fallback diagnostic. Generic platform-font
-substitutions remain explicit approximations; complex text needs more native visual work.
-
-For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
-can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
-valid mismatch and source/runtime metadata, an expected source revision, a per-feature absolute
-SSIM floor and a maximum regression from the baseline. A strict policy uses `requireEvidence`,
-`expectedSourceRevision`, `features.<feature>.minSsim`, and `maxDrop`. Keep the reviewed baseline
-separate from new output; the quality command never updates it.
-
-Portable tests assert that no standard element lacks a policy, that input routing stays consistent,
-and that unsupported inline content cannot silently disappear. Chrome tests exercise nine semantic
-container tags across block/flex/grid and compare their geometry and generated Swift. These checks
-establish routing and layout consistency; they do not replace native rendering comparisons.
-
-The first sizing pass normalizes `min/max-width` and `min/max-height` to border-box dimensions,
-including padding, borders, percentage width limits and simple `calc()` expressions. Capture
-retains cascaded width/height intent, so fixed stylesheet sizes and overridden inline sizes use
-the same rules as compiled utility selectors. Finite caps preserve intrinsic boxes without
-expanding their backgrounds; height floors and clipping preserve block text's top placement.
-Chrome sizing tests cover 320, 390 and 768px in both themes.
-
-Equal flex allocations can use native fill sizing. Unequal growth, bases or measured sizes,
-and growth factors totaling less than one, retain captured dimensions with approximation
-diagnostics. Percentage height constraints and unresolved intrinsic/complex limits also retain
-captured bounds with diagnostics. These limits are measured pixels, not reconstructed responsive
-CSS constraints. Intrinsic sizing and tables remain layout work.
-
-Regular full-cell grids use native `Grid` when captured geometry matches the resolved tracks;
-unequal tracks retain measured widths. Holes, spans, empty tracks, aligned intrinsic items,
-overlap and RTL use captured child positions, preserving padding, borders and paint order.
-These grid paths report that responsive track definitions are not reconstructed.
-
-Row wrapping now uses a native layout that chooses rows again at the component's available
-width. It supports captured fixed-size items with growth and shrink disabled, pixel gaps,
-and start/center/end alignment. It does not reevaluate source CSS or media queries. Reverse
-and column wrapping, intrinsic sizes, grow/shrink allocation, margins, baseline alignment,
-CSS order and unsupported cross-row distribution retain captured positions with an explicit
-reflow limitation. Chrome regression tests cover these cases at three widths in both themes.
-
-Development proceeds by feature family, with reusable fixtures and regression checks:
-
-1. Layout: intrinsic sizing, flex/grid combinations, tables, wrapping, overlays, clipping and scroll.
-2. Text: fonts, mixed inline content, line breaking, RTL, ruby and accessibility semantics.
-3. Paint: layered gradients, borders, shadows, masks, filters and transforms.
-4. Native behavior: control state, navigation callbacks, media, animation and responsive resizing.
-
-Each family needs parser/inference tests, real Chrome capture, generated Swift compilation,
-and representative native/browser visual comparisons at multiple widths and themes. Behavior
-and accessibility need their own native assertions; a good screenshot score cannot prove them.
-An unsupported feature must first report its loss, then gain a tested implementation. The release
-scope will follow that verified matrix rather than claiming every HTML/CSS combination is covered.
-
-Successful compilation is not proof of visual correctness. Complex layout, rich inline text,
-font metrics, native resizing and accessibility still need improvement. Capture observes one
-viewport and state; it does not infer all responsive or interactive behavior. A multi-component
-bundle linker remains planned work; the separate preview playground is kept locally.
-
-Research corpora, local simulator fixtures, generated screenshots and development state notes
-are intentionally excluded from this repository. The checked-in unit and integration tests
-run without those files. Native compilation tests require macOS with Xcode; browser tests
-require Google Chrome. Node.js compatibility is not yet claimed.
-
-No release license has been selected yet.
+Only source, built package files, tests, tools needed for portable checks and this README are tracked. Local research, visual baselines, the older playground and generated output stay outside the distributed package.
