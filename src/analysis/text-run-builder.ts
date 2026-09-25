@@ -8,6 +8,7 @@ import { hostSpace, inlineChain } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { textPaintOf } from "./style.ts";
 import { EDGES, edgeWidth, unionRect } from "./geometry.ts";
+import { reportStaticMotion } from "./style-effects.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -28,6 +29,9 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
   let prevRun: SourceTextRun | undefined;
   for (const r of runs) {
     const s = r.styleOf.styles;
+    // Inline elements and generated pseudo text are folded into their host Text. Their own
+    // semantic nodes do not survive, so propagate motion loss to the host's diagnostic.
+    for (const inline of inlineChain(host, r.styleOf)) reportStaticMotion(inline.styles, note);
     const boundary = r.node.tag === "br" ? "\n" : r.node.tag === "wbr" ? "\u200b" : undefined;
     if (r.node.tag === "wbr") note("approximated: <wbr> → zero-width break opportunity; native line breaking may differ");
     const mode: Collapse = boundary === undefined ? collapseOf(s) : "preserve";

@@ -10822,6 +10822,7 @@ function colorHint(util) {
 // src/analysis/style-effects.ts
 function applyEffects(n, style, notes) {
   const s = n.styles;
+  reportStaticMotion(s, (note) => notes.push(note));
   const { w, h } = n.bounds;
   const op = parseFloat(s["opacity"] ?? "1");
   if (op < 1)
@@ -10907,6 +10908,19 @@ function applyEffects(n, style, notes) {
   const tokens = [...[...(n.attrs["style"] ?? "").matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]), ...classColorHints(n.attrs)];
   if (tokens.length)
     style.tokens = [...new Set(tokens)];
+}
+function reportStaticMotion(styles, note) {
+  if (hasTimedProperty(styles["animation-name"] ?? "none", styles["animation-duration"] ?? "0s")) {
+    note("approximated: CSS animation captured as a static state; keyframes are not translated");
+  }
+  if (hasTimedProperty(styles["transition-property"] ?? "all", styles["transition-duration"] ?? "0s")) {
+    note("approximated: CSS transition captured as a static state; runtime transitions are not translated");
+  }
+}
+function hasTimedProperty(properties, durations) {
+  const names = properties.split(",").map((value) => value.trim().toLowerCase());
+  const times = durations.split(",").map((value) => parseFloat(value.trim()));
+  return names.some((name, i) => name !== "none" && Number.isFinite(times[i % times.length]) && times[i % times.length] > 0);
 }
 
 // src/analysis/style.ts
@@ -11582,6 +11596,8 @@ function buildTextRuns(host, runs, ctx, note) {
   let prevRun;
   for (const r of runs) {
     const s = r.styleOf.styles;
+    for (const inline of inlineChain(host, r.styleOf))
+      reportStaticMotion(inline.styles, note);
     const boundary = r.node.tag === "br" ? `
 ` : r.node.tag === "wbr" ? "​" : undefined;
     if (r.node.tag === "wbr")

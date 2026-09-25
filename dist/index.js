@@ -7105,6 +7105,8 @@ var STYLE_WHITELIST = [
   "align-content",
   "align-items",
   "align-self",
+  "animation-duration",
+  "animation-name",
   "aspect-ratio",
   "backdrop-filter",
   "background-blend-mode",
@@ -7213,6 +7215,8 @@ var STYLE_WHITELIST = [
   "top",
   "transform",
   "transform-origin",
+  "transition-duration",
+  "transition-property",
   "vertical-align",
   "visibility",
   "-webkit-line-clamp",
@@ -7650,6 +7654,76 @@ function hasImageFunction(content) {
   return false;
 }
 
+// src/browser/motion.ts
+async function readTransitionProperties(page, selector) {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root)
+      throw new Error(`capture root ${selector} not found`);
+    const out = {};
+    const record = (element, path, pseudo) => {
+      const style = getComputedStyle(element, pseudo);
+      if (style.transitionProperty !== "none" && style.transitionDuration.split(",").some((time) => parseFloat(time) > 0)) {
+        out[path] = style.transitionProperty;
+      }
+    };
+    const walk = (element, path) => {
+      record(element, path);
+      for (const pseudo of ["::before", "::after", "::marker"])
+        record(element, `${path}/${pseudo}`, pseudo);
+      Array.from(element.children).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
+    };
+    walk(root, "");
+    return out;
+  }, selector);
+}
+function restoreTransitionProperties(root, properties) {
+  const walk = (raw, path) => {
+    if (properties[path])
+      raw.styles["transition-property"] = properties[path];
+    let index = 0;
+    for (const child of raw.children) {
+      if (child.type !== 1)
+        continue;
+      if (child.pseudo)
+        walk(child, `${path}/::${child.pseudo}`);
+      else
+        walk(child, path ? `${path}/${index++}` : String(index++));
+    }
+  };
+  walk(root, "");
+}
+async function readKeyframeNames(page) {
+  return page.evaluate(() => {
+    const names = new Set;
+    const visited = new Set;
+    const visitSheet = (sheet) => {
+      if (visited.has(sheet))
+        return;
+      visited.add(sheet);
+      try {
+        visitRules(sheet.cssRules);
+      } catch {}
+    };
+    const visitRules = (rules) => {
+      for (const rule of rules) {
+        if (rule instanceof CSSKeyframesRule)
+          names.add(rule.name);
+        else if (rule instanceof CSSImportRule && rule.styleSheet)
+          visitSheet(rule.styleSheet);
+        else if ("cssRules" in rule)
+          visitRules(rule.cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      if (sheet.ownerNode?.hasAttribute?.("data-h2s-harness"))
+        continue;
+      visitSheet(sheet);
+    }
+    return [...names];
+  });
+}
+
 // src/browser/capture.ts
 var ROOT_MARK = "data-h2s-root-capture";
 
@@ -7678,6 +7752,7 @@ class BrowserCapture {
   async capture(spec, identity, source) {
     const page = await this.context.newPage();
     const errors = [];
+    const motionWarnings = [];
     const images = new Map;
     const imageReads = [];
     const favicon = (url) => url.endsWith("/favicon.ico");
@@ -7715,9 +7790,12 @@ class BrowserCapture {
       await page.goto(spec.url, { waitUntil: "load" });
       await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15000 });
       await spec.prepare?.(page);
-      const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
+      const transitionProperties = await readTransitionProperties(page, spec.root);
+      const noTransition = await page.addStyleTag({ content: "*, *::before, *::after, *::marker { transition-property: none !important; }" });
       await noTransition.evaluate((s) => s.setAttribute("data-h2s-harness", ""));
       await settle(page, spec.hide ?? []);
+      for (const name of await readKeyframeNames(page))
+        motionWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
       const fonts = await collectFontFaces(page);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(({ sel, mark }) => {
@@ -7758,6 +7836,7 @@ class BrowserCapture {
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw)
         throw new Error(`capture root ${spec.root} not in snapshot`);
+      restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
       delete rootRaw.attrs[ROOT_MARK];
@@ -7787,7 +7866,7 @@ class BrowserCapture {
   ${errors.join(`
   `)}`);
       return {
-        warnings: errors,
+        warnings: [...errors, ...motionWarnings],
         layout: {
           version: 1,
           source,
@@ -11840,6 +11919,7 @@ function colorHint(util) {
 // src/analysis/style-effects.ts
 function applyEffects(n, style, notes) {
   const s = n.styles;
+  reportStaticMotion(s, (note) => notes.push(note));
   const { w, h } = n.bounds;
   const op = parseFloat(s["opacity"] ?? "1");
   if (op < 1)
@@ -11925,6 +12005,19 @@ function applyEffects(n, style, notes) {
   const tokens = [...[...(n.attrs["style"] ?? "").matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]), ...classColorHints(n.attrs)];
   if (tokens.length)
     style.tokens = [...new Set(tokens)];
+}
+function reportStaticMotion(styles, note) {
+  if (hasTimedProperty(styles["animation-name"] ?? "none", styles["animation-duration"] ?? "0s")) {
+    note("approximated: CSS animation captured as a static state; keyframes are not translated");
+  }
+  if (hasTimedProperty(styles["transition-property"] ?? "all", styles["transition-duration"] ?? "0s")) {
+    note("approximated: CSS transition captured as a static state; runtime transitions are not translated");
+  }
+}
+function hasTimedProperty(properties, durations) {
+  const names = properties.split(",").map((value) => value.trim().toLowerCase());
+  const times = durations.split(",").map((value) => parseFloat(value.trim()));
+  return names.some((name, i) => name !== "none" && Number.isFinite(times[i % times.length]) && times[i % times.length] > 0);
 }
 
 // src/analysis/style.ts
@@ -12600,6 +12693,8 @@ function buildTextRuns(host, runs, ctx, note) {
   let prevRun;
   for (const r of runs) {
     const s = r.styleOf.styles;
+    for (const inline of inlineChain(host, r.styleOf))
+      reportStaticMotion(inline.styles, note);
     const boundary = r.node.tag === "br" ? `
 ` : r.node.tag === "wbr" ? "​" : undefined;
     if (r.node.tag === "wbr")

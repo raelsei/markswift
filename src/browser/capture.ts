@@ -14,6 +14,7 @@ import { readPreferredSizes } from "./sizing.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
 import { generatedContentWarnings } from "./generated-content.ts";
+import { readKeyframeNames, readTransitionProperties, restoreTransitionProperties } from "./motion.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-h2s-root-capture";
@@ -63,6 +64,7 @@ export class BrowserCapture {
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
     const page = await this.context.newPage();
     const errors: string[] = [];
+    const motionWarnings: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
     // Chromium probes /favicon.ico on its own; a static directory rarely has one.
@@ -95,11 +97,14 @@ export class BrowserCapture {
       await page.goto(spec.url, { waitUntil: "load" });
       await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
       await spec.prepare?.(page);
+      // Keep authored motion facts while preventing mid-transition geometry in the snapshot.
+      const transitionProperties = await readTransitionProperties(page, spec.root);
       // Static capture: transitions only interpolate towards the same end state, but a
       // running one makes computed values (and the transform:none probe) mid-flight.
-      const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
+      const noTransition = await page.addStyleTag({ content: "*, *::before, *::after, *::marker { transition-property: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-h2s-harness", ""));
       await settle(page, spec.hide ?? []);
+      for (const name of await readKeyframeNames(page)) motionWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
       const fonts = await collectFontFaces(page);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(
@@ -147,6 +152,7 @@ export class BrowserCapture {
       const tree = snapshotToTree(snapA, snapB);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
+      restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
       delete rootRaw.attrs[ROOT_MARK];
@@ -178,7 +184,7 @@ export class BrowserCapture {
       }
       if (errors.length && !spec.inlineImages) console.warn(`[render] ${spec.screen}/${spec.theme}: page errors:\n  ${errors.join("\n  ")}`);
       return {
-        warnings: errors,
+        warnings: [...errors, ...motionWarnings],
         layout: {
           version: 1,
           source,

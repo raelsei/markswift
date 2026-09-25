@@ -43,3 +43,29 @@ test("a measured box keeps paint, borders and effects together", () => {
   expect(style.outline).toEqual({ width: 1, color: { r: 0, g: 1, b: 0, a: 1 }, style: "solid", offset: 2 });
   expect(notes).toEqual([]);
 });
+
+test("CSS motion with positive duration is reported as a captured static state", () => {
+  const animated = { ...node("0px"), styles: { "animation-name": "none, pulse", "animation-duration": "0s, 250ms" } };
+  const transition = { ...node("0px"), styles: { "transition-property": "opacity", "transition-duration": ".15s" } };
+  const animationNotes: string[] = [];
+  const transitionNotes: string[] = [];
+  styleOf(animated, animationNotes);
+  styleOf(transition, transitionNotes);
+  expect(animationNotes).toContain("approximated: CSS animation captured as a static state; keyframes are not translated");
+  expect(transitionNotes).toContain("approximated: CSS transition captured as a static state; runtime transitions are not translated");
+});
+
+test("none and zero-duration CSS motion leaves a static element mapped", () => {
+  const cases: Array<Record<string, string>> = [
+    { "animation-name": "none", "animation-duration": "1s" },
+    { "animation-name": "pulse", "animation-duration": "0s" },
+    { "animation-name": "pulse", "animation-duration": "0s, 250ms" },
+    { "transition-property": "none", "transition-duration": "1s" },
+    { "transition-property": "opacity", "transition-duration": "0s" },
+  ];
+  for (const styles of cases) {
+    const notes: string[] = [];
+    styleOf({ ...node("0px"), styles }, notes);
+    expect(notes).toEqual([]);
+  }
+});

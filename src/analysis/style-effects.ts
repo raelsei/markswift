@@ -7,6 +7,7 @@ import { imagePaint } from "./style-background.ts";
 
 export function applyEffects(n: LayoutNode, style: Style, notes: string[]): void {
   const s = n.styles;
+  reportStaticMotion(s, note => notes.push(note));
   const { w, h } = n.bounds;
   const op = parseFloat(s["opacity"] ?? "1");
   if (op < 1) style.opacity = op;
@@ -76,4 +77,21 @@ export function applyEffects(n: LayoutNode, style: Style, notes: string[]): void
   // promotes a consistent hint to the token's name (`bg-blue-500` → `Color.blue500`).
   const tokens = [...[...(n.attrs["style"] ?? "").matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]!), ...classColorHints(n.attrs)];
   if (tokens.length) style.tokens = [...new Set(tokens)];
+}
+
+/** A browser snapshot carries one settled frame, never the CSS timeline or a future state change. */
+export function reportStaticMotion(styles: Record<string, string>, note: (message: string) => void): void {
+  if (hasTimedProperty(styles["animation-name"] ?? "none", styles["animation-duration"] ?? "0s")) {
+    note("approximated: CSS animation captured as a static state; keyframes are not translated");
+  }
+  if (hasTimedProperty(styles["transition-property"] ?? "all", styles["transition-duration"] ?? "0s")) {
+    note("approximated: CSS transition captured as a static state; runtime transitions are not translated");
+  }
+}
+
+/** CSS repeats a shorter duration list over the corresponding animation/property list. */
+function hasTimedProperty(properties: string, durations: string): boolean {
+  const names = properties.split(",").map(value => value.trim().toLowerCase());
+  const times = durations.split(",").map(value => parseFloat(value.trim()));
+  return names.some((name, i) => name !== "none" && Number.isFinite(times[i % times.length]) && times[i % times.length]! > 0);
 }
