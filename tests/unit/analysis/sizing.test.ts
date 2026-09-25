@@ -94,3 +94,39 @@ test("ordinary inline text does not acquire CSS constraints that the browser ign
   expect(sizing(element(30, 20, { display: "inline", "min-width": "120px", "min-height": "80px", "max-width": "200px" }))).toMatchObject({ width: { kind: "fixed", px: 30 } });
   expect(sizing(element(30, 20, { display: "inline", "min-width": "120px" })).minWidth).toBeUndefined();
 });
+
+test("a simple block child retains its percentage width", () => {
+  const child = element(195, 30, { display: "block", "box-sizing": "border-box", "background-color": "rgb(255, 0, 0)" }, [], "width:50%;height:30px");
+  const containing = element(390, 100, { display: "block" }, [child]);
+  const result = sizing(child, { ...ctx, root: containing, parent: containing });
+  expect(result.width).toEqual({ kind: "fraction", value: 0.5, capturedPx: 195 });
+  expect(result.notes.some((note) => note.includes("resize"))).toBe(false);
+});
+
+test.each([
+  ["padding", { "padding-left": "8px" }, {}],
+  ["parent padding", {}, { "padding-left": "8px" }],
+  ["horizontal margin", { "margin-left": "8px" }, {}],
+  ["max width", { "max-width": "300px" }, {}],
+  ["flex parent", {}, { display: "flex" }],
+  ["RTL parent", {}, { direction: "rtl" }],
+  ["radial gradient", { "background-image": "radial-gradient(red, blue)" }, {}],
+  ["percentage clip path", { "clip-path": "circle(50% at 50% 50%)" }, {}],
+  ["mask", { "mask-image": "linear-gradient(black, transparent)" }, {}],
+  ["rounded box", { "border-top-left-radius": "50%" }, {}],
+] as const)("%s keeps the captured width with a diagnostic", (_, childStyles, parentStyles) => {
+  const child = element(195, 30, { display: "block", ...childStyles }, [], "width:50%;height:30px");
+  const containing = element(390, 100, { display: "block", ...parentStyles }, [child]);
+  const result = sizing(child, { ...ctx, root: containing, parent: containing, parentDisplay: containing.styles.display });
+  expect(result.width).toEqual({ kind: "fixed", px: 195 });
+  expect(result.notes.some((note) => note.includes("resize"))).toBe(true);
+});
+
+test("a width-dependent painted descendant keeps the ancestor's captured width", () => {
+  const grandchild = element(195, 30, { display: "block", "background-image": "linear-gradient(red, blue)" });
+  const child = element(195, 30, { display: "block" }, [grandchild], "width:50%;height:30px");
+  const containing = element(390, 100, { display: "block" }, [child]);
+  const result = sizing(child, { ...ctx, root: containing, parent: containing });
+  expect(result.width).toEqual({ kind: "fixed", px: 195 });
+  expect(result.notes.some((note) => note.includes("resize"))).toBe(true);
+});

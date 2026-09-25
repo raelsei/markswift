@@ -11215,11 +11215,16 @@ function sizeOf(n, d, ctx, notes) {
   const measuredH = { kind: "fixed", px: round2(n.bounds.h) };
   const growthW = flexGrowthSize(n, "h", ctx, notes);
   const growthH = flexGrowthSize(n, "v", ctx, notes);
+  const fractionW = declW ? responsiveFraction(n, declW, ctx) : undefined;
   let width;
   if (declW && /px$/.test(declW))
     width = measuredW;
   else if (declW === "100%")
     width = fillsW && !abs ? { kind: "fill" } : measuredW;
+  else if (fractionW !== undefined)
+    width = { kind: "fraction", value: fractionW, capturedPx: round2(n.bounds.w) };
+  else if (declW?.includes("%"))
+    width = measuredW;
   else if (growthW)
     width = growthW;
   else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
@@ -11230,7 +11235,7 @@ function sizeOf(n, d, ctx, notes) {
     width = { kind: "fill" };
   else
     width = measuredW;
-  if (declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+  if (width.kind !== "fraction" && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
     notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
   }
   let height;
@@ -11260,6 +11265,44 @@ function sizeOf(n, d, ctx, notes) {
     }
   }
   return { width, height, ...constraints, ...selfAlign !== undefined ? { selfAlign } : {} };
+}
+function responsiveFraction(n, declared, ctx) {
+  const match = /^(?:([0-9]+(?:\.[0-9]+)?)|(\.[0-9]+))%$/.exec(declared.trim());
+  if (!match || !ctx.parent || ctx.parentDisplay !== "block" || ctx.parentAxis !== "v")
+    return;
+  const fraction = Number(match[1] ?? match[2]) / 100;
+  if (!(fraction > 0 && fraction < 1))
+    return;
+  const parent = ctx.parent;
+  if (n.styles.display !== "block" || parent.styles.display !== "block")
+    return;
+  if ([n, parent].some((box) => box.styles.direction === "rtl" || box.styles["writing-mode"] !== undefined && box.styles["writing-mode"] !== "horizontal-tb"))
+    return;
+  if (hasCapturedPaintGeometry(n))
+    return;
+  if (![n, parent].every((box) => {
+    const s = box.styles;
+    return (!s.position || s.position === "static") && (!s.float || s.float === "none") && (!s.transform || s.transform === "none") && (!s["min-width"] || /^(?:auto|0(?:px)?)$/.test(s["min-width"])) && (!s["max-width"] || s["max-width"] === "none") && insetsOf(s).every((inset) => inset === 0) && ["left", "right", "top", "bottom"].every((edge) => px(s[`margin-${edge}`]) === 0);
+  }))
+    return;
+  if (parent.children.some((child) => child.tag === "#text" ? Boolean(child.text?.trim()) : child.styles.display !== "block" || child.styles.float && child.styles.float !== "none" || child.styles.position && child.styles.position !== "static"))
+    return;
+  if (Math.abs(n.bounds.w - parent.bounds.w * fraction) > 1)
+    return;
+  return fraction;
+}
+function hasCapturedPaintGeometry(n) {
+  const s = n.styles;
+  if (["svg", "img", "canvas", "video", "iframe", "object", "embed"].includes(n.tag))
+    return true;
+  if (["background-image", "mask-image", "clip-path", "box-shadow", "filter", "backdrop-filter"].some((property) => s[property] !== undefined && s[property] !== "none"))
+    return true;
+  if (["top-left", "top-right", "bottom-right", "bottom-left"].some((corner) => !zeroRadius(s[`border-${corner}-radius`])))
+    return true;
+  return n.children.some(hasCapturedPaintGeometry);
+}
+function zeroRadius(value) {
+  return value === undefined || value.trim().split(/\s+/).every((part) => /^0(?:\.0+)?(?:px|%)?$/.test(part));
 }
 
 // src/analysis/node-base.ts
@@ -13219,7 +13262,7 @@ function stackOfNodes(nodes, deps) {
 function frameModifier(n, ctx) {
   const parts = [];
   const app = ctx.mode === "app";
-  const w = n.width.kind === "fixed" ? n.width.px : undefined;
+  const w = n.width.kind === "fixed" ? n.width.px : n.width.kind === "fraction" && !app ? n.width.capturedPx : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
   const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack" && !n.measured && !n.wrap && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
@@ -13230,6 +13273,8 @@ function frameModifier(n, ctx) {
   const align = fillAlignment(n, ctx.mode);
   if (fixedW || fixedH)
     parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`);
+  if (app && n.width.kind === "fraction")
+    parts.push(`.modifier(MarkswiftRelativeWidth(fraction: ${num3(n.width.value)}, capturedWidth: ${num3(n.width.capturedPx)}))`);
   const minHeight = n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
   const flex = [
     !fixedW && n.minWidth !== undefined ? `minWidth: ${num3(n.minWidth)}` : "",
@@ -13848,6 +13893,41 @@ struct MarkswiftGreedyText: View {
 }
 `;
 
+// src/swift/relative-width-runtime.ts
+var RELATIVE_WIDTH_RUNTIME = `
+struct MarkswiftRelativeWidth: ViewModifier {
+    let fraction: CGFloat
+    let capturedWidth: CGFloat
+
+    func body(content: Content) -> some View {
+        MarkswiftRelativeWidthLayout(fraction: fraction, capturedWidth: capturedWidth) { content }
+    }
+}
+
+private struct MarkswiftRelativeWidthLayout: Layout {
+    let fraction: CGFloat
+    let capturedWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let width: CGFloat
+        if let available = proposal.width, available.isFinite {
+            width = max(0, available * fraction)
+        } else {
+            width = max(0, capturedWidth)
+        }
+        let size = child.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+        return CGSize(width: width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, anchor: .topLeading,
+                    proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+`;
+
 // src/swift/runtime.ts
 var SWIFT_RUNTIME = `// Generated by Markswift — runtime helpers shared by all generated views.
 import SwiftUI
@@ -14131,7 +14211,8 @@ enum MarkswiftFonts {
 ${CONTROL_RUNTIME}
 ${MEASURED_LAYOUT_RUNTIME}
 ${FLOW_RUNTIME}
-${GREEDY_TEXT_RUNTIME}`;
+${GREEDY_TEXT_RUNTIME}
+${RELATIVE_WIDTH_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {

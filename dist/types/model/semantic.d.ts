@@ -14,6 +14,10 @@ export type Size = {
     kind: "fill";
 } | {
     kind: "hug";
+} | {
+    kind: "fraction";
+    value: number;
+    capturedPx: number;
 };
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
 export interface MeasuredLayout {

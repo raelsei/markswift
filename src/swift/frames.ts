@@ -9,7 +9,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // text-only stack is a floor (`minHeight`) so native text metrics can grow it without clipping.
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
-  const w = n.width.kind === "fixed" ? n.width.px : undefined;
+  const w = n.width.kind === "fixed" ? n.width.px : n.width.kind === "fraction" && !app ? n.width.capturedPx : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
   const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack"
@@ -22,6 +22,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // A fixed frame centres its content by default; the browser packs a container's content per
   // its own alignment (block flow / flex start), and text per its text-align.
   if (fixedW || fixedH) parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`);
+  if (app && n.width.kind === "fraction") parts.push(`.modifier(MarkswiftRelativeWidth(fraction: ${num(n.width.value)}, capturedWidth: ${num(n.width.capturedPx)}))`);
   // Limits apply to the painted box. A later infinity frame would expand that paint beyond
   // a finite cap. Margin placement, when needed, is applied after paint by modifiers.ts.
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap

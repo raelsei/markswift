@@ -117,10 +117,13 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   const measuredH: Size = { kind: "fixed", px: round2(n.bounds.h) };
   const growthW = flexGrowthSize(n, "h", ctx, notes);
   const growthH = flexGrowthSize(n, "v", ctx, notes);
+  const fractionW = declW ? responsiveFraction(n, declW, ctx) : undefined;
 
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
+  else if (fractionW !== undefined) width = { kind: "fraction", value: fractionW, capturedPx: round2(n.bounds.w) };
+  else if (declW?.includes("%")) width = measuredW;
   else if (growthW) width = growthW;
   else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
@@ -128,10 +131,9 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   else if (fillsW && !abs) width = { kind: "fill" };
   else width = measuredW;
 
-  // The IR can express fill and fixed widths, but not an arbitrary fraction of a
-  // changing parent proposal. Keep the measured width for this capture and make
-  // the loss visible instead of reporting a responsive mapping as exact.
-  if (declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+  // Complex percentage widths still use the captured border-box size. Only the simple
+  // in-flow block subset below can be re-proposed against a native parent's live width.
+  if (width.kind !== "fraction" && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
     notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
   }
 
@@ -160,4 +162,50 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
     }
   }
   return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}) };
+}
+
+/** Admit only the width rule that a plain vertical SwiftUI stack can reproduce. */
+function responsiveFraction(n: LayoutNode, declared: string, ctx: InferenceContext): number | undefined {
+  const match = /^(?:([0-9]+(?:\.[0-9]+)?)|(\.[0-9]+))%$/.exec(declared.trim());
+  if (!match || !ctx.parent || ctx.parentDisplay !== "block" || ctx.parentAxis !== "v") return;
+  const fraction = Number(match[1] ?? match[2]) / 100;
+  if (!(fraction > 0 && fraction < 1)) return;
+  const parent = ctx.parent;
+  if (n.styles.display !== "block" || parent.styles.display !== "block") return;
+  // CSS block-start in RTL is the right edge. The emitted column currently aligns a partial
+  // width child differently, so retaining a responsive width would hide a placement loss.
+  if ([n, parent].some((box) => box.styles.direction === "rtl" ||
+    (box.styles["writing-mode"] !== undefined && box.styles["writing-mode"] !== "horizontal-tb"))) return;
+  // Gradients, masks and geometric effects are currently resolved against the captured box
+  // in pixels. A resizing box (or any of its descendants) would keep stale paint geometry.
+  if (hasCapturedPaintGeometry(n)) return;
+  if (![n, parent].every((box) => {
+    const s = box.styles;
+    return (!s.position || s.position === "static") && (!s.float || s.float === "none")
+      && (!s.transform || s.transform === "none")
+      && (!s["min-width"] || /^(?:auto|0(?:px)?)$/.test(s["min-width"]))
+      && (!s["max-width"] || s["max-width"] === "none")
+      && insetsOf(s).every((inset) => inset === 0)
+      && ["left", "right", "top", "bottom"].every((edge) => px(s[`margin-${edge}`]) === 0);
+  })) return;
+  // Inline/float siblings turn the inferred parent into rows or measured fallback layouts.
+  if (parent.children.some((child) => child.tag === "#text" ? Boolean(child.text?.trim())
+    : child.styles.display !== "block" || (child.styles.float && child.styles.float !== "none")
+      || (child.styles.position && child.styles.position !== "static"))) return;
+  if (Math.abs(n.bounds.w - parent.bounds.w * fraction) > 1) return;
+  return fraction;
+}
+
+function hasCapturedPaintGeometry(n: LayoutNode): boolean {
+  const s = n.styles;
+  if (["svg", "img", "canvas", "video", "iframe", "object", "embed"].includes(n.tag)) return true;
+  if (["background-image", "mask-image", "clip-path", "box-shadow", "filter", "backdrop-filter"]
+    .some((property) => s[property] !== undefined && s[property] !== "none")) return true;
+  if (["top-left", "top-right", "bottom-right", "bottom-left"]
+    .some((corner) => !zeroRadius(s[`border-${corner}-radius`]))) return true;
+  return n.children.some(hasCapturedPaintGeometry);
+}
+
+function zeroRadius(value: string | undefined): boolean {
+  return value === undefined || value.trim().split(/\s+/).every((part) => /^0(?:\.0+)?(?:px|%)?$/.test(part));
 }
