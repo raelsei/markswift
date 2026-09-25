@@ -13674,10 +13674,8 @@ function imageNodeExpr(n, ctx) {
   const [vw, vh] = src.size;
   if (n.contentMode === "stretch")
     return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
-  if (n.contentMode === "none")
-    return [...src.view(vw, vh), ...a11y];
-  const s = n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return [...src.view(vw * s, vh * s), ...a11y];
+  const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
+  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
 }
 
 // src/swift/paint.ts

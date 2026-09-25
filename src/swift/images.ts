@@ -141,10 +141,12 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     return [src.expr(sizing), ...a11y];
   }
   // Vector: `fit` draws inside the box; `fill` covers it; `stretch` scales both axes
-  // independently, and `none` leaves the viewBox at intrinsic size.
+  // independently, and `none` leaves the viewBox at intrinsic size. The overlay's
+  // primary view owns the measured <img> box. An oversized vector must not set the
+  // box's ideal size, otherwise SwiftUI's later fill frame can crop from the wrong
+  // edge; a narrower vector must likewise remain centred in that box.
   const [vw, vh] = src.size;
   if (n.contentMode === "stretch") return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
-  if (n.contentMode === "none") return [...src.view(vw, vh), ...a11y];
-  const s = n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return [...src.view(vw * s, vh * s), ...a11y];
+  const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
+  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
 }

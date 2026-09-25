@@ -48,3 +48,19 @@ browserTest("object-fit and object-position survive capture with honest image ma
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\s*\.accessibilityLabel\("none"\)/);
   expect(result.mapping.approximated).toBeGreaterThanOrEqual(3);
 }, 30_000);
+
+browserTest("SVG data images centre cover and contain artwork in the measured image box", async () => {
+  const svg = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 160"><rect width="100" height="160" fill="purple"/><circle cx="50" cy="60" r="30" fill="yellow"/></svg>');
+  const result = await convertHtml(`<main data-markswift-root style="display:flex;gap:8px">${["cover", "contain", "fill"].map(fit =>
+    `<img id="${fit}" src="${svg}" alt="${fit}" style="width:110px;height:110px;object-fit:${fit}">`
+  ).join("")}</main>`, { name: "VectorFit" });
+
+  // cover is 110×176, contain is 68.75×110. The vector's intrinsic frame cannot
+  // become the measured <img> box; the overlay positions it at the box centre.
+  expect(result.code).toContain(".frame(width: 110.0, height: 176.0)");
+  expect(result.code).toContain(".frame(width: 68.75, height: 110.0)");
+  expect(result.code.match(/\.overlay\(alignment: \.center\) \{/g)).toHaveLength(2);
+  expect(result.code).toMatch(/Color\.clear\s*\.overlay\(alignment: \.center\) \{[\s\S]*?height: 176\.0\)[\s\S]*?\.accessibilityLabel\("cover"\)/);
+  expect(result.code).toMatch(/Color\.clear\s*\.overlay\(alignment: \.center\) \{[\s\S]*?height: 110\.0\)[\s\S]*?\.accessibilityLabel\("contain"\)/);
+  expect(result.diagnostics.filter(item => ["#cover", "#contain", "#fill"].includes(item.id))).toHaveLength(0);
+}, 30_000);
