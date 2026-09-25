@@ -3,6 +3,7 @@ import type { NodeIdentity } from "../input/types.ts";
 import type { PreferredSizes } from "./sizing.ts";
 import type { Raw } from "./snapshot-types.ts";
 import { rebase } from "./snapshot-geometry.ts";
+import { singleGeneratedImageUrl } from "./generated-content.ts";
 
 const SKIP_TAGS: Record<string, true> = { script: true, style: true, link: true, meta: true, template: true, noscript: true };
 /**
@@ -53,7 +54,8 @@ export function findAll(root: Raw, pred: (r: Raw) => boolean, out: Raw[] = []): 
  *
  * - `::before`/`::after`/`::marker` become element nodes with that tag, their
  *   computed styles, the derived border box and one `#text` child holding the
- *   generated text (counters/quotes already resolved by the browser). `::after`
+ *   generated text (counters/quotes already resolved by the browser), or one
+ *   measured image child for a lone `content: url(...)`. `::after`
  *   is placed after the element's real children, the others before. They do
  *   not consume an element index; their path is `<parent path>/::before`.
  *   Empty ones (`content: ""` without a box) are dropped.
@@ -140,15 +142,33 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
   const text = raw.text?.trim() ? raw.text : undefined;
   const box = raw.box && raw.box.w > 0 && raw.box.h > 0 ? raw.box : undefined;
   if (!text && !box) return undefined;
+  const imageUrl = box ? singleGeneratedImageUrl(raw.styles.content ?? "") : undefined;
+  const bounds = rebase(box ?? raw.bounds, origin);
+  const imageBounds = imageUrl && box ? rebase(pseudoContentBox(box, raw.styles), origin) : undefined;
   const node: LayoutNode = {
     tag,
     attrs: {},
     styles: raw.styles,
-    bounds: rebase(box ?? raw.bounds, origin),
-    children: text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : [],
+    bounds,
+    children: imageUrl && imageBounds
+      ? [{ tag: "img", attrs: { src: imageUrl, alt: "" }, styles: { display: "block", "object-fit": "fill" }, bounds: imageBounds, children: [] }]
+      : text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : [],
   };
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   return node;
+}
+
+/** The pseudo owns padding and border paint; its replaced image occupies only the content box. */
+function pseudoContentBox(box: LayoutNode["bounds"], styles: Record<string, string>): LayoutNode["bounds"] {
+  const inset = (edge: "top" | "right" | "bottom" | "left") => {
+    const padding = parseFloat(styles[`padding-${edge}`] ?? "") || 0;
+    const borderStyle = styles[`border-${edge}-style`];
+    const border = borderStyle && borderStyle !== "none" && borderStyle !== "hidden"
+      ? parseFloat(styles[`border-${edge}-width`] ?? "") || 0 : 0;
+    return padding + border;
+  };
+  const top = inset("top"), right = inset("right"), bottom = inset("bottom"), left = inset("left");
+  return { x: box.x + left, y: box.y + top, w: Math.max(0, box.w - left - right), h: Math.max(0, box.h - top - bottom) };
 }

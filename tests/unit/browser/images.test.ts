@@ -26,3 +26,12 @@ test("video poster embeds the image resource that Chrome loaded", () => {
   expect(inlineCapturedImages(root, "http://localhost/assets/", images)).toEqual([]);
   expect(root.attrs.poster).toBe("data:image/png;base64,AAAA");
 });
+
+test("generated pseudo image uses the same captured resource embedding as img", () => {
+  const root: LayoutNode = { tag: "::before", attrs: {}, styles: { content: 'url("icon.svg")' }, bounds: { x: 0, y: 0, w: 20, h: 20 }, children: [
+    { tag: "img", attrs: { src: "icon.svg", alt: "" }, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 20, h: 20 }, children: [] },
+  ] };
+  const images = new Map([["http://localhost/assets/icon.svg", "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="]]);
+  expect(inlineCapturedImages(root, "http://localhost/assets/", images)).toEqual([]);
+  expect(root.children[0]?.attrs["data-h2s-src"]).toBe("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=");
+});

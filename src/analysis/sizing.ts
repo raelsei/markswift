@@ -118,11 +118,13 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   const growthW = flexGrowthSize(n, "h", ctx, notes);
   const growthH = flexGrowthSize(n, "v", ctx, notes);
   const fractionW = declW ? responsiveFraction(n, declW, ctx) : undefined;
+  const sharedFlexW = declW ? equalCalculatedFlexWidth(n, declW, ctx) : false;
 
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
   else if (fractionW !== undefined) width = { kind: "fraction", value: fractionW, capturedPx: round2(n.bounds.w) };
+  else if (sharedFlexW) width = { kind: "fill" };
   else if (declW?.includes("%")) width = measuredW;
   else if (growthW) width = growthW;
   else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
@@ -133,7 +135,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
 
   // Complex percentage widths still use the captured border-box size. Only the simple
   // in-flow block subset below can be re-proposed against a native parent's live width.
-  if (width.kind !== "fraction" && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+  if (width.kind !== "fraction" && !sharedFlexW && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
     notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
   }
 
@@ -162,6 +164,37 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
     }
   }
   return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}) };
+}
+
+/** Equal calc-based flex tracks that exactly pack a row can use native equal-width allocation. */
+function equalCalculatedFlexWidth(n: LayoutNode, declared: string, ctx: InferenceContext): boolean {
+  const match = /^calc\(\s*(\d+(?:\.\d+)?)%\s*([+-])\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(declared.trim());
+  const parent = ctx.parent;
+  if (!match || !parent || ctx.parentAxis !== "h" || !/flex/.test(ctx.parentDisplay ?? "")) return false;
+  if (!/^row$/.test(parent.styles["flex-direction"] ?? "row") ||
+    !/^(?:nowrap|none)$/.test(parent.styles["flex-wrap"] ?? "nowrap")) return false;
+  if (parent.children.some((child) => child.tag === "#text" && child.text?.trim())) return false;
+  const siblings = parent.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none");
+  if (siblings.length < 2 || !siblings.includes(n)) return false;
+  if (siblings.some((child) => child.preferredSize?.width !== declared ||
+    (child.styles.position && child.styles.position !== "static") ||
+    (child.styles.float && child.styles.float !== "none") ||
+    !/^(?:auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") ||
+    (child.styles["max-width"] ?? "none") !== "none" ||
+    (child.styles["flex-basis"] ?? "auto") !== "auto" ||
+    insetsOf(child.styles).some((inset) => inset !== 0) ||
+    ["flex-grow", "flex-shrink", "flex-basis"].some((property) => child.styles[property] !== n.styles[property]) ||
+    ["left", "right"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0))) return false;
+  const [, right, , left] = insetsOf(parent.styles);
+  const available = parent.bounds.w - left - right;
+  const fraction = Number(match[1]) / 100;
+  const offset = Number(match[3]) * (match[2] === "-" ? -1 : 1);
+  const gap = px(parent.styles["column-gap"] ?? parent.styles.gap);
+  // The equal-share identity must hold at every parent width, not merely at capture width.
+  if (Math.abs(siblings.length * fraction - 1) > 0.000001 ||
+    Math.abs(siblings.length * offset + gap * (siblings.length - 1)) > 0.000001) return false;
+  if (!(available > 0) || siblings.some((child) => Math.abs(child.bounds.w - (available * fraction + offset)) > 1)) return false;
+  return Math.abs(siblings.reduce((sum, child) => sum + child.bounds.w, 0) + gap * (siblings.length - 1) - available) <= 1;
 }
 
 /** Admit only the width rule that a plain vertical SwiftUI stack can reproduce. */

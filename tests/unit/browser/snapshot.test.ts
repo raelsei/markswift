@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { STYLE_WHITELIST } from "../../../src/model/layout.ts";
 import { attachPreferredSizes, snapshotToTree, srcsetUrls, toLayout, type DomSnapshot } from "../../../src/browser/snapshot.ts";
+import { generatedContentWarnings } from "../../../src/browser/generated-content.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 
 describe("srcsetUrls", () => {
   test("data URLs keep their comma; descriptors are skipped; bare trailing commas are stripped", () => {
@@ -63,6 +65,48 @@ function synth(root: Spec): DomSnapshot {
 const pathIdentity = (_tag: string, _attrs: Record<string, string>, path: string) => path || "root";
 
 describe("toLayout", () => {
+  test("single image-valued pseudo content keeps a drawable image child", () => {
+    const imageUrl = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="#ff0000"/></svg>');
+    const content = `url("${imageUrl}")`;
+    const snap = synth(["html", {}, { b: [0, 0, 100, 25] }, [["p", { id: "root" }, { b: [0, 0, 100, 25], styles: { position: "relative" } }, [
+      ["::before", {}, { b: [0, 0, 20, 20], pseudo: "before", text: "", styles: { content, display: "inline-block" } }, []],
+      "Text",
+    ]]]]);
+    const raw = snapshotToTree(snap).children[0]!;
+    const node = toLayout(raw, { x: 0, y: 0 }, pathIdentity)!;
+    const pseudo = node.children[0]!;
+    expect(pseudo.tag).toBe("::before");
+    expect(pseudo.children[0]).toMatchObject({ tag: "img", bounds: pseudo.bounds, attrs: { src: imageUrl } });
+    expect(generatedContentWarnings(raw)).toEqual([]);
+    const swift = compileLayout({ version: 1, source: "pseudo.html", combo: { screen: "pseudo", theme: "light", demoState: "normal" }, size: { w: 100, h: 25 }, dpr: 1, canvas: "white", root: node }, { name: "PseudoIcon" });
+    expect(swift.code).toContain("MarkswiftShape_");
+  });
+
+  test("generated image occupies the content box inside pseudo padding and border", () => {
+    const snap = synth(["html", {}, { b: [0, 0, 100, 80] }, [["p", { id: "root" }, { b: [0, 0, 100, 80], styles: { position: "relative" } }, [
+      ["::before", {}, { b: [10, 11, 40, 34], pseudo: "before", text: "", styles: {
+        content: 'url("icon.svg")', display: "inline-block",
+        "padding-top": "3px", "padding-right": "7px", "padding-bottom": "4px", "padding-left": "5px",
+        "border-top-style": "solid", "border-top-width": "1px",
+        "border-right-style": "solid", "border-right-width": "1px",
+        "border-bottom-style": "solid", "border-bottom-width": "2px",
+        "border-left-style": "solid", "border-left-width": "2px",
+      } }, []],
+    ]]]]);
+    const node = toLayout(snapshotToTree(snap).children[0]!, { x: 0, y: 0 }, pathIdentity)!;
+    expect(node.children[0]?.bounds).toEqual({ x: 10, y: 11, w: 40, h: 34 });
+    expect(node.children[0]?.children[0]?.bounds).toEqual({ x: 17, y: 15, w: 25, h: 24 });
+  });
+
+  test("complex image-valued pseudo content remains diagnosed", () => {
+    const snap = synth(["html", {}, { b: [0, 0, 100, 25] }, [["p", { id: "root" }, { b: [0, 0, 100, 25], styles: { position: "relative" } }, [
+      ["::before", {}, { b: [0, 0, 20, 20], pseudo: "before", text: "", styles: { content: 'url("icon.svg") "new"', display: "inline-block" } }, []],
+    ]]]]);
+    const raw = snapshotToTree(snap).children[0]!;
+    expect(generatedContentWarnings(raw)).toEqual([expect.stringContaining("generated image content")]);
+    expect(toLayout(raw, { x: 0, y: 0 }, pathIdentity)!.children[0]!.children).toEqual([]);
+  });
+
   test("size intent follows DOM element paths through pseudo-elements, text and flattened wrappers", () => {
     const snap = synth(["html", {}, undefined, [["main", {}, { b: [0, 0, 200, 100] }, [
       ["style", {}, undefined, []],

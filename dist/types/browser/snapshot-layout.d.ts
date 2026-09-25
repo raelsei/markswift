@@ -16,7 +16,8 @@ export declare function findAll(root: Raw, pred: (r: Raw) => boolean, out?: Raw[
  *
  * - `::before`/`::after`/`::marker` become element nodes with that tag, their
  *   computed styles, the derived border box and one `#text` child holding the
- *   generated text (counters/quotes already resolved by the browser). `::after`
+ *   generated text (counters/quotes already resolved by the browser), or one
+ *   measured image child for a lone `content: url(...)`. `::after`
  *   is placed after the element's real children, the others before. They do
  *   not consume an element index; their path is `<parent path>/::before`.
  *   Empty ones (`content: ""` without a box) are dropped.

@@ -7553,6 +7553,89 @@ function normalizeFormState(nodes, raws, str) {
         raws[i].attrs.selected = "";
   }
 }
+// src/browser/generated-content.ts
+function singleGeneratedImageUrl(content) {
+  const value = content.trim();
+  const head = /^url\s*\(/i.exec(value);
+  if (!head)
+    return;
+  let index = head[0].length;
+  while (/\s/.test(value[index] ?? ""))
+    index++;
+  const quote = value[index] === '"' || value[index] === "'" ? value[index++] : undefined;
+  let source = "";
+  let closed = false;
+  while (index < value.length) {
+    const char = value[index++];
+    if (char === "\\") {
+      const hex = /^[0-9a-f]{1,6}/i.exec(value.slice(index));
+      if (hex) {
+        source += String.fromCodePoint(parseInt(hex[0], 16));
+        index += hex[0].length;
+        if (/\s/.test(value[index] ?? ""))
+          index++;
+      } else if (index < value.length)
+        source += value[index++];
+      else
+        return;
+    } else if (char === quote) {
+      closed = true;
+      break;
+    } else if (!quote && char === ")") {
+      closed = true;
+      break;
+    } else if (!quote && (/\s/.test(char) || char === '"' || char === "'" || char === "("))
+      return;
+    else
+      source += char;
+  }
+  if (!closed || !source)
+    return;
+  if (quote) {
+    while (/\s/.test(value[index] ?? ""))
+      index++;
+    if (value[index++] !== ")")
+      return;
+  }
+  return value.slice(index).trim() === "" ? source : undefined;
+}
+function generatedContentWarnings(root) {
+  const warnings = [];
+  const visit = (node) => {
+    if (node.pseudo && hasImageFunction(node.styles.content ?? "") && !singleGeneratedImageUrl(node.styles.content ?? "") && (node.box?.w || node.bounds?.w || node.box?.h || node.bounds?.h)) {
+      const host = node.parent;
+      const source = host ? `<${host.name}>${host.attrs.id ? `#${host.attrs.id}` : ""}` : "element";
+      warnings.push(`CSS ::${node.pseudo} generated image content on ${source} is not translated; only its measured box is kept`);
+    }
+    for (const child of node.children)
+      visit(child);
+  };
+  visit(root);
+  return warnings;
+}
+function hasImageFunction(content) {
+  let quote;
+  for (let i = 0;i < content.length; i++) {
+    const char = content[i];
+    if (quote) {
+      if (char === "\\")
+        i++;
+      else if (char === quote)
+        quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (i > 0 && /[\w-]/.test(content[i - 1]))
+      continue;
+    if (/^(?:url|(?:-webkit-)?image-set)\s*\(/i.test(content.slice(i)))
+      return true;
+  }
+  return false;
+}
+
 // src/browser/snapshot-layout.ts
 var SKIP_TAGS = { script: true, style: true, link: true, meta: true, template: true, noscript: true };
 var KEEP_WITHOUT_LAYOUT = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true };
@@ -7657,12 +7740,15 @@ function pseudoElement(raw, origin, identity, parentPath) {
   const box = raw.box && raw.box.w > 0 && raw.box.h > 0 ? raw.box : undefined;
   if (!text && !box)
     return;
+  const imageUrl = box ? singleGeneratedImageUrl(raw.styles.content ?? "") : undefined;
+  const bounds = rebase(box ?? raw.bounds, origin);
+  const imageBounds = imageUrl && box ? rebase(pseudoContentBox(box, raw.styles), origin) : undefined;
   const node = {
     tag,
     attrs: {},
     styles: raw.styles,
-    bounds: rebase(box ?? raw.bounds, origin),
-    children: text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : []
+    bounds,
+    children: imageUrl && imageBounds ? [{ tag: "img", attrs: { src: imageUrl, alt: "" }, styles: { display: "block", "object-fit": "fill" }, bounds: imageBounds, children: [] }] : text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : []
   };
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
   if (id !== undefined)
@@ -7670,6 +7756,16 @@ function pseudoElement(raw, origin, identity, parentPath) {
   if (raw.paint !== undefined)
     node.paint = raw.paint;
   return node;
+}
+function pseudoContentBox(box, styles) {
+  const inset = (edge) => {
+    const padding = parseFloat(styles[`padding-${edge}`] ?? "") || 0;
+    const borderStyle = styles[`border-${edge}-style`];
+    const border = borderStyle && borderStyle !== "none" && borderStyle !== "hidden" ? parseFloat(styles[`border-${edge}-width`] ?? "") || 0 : 0;
+    return padding + border;
+  };
+  const top = inset("top"), right = inset("right"), bottom = inset("bottom"), left = inset("left");
+  return { x: box.x + left, y: box.y + top, w: Math.max(0, box.w - left - right), h: Math.max(0, box.h - top - bottom) };
 }
 // src/browser/sizing.ts
 async function readPreferredSizes(page, selector) {
@@ -7732,44 +7828,6 @@ function inlineCapturedImages(root, baseURL, images) {
   };
   visit(root);
   return [...warnings];
-}
-
-// src/browser/generated-content.ts
-function generatedContentWarnings(root) {
-  const warnings = [];
-  const visit = (node) => {
-    if (node.pseudo && hasImageFunction(node.styles.content ?? "") && (node.box?.w || node.bounds?.w || node.box?.h || node.bounds?.h)) {
-      const host = node.parent;
-      const source = host ? `<${host.name}>${host.attrs.id ? `#${host.attrs.id}` : ""}` : "element";
-      warnings.push(`CSS ::${node.pseudo} generated image content on ${source} is not translated; only its measured box is kept`);
-    }
-    for (const child of node.children)
-      visit(child);
-  };
-  visit(root);
-  return warnings;
-}
-function hasImageFunction(content) {
-  let quote;
-  for (let i = 0;i < content.length; i++) {
-    const char = content[i];
-    if (quote) {
-      if (char === "\\")
-        i++;
-      else if (char === quote)
-        quote = undefined;
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-    if (i > 0 && /[\w-]/.test(content[i - 1]))
-      continue;
-    if (/^(?:url|(?:-webkit-)?image-set)\s*\(/i.test(content.slice(i)))
-      return true;
-  }
-  return false;
 }
 
 // src/browser/motion.ts
@@ -12503,6 +12561,7 @@ function sizeOf(n, d, ctx, notes) {
   const growthW = flexGrowthSize(n, "h", ctx, notes);
   const growthH = flexGrowthSize(n, "v", ctx, notes);
   const fractionW = declW ? responsiveFraction(n, declW, ctx) : undefined;
+  const sharedFlexW = declW ? equalCalculatedFlexWidth(n, declW, ctx) : false;
   let width;
   if (declW && /px$/.test(declW))
     width = measuredW;
@@ -12510,6 +12569,8 @@ function sizeOf(n, d, ctx, notes) {
     width = fillsW && !abs ? { kind: "fill" } : measuredW;
   else if (fractionW !== undefined)
     width = { kind: "fraction", value: fractionW, capturedPx: round2(n.bounds.w) };
+  else if (sharedFlexW)
+    width = { kind: "fill" };
   else if (declW?.includes("%"))
     width = measuredW;
   else if (growthW)
@@ -12522,7 +12583,7 @@ function sizeOf(n, d, ctx, notes) {
     width = { kind: "fill" };
   else
     width = measuredW;
-  if (width.kind !== "fraction" && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
+  if (width.kind !== "fraction" && !sharedFlexW && declW?.includes("%") && declW !== "100%" && declW !== "0%") {
     notes.push(`approximated: width: ${declW} captured as ${round2(n.bounds.w)}px; generated view may not resize proportionally with its parent`);
   }
   let height;
@@ -12552,6 +12613,31 @@ function sizeOf(n, d, ctx, notes) {
     }
   }
   return { width, height, ...constraints, ...selfAlign !== undefined ? { selfAlign } : {} };
+}
+function equalCalculatedFlexWidth(n, declared, ctx) {
+  const match = /^calc\(\s*(\d+(?:\.\d+)?)%\s*([+-])\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(declared.trim());
+  const parent = ctx.parent;
+  if (!match || !parent || ctx.parentAxis !== "h" || !/flex/.test(ctx.parentDisplay ?? ""))
+    return false;
+  if (!/^row$/.test(parent.styles["flex-direction"] ?? "row") || !/^(?:nowrap|none)$/.test(parent.styles["flex-wrap"] ?? "nowrap"))
+    return false;
+  if (parent.children.some((child) => child.tag === "#text" && child.text?.trim()))
+    return false;
+  const siblings = parent.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none");
+  if (siblings.length < 2 || !siblings.includes(n))
+    return false;
+  if (siblings.some((child) => child.preferredSize?.width !== declared || child.styles.position && child.styles.position !== "static" || child.styles.float && child.styles.float !== "none" || !/^(?:auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none" || (child.styles["flex-basis"] ?? "auto") !== "auto" || insetsOf(child.styles).some((inset) => inset !== 0) || ["flex-grow", "flex-shrink", "flex-basis"].some((property) => child.styles[property] !== n.styles[property]) || ["left", "right"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0)))
+    return false;
+  const [, right, , left] = insetsOf(parent.styles);
+  const available = parent.bounds.w - left - right;
+  const fraction = Number(match[1]) / 100;
+  const offset = Number(match[3]) * (match[2] === "-" ? -1 : 1);
+  const gap = px(parent.styles["column-gap"] ?? parent.styles.gap);
+  if (Math.abs(siblings.length * fraction - 1) > 0.000001 || Math.abs(siblings.length * offset + gap * (siblings.length - 1)) > 0.000001)
+    return false;
+  if (!(available > 0) || siblings.some((child) => Math.abs(child.bounds.w - (available * fraction + offset)) > 1))
+    return false;
+  return Math.abs(siblings.reduce((sum, child) => sum + child.bounds.w, 0) + gap * (siblings.length - 1) - available) <= 1;
 }
 function responsiveFraction(n, declared, ctx) {
   const match = /^(?:([0-9]+(?:\.[0-9]+)?)|(\.[0-9]+))%$/.exec(declared.trim());
@@ -13941,6 +14027,21 @@ function imageNodeExpr(n, ctx) {
   const [vw, vh] = src.size;
   if (n.contentMode === "stretch") {
     return [...src.view(n.frame.w, n.frame.h), ...a11y];
+  }
+  const liveBox = ctx.mode === "app" && (n.width.kind === "fill" || n.width.kind === "fraction" || n.height.kind === "fill");
+  if (liveBox && n.contentMode !== "none") {
+    const scale = n.contentMode === "fill" ? "max" : "min";
+    return [
+      "Color.clear",
+      ".overlay {",
+      "    GeometryReader { geometry in",
+      ...indent(src.view(vw, vh), 2),
+      `        .scaleEffect(${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)}))`,
+      "        .frame(width: geometry.size.width, height: geometry.size.height)",
+      "    }",
+      "}",
+      ...a11y
+    ];
   }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];

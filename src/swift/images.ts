@@ -157,6 +157,20 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     // still governs how the viewBox fits that new viewport.
     return [...src.view(n.frame.w, n.frame.h), ...a11y];
   }
+  // A flexible image box must size its SVG against the live SwiftUI proposal. Rendering the
+  // intrinsic viewport once and scaling the resulting vector preserves paths, strokes and the
+  // SVG's own viewBox mapping while cover/contain follow a resizable parent.
+  const liveBox = ctx.mode === "app" && (n.width.kind === "fill" || n.width.kind === "fraction" || n.height.kind === "fill");
+  if (liveBox && n.contentMode !== "none") {
+    const scale = n.contentMode === "fill" ? "max" : "min";
+    return [
+      "Color.clear", ".overlay {", "    GeometryReader { geometry in",
+      ...indent(src.view(vw, vh), 2),
+      `        .scaleEffect(${scale}(geometry.size.width / ${num(vw)}, geometry.size.height / ${num(vh)}))`,
+      "        .frame(width: geometry.size.width, height: geometry.size.height)",
+      "    }", "}", ...a11y,
+    ];
+  }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
 }

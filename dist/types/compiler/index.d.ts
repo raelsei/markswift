@@ -22,3 +22,5 @@ export interface CompileResult {
 export declare function compileLayout(layout: LayoutDoc, options?: CompileOptions): CompileResult;
 export type { LayoutDoc } from "../model/layout.ts";
 export type { EmitMode } from "../swift/emit.ts";
+export { compileLayouts } from "./batch.ts";
+export type { CompileLayoutInput, CompileBatchResult } from "./batch.ts";
