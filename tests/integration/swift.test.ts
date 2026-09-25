@@ -16,10 +16,11 @@ nativeTest("public conversion produces complete Swift compilable in both modes",
         css: "body{margin:0} main{width:300px;padding:20px;font:16px system-ui;background:#eee} h2{font-size:24px}label{display:block}",
       });
       expect(result.code).toContain("Link(destination:");
+      expect(result.code).toContain('Text.markswiftLink("our site", "https://example.com/")');
       expect(result.code).toContain("minHeight: 30.0");
       expect(result.code).toContain("height: 10.0, alignment: .topLeading");
       expect(result.code).toContain("maxWidth: 200.0");
-      expect(result.diagnostics.flatMap(item => item.notes).join("\n")).toContain("destination dropped");
+      expect(result.diagnostics.flatMap(item => item.notes).join("\n")).not.toContain("destination dropped");
       const output = join(directory, mode);
       for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
       const check = await typecheck(output);

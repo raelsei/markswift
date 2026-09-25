@@ -86,12 +86,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
     }
     case "link": {
-      // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
+      // Only a supported external URL has a destination outside the app. Other hrefs need
       // navigation the generated view cannot resolve, so the element becomes a button over the
       // placeholder callback `controlMembers` declared for its target — the same shape an
       // `onclick` handler gets, and named after whatever the design called the target.
       const href = n.href ?? "";
-      if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+      if (n.action !== undefined) {
         const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
         return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
       }

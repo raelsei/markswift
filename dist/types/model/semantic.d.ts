@@ -152,6 +152,8 @@ export interface TextDecoration {
 }
 export interface TextRun {
     text: string;
+    /** Navigable absolute URL for an inline link; relative targets require an app route. */
+    href?: string;
     font: FontSpec;
     color: Color;
     kerning?: number;
@@ -418,7 +420,7 @@ export interface ControlNode extends SemBase {
     level?: "optimum" | "suboptimal" | "poor";
     /** Picker choices in document order (`<option>` labels). */
     options?: string[];
-    /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
+    /** Serialized external destination, or authored href when app-specific navigation is needed. */
     href?: string;
     /**
      * The callback the generated view should run: an `@onclick` handler's source, or — for an

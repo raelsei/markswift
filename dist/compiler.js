@@ -10292,6 +10292,25 @@ var INPUT_PLACEHOLDERS = Object.freeze({
   image: "image submit buttons are not translated; placeholder box only"
 });
 
+// src/analysis/link-destination.ts
+function nativeExternalURL(href) {
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(href)?.[1]?.toLowerCase();
+  if (!scheme || !["http", "https", "mailto", "tel"].includes(scheme))
+    return;
+  if ((scheme === "http" || scheme === "https") && !/^https?:\/\//i.test(href))
+    return;
+  try {
+    const url = new URL(href);
+    const hasDestination = scheme === "http" || scheme === "https" ? Boolean(url.hostname) : Boolean(url.pathname);
+    return hasDestination ? url.href : undefined;
+  } catch {
+    return;
+  }
+}
+function linkDestinationLoss(href) {
+  return /^[a-z][a-z0-9+.-]*:/i.test(href) ? "unsupported or malformed URL" : "app navigation route or fragment";
+}
+
 // src/analysis/controls.ts
 function controlOf(n) {
   const a = n.attrs;
@@ -10310,10 +10329,11 @@ function controlOf(n) {
       const href = a["href"];
       if (href === undefined)
         return;
-      const spec = { control: "link", href, notes };
-      if (!ABSOLUTE_URL.test(href)) {
+      const destination = nativeExternalURL(href);
+      const spec = { control: "link", href: destination ?? href, notes };
+      if (!destination) {
         spec.action = a["onclick"] || `#${targetName(href, n)}`;
-        notes.push(`approximated: <a href="${href}"> has no runtime destination → Button over a placeholder action`);
+        notes.push(`approximated: <a href="${href}"> has no supported runtime destination → Button over a placeholder action`);
       }
       return spec;
     }
@@ -10456,7 +10476,6 @@ function buildControl(spec, parts) {
   }
   return node;
 }
-var ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 function targetName(href, n) {
   const hash = href.indexOf("#");
   const fragment = hash < 0 ? "" : href.slice(hash + 1);
@@ -10516,7 +10535,7 @@ var HTML_ELEMENTS = Object.freeze({
   ...family("svg", "svg"),
   ...family("br", "line-break"),
   ...family("area base datalist head link meta script source style template title track", "metadata", "nonvisual"),
-  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated"),
+  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; a subset of equal-column fixed tables resizes natively; spans, other column rules and table accessibility are not translated"),
   ...family("ruby rt", "flow", "approximated", "→ measured annotation boxes; ruby associations and paragraph reflow are not translated"),
   ...family("form", "flow", "approximated", "→ measured content; browser form submission and validation are not translated"),
   ...family("label", "text", "approximated", "→ styled text; label-to-control focus behavior is not translated"),
@@ -11267,6 +11286,87 @@ function zeroRadius(value) {
   return value === undefined || value.trim().split(/\s+/).every((part) => /^0(?:\.0+)?(?:px|%)?$/.test(part));
 }
 
+// src/analysis/table-width.ts
+var tableWidths = new WeakMap;
+var groups = new Set(["thead", "tbody", "tfoot"]);
+var cells = new Set(["td", "th"]);
+function hasEqualFixedTableWidth(root, node) {
+  let indexed = tableWidths.get(root);
+  if (!indexed) {
+    indexed = new WeakSet;
+    indexTables(root, undefined, indexed);
+    tableWidths.set(root, indexed);
+  }
+  return indexed.has(node);
+}
+function indexTables(node, parent, indexed) {
+  if (node.tag === "table") {
+    const members = equalFixedTable(node, parent);
+    if (members)
+      for (const member of members)
+        indexed.add(member);
+  }
+  for (const child of node.children)
+    indexTables(child, node, indexed);
+}
+function equalFixedTable(table, parent) {
+  if (table.styles["table-layout"] !== "fixed" || table.styles.display !== "table" || table.preferredSize?.width !== "100%" || parent && parent.styles.display !== "block" || !ordinary(table) || !unconstrained(table))
+    return;
+  if (parent) {
+    const [, right, , left] = insetsOf(parent.styles);
+    const available = parent.bounds.w - left - right;
+    if (Math.abs(table.bounds.w - available) > 1)
+      return;
+  }
+  const members = [table];
+  const rows = [];
+  for (const child of table.children) {
+    if (child.tag === "tr")
+      rows.push(child);
+    else if (groups.has(child.tag) && ordinary(child) && autoWidth(child)) {
+      members.push(child);
+      if (!child.children.length || child.children.some((row) => row.tag !== "tr"))
+        return;
+      rows.push(...child.children);
+    } else
+      return;
+  }
+  if (!rows.length)
+    return;
+  let columns = 0;
+  let edges;
+  for (const row of rows) {
+    if (!ordinary(row) || !autoWidth(row) || row.styles.display !== "table-row")
+      return;
+    const rowCells = row.children;
+    if (rowCells.length < 2 || rowCells.some((cell) => !cells.has(cell.tag) || !ordinary(cell) || !autoWidth(cell) || cell.styles.display !== "table-cell" || cell.attrs.colspan !== undefined || cell.attrs.rowspan !== undefined || cell.attrs.width !== undefined || cell.styles["min-width"] !== undefined && !/^(?:auto|0(?:px)?)$/.test(cell.styles["min-width"]) || cell.styles["max-width"] !== undefined && cell.styles["max-width"] !== "none"))
+      return;
+    if (columns && rowCells.length !== columns)
+      return;
+    columns = rowCells.length;
+    const share = row.bounds.w / columns;
+    if (!(share > 0) || rowCells.some((cell) => Math.abs(cell.bounds.w - share) > 1))
+      return;
+    const currentEdges = rowCells.map((cell) => cell.bounds.x - row.bounds.x);
+    if (edges && currentEdges.some((edge, i) => Math.abs(edge - edges[i]) > 1))
+      return;
+    edges = currentEdges;
+    members.push(row, ...rowCells);
+  }
+  return members;
+}
+function autoWidth(node) {
+  return (node.preferredSize?.width ?? "auto") === "auto" && node.attrs.width === undefined;
+}
+function ordinary(node) {
+  const styles = node.styles;
+  return (styles.position === undefined || styles.position === "static") && (styles.float === undefined || styles.float === "none") && (styles.direction === undefined || styles.direction === "ltr") && (styles["writing-mode"] === undefined || styles["writing-mode"] === "horizontal-tb") && (styles.transform === undefined || styles.transform === "none");
+}
+function unconstrained(node) {
+  const styles = node.styles;
+  return (styles["min-width"] === undefined || /^(?:auto|0(?:px)?)$/.test(styles["min-width"])) && (styles["max-width"] === undefined || styles["max-width"] === "none") && px(styles["margin-left"]) === 0 && px(styles["margin-right"]) === 0;
+}
+
 // src/analysis/sizing.ts
 function trailingInset(n, height, padBottom) {
   if (height.kind !== "hug" || n.children.length === 0)
@@ -11355,7 +11455,9 @@ function sizeOf(n, d, ctx, notes) {
   const fractionW = declW ? responsiveFraction(n, declW, ctx) : undefined;
   const sharedFlexW = declW ? equalCalculatedFlexWidth(n, declW, ctx) : false;
   let width;
-  if (declW && /px$/.test(declW))
+  if (hasEqualFixedTableWidth(ctx.root, n))
+    width = { kind: "fill" };
+  else if (declW && /px$/.test(declW))
     width = measuredW;
   else if (declW === "100%")
     width = fillsW && !abs ? { kind: "fill" } : measuredW;
@@ -11618,8 +11720,7 @@ function trimRun(b, edge) {
   else
     b.src.length = b.src.length - cut;
 }
-function markLineBreaks(built, note) {
-  let forced = false;
+function markLineBreaks(built) {
   for (const b of built) {
     const boxes = b.node.lines;
     if (!boxes || boxes.length < 2)
@@ -11645,10 +11746,7 @@ function markLineBreaks(built, note) {
     if (!breaks.length)
       continue;
     b.run.breaks = breaks;
-    forced = true;
   }
-  if (forced)
-    note("approximated: line division forced from the browser (native wraps differently)");
 }
 function markBaselineShifts(built, host, note) {
   const shifted = built.filter((b) => {
@@ -11773,9 +11871,17 @@ function buildTextRuns(host, runs, ctx, note) {
       if (bg && bg.a > 0 || EDGES.some((e) => edgeWidth(el.styles, e) > 0))
         painted.push(el);
     }
-    const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link)
-      note(`approximated: inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`);
+    const link = inlineChain(host, el).find((a) => a.tag === "a" && a.attrs["href"] !== undefined);
+    if (link) {
+      const href = link.attrs["href"];
+      const destination = nativeExternalURL(href);
+      if (destination)
+        run.href = destination;
+      else
+        note(`approximated: inline <a href="${href}"> → styled text run, destination dropped (${linkDestinationLoss(href)})`);
+      if (link.attrs["onclick"])
+        note("approximated: inline link onclick handler requires an app action");
+    }
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
@@ -11810,7 +11916,7 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
   if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built, note);
+  markLineBreaks(built);
   markBaselineShifts(built, host, note);
   for (const el of painted) {
     const style = styleOf(el, []);
@@ -12904,6 +13010,8 @@ function naturalLineHeight(f, metrics) {
 }
 function textExpr(n, ctx) {
   const runs = n.runs;
+  if (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length))
+    note(n, "approximated: line division forced from the browser (native wraps differently)");
   if (ctx.mode === "app" && usesGreedyWords(n)) {
     const run = runs[0];
     const natural = naturalLineHeight(run.font, ctx.fontMetrics);
@@ -12967,7 +13075,7 @@ function usesGreedyWords(n) {
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden)
     return false;
   const r = n.runs[0];
-  if (r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
+  if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
     return false;
   if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined)
     return false;
@@ -12998,7 +13106,7 @@ function runExpr(r, n, literalTransform, ctx) {
     if (r.bound)
       note(n, "approximated: text-transform baked into a bound run's literal");
   }
-  let e = `Text(verbatim: ${str(text)})`;
+  let e = r.href ? `Text.markswiftLink(${str(text)}, ${str(r.href)})` : `Text(verbatim: ${str(text)})`;
   e += `.font(${fontExpr(r.font, ctx)})`;
   if (r.italic)
     e += ".italic()";
@@ -13238,7 +13346,7 @@ function core2(n, deps) {
     }
     case "link": {
       const href = n.href ?? "";
-      if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+      if (n.action !== undefined) {
         const action = n.action !== undefined ? deps.actionOf.get(n.action) ?? "{}" : "{}";
         return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
@@ -14075,6 +14183,14 @@ extension Font {
 }
 
 extension Text {
+    /// A URL-bearing span inside a styled paragraph. AttributedString keeps the link
+    /// interactive after the span is concatenated with its neighbouring Text runs.
+    nonisolated static func markswiftLink(_ value: String, _ destination: String) -> Text {
+        var attributed = AttributedString(value)
+        attributed.link = URL(string: destination)
+        return Text(attributed)
+    }
+
     /// Pure horizontal advance inside a concatenated \`Text\`: the padding and border of an inline
     /// element, which a native text run cannot carry as a box. CoreText drops zero-width
     /// characters and their kerning with them, so the advance rides on a no-break space in a font

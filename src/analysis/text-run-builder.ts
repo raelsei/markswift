@@ -9,6 +9,7 @@ import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { textPaintOf } from "./style.ts";
 import { EDGES, edgeWidth, unionRect } from "./geometry.ts";
 import { reportStaticMotion } from "./style-effects.ts";
+import { linkDestinationLoss, nativeExternalURL } from "./link-destination.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -125,13 +126,18 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
       const bg = parseColor(el.styles["background-color"]);
       if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
     }
-    // A link inside a sentence never reaches `controlOf` — it is an inline element, so it arrives
-    // here as a run and leaves as decoration. SwiftUI's `Text` has no per-run destination (an
-    // `AttributedString` link would, but then the whole paragraph stops being a run chain), so
-    // the navigation is genuinely lost; what must not be lost is the record of losing it. This is
-    // the most common link form in prose, and it used to report nothing at all.
-    const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link) note(`approximated: inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`);
+    // Inline links remain in the paragraph's run order. A linked Text made from an
+    // AttributedString preserves the per-run URL while the ordinary Text modifiers below
+    // preserve its font, colour and decoration. Only schemes the native system can safely open
+    // are emitted; a route/fragment needs an app-specific navigation action.
+    const link = inlineChain(host, el).find((a) => a.tag === "a" && a.attrs["href"] !== undefined);
+    if (link) {
+      const href = link.attrs["href"]!;
+      const destination = nativeExternalURL(href);
+      if (destination) run.href = destination;
+      else note(`approximated: inline <a href="${href}"> → styled text run, destination dropped (${linkDestinationLoss(href)})`);
+      if (link.attrs["onclick"]) note("approximated: inline link onclick handler requires an app action");
+    }
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };

@@ -31,6 +31,14 @@ extension Font {
 }
 
 extension Text {
+    /// A URL-bearing span inside a styled paragraph. AttributedString keeps the link
+    /// interactive after the span is concatenated with its neighbouring Text runs.
+    nonisolated static func markswiftLink(_ value: String, _ destination: String) -> Text {
+        var attributed = AttributedString(value)
+        attributed.link = URL(string: destination)
+        return Text(attributed)
+    }
+
     /// Pure horizontal advance inside a concatenated \`Text\`: the padding and border of an inline
     /// element, which a native text run cannot carry as a box. CoreText drops zero-width
     /// characters and their kerning with them, so the advance rides on a no-break space in a font

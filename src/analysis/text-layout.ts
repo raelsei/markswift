@@ -126,8 +126,7 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
  * Fragments are grouped by their top edge; the first fragment of each line after the first is
  * a break, and the first output character at or after its raw index is where it goes.
  */
-export function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => void): void {
-  let forced = false;
+export function markLineBreaks(built: MeasuredTextRun[]): void {
   for (const b of built) {
     const boxes = b.node.lines;
     if (!boxes || boxes.length < 2) continue;
@@ -149,9 +148,7 @@ export function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => vo
     }
     if (!breaks.length) continue;
     b.run.breaks = breaks;
-    forced = true;
   }
-  if (forced) note("approximated: line division forced from the browser (native wraps differently)");
 }
 
 /**

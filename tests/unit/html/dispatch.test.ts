@@ -25,11 +25,24 @@ for (const tag of ["canvas", "iframe", "embed", "object", "math", "video", "audi
 
 test("block anchors retain their native link semantics", () => {
   const text: LayoutNode = { ...element("#text"), text: "Visit" };
-  const input = document(element("div", [element("a", [text], { display: "block" }, { href: "https://example.com" })]));
-  expect(compileLayout(input).code).toContain('Link(destination:');
+  for (const href of ["https://example.com", "http://example.com", "mailto:hello@example.com", "tel:+12025550123"]) {
+    const input = document(element("div", [element("a", [text], { display: "block" }, { href })]));
+    expect(compileLayout(input).code).toContain('Link(destination:');
+  }
 });
 
-test("wrapped prose links preserve DOM reading order and report their lost destination", () => {
+test("block anchors with unsupported schemes use an explicit placeholder action", () => {
+  const text: LayoutNode = { ...element("#text"), text: "Open" };
+  for (const href of ["javascript:alert(1)", "data:text/html,hi", "custom:route", "https:/malformed"]) {
+    const input = document(element("div", [element("a", [text], { display: "block" }, { href })]));
+    const result = compileLayout(input);
+    expect(result.code).not.toContain("Link(destination:");
+    expect(result.code).toContain("Button(action:");
+    expect(result.diagnostics.flatMap(item => item.notes).join("\n")).toContain("no supported runtime destination");
+  }
+});
+
+test("wrapped prose links preserve DOM reading order and their native destination", () => {
   const before = { ...element("#text"), text: "Before ", bounds: { x: 0, y: 0, w: 40, h: 20 } };
   const linked = { ...element("#text"), text: "long link wrapping", bounds: { x: 0, y: 0, w: 100, h: 40 } };
   const after = { ...element("#text"), text: " After", bounds: { x: 60, y: 20, w: 40, h: 20 } };
@@ -38,7 +51,10 @@ test("wrapped prose links preserve DOM reading order and report their lost desti
   expect(screen.root.kind).toBe("text");
   if (screen.root.kind !== "text") throw new Error("Prose was split into flow controls");
   expect(screen.root.runs.map(run => run.text).join("")).toBe("Before long link wrapping After");
-  expect(compileLayout(input).diagnostics.flatMap(item => item.notes).join("\n")).toContain("destination dropped");
+  expect(screen.root.runs.find(run => run.text === "long link wrapping")?.href).toBe("https://example.com/");
+  const result = compileLayout(input);
+  expect(result.code).toContain('Text.markswiftLink("long link wrapping", "https://example.com/")');
+  expect(result.diagnostics.flatMap(item => item.notes).join("\n")).not.toContain("destination dropped");
 });
 
 test("custom elements preserve children while making missing behavior explicit", () => {

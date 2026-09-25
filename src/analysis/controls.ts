@@ -8,6 +8,7 @@
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
+import { nativeExternalURL } from "./link-destination.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -47,14 +48,15 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "a": {
       const href = a["href"];
       if (href === undefined) return undefined;
-      const spec: ControlSpec = { control: "link", href, notes };
-      // An absolute URL has a destination outside the app and becomes a `Link`. Everything else
-      // — `#`, `#section`, `/path` — is navigation only the app can perform, so the element
+      const destination = nativeExternalURL(href);
+      const spec: ControlSpec = { control: "link", href: destination ?? href, notes };
+      // A supported external URL becomes a `Link`. Everything else — routes, fragments and
+      // unsupported schemes — needs navigation only the app can perform, so the element
       // becomes a button over the same callback an `onclick` would get, named after whatever the
       // design called the target so the placeholder says which link it was.
-      if (!ABSOLUTE_URL.test(href)) {
+      if (!destination) {
         spec.action = a["onclick"] || `#${targetName(href, n)}`;
-        notes.push(`approximated: <a href="${href}"> has no runtime destination → Button over a placeholder action`);
+        notes.push(`approximated: <a href="${href}"> has no supported runtime destination → Button over a placeholder action`);
       }
       return spec;
     }
@@ -197,9 +199,6 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
   }
   return node;
 }
-
-/** A URL with a scheme: the only `href` the generated view can hand to the system. */
-const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
  * What the design called a link's target, for the name of the placeholder action it becomes:

@@ -35,7 +35,7 @@ export declare function trimRun(b: MeasuredTextRun, edge: RegExp): void;
  * Fragments are grouped by their top edge; the first fragment of each line after the first is
  * a break, and the first output character at or after its raw index is where it goes.
  */
-export declare function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => void): void;
+export declare function markLineBreaks(built: MeasuredTextRun[]): void;
 /**
  * `vertical-align` on an inline run (`<sub>`, `<sup>`, `vertical-align: super`) as a baseline
  * offset in px. The shift is measured against the nearest run on the same line that sits on the

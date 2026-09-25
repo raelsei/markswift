@@ -240,6 +240,7 @@ export const STYLE_WHITELIST = [
   "stroke-opacity",
   "stroke-width",
   "tab-size",
+  "table-layout",
   "text-align",
   "text-decoration-color",
   "text-decoration-line",

@@ -9,6 +9,7 @@ import { crossAlign, distributionOf } from "./alignment.ts";
 import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
 import { equalCalculatedFlexWidth, responsiveFraction } from "./responsive-width.ts";
+import { hasEqualFixedTableWidth } from "./table-width.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -122,7 +123,8 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   const sharedFlexW = declW ? equalCalculatedFlexWidth(n, declW, ctx) : false;
 
   let width: Size;
-  if (declW && /px$/.test(declW)) width = measuredW;
+  if (hasEqualFixedTableWidth(ctx.root, n)) width = { kind: "fill" };
+  else if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
   else if (fractionW !== undefined) width = { kind: "fraction", value: fractionW, capturedPx: round2(n.bounds.w) };
   else if (sharedFlexW) width = { kind: "fill" };

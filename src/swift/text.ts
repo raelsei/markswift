@@ -32,6 +32,7 @@ function naturalLineHeight(f: TextRun["font"], metrics: FontMetrics): number {
 
 export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
   const runs = n.runs;
+  if (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length)) note(n, "approximated: line division forced from the browser (native wraps differently)");
   if (ctx.mode === "app" && usesGreedyWords(n)) {
     const run = runs[0]!;
     const natural = naturalLineHeight(run.font, ctx.fontMetrics);
@@ -149,7 +150,7 @@ function usesGreedyWords(n: TextNode): boolean {
   if (n.sourceTag !== "p" || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate) return false;
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden) return false;
   const r = n.runs[0]!;
-  if (r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
+  if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
   if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined) return false;
   if (r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
   if (n.notes.some((note) => note.includes("font-family"))) return false;
@@ -180,7 +181,7 @@ function runExpr(r: TextRun, n: TextNode, literalTransform: boolean, ctx: ColorC
     if (r.transform === "capitalize") note(n, "approximated: text-transform capitalize applied to the literal (no .textCase equivalent)");
     if (r.bound) note(n, "approximated: text-transform baked into a bound run's literal");
   }
-  let e = `Text(verbatim: ${str(text)})`;
+  let e = r.href ? `Text.markswiftLink(${str(text)}, ${str(r.href)})` : `Text(verbatim: ${str(text)})`;
   e += `.font(${fontExpr(r.font, ctx)})`;
   if (r.italic) e += ".italic()";
   // `background-clip: text`: the paint is the glyph fill (`Text.foregroundStyle` takes any ShapeStyle).
