@@ -345,6 +345,10 @@ export interface TextNode extends SemBase {
 export interface SvgNode extends SemBase {
     kind: "svg";
     viewBox: [number, number, number, number];
+    /** Standalone SVG resource viewport; may differ from viewBox (for an <img> data URL). */
+    intrinsicSize?: [number, number];
+    /** Intrinsic SVG root dimension is zero or negative; background tiling cannot use it. */
+    invalidIntrinsic?: string;
     paths: SvgPath[];
     /** Text runs drawn over the shapes. */
     texts?: SvgText[];

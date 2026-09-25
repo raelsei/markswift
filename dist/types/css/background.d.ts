@@ -3,10 +3,12 @@ export type BackgroundRepeat = "no-repeat" | "repeat" | "repeat-x" | "repeat-y";
 /** Computed `background-repeat` (first layer) → one of the four tile modes; `space`/`round` → `repeat`. */
 export declare function parseBackgroundRepeat(s: string | undefined): BackgroundRepeat | undefined;
 /**
- * Intrinsic size of a `data:image/svg+xml` URL from its `width`/`height` (or `viewBox`)
- * attributes; undefined for raster or external images (the browser knows, we do not).
+ * Natural viewport of a `data:image/svg+xml` URL. A viewBox-only resource has an aspect
+ * ratio but no absolute dimensions: without `boxW`/`boxH` this uses the browser's 300×150
+ * default object, while a background fits that ratio inside its positioning area.
+ * Raster and external images are unknown here.
  */
-export declare function imageSize(url: string): {
+export declare function imageSize(url: string, boxW?: number, boxH?: number): {
     w: number;
     h: number;
 } | undefined;

@@ -28,7 +28,7 @@ function layerValue(list: string | undefined, i: number): string | undefined {
  * that; unknown (raster files) → only a `0% 0%` position is certain.
  */
 export function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number): Paint {
-  const img = imageSize(url);
+  const img = imageSize(url, w, h);
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
   const paint: Paint = { kind: "image", url };
   if (size !== undefined) paint.size = size;

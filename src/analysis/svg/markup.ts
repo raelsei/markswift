@@ -4,7 +4,7 @@ import { type SvgNode, type SemBase } from "../../model/semantic.ts";
 import { DomHandler, type Element, type Text } from "domhandler";
 import { Parser } from "htmlparser2";
 import { round2 } from "../../css/index.ts";
-import { num } from "./attributes.ts";
+import { svgRootDimensions } from "../../css/svg-intrinsic.ts";
 import { buildSvg } from "./build.ts";
 
 /**
@@ -26,11 +26,9 @@ export function svgFromMarkup(markup: string, frame: Rect): SvgNode | undefined 
     children: el.children.flatMap((c) => (c.type === "tag" ? [toLayout(c as Element)] : c.type === "text" ? [{ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: (c as Text).data, children: [] }] : [])),
   });
   const root = toLayout(rootEl);
-  if (!root.attrs["viewbox"]) {
-    const w = num(root.attrs["width"]), h = num(root.attrs["height"]);
-    if (w <= 0 || h <= 0) return undefined;
-    root.attrs["viewbox"] = `0 0 ${w} ${h}`;
-  }
+  const dimensions = svgRootDimensions(root.attrs);
+  if (!dimensions) return undefined;
+  if (!root.attrs["viewbox"]) root.attrs["viewbox"] = dimensions.viewBox.join(" ");
   root.bounds = frame;
   const base: SemBase = {
     id: "svg-markup",
@@ -44,6 +42,12 @@ export function svgFromMarkup(markup: string, frame: Rect): SvgNode | undefined 
     overlays: [],
   };
   const node = buildSvg(root, base);
+  node.intrinsicSize = dimensions.size;
+  node.invalidIntrinsic = dimensions.invalid;
+  node.notes.push(...dimensions.notes);
+  const ratio = root.attrs["preserveaspectratio"]?.trim();
+  if (ratio && !/^(?:none|xMidYMid(?:\s+meet)?)$/i.test(ratio))
+    node.notes.push(`approximated: SVG preserveAspectRatio ${ratio} uses centred meet alignment`);
   if (node.notes.some((s) => s.startsWith("unmapped"))) node.confidence = "unmapped";
   else if (node.notes.some((s) => s.startsWith("approximated"))) node.confidence = "approximated";
   return node;

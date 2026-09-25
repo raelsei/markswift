@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { imageSize, parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize, type BackgroundRepeat, type BackgroundSize } from "../../../src/css/background.ts";
+import { svgRootDimensions } from "../../../src/css/svg-intrinsic.ts";
 
 
 describe("parseBackgroundSize", () => {
@@ -20,6 +21,15 @@ describe("parseBackgroundSize", () => {
     expect(parseBackgroundSize("auto 50px", 200, 100, 40, 20)).toEqual({ w: 100, h: 50 });
     expect(parseBackgroundSize("50% auto", 200, 100, 40, 20)).toEqual({ w: 100, h: 50 });
   });
+});
+
+test("root-relative SVG lengths carry an approximation note", () => {
+  const dimensions = svgRootDimensions({ width: "10em", height: "5rem", viewbox: "0 0 100 50" });
+  expect(dimensions?.size).toEqual([160, 80]);
+  expect(dimensions?.notes).toEqual([
+    expect.stringContaining("width 10em assumes 16px"),
+    expect.stringContaining("height 5rem assumes 16px"),
+  ]);
 });
 
 
@@ -72,9 +82,18 @@ describe("imageSize", () => {
   test("reads width/height or viewBox from a data: svg, nothing from rasters", () => {
     const svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
     expect(imageSize(svg)).toEqual({ w: 160, h: 100 });
-    expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")).toEqual({ w: 20, h: 10 });
+    expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")).toEqual({ w: 300, h: 150 });
+    expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 100 200'%3E%3C/svg%3E")).toEqual({ w: 75, h: 150 });
+    expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 100 200'%3E%3C/svg%3E", 180, 180)).toEqual({ w: 90, h: 180 });
+    expect(imageSize("data:image/svg+xml,%3Csvg width='100' height='160' viewBox='0 0 100 100'%3E%3C/svg%3E")).toEqual({ w: 100, h: 160 });
+    expect(imageSize("data:image/svg+xml,%3Csvg stroke-width='8' data-width='6' width='100' height='160' viewBox='0 0 100 100'%3E%3C/svg%3E")).toEqual({ w: 100, h: 160 });
+    expect(imageSize("data:image/svg+xml,%3Csvg stroke-width='8' height='160' viewBox='0 0 100 100'%3E%3C/svg%3E")).toEqual({ w: 160, h: 160 });
+    expect(imageSize("data:image/svg+xml,%3Csvg data-viewBox='0 0 4 8' viewBox='0 0 100 200'%3E%3C/svg%3E")).toEqual({ w: 75, h: 150 });
+    expect(imageSize("data:image/svg+xml," + encodeURIComponent('<svg data-note=" width=\'5\' >" stroke-width="8" width="100" height="160" viewBox="0 0 100 100"></svg>'))).toEqual({ w: 100, h: 160 });
     expect(imageSize(`data:image/svg+xml;base64,${Buffer.from('<svg width="8px" height="4px"/>').toString("base64")}`)).toEqual({ w: 8, h: 4 });
     expect(imageSize("data:image/png;base64,AAAA")).toBeUndefined();
     expect(imageSize("https://example.com/a.svg")).toBeUndefined();
+    expect(imageSize("data:image/svg+xml,%3Csvg width='-5' height='160' viewBox='0 0 100 100'%3E%3C/svg%3E")).toBeUndefined();
+    expect(imageSize("data:image/svg+xml,%3Csvg width='0' height='160' viewBox='0 0 100 100'%3E%3C/svg%3E")).toBeUndefined();
   });
 });

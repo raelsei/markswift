@@ -8768,1116 +8768,67 @@ function parseClipPath(s, w, h) {
     return;
   return { kind: "ellipse", cx: round2(cx), cy: round2(cy), rx: round2(rx), ry: round2(ry) };
 }
-// src/css/background.ts
-function parseBackgroundRepeat(s) {
-  const layer = splitTop(s ?? "", ",")[0];
-  if (!layer)
-    return;
-  const [x, y = x] = layer.split(/\s+/).map((t) => t === "space" || t === "round" ? "repeat" : t);
-  if (x === "repeat-x" || x === "repeat-y" || x === "no-repeat" || x === "repeat") {
-    if (x !== "repeat" && x !== "no-repeat")
-      return x;
-    if (x === y)
-      return x;
-    return x === "repeat" ? "repeat-x" : "repeat-y";
-  }
-  return;
-}
-function imageSize(url) {
-  if (!/^data:image\/svg\+xml/i.test(url))
-    return;
-  const comma = url.indexOf(",");
-  let svg = url.slice(comma + 1);
-  if (/;base64/i.test(url.slice(0, comma)))
-    svg = Buffer.from(svg, "base64").toString("utf8");
-  else
-    svg = decodeURIComponent(svg);
-  const open = /<svg\b[^>]*>/i.exec(svg)?.[0] ?? "";
-  const attr = (n) => {
-    const m = new RegExp(`\\b${n}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(open);
-    return m ? (m[1] ?? m[2] ?? m[3]).trim() : undefined;
-  };
-  const w = attr("width"), h = attr("height");
-  if (w && h && /^[\d.]+(px)?$/.test(w) && /^[\d.]+(px)?$/.test(h))
-    return { w: parseFloat(w), h: parseFloat(h) };
-  const vb = attr("viewBox")?.split(/[\s,]+/).map(Number);
-  return vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? { w: vb[2], h: vb[3] } : undefined;
-}
-function parseBackgroundSize(s, boxW, boxH, imgW, imgH) {
-  if (!s)
-    return;
-  const layer = splitTop(s, ",")[0];
-  if (!layer)
-    return;
-  if (layer === "cover" || layer === "contain")
-    return layer;
-  const parts = splitTop(layer, " ");
-  const tw = parts[0], th = parts[1] ?? "auto";
-  const w = tw === "auto" ? undefined : resolveLength(tw, boxW);
-  const h = th === "auto" ? undefined : resolveLength(th, boxH);
-  if (tw !== "auto" && w === undefined || th !== "auto" && h === undefined)
-    return;
-  if (w !== undefined && h !== undefined)
-    return { w, h };
-  if (imgW === undefined || imgH === undefined)
-    return;
-  if (w === undefined && h === undefined)
-    return { w: imgW, h: imgH };
-  const ratio = imgH === 0 ? 0 : imgW / imgH;
-  return w !== undefined ? { w, h: ratio === 0 ? 0 : w / ratio } : { w: h * ratio, h };
-}
-function parseBackgroundPosition(s, boxW, boxH, imgW = 0, imgH = 0) {
-  const tokens = splitTop(splitTop(s ?? "", ",")[0] ?? "", " ");
-  if (!tokens.length)
-    return [0, 0];
-  const spanX = boxW - imgW, spanY = boxH - imgH;
-  const isY = (t) => t === "top" || t === "bottom";
-  const isX = (t) => t === "left" || t === "right";
-  const edge = (t, span) => t === "left" || t === "top" ? 0 : t === "center" ? span / 2 : span;
-  if (tokens.length <= 2) {
-    let [tx = "center", ty = "center"] = tokens;
-    if (isY(tx) || isX(ty))
-      [tx, ty] = [ty, tx];
-    const x = isX(tx) || tx === "center" ? edge(tx, spanX) : resolveLength(tx, spanX);
-    const y = isY(ty) || ty === "center" ? edge(ty, spanY) : resolveLength(ty, spanY);
-    return [x ?? 0, y ?? 0];
-  }
-  let x = 0, y = 0;
-  for (let i = 0;i < tokens.length; i++) {
-    const t = tokens[i];
-    if (!isX(t) && !isY(t) && t !== "center")
-      return [0, 0];
-    const span = isY(t) ? spanY : spanX;
-    const next = tokens[i + 1];
-    const off = next !== undefined && !isX(next) && !isY(next) && next !== "center" ? resolveLength(next, span) : undefined;
-    if (off !== undefined)
-      i++;
-    const v = edge(t, span) + (t === "right" || t === "bottom" ? -(off ?? 0) : off ?? 0);
-    if (isY(t))
-      y = v;
-    else
-      x = v;
-  }
-  return [x, y];
-}
-// src/css/typography.ts
-function fontWeight(s) {
-  if (!s)
-    return 400;
-  if (s === "bold")
-    return 700;
-  if (s === "normal")
-    return 400;
-  const v = parseInt(s, 10);
-  return Number.isFinite(v) ? v : 400;
-}
-function fontFamilies(s) {
-  if (!s)
-    return [];
-  return splitTop(s, ",").map((f) => f.replace(/^["']|["']$/g, "").trim());
-}
-// src/css/radius.ts
-function parseRadiusXY(s, refW, refH) {
-  if (!s)
-    return [0, 0];
-  const [x = "", y] = splitTop(s, " ");
-  return [resolveLength(x, refW) ?? 0, resolveLength(y ?? x, refH) ?? 0];
-}
-// src/analysis/svg/transforms.ts
-var import_svgpath = __toESM(require_svgpath(), 1);
-var IDENTITY2 = [1, 0, 0, 1, 0, 0];
-function multiply(m, n) {
-  return [
-    m[0] * n[0] + m[2] * n[1],
-    m[1] * n[0] + m[3] * n[1],
-    m[0] * n[2] + m[2] * n[3],
-    m[1] * n[2] + m[3] * n[3],
-    m[0] * n[4] + m[2] * n[5] + m[4],
-    m[1] * n[4] + m[3] * n[5] + m[5]
-  ];
-}
-function isIdentity(m) {
-  return m.every((v, i) => Math.abs(v - IDENTITY2[i]) < 0.000000001);
-}
-function ownTransform(c, notes) {
-  const computed = c.styles["transform"];
-  if (computed !== undefined) {
-    if (computed === "none")
-      return IDENTITY2;
-    const m = /^matrix\(([^)]+)\)$/.exec(computed);
-    if (!m) {
-      notes.push(`approximated: svg 3D transform ignored (${computed})`);
-      return IDENTITY2;
-    }
-    const v = m[1].split(",").map(Number);
-    const o = /^([-\d.]+)px\s+([-\d.]+)px/.exec(c.styles["transform-origin"] ?? "");
-    if (!o)
-      return v;
-    const ox = +o[1], oy = +o[2];
-    return multiply(multiply([1, 0, 0, 1, ox, oy], v), [1, 0, 0, 1, -ox, -oy]);
-  }
-  return transformAttr(c.attrs["transform"]);
-}
-function transformAttr(attr) {
-  if (!attr)
-    return IDENTITY2;
-  const pts = [];
-  import_svgpath.default("M0 0L1 0L0 1").transform(attr).iterate((seg) => pts.push(+seg[1], +seg[2]));
-  if (pts.length !== 6)
-    return IDENTITY2;
-  return [pts[2] - pts[0], pts[3] - pts[1], pts[4] - pts[0], pts[5] - pts[1], pts[0], pts[1]];
-}
-function bake(d, ctm) {
-  return isIdentity(ctm) ? d : import_svgpath.default(d).matrix(ctm).round(3).toString();
-}
-function apply(m, x, y) {
-  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
-}
-
-// src/analysis/svg/attributes.ts
-var INHERITED_ATTRS = [
-  "clip-rule",
-  "color",
-  "fill",
-  "fill-opacity",
-  "fill-rule",
-  "font-family",
-  "font-size",
-  "font-weight",
-  "stroke",
-  "stroke-dasharray",
-  "stroke-dashoffset",
-  "stroke-linecap",
-  "stroke-linejoin",
-  "stroke-miterlimit",
-  "stroke-opacity",
-  "stroke-width",
-  "text-anchor"
-];
-function inherit(parent, own) {
-  const out = { ...parent };
-  for (const k of INHERITED_ATTRS)
-    if (own[k] !== undefined)
-      out[k] = own[k];
-  return out;
-}
-function styleProp(c, attrs, k, scope) {
-  const declared = attrs[k];
-  if (scope.useColor && declared === "currentColor")
-    return scope.useColor;
-  return c.styles[k] ?? declared;
-}
-function reference(c, attrs, k, ctx) {
-  const raw = attrs[k] ?? parseDeclared(c.attrs["style"])[k];
-  const m = raw && /^url\(["']?#([^"')]+)["']?\)/.exec(raw);
-  if (m && !ctx.ids[m[1]])
-    ctx.notes.push(`unmapped: svg ${k} url(#${m[1]}) (target not in document)`);
-  return m ? ctx.ids[m[1]] : undefined;
-}
-function parseDash(s) {
-  if (!s || s === "none")
-    return [];
-  const v = s.split(/[\s,]+/).map(parseFloat).filter((x) => Number.isFinite(x) && x >= 0);
-  return v.some((x) => x > 0) ? v : [];
-}
-function num(s, def = 0) {
-  const v = s === undefined ? NaN : parseFloat(s);
-  return Number.isFinite(v) ? v : def;
-}
-
-// src/analysis/typography.ts
-var SYSTEM_DESIGNS = {
-  "-apple-system": "default",
-  arial: "default",
-  blinkmacsystemfont: "default",
-  courier: "monospaced",
-  "courier new": "monospaced",
-  cursive: "default",
-  fantasy: "default",
-  georgia: "serif",
-  helvetica: "default",
-  "helvetica neue": "default",
-  menlo: "monospaced",
-  monaco: "monospaced",
-  monospace: "monospaced",
-  "new york": "serif",
-  "sans-serif": "default",
-  serif: "serif",
-  "sf mono": "monospaced",
-  "sf pro": "default",
-  "sf pro rounded": "rounded",
-  "sf pro text": "default",
-  "sfmono-regular": "monospaced",
-  "system-ui": "default",
-  times: "serif",
-  "times new roman": "serif",
-  "ui-monospace": "monospaced",
-  "ui-rounded": "rounded",
-  "ui-sans-serif": "default",
-  "ui-serif": "serif"
+// src/css/svg-intrinsic.ts
+var UNITS = {
+  px: 1,
+  in: 96,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+  q: 96 / 101.6,
+  pt: 96 / 72,
+  pc: 16,
+  em: 16,
+  rem: 16
 };
-function fontOf(s, families = {}) {
-  const size = round2(px(s["font-size"]));
-  const spec = { family: { kind: "system", design: "default" }, size, weight: fontWeight(s["font-weight"]) };
-  for (const family of fontFamilies(s["font-family"])) {
-    const bundled = families[family];
-    if (bundled) {
-      spec.family = { kind: "custom", name: family };
-      if (bundled.opsz)
-        spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], size));
-      break;
-    }
-    const design = SYSTEM_DESIGNS[family.toLowerCase()];
-    if (design) {
-      spec.family = { kind: "system", design };
-      break;
-    }
-  }
-  const lh = s["line-height"];
-  if (lh && lh !== "normal")
-    spec.lineHeight = round2(px(lh));
-  return spec;
+function length(raw) {
+  if (raw === undefined || raw.trim().endsWith("%"))
+    return {};
+  const match = /^\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]*)\s*$/i.exec(raw);
+  if (!match)
+    return { unsupported: true };
+  const unit = (match[2] || "px").toLowerCase();
+  const factor = UNITS[unit];
+  if (factor === undefined)
+    return { unsupported: true };
+  const px = Number(match[1]) * factor;
+  return px > 0 ? { px } : { invalid: true };
 }
-
-// src/analysis/svg/text.ts
-function collectText(el, scope, pos, ctx) {
-  const attrs = { ...scope.attrs, ...el.attrs };
-  const at = { x: num(el.attrs["x"], pos.x), y: num(el.attrs["y"], pos.y) };
-  const anchorRaw = attrs["text-anchor"];
-  const anchor = anchorRaw === "middle" || anchorRaw === "end" ? anchorRaw : "start";
-  if (el.tag === "text" && !ctx.notes.includes("approximated: svg text → positioned Text"))
-    ctx.notes.push("approximated: svg text → positioned Text");
-  for (const c of el.children) {
-    if (c.tag === "#text") {
-      const text = c.text ?? "";
-      if (!text.trim())
-        continue;
-      const fill = parseColor(styleProp(el, attrs, "fill", scope)) ?? { r: 0, g: 0, b: 0, a: 1 };
-      const font = fontOf(el.styles, ctx.bundledFamilies);
-      const box = c.bounds.w > 0 ? { x: round2(c.bounds.x - ctx.frame.x), y: round2(c.bounds.y - ctx.frame.y), w: round2(c.bounds.w), h: round2(c.bounds.h) } : derivedBox(text, at, anchor, el, attrs, scope, ctx);
-      ctx.texts.push({ text, x: at.x, y: at.y, anchor, font, fill, box });
-    } else if (c.tag === "tspan" || c.tag === "a")
-      collectText(c, { ...scope, attrs: inherit(scope.attrs, el.attrs) }, at, ctx);
-    else if (c.tag === "textpath")
-      ctx.notes.push("unmapped: svg textPath");
+function svgRootDimensions(attrs, fallbackBox = [300, 150]) {
+  const width = length(attrs["width"]), height = length(attrs["height"]);
+  const notes = [];
+  for (const [name, parsed] of [["width", width], ["height", height]]) {
+    if (parsed.unsupported)
+      notes.push(`approximated: SVG intrinsic ${name} ${attrs[name]} is unsupported; viewBox ratio used`);
+    else if (parsed.px !== undefined && /(?:em|rem)\s*$/i.test(attrs[name] ?? ""))
+      notes.push(`approximated: SVG intrinsic ${name} ${attrs[name]} assumes 16px font size`);
   }
-}
-function derivedBox(text, at, anchor, el, attrs, scope, ctx) {
-  const size = num(styleProp(el, attrs, "font-size", scope), 16) || 16;
-  const w = text.length * size * 0.55;
-  const sx = ctx.vb[2] ? ctx.frame.w / ctx.vb[2] : 1;
-  const sy = ctx.vb[3] ? ctx.frame.h / ctx.vb[3] : 1;
-  const x = anchor === "middle" ? at.x - w / 2 : anchor === "end" ? at.x - w : at.x;
-  ctx.notes.push("approximated: svg text box estimated (markup has no measured glyph run)");
-  return { x: round2((x - ctx.vb[0]) * sx), y: round2((at.y - size * 0.8 - ctx.vb[1]) * sy), w: round2(w * sx), h: round2(size * sy) };
-}
-function textContent(el) {
-  if (!el)
-    return "";
-  return el.tag === "#text" ? el.text ?? "" : el.children.map(textContent).join("");
-}
-
-// src/analysis/svg/geometry.ts
-var import_svgpath2 = __toESM(require_svgpath(), 1);
-function ringOf(circle, dash, phase, ctm, vb) {
-  if (dash.length !== 1 || dash[0] < 2 * Math.PI * circle.r * 0.99)
-    return;
-  if (Math.abs(circle.cx - (vb[0] + vb[2] / 2)) > 0.01 || Math.abs(circle.cy - (vb[1] + vb[3] / 2)) > 0.01)
-    return;
-  const [a, b, c, d, e, f] = ctm;
-  if (Math.abs(a - d) > 0.000001 || Math.abs(b + c) > 0.000001 || Math.abs(a * a + b * b - 1) > 0.000001)
-    return;
-  if (Math.abs(a * circle.cx + c * circle.cy + e - circle.cx) > 0.01 || Math.abs(b * circle.cx + d * circle.cy + f - circle.cy) > 0.01)
-    return;
-  return { r: circle.r, to: round2(Math.max(0, Math.min(1, 1 - phase / dash[0]))), startAngle: round2(Math.atan2(b, a) * 180 / Math.PI) };
-}
-function pathBounds(d) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const add = (x, y) => {
-    if (x < minX)
-      minX = x;
-    if (x > maxX)
-      maxX = x;
-    if (y < minY)
-      minY = y;
-    if (y > maxY)
-      maxY = y;
-  };
-  let cx = 0, cy = 0;
-  import_svgpath2.default(d).unshort().unarc().abs().iterate((seg) => {
-    const [cmd, ...a] = seg;
-    switch (cmd) {
-      case "M":
-      case "L":
-        cx = a[0];
-        cy = a[1];
-        add(cx, cy);
-        break;
-      case "H":
-        cx = a[0];
-        add(cx, cy);
-        break;
-      case "V":
-        cy = a[0];
-        add(cx, cy);
-        break;
-      case "C":
-        for (const t of cubicExtrema(cx, a[0], a[2], a[4]))
-          add(cubicAt(cx, a[0], a[2], a[4], t), cy);
-        for (const t of cubicExtrema(cy, a[1], a[3], a[5]))
-          add(cx, cubicAt(cy, a[1], a[3], a[5], t));
-        cx = a[4];
-        cy = a[5];
-        add(cx, cy);
-        break;
-      case "Q":
-        for (const t of quadExtrema(cx, a[0], a[2]))
-          add(quadAt(cx, a[0], a[2], t), cy);
-        for (const t of quadExtrema(cy, a[1], a[3]))
-          add(cx, quadAt(cy, a[1], a[3], t));
-        cx = a[2];
-        cy = a[3];
-        add(cx, cy);
-        break;
-    }
-  });
-  if (!Number.isFinite(minX))
-    return { x: 0, y: 0, w: 0, h: 0 };
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
-function cubicAt(p0, p1, p2, p3, t) {
-  const u = 1 - t;
-  return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
-}
-function cubicExtrema(p0, p1, p2, p3) {
-  const a = -p0 + 3 * p1 - 3 * p2 + p3, b = 2 * (p0 - 2 * p1 + p2), c = p1 - p0;
-  const out = [];
-  if (Math.abs(a) < 0.000000000001) {
-    if (Math.abs(b) > 0.000000000001)
-      out.push(-c / b);
-  } else {
-    const disc = b * b - 4 * a * c;
-    if (disc >= 0) {
-      const s = Math.sqrt(disc);
-      out.push((-b + s) / (2 * a), (-b - s) / (2 * a));
-    }
-  }
-  return out.filter((t) => t > 0 && t < 1);
-}
-function quadAt(p0, p1, p2, t) {
-  const u = 1 - t;
-  return u * u * p0 + 2 * u * t * p1 + t * t * p2;
-}
-function quadExtrema(p0, p1, p2) {
-  const den = p0 - 2 * p1 + p2;
-  if (Math.abs(den) < 0.000000000001)
-    return [];
-  const t = (p0 - p1) / den;
-  return t > 0 && t < 1 ? [t] : [];
-}
-
-// src/analysis/svg/gradients.ts
-function gradientOf(raw, bbox, ctx) {
-  const id = raw.replace(/^url\(["']?#|["']?\)$/g, "");
-  const el = ctx.ids[id];
-  if (!el || el.tag !== "lineargradient" && el.tag !== "radialgradient") {
-    ctx.notes.push(`unmapped: svg paint url(#${id})`);
-    return;
-  }
-  const chain = [el];
-  for (let cur = el, i = 0;i < 8; i++) {
-    const href = cur.attrs["href"] ?? cur.attrs["xlink:href"];
-    const next = href?.startsWith("#") ? ctx.ids[href.slice(1)] : undefined;
-    if (!next || chain.includes(next))
-      break;
-    chain.push(next);
-    cur = next;
-  }
-  const attr = (k) => chain.map((g) => g.attrs[k]).find((v) => v !== undefined);
-  const stopsEl = chain.find((g) => g.children.some((s) => s.tag === "stop")) ?? el;
-  const stops = [];
-  for (const s of stopsEl.children) {
-    if (s.tag !== "stop")
-      continue;
-    const decl = parseDeclared(s.attrs["style"]);
-    const color = parseColor(s.attrs["stop-color"] ?? decl["stop-color"] ?? s.styles["stop-color"] ?? "black");
-    if (!color)
-      continue;
-    const so = parseFloat(s.attrs["stop-opacity"] ?? decl["stop-opacity"] ?? s.styles["stop-opacity"] ?? "1");
-    const offRaw = s.attrs["offset"] ?? "0";
-    let pos = parseFloat(offRaw) / (offRaw.trim().endsWith("%") ? 100 : 1);
-    if (!Number.isFinite(pos))
-      pos = 0;
-    pos = Math.max(stops[stops.length - 1]?.pos ?? 0, Math.min(1, pos));
-    stops.push({ color: Number.isFinite(so) && so < 1 ? { ...color, a: color.a * so } : color, pos });
-  }
-  if (!stops.length) {
-    ctx.notes.push(`unmapped: svg gradient #${id} has no stops`);
-    return;
-  }
-  const [vx, , vw, vh] = ctx.vb;
-  const obb = (attr("gradientunits") ?? "objectBoundingBox") !== "userSpaceOnUse";
-  const tf = transformAttr(attr("gradienttransform"));
-  const toUser = (x, y) => {
-    const [tx, ty] = apply(tf, x, y);
-    return obb ? [round2(bbox.x + tx * bbox.w), round2(bbox.y + ty * bbox.h)] : [round2(tx), round2(ty)];
-  };
-  const len = (k, def, span) => {
-    const v = attr(k);
-    if (v === undefined)
-      return def;
-    const n = parseFloat(v);
-    return v.trim().endsWith("%") ? n / 100 * (obb ? 1 : span) : n;
-  };
-  if (el.tag === "lineargradient") {
-    return { kind: "linear", stops, start: toUser(len("x1", 0, vw), len("y1", 0, vh)), end: toUser(len("x2", obb ? 1 : vx + vw, vw), len("y2", 0, vh)) };
-  }
-  const diag = Math.hypot(vw, vh) / Math.SQRT2;
-  const r = len("r", obb ? 0.5 : diag / 2, diag);
-  const center = toUser(len("cx", obb ? 0.5 : vx + vw / 2, vw), len("cy", obb ? 0.5 : ctx.vb[1] + vh / 2, vh));
-  const radius = obb ? [round2(r * bbox.w), round2(r * bbox.h)] : [round2(r), round2(r)];
-  if (!isIdentity(tf))
-    ctx.notes.push("approximated: svg radialGradient gradientTransform → centre only");
-  const proportional = Math.abs(bbox.w / vw - bbox.h / vh) < 0.005;
-  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01)
-    ctx.notes.push("approximated: svg radialGradient on a non-proportional bounding box → circular");
-  return { kind: "radial", stops, center, radius };
-}
-
-// src/analysis/svg/traversal.ts
-var SVG_SHAPE_TAGS = { path: true, circle: true, rect: true, line: true, polyline: true, polygon: true, ellipse: true };
-var GROUP_TAGS = { g: true, svg: true, a: true };
-function childScope(c, scope, ctx, extra = IDENTITY2) {
-  const own = parseFloat(c.attrs["opacity"] ?? "1");
-  return {
-    attrs: inherit(scope.attrs, c.attrs),
-    ctm: multiply(multiply(scope.ctm, extra), ownTransform(c, ctx.notes)),
-    opacity: scope.opacity * (Number.isFinite(own) ? own : 1),
-    useColor: scope.useColor,
-    depth: scope.depth
-  };
-}
-function visitChildren(el, scope, ctx) {
-  for (const c of el.children)
-    visitOne(c, scope, ctx);
-}
-function visitOne(c, scope, ctx) {
-  if (SVG_SHAPE_TAGS[c.tag]) {
-    const p = shapeToPath(c, childScope(c, scope, ctx), ctx, true);
-    if (p)
-      ctx.paths.push(p);
-  } else if (c.tag === "switch") {
-    const inner = childScope(c, scope, ctx);
-    for (const k of c.children)
-      if (k.bounds.w > 0 || k.bounds.h > 0)
-        visitOne(k, inner, ctx);
-  } else if (GROUP_TAGS[c.tag]) {
-    if (c.tag === "a")
-      ctx.notes.push("approximated: svg <a> link → shapes only");
-    visitChildren(c, childScope(c, scope, ctx), ctx);
-  } else if (c.tag === "use")
-    instantiate(c, scope, ctx);
-  else if (c.tag === "text")
-    collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
-  else if (c.tag === "image")
-    ctx.notes.push("unmapped: svg image");
-  else if (c.tag === "foreignobject") {
-    const text = textContent(c).replace(/\s+/g, " ").trim();
-    const sample = text ? ` (text: ${JSON.stringify(text.slice(0, 80))}${text.length > 80 ? "…" : ""})` : "";
-    ctx.notes.push(`unmapped: svg <foreignObject> HTML content omitted${sample}`);
-  }
-}
-function instantiate(c, scope, ctx) {
-  const href = c.attrs["href"] ?? c.attrs["xlink:href"] ?? "";
-  if (!href.startsWith("#")) {
-    ctx.notes.push(`unmapped: svg use ${href || "(no href)"}`);
-    return;
-  }
-  const target = ctx.ids[href.slice(1)];
-  if (!target) {
-    ctx.notes.push(`unmapped: svg use ${href} (target not in document)`);
-    return;
-  }
-  if (scope.depth > 8)
-    return;
-  const x = num(c.attrs["x"]), y = num(c.attrs["y"]);
-  const inner = childScope(c, scope, ctx);
-  inner.ctm = multiply(inner.ctm, [1, 0, 0, 1, x, y]);
-  inner.useColor = c.styles["color"] ?? scope.useColor;
-  inner.depth = scope.depth + 1;
-  if (target.tag === "symbol" || target.tag === "svg") {
-    const [, , vw, vh] = ctx.vb;
-    const w = num(c.attrs["width"] ?? target.attrs["width"], vw), h = num(c.attrs["height"] ?? target.attrs["height"], vh);
-    const svb = target.attrs["viewbox"]?.split(/[\s,]+/).map(Number);
-    if (svb && svb.length === 4 && svb[2] > 0 && svb[3] > 0) {
-      const s = Math.min(w / svb[2], h / svb[3]);
-      inner.ctm = multiply(inner.ctm, [s, 0, 0, s, (w - svb[2] * s) / 2 - svb[0] * s, (h - svb[3] * s) / 2 - svb[1] * s]);
-    }
-    visitChildren(target, { ...inner, attrs: inherit(inner.attrs, target.attrs) }, ctx);
-  } else
-    visitOne(target, inner, ctx);
-}
-function shapeToPath(c, scope, ctx, decorate) {
-  const attrs = { ...scope.attrs, ...c.attrs };
-  const g = (k, def = 0) => num(attrs[k], def);
-  let d;
-  let circle;
-  switch (c.tag) {
-    case "path":
-      d = attrs["d"];
-      break;
-    case "circle": {
-      const cx = g("cx"), cy = g("cy"), r = g("r");
-      d = `M ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} Z`;
-      circle = { cx, cy, r };
-      break;
-    }
-    case "rect": {
-      const x = g("x"), y = g("y"), w = g("width"), h = g("height");
-      const rx = Math.min(g("rx", g("ry")), w / 2), ry = Math.min(g("ry", g("rx")), h / 2);
-      d = rx > 0 && ry > 0 ? `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z` : `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
-      break;
-    }
-    case "line":
-      d = `M ${g("x1")} ${g("y1")} L ${g("x2")} ${g("y2")}`;
-      break;
-    case "polyline":
-    case "polygon": {
-      const pts = (attrs["points"] ?? "").trim().split(/[\s,]+/).map(Number);
-      const parts = [];
-      for (let i = 0;i + 1 < pts.length; i += 2)
-        parts.push(`${i === 0 ? "M" : "L"} ${pts[i]} ${pts[i + 1]}`);
-      d = parts.join(" ") + (c.tag === "polygon" ? " Z" : "");
-      break;
-    }
-    case "ellipse": {
-      const cx = g("cx"), cy = g("cy"), rx = g("rx"), ry = g("ry");
-      d = `M ${cx + rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx - rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx + rx} ${cy} Z`;
-      break;
-    }
-  }
-  if (!d)
-    return;
-  const p = { d: bake(d, scope.ctm) };
-  const prop = (k) => styleProp(c, attrs, k, scope);
-  const bbox = pathBounds(p.d);
-  const fillRaw = c.tag === "line" ? undefined : prop("fill");
-  if (fillRaw && fillRaw !== "none") {
-    const grad = fillRaw.startsWith("url(") ? gradientOf(fillRaw, bbox, ctx) : undefined;
-    if (grad)
-      p.gradient = grad;
-    else if (!fillRaw.startsWith("url("))
-      p.fill = parseColor(fillRaw);
-  }
-  if (p.fill || p.gradient) {
-    const fo = parseFloat(prop("fill-opacity") ?? "1");
-    if (Number.isFinite(fo) && fo < 1)
-      p.fillOpacity = fo;
-    if (attrs["fill-rule"] === "evenodd")
-      p.eoFill = true;
-  }
-  const strokeRaw = prop("stroke");
-  if (strokeRaw && strokeRaw !== "none") {
-    const grad = strokeRaw.startsWith("url(") ? gradientOf(strokeRaw, bbox, ctx) : undefined;
-    if (grad)
-      p.strokeGradient = grad;
-    else if (!strokeRaw.startsWith("url("))
-      p.stroke = parseColor(strokeRaw);
-  }
-  if (p.stroke || p.strokeGradient) {
-    const [a, b, cc, dd] = scope.ctm;
-    const k = Math.sqrt(Math.abs(a * dd - b * cc));
-    const scaled = (v) => Math.abs(k - 1) < 0.000000001 ? v : round2(v * k);
-    p.strokeWidth = scaled(px(prop("stroke-width") ?? "1"));
-    const so = parseFloat(prop("stroke-opacity") ?? "1");
-    if (Number.isFinite(so) && so < 1)
-      p.strokeOpacity = so;
-    const cap = prop("stroke-linecap");
-    if (cap === "round" || cap === "square")
-      p.lineCap = cap;
-    const join = prop("stroke-linejoin");
-    if (join === "round" || join === "bevel")
-      p.lineJoin = join;
-    const miter = parseFloat(attrs["stroke-miterlimit"] ?? "");
-    if (Number.isFinite(miter) && miter >= 1)
-      p.miterLimit = miter;
-    const dash = parseDash(prop("stroke-dasharray"));
-    const phase = parseFloat(prop("stroke-dashoffset") ?? "0") || 0;
-    const ring = circle && ringOf(circle, dash, phase, scope.ctm, ctx.vb);
-    if (ring)
-      p.ring = ring;
-    else if (dash.length) {
-      p.dash = dash.map(scaled);
-      if (phase)
-        p.dashPhase = scaled(phase);
-    }
-  }
-  const opacity = scope.opacity;
-  if (opacity < 1)
-    p.opacity = round2(opacity);
-  if (decorate) {
-    const clip = reference(c, attrs, "clip-path", ctx);
-    if (clip)
-      p.clip = clipOf(clip, scope, bbox, ctx);
-    const mask = reference(c, attrs, "mask", ctx);
-    if (mask)
-      p.mask = maskOf(mask, scope, ctx);
-  }
-  return p;
-}
-function clipOf(el, scope, bbox, ctx) {
-  if (el.tag !== "clippath") {
-    ctx.notes.push(`unmapped: svg clip-path url(#${el.attrs["id"]})`);
-    return;
-  }
-  const units = el.attrs["clippathunits"] === "objectBoundingBox" ? multiply(scope.ctm, [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y]) : scope.ctm;
-  const inner = { ...scope, ctm: multiply(units, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
-  const parts = [];
-  let eoFill;
-  for (const c of el.children) {
-    if (!SVG_SHAPE_TAGS[c.tag] && c.tag !== "use")
-      continue;
-    const before = ctx.paths.length;
-    if (c.tag === "use")
-      instantiate(c, inner, ctx);
-    else {
-      const p = shapeToPath(c, childScope(c, inner, ctx), ctx, false);
-      if (p)
-        ctx.paths.push(p);
-    }
-    for (const p of ctx.paths.splice(before))
-      parts.push(p.d);
-    if ((c.attrs["clip-rule"] ?? el.attrs["clip-rule"]) === "evenodd")
-      eoFill = true;
-  }
-  if (!parts.length)
-    return;
-  const clip = { d: parts.join(" ") };
-  if (eoFill)
-    clip.eoFill = true;
-  return clip;
-}
-function maskOf(el, scope, ctx) {
-  if (el.tag !== "mask") {
-    ctx.notes.push(`unmapped: svg mask url(#${el.attrs["id"]})`);
-    return;
-  }
-  ctx.notes.push("approximated: svg mask → luminance mask");
-  const inner = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
-  const before = ctx.paths.length;
-  visitChildren(el, inner, ctx);
-  const paths = ctx.paths.splice(before);
-  return paths.length ? paths : undefined;
-}
-
-// src/analysis/svg/build.ts
-function buildSvg(n, base, doc = n, bundledFamilies = {}) {
-  const vb = (n.attrs["viewbox"] ?? `0 0 ${n.bounds.w} ${n.bounds.h}`).split(/[\s,]+/).map(Number);
-  const ctx = { bundledFamilies, ids: idIndex(doc), notes: base.notes, vb, frame: n.bounds, paths: [], texts: [] };
-  visitChildren(n, { attrs: inherit({}, n.attrs), ctm: IDENTITY2, opacity: 1, depth: 0 }, ctx);
-  base.width = { kind: "fixed", px: round2(n.bounds.w) };
-  base.height = { kind: "fixed", px: round2(n.bounds.h) };
-  const node = { ...base, kind: "svg", viewBox: vb, paths: ctx.paths };
-  if (ctx.texts.length)
-    node.texts = ctx.texts;
-  const title = textContent(n.children.find((c) => c.tag === "title")).trim();
-  if (title)
-    node.label = title;
-  if (n.attrs["preserveaspectratio"]?.trim().startsWith("none"))
-    node.stretch = true;
-  return node;
-}
-var ID_INDEX = new WeakMap;
-function idIndex(doc) {
-  let index = ID_INDEX.get(doc);
-  if (index)
-    return index;
-  index = {};
-  const walk = (el) => {
-    const id = el.attrs["id"];
-    if (id && !index[id])
-      index[id] = el;
-    for (const c of el.children)
-      walk(c);
-  };
-  walk(doc);
-  ID_INDEX.set(doc, index);
-  return index;
-}
-// node_modules/domelementtype/lib/esm/index.js
-var ElementType;
-(function(ElementType) {
-  ElementType["Root"] = "root";
-  ElementType["Text"] = "text";
-  ElementType["Directive"] = "directive";
-  ElementType["Comment"] = "comment";
-  ElementType["Script"] = "script";
-  ElementType["Style"] = "style";
-  ElementType["Tag"] = "tag";
-  ElementType["CDATA"] = "cdata";
-  ElementType["Doctype"] = "doctype";
-})(ElementType || (ElementType = {}));
-function isTag(elem) {
-  return elem.type === ElementType.Tag || elem.type === ElementType.Script || elem.type === ElementType.Style;
-}
-var Root = ElementType.Root;
-var Text = ElementType.Text;
-var Directive = ElementType.Directive;
-var Comment = ElementType.Comment;
-var Script = ElementType.Script;
-var Style = ElementType.Style;
-var Tag = ElementType.Tag;
-var CDATA = ElementType.CDATA;
-var Doctype = ElementType.Doctype;
-
-// node_modules/domhandler/lib/esm/node.js
-class Node {
-  constructor() {
-    this.parent = null;
-    this.prev = null;
-    this.next = null;
-    this.startIndex = null;
-    this.endIndex = null;
-  }
-  get parentNode() {
-    return this.parent;
-  }
-  set parentNode(parent) {
-    this.parent = parent;
-  }
-  get previousSibling() {
-    return this.prev;
-  }
-  set previousSibling(prev) {
-    this.prev = prev;
-  }
-  get nextSibling() {
-    return this.next;
-  }
-  set nextSibling(next) {
-    this.next = next;
-  }
-  cloneNode(recursive = false) {
-    return cloneNode(this, recursive);
-  }
-}
-
-class DataNode extends Node {
-  constructor(data) {
-    super();
-    this.data = data;
-  }
-  get nodeValue() {
-    return this.data;
-  }
-  set nodeValue(data) {
-    this.data = data;
-  }
-}
-
-class Text2 extends DataNode {
-  constructor() {
-    super(...arguments);
-    this.type = ElementType.Text;
-  }
-  get nodeType() {
-    return 3;
-  }
-}
-
-class Comment2 extends DataNode {
-  constructor() {
-    super(...arguments);
-    this.type = ElementType.Comment;
-  }
-  get nodeType() {
-    return 8;
-  }
-}
-
-class ProcessingInstruction extends DataNode {
-  constructor(name, data) {
-    super(data);
-    this.name = name;
-    this.type = ElementType.Directive;
-  }
-  get nodeType() {
-    return 1;
-  }
-}
-
-class NodeWithChildren extends Node {
-  constructor(children) {
-    super();
-    this.children = children;
-  }
-  get firstChild() {
-    var _a;
-    return (_a = this.children[0]) !== null && _a !== undefined ? _a : null;
-  }
-  get lastChild() {
-    return this.children.length > 0 ? this.children[this.children.length - 1] : null;
-  }
-  get childNodes() {
-    return this.children;
-  }
-  set childNodes(children) {
-    this.children = children;
-  }
-}
-
-class CDATA2 extends NodeWithChildren {
-  constructor() {
-    super(...arguments);
-    this.type = ElementType.CDATA;
-  }
-  get nodeType() {
-    return 4;
-  }
-}
-
-class Document extends NodeWithChildren {
-  constructor() {
-    super(...arguments);
-    this.type = ElementType.Root;
-  }
-  get nodeType() {
-    return 9;
-  }
-}
-
-class Element extends NodeWithChildren {
-  constructor(name, attribs, children = [], type = name === "script" ? ElementType.Script : name === "style" ? ElementType.Style : ElementType.Tag) {
-    super(children);
-    this.name = name;
-    this.attribs = attribs;
-    this.type = type;
-  }
-  get nodeType() {
-    return 1;
-  }
-  get tagName() {
-    return this.name;
-  }
-  set tagName(name) {
-    this.name = name;
-  }
-  get attributes() {
-    return Object.keys(this.attribs).map((name) => {
-      var _a, _b;
-      return {
-        name,
-        value: this.attribs[name],
-        namespace: (_a = this["x-attribsNamespace"]) === null || _a === undefined ? undefined : _a[name],
-        prefix: (_b = this["x-attribsPrefix"]) === null || _b === undefined ? undefined : _b[name]
-      };
-    });
-  }
-}
-function isTag2(node) {
-  return isTag(node);
-}
-function isCDATA(node) {
-  return node.type === ElementType.CDATA;
-}
-function isText(node) {
-  return node.type === ElementType.Text;
-}
-function isComment(node) {
-  return node.type === ElementType.Comment;
-}
-function isDirective(node) {
-  return node.type === ElementType.Directive;
-}
-function isDocument(node) {
-  return node.type === ElementType.Root;
-}
-function cloneNode(node, recursive = false) {
-  let result;
-  if (isText(node)) {
-    result = new Text2(node.data);
-  } else if (isComment(node)) {
-    result = new Comment2(node.data);
-  } else if (isTag2(node)) {
-    const children = recursive ? cloneChildren(node.children) : [];
-    const clone = new Element(node.name, { ...node.attribs }, children);
-    children.forEach((child) => child.parent = clone);
-    if (node.namespace != null) {
-      clone.namespace = node.namespace;
-    }
-    if (node["x-attribsNamespace"]) {
-      clone["x-attribsNamespace"] = { ...node["x-attribsNamespace"] };
-    }
-    if (node["x-attribsPrefix"]) {
-      clone["x-attribsPrefix"] = { ...node["x-attribsPrefix"] };
-    }
-    result = clone;
-  } else if (isCDATA(node)) {
-    const children = recursive ? cloneChildren(node.children) : [];
-    const clone = new CDATA2(children);
-    children.forEach((child) => child.parent = clone);
-    result = clone;
-  } else if (isDocument(node)) {
-    const children = recursive ? cloneChildren(node.children) : [];
-    const clone = new Document(children);
-    children.forEach((child) => child.parent = clone);
-    if (node["x-mode"]) {
-      clone["x-mode"] = node["x-mode"];
-    }
-    result = clone;
-  } else if (isDirective(node)) {
-    const instruction = new ProcessingInstruction(node.name, node.data);
-    if (node["x-name"] != null) {
-      instruction["x-name"] = node["x-name"];
-      instruction["x-publicId"] = node["x-publicId"];
-      instruction["x-systemId"] = node["x-systemId"];
-    }
-    result = instruction;
-  } else {
-    throw new Error(`Not implemented yet: ${node.type}`);
-  }
-  result.startIndex = node.startIndex;
-  result.endIndex = node.endIndex;
-  if (node.sourceCodeLocation != null) {
-    result.sourceCodeLocation = node.sourceCodeLocation;
-  }
-  return result;
-}
-function cloneChildren(childs) {
-  const children = childs.map((child) => cloneNode(child, true));
-  for (let i = 1;i < children.length; i++) {
-    children[i].prev = children[i - 1];
-    children[i - 1].next = children[i];
-  }
-  return children;
-}
-
-// node_modules/domhandler/lib/esm/index.js
-var defaultOpts = {
-  withStartIndices: false,
-  withEndIndices: false,
-  xmlMode: false
-};
-
-class DomHandler {
-  constructor(callback, options, elementCB) {
-    this.dom = [];
-    this.root = new Document(this.dom);
-    this.done = false;
-    this.tagStack = [this.root];
-    this.lastNode = null;
-    this.parser = null;
-    if (typeof options === "function") {
-      elementCB = options;
-      options = defaultOpts;
-    }
-    if (typeof callback === "object") {
-      options = callback;
-      callback = undefined;
-    }
-    this.callback = callback !== null && callback !== undefined ? callback : null;
-    this.options = options !== null && options !== undefined ? options : defaultOpts;
-    this.elementCB = elementCB !== null && elementCB !== undefined ? elementCB : null;
-  }
-  onparserinit(parser) {
-    this.parser = parser;
-  }
-  onreset() {
-    this.dom = [];
-    this.root = new Document(this.dom);
-    this.done = false;
-    this.tagStack = [this.root];
-    this.lastNode = null;
-    this.parser = null;
-  }
-  onend() {
-    if (this.done)
+  const rawViewBox = attrs["viewbox"] ?? attrs["viewBox"];
+  const vb = rawViewBox ? rawViewBox.trim().split(/[\s,]+/).map(Number) : undefined;
+  let viewBox;
+  if (vb) {
+    if (vb.length !== 4 || vb.some((v) => !Number.isFinite(v)) || vb[2] <= 0 || vb[3] <= 0)
       return;
-    this.done = true;
-    this.parser = null;
-    this.handleCallback(null);
-  }
-  onerror(error) {
-    this.handleCallback(error);
-  }
-  onclosetag() {
-    this.lastNode = null;
-    const elem = this.tagStack.pop();
-    if (this.options.withEndIndices) {
-      elem.endIndex = this.parser.endIndex;
-    }
-    if (this.elementCB)
-      this.elementCB(elem);
-  }
-  onopentag(name, attribs) {
-    const type = this.options.xmlMode ? ElementType.Tag : undefined;
-    const element = new Element(name, attribs, undefined, type);
-    this.addNode(element);
-    this.tagStack.push(element);
-  }
-  ontext(data) {
-    const { lastNode } = this;
-    if (lastNode && lastNode.type === ElementType.Text) {
-      lastNode.data += data;
-      if (this.options.withEndIndices) {
-        lastNode.endIndex = this.parser.endIndex;
-      }
-    } else {
-      const node = new Text2(data);
-      this.addNode(node);
-      this.lastNode = node;
-    }
-  }
-  oncomment(data) {
-    if (this.lastNode && this.lastNode.type === ElementType.Comment) {
-      this.lastNode.data += data;
+    viewBox = vb;
+  } else {
+    if (width.px === undefined || height.px === undefined)
       return;
-    }
-    const node = new Comment2(data);
-    this.addNode(node);
-    this.lastNode = node;
+    viewBox = [0, 0, width.px, height.px];
   }
-  oncommentend() {
-    this.lastNode = null;
+  if (width.invalid || height.invalid) {
+    const axis = [width.invalid ? "width" : "", height.invalid ? "height" : ""].filter(Boolean).join(" and ");
+    return { viewBox, notes, invalid: `SVG intrinsic ${axis} is non-positive` };
   }
-  oncdatastart() {
-    const text = new Text2("");
-    const node = new CDATA2([text]);
-    this.addNode(node);
-    text.parent = node;
-    this.lastNode = text;
-  }
-  oncdataend() {
-    this.lastNode = null;
-  }
-  onprocessinginstruction(name, data) {
-    const node = new ProcessingInstruction(name, data);
-    this.addNode(node);
-  }
-  handleCallback(error) {
-    if (typeof this.callback === "function") {
-      this.callback(error, this.dom);
-    } else if (error) {
-      throw error;
-    }
-  }
-  addNode(node) {
-    const parent = this.tagStack[this.tagStack.length - 1];
-    const previousSibling = parent.children[parent.children.length - 1];
-    if (this.options.withStartIndices) {
-      node.startIndex = this.parser.startIndex;
-    }
-    if (this.options.withEndIndices) {
-      node.endIndex = this.parser.endIndex;
-    }
-    parent.children.push(node);
-    if (previousSibling) {
-      node.prev = previousSibling;
-      previousSibling.next = node;
-    }
-    node.parent = parent;
-    this.lastNode = null;
-  }
+  const [, , vw, vh] = viewBox;
+  let w = width.px, h = height.px;
+  if (w === undefined && h === undefined) {
+    const scale = Math.min(fallbackBox[0] / vw, fallbackBox[1] / vh);
+    w = vw * scale;
+    h = vh * scale;
+  } else if (w === undefined)
+    w = h * vw / vh;
+  else if (h === undefined)
+    h = w * vh / vw;
+  return { size: [w, h], viewBox, notes };
 }
 
 // node_modules/entities/lib/esm/generated/decode-data-html.js
@@ -11244,6 +10195,1114 @@ class Parser {
     this.end(chunk);
   }
 }
+// node_modules/domelementtype/lib/esm/index.js
+var ElementType;
+(function(ElementType) {
+  ElementType["Root"] = "root";
+  ElementType["Text"] = "text";
+  ElementType["Directive"] = "directive";
+  ElementType["Comment"] = "comment";
+  ElementType["Script"] = "script";
+  ElementType["Style"] = "style";
+  ElementType["Tag"] = "tag";
+  ElementType["CDATA"] = "cdata";
+  ElementType["Doctype"] = "doctype";
+})(ElementType || (ElementType = {}));
+function isTag(elem) {
+  return elem.type === ElementType.Tag || elem.type === ElementType.Script || elem.type === ElementType.Style;
+}
+var Root = ElementType.Root;
+var Text = ElementType.Text;
+var Directive = ElementType.Directive;
+var Comment = ElementType.Comment;
+var Script = ElementType.Script;
+var Style = ElementType.Style;
+var Tag = ElementType.Tag;
+var CDATA = ElementType.CDATA;
+var Doctype = ElementType.Doctype;
+
+// node_modules/domhandler/lib/esm/node.js
+class Node {
+  constructor() {
+    this.parent = null;
+    this.prev = null;
+    this.next = null;
+    this.startIndex = null;
+    this.endIndex = null;
+  }
+  get parentNode() {
+    return this.parent;
+  }
+  set parentNode(parent) {
+    this.parent = parent;
+  }
+  get previousSibling() {
+    return this.prev;
+  }
+  set previousSibling(prev) {
+    this.prev = prev;
+  }
+  get nextSibling() {
+    return this.next;
+  }
+  set nextSibling(next) {
+    this.next = next;
+  }
+  cloneNode(recursive = false) {
+    return cloneNode(this, recursive);
+  }
+}
+
+class DataNode extends Node {
+  constructor(data) {
+    super();
+    this.data = data;
+  }
+  get nodeValue() {
+    return this.data;
+  }
+  set nodeValue(data) {
+    this.data = data;
+  }
+}
+
+class Text2 extends DataNode {
+  constructor() {
+    super(...arguments);
+    this.type = ElementType.Text;
+  }
+  get nodeType() {
+    return 3;
+  }
+}
+
+class Comment2 extends DataNode {
+  constructor() {
+    super(...arguments);
+    this.type = ElementType.Comment;
+  }
+  get nodeType() {
+    return 8;
+  }
+}
+
+class ProcessingInstruction extends DataNode {
+  constructor(name, data) {
+    super(data);
+    this.name = name;
+    this.type = ElementType.Directive;
+  }
+  get nodeType() {
+    return 1;
+  }
+}
+
+class NodeWithChildren extends Node {
+  constructor(children) {
+    super();
+    this.children = children;
+  }
+  get firstChild() {
+    var _a;
+    return (_a = this.children[0]) !== null && _a !== undefined ? _a : null;
+  }
+  get lastChild() {
+    return this.children.length > 0 ? this.children[this.children.length - 1] : null;
+  }
+  get childNodes() {
+    return this.children;
+  }
+  set childNodes(children) {
+    this.children = children;
+  }
+}
+
+class CDATA2 extends NodeWithChildren {
+  constructor() {
+    super(...arguments);
+    this.type = ElementType.CDATA;
+  }
+  get nodeType() {
+    return 4;
+  }
+}
+
+class Document extends NodeWithChildren {
+  constructor() {
+    super(...arguments);
+    this.type = ElementType.Root;
+  }
+  get nodeType() {
+    return 9;
+  }
+}
+
+class Element extends NodeWithChildren {
+  constructor(name, attribs, children = [], type = name === "script" ? ElementType.Script : name === "style" ? ElementType.Style : ElementType.Tag) {
+    super(children);
+    this.name = name;
+    this.attribs = attribs;
+    this.type = type;
+  }
+  get nodeType() {
+    return 1;
+  }
+  get tagName() {
+    return this.name;
+  }
+  set tagName(name) {
+    this.name = name;
+  }
+  get attributes() {
+    return Object.keys(this.attribs).map((name) => {
+      var _a, _b;
+      return {
+        name,
+        value: this.attribs[name],
+        namespace: (_a = this["x-attribsNamespace"]) === null || _a === undefined ? undefined : _a[name],
+        prefix: (_b = this["x-attribsPrefix"]) === null || _b === undefined ? undefined : _b[name]
+      };
+    });
+  }
+}
+function isTag2(node) {
+  return isTag(node);
+}
+function isCDATA(node) {
+  return node.type === ElementType.CDATA;
+}
+function isText(node) {
+  return node.type === ElementType.Text;
+}
+function isComment(node) {
+  return node.type === ElementType.Comment;
+}
+function isDirective(node) {
+  return node.type === ElementType.Directive;
+}
+function isDocument(node) {
+  return node.type === ElementType.Root;
+}
+function cloneNode(node, recursive = false) {
+  let result;
+  if (isText(node)) {
+    result = new Text2(node.data);
+  } else if (isComment(node)) {
+    result = new Comment2(node.data);
+  } else if (isTag2(node)) {
+    const children = recursive ? cloneChildren(node.children) : [];
+    const clone = new Element(node.name, { ...node.attribs }, children);
+    children.forEach((child) => child.parent = clone);
+    if (node.namespace != null) {
+      clone.namespace = node.namespace;
+    }
+    if (node["x-attribsNamespace"]) {
+      clone["x-attribsNamespace"] = { ...node["x-attribsNamespace"] };
+    }
+    if (node["x-attribsPrefix"]) {
+      clone["x-attribsPrefix"] = { ...node["x-attribsPrefix"] };
+    }
+    result = clone;
+  } else if (isCDATA(node)) {
+    const children = recursive ? cloneChildren(node.children) : [];
+    const clone = new CDATA2(children);
+    children.forEach((child) => child.parent = clone);
+    result = clone;
+  } else if (isDocument(node)) {
+    const children = recursive ? cloneChildren(node.children) : [];
+    const clone = new Document(children);
+    children.forEach((child) => child.parent = clone);
+    if (node["x-mode"]) {
+      clone["x-mode"] = node["x-mode"];
+    }
+    result = clone;
+  } else if (isDirective(node)) {
+    const instruction = new ProcessingInstruction(node.name, node.data);
+    if (node["x-name"] != null) {
+      instruction["x-name"] = node["x-name"];
+      instruction["x-publicId"] = node["x-publicId"];
+      instruction["x-systemId"] = node["x-systemId"];
+    }
+    result = instruction;
+  } else {
+    throw new Error(`Not implemented yet: ${node.type}`);
+  }
+  result.startIndex = node.startIndex;
+  result.endIndex = node.endIndex;
+  if (node.sourceCodeLocation != null) {
+    result.sourceCodeLocation = node.sourceCodeLocation;
+  }
+  return result;
+}
+function cloneChildren(childs) {
+  const children = childs.map((child) => cloneNode(child, true));
+  for (let i = 1;i < children.length; i++) {
+    children[i].prev = children[i - 1];
+    children[i - 1].next = children[i];
+  }
+  return children;
+}
+
+// node_modules/domhandler/lib/esm/index.js
+var defaultOpts = {
+  withStartIndices: false,
+  withEndIndices: false,
+  xmlMode: false
+};
+
+class DomHandler {
+  constructor(callback, options, elementCB) {
+    this.dom = [];
+    this.root = new Document(this.dom);
+    this.done = false;
+    this.tagStack = [this.root];
+    this.lastNode = null;
+    this.parser = null;
+    if (typeof options === "function") {
+      elementCB = options;
+      options = defaultOpts;
+    }
+    if (typeof callback === "object") {
+      options = callback;
+      callback = undefined;
+    }
+    this.callback = callback !== null && callback !== undefined ? callback : null;
+    this.options = options !== null && options !== undefined ? options : defaultOpts;
+    this.elementCB = elementCB !== null && elementCB !== undefined ? elementCB : null;
+  }
+  onparserinit(parser) {
+    this.parser = parser;
+  }
+  onreset() {
+    this.dom = [];
+    this.root = new Document(this.dom);
+    this.done = false;
+    this.tagStack = [this.root];
+    this.lastNode = null;
+    this.parser = null;
+  }
+  onend() {
+    if (this.done)
+      return;
+    this.done = true;
+    this.parser = null;
+    this.handleCallback(null);
+  }
+  onerror(error) {
+    this.handleCallback(error);
+  }
+  onclosetag() {
+    this.lastNode = null;
+    const elem = this.tagStack.pop();
+    if (this.options.withEndIndices) {
+      elem.endIndex = this.parser.endIndex;
+    }
+    if (this.elementCB)
+      this.elementCB(elem);
+  }
+  onopentag(name, attribs) {
+    const type = this.options.xmlMode ? ElementType.Tag : undefined;
+    const element = new Element(name, attribs, undefined, type);
+    this.addNode(element);
+    this.tagStack.push(element);
+  }
+  ontext(data) {
+    const { lastNode } = this;
+    if (lastNode && lastNode.type === ElementType.Text) {
+      lastNode.data += data;
+      if (this.options.withEndIndices) {
+        lastNode.endIndex = this.parser.endIndex;
+      }
+    } else {
+      const node = new Text2(data);
+      this.addNode(node);
+      this.lastNode = node;
+    }
+  }
+  oncomment(data) {
+    if (this.lastNode && this.lastNode.type === ElementType.Comment) {
+      this.lastNode.data += data;
+      return;
+    }
+    const node = new Comment2(data);
+    this.addNode(node);
+    this.lastNode = node;
+  }
+  oncommentend() {
+    this.lastNode = null;
+  }
+  oncdatastart() {
+    const text = new Text2("");
+    const node = new CDATA2([text]);
+    this.addNode(node);
+    text.parent = node;
+    this.lastNode = text;
+  }
+  oncdataend() {
+    this.lastNode = null;
+  }
+  onprocessinginstruction(name, data) {
+    const node = new ProcessingInstruction(name, data);
+    this.addNode(node);
+  }
+  handleCallback(error) {
+    if (typeof this.callback === "function") {
+      this.callback(error, this.dom);
+    } else if (error) {
+      throw error;
+    }
+  }
+  addNode(node) {
+    const parent = this.tagStack[this.tagStack.length - 1];
+    const previousSibling = parent.children[parent.children.length - 1];
+    if (this.options.withStartIndices) {
+      node.startIndex = this.parser.startIndex;
+    }
+    if (this.options.withEndIndices) {
+      node.endIndex = this.parser.endIndex;
+    }
+    parent.children.push(node);
+    if (previousSibling) {
+      node.prev = previousSibling;
+      previousSibling.next = node;
+    }
+    node.parent = parent;
+    this.lastNode = null;
+  }
+}
+// src/css/background.ts
+function parseBackgroundRepeat(s) {
+  const layer = splitTop(s ?? "", ",")[0];
+  if (!layer)
+    return;
+  const [x, y = x] = layer.split(/\s+/).map((t) => t === "space" || t === "round" ? "repeat" : t);
+  if (x === "repeat-x" || x === "repeat-y" || x === "no-repeat" || x === "repeat") {
+    if (x !== "repeat" && x !== "no-repeat")
+      return x;
+    if (x === y)
+      return x;
+    return x === "repeat" ? "repeat-x" : "repeat-y";
+  }
+  return;
+}
+function imageSize(url, boxW, boxH) {
+  if (!/^data:image\/svg\+xml/i.test(url))
+    return;
+  const comma = url.indexOf(",");
+  let svg = url.slice(comma + 1);
+  if (/;base64/i.test(url.slice(0, comma)))
+    svg = Buffer.from(svg, "base64").toString("utf8");
+  else
+    svg = decodeURIComponent(svg);
+  let root;
+  new Parser({ onopentag(name, attrs) {
+    if (name === "svg" && !root)
+      root = attrs;
+  } }, { xmlMode: true, lowerCaseTags: true, lowerCaseAttributeNames: true }).end(svg);
+  const size = root && svgRootDimensions(root, boxW !== undefined && boxH !== undefined ? [boxW, boxH] : undefined)?.size;
+  return size ? { w: size[0], h: size[1] } : undefined;
+}
+function parseBackgroundSize(s, boxW, boxH, imgW, imgH) {
+  if (!s)
+    return;
+  const layer = splitTop(s, ",")[0];
+  if (!layer)
+    return;
+  if (layer === "cover" || layer === "contain")
+    return layer;
+  const parts = splitTop(layer, " ");
+  const tw = parts[0], th = parts[1] ?? "auto";
+  const w = tw === "auto" ? undefined : resolveLength(tw, boxW);
+  const h = th === "auto" ? undefined : resolveLength(th, boxH);
+  if (tw !== "auto" && w === undefined || th !== "auto" && h === undefined)
+    return;
+  if (w !== undefined && h !== undefined)
+    return { w, h };
+  if (imgW === undefined || imgH === undefined)
+    return;
+  if (w === undefined && h === undefined)
+    return { w: imgW, h: imgH };
+  const ratio = imgH === 0 ? 0 : imgW / imgH;
+  return w !== undefined ? { w, h: ratio === 0 ? 0 : w / ratio } : { w: h * ratio, h };
+}
+function parseBackgroundPosition(s, boxW, boxH, imgW = 0, imgH = 0) {
+  const tokens = splitTop(splitTop(s ?? "", ",")[0] ?? "", " ");
+  if (!tokens.length)
+    return [0, 0];
+  const spanX = boxW - imgW, spanY = boxH - imgH;
+  const isY = (t) => t === "top" || t === "bottom";
+  const isX = (t) => t === "left" || t === "right";
+  const edge = (t, span) => t === "left" || t === "top" ? 0 : t === "center" ? span / 2 : span;
+  if (tokens.length <= 2) {
+    let [tx = "center", ty = "center"] = tokens;
+    if (isY(tx) || isX(ty))
+      [tx, ty] = [ty, tx];
+    const x = isX(tx) || tx === "center" ? edge(tx, spanX) : resolveLength(tx, spanX);
+    const y = isY(ty) || ty === "center" ? edge(ty, spanY) : resolveLength(ty, spanY);
+    return [x ?? 0, y ?? 0];
+  }
+  let x = 0, y = 0;
+  for (let i = 0;i < tokens.length; i++) {
+    const t = tokens[i];
+    if (!isX(t) && !isY(t) && t !== "center")
+      return [0, 0];
+    const span = isY(t) ? spanY : spanX;
+    const next = tokens[i + 1];
+    const off = next !== undefined && !isX(next) && !isY(next) && next !== "center" ? resolveLength(next, span) : undefined;
+    if (off !== undefined)
+      i++;
+    const v = edge(t, span) + (t === "right" || t === "bottom" ? -(off ?? 0) : off ?? 0);
+    if (isY(t))
+      y = v;
+    else
+      x = v;
+  }
+  return [x, y];
+}
+// src/css/typography.ts
+function fontWeight(s) {
+  if (!s)
+    return 400;
+  if (s === "bold")
+    return 700;
+  if (s === "normal")
+    return 400;
+  const v = parseInt(s, 10);
+  return Number.isFinite(v) ? v : 400;
+}
+function fontFamilies(s) {
+  if (!s)
+    return [];
+  return splitTop(s, ",").map((f) => f.replace(/^["']|["']$/g, "").trim());
+}
+// src/css/radius.ts
+function parseRadiusXY(s, refW, refH) {
+  if (!s)
+    return [0, 0];
+  const [x = "", y] = splitTop(s, " ");
+  return [resolveLength(x, refW) ?? 0, resolveLength(y ?? x, refH) ?? 0];
+}
+// src/analysis/svg/transforms.ts
+var import_svgpath = __toESM(require_svgpath(), 1);
+var IDENTITY2 = [1, 0, 0, 1, 0, 0];
+function multiply(m, n) {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5]
+  ];
+}
+function isIdentity(m) {
+  return m.every((v, i) => Math.abs(v - IDENTITY2[i]) < 0.000000001);
+}
+function ownTransform(c, notes) {
+  const computed = c.styles["transform"];
+  if (computed !== undefined) {
+    if (computed === "none")
+      return IDENTITY2;
+    const m = /^matrix\(([^)]+)\)$/.exec(computed);
+    if (!m) {
+      notes.push(`approximated: svg 3D transform ignored (${computed})`);
+      return IDENTITY2;
+    }
+    const v = m[1].split(",").map(Number);
+    const o = /^([-\d.]+)px\s+([-\d.]+)px/.exec(c.styles["transform-origin"] ?? "");
+    if (!o)
+      return v;
+    const ox = +o[1], oy = +o[2];
+    return multiply(multiply([1, 0, 0, 1, ox, oy], v), [1, 0, 0, 1, -ox, -oy]);
+  }
+  return transformAttr(c.attrs["transform"]);
+}
+function transformAttr(attr) {
+  if (!attr)
+    return IDENTITY2;
+  const pts = [];
+  import_svgpath.default("M0 0L1 0L0 1").transform(attr).iterate((seg) => pts.push(+seg[1], +seg[2]));
+  if (pts.length !== 6)
+    return IDENTITY2;
+  return [pts[2] - pts[0], pts[3] - pts[1], pts[4] - pts[0], pts[5] - pts[1], pts[0], pts[1]];
+}
+function bake(d, ctm) {
+  return isIdentity(ctm) ? d : import_svgpath.default(d).matrix(ctm).round(3).toString();
+}
+function apply(m, x, y) {
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+// src/analysis/svg/attributes.ts
+var INHERITED_ATTRS = [
+  "clip-rule",
+  "color",
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "stroke",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-miterlimit",
+  "stroke-opacity",
+  "stroke-width",
+  "text-anchor"
+];
+function inherit(parent, own) {
+  const out = { ...parent };
+  for (const k of INHERITED_ATTRS)
+    if (own[k] !== undefined)
+      out[k] = own[k];
+  return out;
+}
+function styleProp(c, attrs, k, scope) {
+  const declared = attrs[k];
+  if (scope.useColor && declared === "currentColor")
+    return scope.useColor;
+  return c.styles[k] ?? declared;
+}
+function reference(c, attrs, k, ctx) {
+  const raw = attrs[k] ?? parseDeclared(c.attrs["style"])[k];
+  const m = raw && /^url\(["']?#([^"')]+)["']?\)/.exec(raw);
+  if (m && !ctx.ids[m[1]])
+    ctx.notes.push(`unmapped: svg ${k} url(#${m[1]}) (target not in document)`);
+  return m ? ctx.ids[m[1]] : undefined;
+}
+function parseDash(s) {
+  if (!s || s === "none")
+    return [];
+  const v = s.split(/[\s,]+/).map(parseFloat).filter((x) => Number.isFinite(x) && x >= 0);
+  return v.some((x) => x > 0) ? v : [];
+}
+function num(s, def = 0) {
+  const v = s === undefined ? NaN : parseFloat(s);
+  return Number.isFinite(v) ? v : def;
+}
+
+// src/analysis/typography.ts
+var SYSTEM_DESIGNS = {
+  "-apple-system": "default",
+  arial: "default",
+  blinkmacsystemfont: "default",
+  courier: "monospaced",
+  "courier new": "monospaced",
+  cursive: "default",
+  fantasy: "default",
+  georgia: "serif",
+  helvetica: "default",
+  "helvetica neue": "default",
+  menlo: "monospaced",
+  monaco: "monospaced",
+  monospace: "monospaced",
+  "new york": "serif",
+  "sans-serif": "default",
+  serif: "serif",
+  "sf mono": "monospaced",
+  "sf pro": "default",
+  "sf pro rounded": "rounded",
+  "sf pro text": "default",
+  "sfmono-regular": "monospaced",
+  "system-ui": "default",
+  times: "serif",
+  "times new roman": "serif",
+  "ui-monospace": "monospaced",
+  "ui-rounded": "rounded",
+  "ui-sans-serif": "default",
+  "ui-serif": "serif"
+};
+function fontOf(s, families = {}) {
+  const size = round2(px(s["font-size"]));
+  const spec = { family: { kind: "system", design: "default" }, size, weight: fontWeight(s["font-weight"]) };
+  for (const family of fontFamilies(s["font-family"])) {
+    const bundled = families[family];
+    if (bundled) {
+      spec.family = { kind: "custom", name: family };
+      if (bundled.opsz)
+        spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], size));
+      break;
+    }
+    const design = SYSTEM_DESIGNS[family.toLowerCase()];
+    if (design) {
+      spec.family = { kind: "system", design };
+      break;
+    }
+  }
+  const lh = s["line-height"];
+  if (lh && lh !== "normal")
+    spec.lineHeight = round2(px(lh));
+  return spec;
+}
+
+// src/analysis/svg/text.ts
+function collectText(el, scope, pos, ctx) {
+  const attrs = { ...scope.attrs, ...el.attrs };
+  const at = { x: num(el.attrs["x"], pos.x), y: num(el.attrs["y"], pos.y) };
+  const anchorRaw = attrs["text-anchor"];
+  const anchor = anchorRaw === "middle" || anchorRaw === "end" ? anchorRaw : "start";
+  if (el.tag === "text" && !ctx.notes.includes("approximated: svg text → positioned Text"))
+    ctx.notes.push("approximated: svg text → positioned Text");
+  for (const c of el.children) {
+    if (c.tag === "#text") {
+      const text = c.text ?? "";
+      if (!text.trim())
+        continue;
+      const fill = parseColor(styleProp(el, attrs, "fill", scope)) ?? { r: 0, g: 0, b: 0, a: 1 };
+      const font = fontOf(el.styles, ctx.bundledFamilies);
+      const box = c.bounds.w > 0 ? { x: round2(c.bounds.x - ctx.frame.x), y: round2(c.bounds.y - ctx.frame.y), w: round2(c.bounds.w), h: round2(c.bounds.h) } : derivedBox(text, at, anchor, el, attrs, scope, ctx);
+      ctx.texts.push({ text, x: at.x, y: at.y, anchor, font, fill, box });
+    } else if (c.tag === "tspan" || c.tag === "a")
+      collectText(c, { ...scope, attrs: inherit(scope.attrs, el.attrs) }, at, ctx);
+    else if (c.tag === "textpath")
+      ctx.notes.push("unmapped: svg textPath");
+  }
+}
+function derivedBox(text, at, anchor, el, attrs, scope, ctx) {
+  const size = num(styleProp(el, attrs, "font-size", scope), 16) || 16;
+  const w = text.length * size * 0.55;
+  const sx = ctx.vb[2] ? ctx.frame.w / ctx.vb[2] : 1;
+  const sy = ctx.vb[3] ? ctx.frame.h / ctx.vb[3] : 1;
+  const x = anchor === "middle" ? at.x - w / 2 : anchor === "end" ? at.x - w : at.x;
+  ctx.notes.push("approximated: svg text box estimated (markup has no measured glyph run)");
+  return { x: round2((x - ctx.vb[0]) * sx), y: round2((at.y - size * 0.8 - ctx.vb[1]) * sy), w: round2(w * sx), h: round2(size * sy) };
+}
+function textContent(el) {
+  if (!el)
+    return "";
+  return el.tag === "#text" ? el.text ?? "" : el.children.map(textContent).join("");
+}
+
+// src/analysis/svg/geometry.ts
+var import_svgpath2 = __toESM(require_svgpath(), 1);
+function ringOf(circle, dash, phase, ctm, vb) {
+  if (dash.length !== 1 || dash[0] < 2 * Math.PI * circle.r * 0.99)
+    return;
+  if (Math.abs(circle.cx - (vb[0] + vb[2] / 2)) > 0.01 || Math.abs(circle.cy - (vb[1] + vb[3] / 2)) > 0.01)
+    return;
+  const [a, b, c, d, e, f] = ctm;
+  if (Math.abs(a - d) > 0.000001 || Math.abs(b + c) > 0.000001 || Math.abs(a * a + b * b - 1) > 0.000001)
+    return;
+  if (Math.abs(a * circle.cx + c * circle.cy + e - circle.cx) > 0.01 || Math.abs(b * circle.cx + d * circle.cy + f - circle.cy) > 0.01)
+    return;
+  return { r: circle.r, to: round2(Math.max(0, Math.min(1, 1 - phase / dash[0]))), startAngle: round2(Math.atan2(b, a) * 180 / Math.PI) };
+}
+function pathBounds(d) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const add = (x, y) => {
+    if (x < minX)
+      minX = x;
+    if (x > maxX)
+      maxX = x;
+    if (y < minY)
+      minY = y;
+    if (y > maxY)
+      maxY = y;
+  };
+  let cx = 0, cy = 0;
+  import_svgpath2.default(d).unshort().unarc().abs().iterate((seg) => {
+    const [cmd, ...a] = seg;
+    switch (cmd) {
+      case "M":
+      case "L":
+        cx = a[0];
+        cy = a[1];
+        add(cx, cy);
+        break;
+      case "H":
+        cx = a[0];
+        add(cx, cy);
+        break;
+      case "V":
+        cy = a[0];
+        add(cx, cy);
+        break;
+      case "C":
+        for (const t of cubicExtrema(cx, a[0], a[2], a[4]))
+          add(cubicAt(cx, a[0], a[2], a[4], t), cy);
+        for (const t of cubicExtrema(cy, a[1], a[3], a[5]))
+          add(cx, cubicAt(cy, a[1], a[3], a[5], t));
+        cx = a[4];
+        cy = a[5];
+        add(cx, cy);
+        break;
+      case "Q":
+        for (const t of quadExtrema(cx, a[0], a[2]))
+          add(quadAt(cx, a[0], a[2], t), cy);
+        for (const t of quadExtrema(cy, a[1], a[3]))
+          add(cx, quadAt(cy, a[1], a[3], t));
+        cx = a[2];
+        cy = a[3];
+        add(cx, cy);
+        break;
+    }
+  });
+  if (!Number.isFinite(minX))
+    return { x: 0, y: 0, w: 0, h: 0 };
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+function cubicAt(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+}
+function cubicExtrema(p0, p1, p2, p3) {
+  const a = -p0 + 3 * p1 - 3 * p2 + p3, b = 2 * (p0 - 2 * p1 + p2), c = p1 - p0;
+  const out = [];
+  if (Math.abs(a) < 0.000000000001) {
+    if (Math.abs(b) > 0.000000000001)
+      out.push(-c / b);
+  } else {
+    const disc = b * b - 4 * a * c;
+    if (disc >= 0) {
+      const s = Math.sqrt(disc);
+      out.push((-b + s) / (2 * a), (-b - s) / (2 * a));
+    }
+  }
+  return out.filter((t) => t > 0 && t < 1);
+}
+function quadAt(p0, p1, p2, t) {
+  const u = 1 - t;
+  return u * u * p0 + 2 * u * t * p1 + t * t * p2;
+}
+function quadExtrema(p0, p1, p2) {
+  const den = p0 - 2 * p1 + p2;
+  if (Math.abs(den) < 0.000000000001)
+    return [];
+  const t = (p0 - p1) / den;
+  return t > 0 && t < 1 ? [t] : [];
+}
+
+// src/analysis/svg/gradients.ts
+function gradientOf(raw, bbox, ctx) {
+  const id = raw.replace(/^url\(["']?#|["']?\)$/g, "");
+  const el = ctx.ids[id];
+  if (!el || el.tag !== "lineargradient" && el.tag !== "radialgradient") {
+    ctx.notes.push(`unmapped: svg paint url(#${id})`);
+    return;
+  }
+  const chain = [el];
+  for (let cur = el, i = 0;i < 8; i++) {
+    const href = cur.attrs["href"] ?? cur.attrs["xlink:href"];
+    const next = href?.startsWith("#") ? ctx.ids[href.slice(1)] : undefined;
+    if (!next || chain.includes(next))
+      break;
+    chain.push(next);
+    cur = next;
+  }
+  const attr = (k) => chain.map((g) => g.attrs[k]).find((v) => v !== undefined);
+  const stopsEl = chain.find((g) => g.children.some((s) => s.tag === "stop")) ?? el;
+  const stops = [];
+  for (const s of stopsEl.children) {
+    if (s.tag !== "stop")
+      continue;
+    const decl = parseDeclared(s.attrs["style"]);
+    const color = parseColor(s.attrs["stop-color"] ?? decl["stop-color"] ?? s.styles["stop-color"] ?? "black");
+    if (!color)
+      continue;
+    const so = parseFloat(s.attrs["stop-opacity"] ?? decl["stop-opacity"] ?? s.styles["stop-opacity"] ?? "1");
+    const offRaw = s.attrs["offset"] ?? "0";
+    let pos = parseFloat(offRaw) / (offRaw.trim().endsWith("%") ? 100 : 1);
+    if (!Number.isFinite(pos))
+      pos = 0;
+    pos = Math.max(stops[stops.length - 1]?.pos ?? 0, Math.min(1, pos));
+    stops.push({ color: Number.isFinite(so) && so < 1 ? { ...color, a: color.a * so } : color, pos });
+  }
+  if (!stops.length) {
+    ctx.notes.push(`unmapped: svg gradient #${id} has no stops`);
+    return;
+  }
+  const [vx, , vw, vh] = ctx.vb;
+  const obb = (attr("gradientunits") ?? "objectBoundingBox") !== "userSpaceOnUse";
+  const tf = transformAttr(attr("gradienttransform"));
+  const toUser = (x, y) => {
+    const [tx, ty] = apply(tf, x, y);
+    return obb ? [round2(bbox.x + tx * bbox.w), round2(bbox.y + ty * bbox.h)] : [round2(tx), round2(ty)];
+  };
+  const len = (k, def, span) => {
+    const v = attr(k);
+    if (v === undefined)
+      return def;
+    const n = parseFloat(v);
+    return v.trim().endsWith("%") ? n / 100 * (obb ? 1 : span) : n;
+  };
+  if (el.tag === "lineargradient") {
+    return { kind: "linear", stops, start: toUser(len("x1", 0, vw), len("y1", 0, vh)), end: toUser(len("x2", obb ? 1 : vx + vw, vw), len("y2", 0, vh)) };
+  }
+  const diag = Math.hypot(vw, vh) / Math.SQRT2;
+  const r = len("r", obb ? 0.5 : diag / 2, diag);
+  const center = toUser(len("cx", obb ? 0.5 : vx + vw / 2, vw), len("cy", obb ? 0.5 : ctx.vb[1] + vh / 2, vh));
+  const radius = obb ? [round2(r * bbox.w), round2(r * bbox.h)] : [round2(r), round2(r)];
+  if (!isIdentity(tf))
+    ctx.notes.push("approximated: svg radialGradient gradientTransform → centre only");
+  const proportional = Math.abs(bbox.w / vw - bbox.h / vh) < 0.005;
+  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01)
+    ctx.notes.push("approximated: svg radialGradient on a non-proportional bounding box → circular");
+  return { kind: "radial", stops, center, radius };
+}
+
+// src/analysis/svg/traversal.ts
+var SVG_SHAPE_TAGS = { path: true, circle: true, rect: true, line: true, polyline: true, polygon: true, ellipse: true };
+var GROUP_TAGS = { g: true, svg: true, a: true };
+function childScope(c, scope, ctx, extra = IDENTITY2) {
+  const own = parseFloat(c.attrs["opacity"] ?? "1");
+  return {
+    attrs: inherit(scope.attrs, c.attrs),
+    ctm: multiply(multiply(scope.ctm, extra), ownTransform(c, ctx.notes)),
+    opacity: scope.opacity * (Number.isFinite(own) ? own : 1),
+    useColor: scope.useColor,
+    depth: scope.depth
+  };
+}
+function visitChildren(el, scope, ctx) {
+  for (const c of el.children)
+    visitOne(c, scope, ctx);
+}
+function visitOne(c, scope, ctx) {
+  if (SVG_SHAPE_TAGS[c.tag]) {
+    const p = shapeToPath(c, childScope(c, scope, ctx), ctx, true);
+    if (p)
+      ctx.paths.push(p);
+  } else if (c.tag === "switch") {
+    const inner = childScope(c, scope, ctx);
+    for (const k of c.children)
+      if (k.bounds.w > 0 || k.bounds.h > 0)
+        visitOne(k, inner, ctx);
+  } else if (GROUP_TAGS[c.tag]) {
+    if (c.tag === "a")
+      ctx.notes.push("approximated: svg <a> link → shapes only");
+    visitChildren(c, childScope(c, scope, ctx), ctx);
+  } else if (c.tag === "use")
+    instantiate(c, scope, ctx);
+  else if (c.tag === "text")
+    collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
+  else if (c.tag === "image")
+    ctx.notes.push("unmapped: svg image");
+  else if (c.tag === "foreignobject") {
+    const text = textContent(c).replace(/\s+/g, " ").trim();
+    const sample = text ? ` (text: ${JSON.stringify(text.slice(0, 80))}${text.length > 80 ? "…" : ""})` : "";
+    ctx.notes.push(`unmapped: svg <foreignObject> HTML content omitted${sample}`);
+  }
+}
+function instantiate(c, scope, ctx) {
+  const href = c.attrs["href"] ?? c.attrs["xlink:href"] ?? "";
+  if (!href.startsWith("#")) {
+    ctx.notes.push(`unmapped: svg use ${href || "(no href)"}`);
+    return;
+  }
+  const target = ctx.ids[href.slice(1)];
+  if (!target) {
+    ctx.notes.push(`unmapped: svg use ${href} (target not in document)`);
+    return;
+  }
+  if (scope.depth > 8)
+    return;
+  const x = num(c.attrs["x"]), y = num(c.attrs["y"]);
+  const inner = childScope(c, scope, ctx);
+  inner.ctm = multiply(inner.ctm, [1, 0, 0, 1, x, y]);
+  inner.useColor = c.styles["color"] ?? scope.useColor;
+  inner.depth = scope.depth + 1;
+  if (target.tag === "symbol" || target.tag === "svg") {
+    const [, , vw, vh] = ctx.vb;
+    const w = num(c.attrs["width"] ?? target.attrs["width"], vw), h = num(c.attrs["height"] ?? target.attrs["height"], vh);
+    const svb = target.attrs["viewbox"]?.split(/[\s,]+/).map(Number);
+    if (svb && svb.length === 4 && svb[2] > 0 && svb[3] > 0) {
+      const s = Math.min(w / svb[2], h / svb[3]);
+      inner.ctm = multiply(inner.ctm, [s, 0, 0, s, (w - svb[2] * s) / 2 - svb[0] * s, (h - svb[3] * s) / 2 - svb[1] * s]);
+    }
+    visitChildren(target, { ...inner, attrs: inherit(inner.attrs, target.attrs) }, ctx);
+  } else
+    visitOne(target, inner, ctx);
+}
+function shapeToPath(c, scope, ctx, decorate) {
+  const attrs = { ...scope.attrs, ...c.attrs };
+  const g = (k, def = 0) => num(attrs[k], def);
+  let d;
+  let circle;
+  switch (c.tag) {
+    case "path":
+      d = attrs["d"];
+      break;
+    case "circle": {
+      const cx = g("cx"), cy = g("cy"), r = g("r");
+      d = `M ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} Z`;
+      circle = { cx, cy, r };
+      break;
+    }
+    case "rect": {
+      const x = g("x"), y = g("y"), w = g("width"), h = g("height");
+      const rx = Math.min(g("rx", g("ry")), w / 2), ry = Math.min(g("ry", g("rx")), h / 2);
+      d = rx > 0 && ry > 0 ? `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z` : `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
+      break;
+    }
+    case "line":
+      d = `M ${g("x1")} ${g("y1")} L ${g("x2")} ${g("y2")}`;
+      break;
+    case "polyline":
+    case "polygon": {
+      const pts = (attrs["points"] ?? "").trim().split(/[\s,]+/).map(Number);
+      const parts = [];
+      for (let i = 0;i + 1 < pts.length; i += 2)
+        parts.push(`${i === 0 ? "M" : "L"} ${pts[i]} ${pts[i + 1]}`);
+      d = parts.join(" ") + (c.tag === "polygon" ? " Z" : "");
+      break;
+    }
+    case "ellipse": {
+      const cx = g("cx"), cy = g("cy"), rx = g("rx"), ry = g("ry");
+      d = `M ${cx + rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx - rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx + rx} ${cy} Z`;
+      break;
+    }
+  }
+  if (!d)
+    return;
+  const p = { d: bake(d, scope.ctm) };
+  const prop = (k) => styleProp(c, attrs, k, scope);
+  const bbox = pathBounds(p.d);
+  const fillRaw = c.tag === "line" ? undefined : prop("fill");
+  if (fillRaw && fillRaw !== "none") {
+    const grad = fillRaw.startsWith("url(") ? gradientOf(fillRaw, bbox, ctx) : undefined;
+    if (grad)
+      p.gradient = grad;
+    else if (!fillRaw.startsWith("url("))
+      p.fill = parseColor(fillRaw);
+  }
+  if (p.fill || p.gradient) {
+    const fo = parseFloat(prop("fill-opacity") ?? "1");
+    if (Number.isFinite(fo) && fo < 1)
+      p.fillOpacity = fo;
+    if (attrs["fill-rule"] === "evenodd")
+      p.eoFill = true;
+  }
+  const strokeRaw = prop("stroke");
+  if (strokeRaw && strokeRaw !== "none") {
+    const grad = strokeRaw.startsWith("url(") ? gradientOf(strokeRaw, bbox, ctx) : undefined;
+    if (grad)
+      p.strokeGradient = grad;
+    else if (!strokeRaw.startsWith("url("))
+      p.stroke = parseColor(strokeRaw);
+  }
+  if (p.stroke || p.strokeGradient) {
+    const [a, b, cc, dd] = scope.ctm;
+    const k = Math.sqrt(Math.abs(a * dd - b * cc));
+    const scaled = (v) => Math.abs(k - 1) < 0.000000001 ? v : round2(v * k);
+    p.strokeWidth = scaled(px(prop("stroke-width") ?? "1"));
+    const so = parseFloat(prop("stroke-opacity") ?? "1");
+    if (Number.isFinite(so) && so < 1)
+      p.strokeOpacity = so;
+    const cap = prop("stroke-linecap");
+    if (cap === "round" || cap === "square")
+      p.lineCap = cap;
+    const join = prop("stroke-linejoin");
+    if (join === "round" || join === "bevel")
+      p.lineJoin = join;
+    const miter = parseFloat(attrs["stroke-miterlimit"] ?? "");
+    if (Number.isFinite(miter) && miter >= 1)
+      p.miterLimit = miter;
+    const dash = parseDash(prop("stroke-dasharray"));
+    const phase = parseFloat(prop("stroke-dashoffset") ?? "0") || 0;
+    const ring = circle && ringOf(circle, dash, phase, scope.ctm, ctx.vb);
+    if (ring)
+      p.ring = ring;
+    else if (dash.length) {
+      p.dash = dash.map(scaled);
+      if (phase)
+        p.dashPhase = scaled(phase);
+    }
+  }
+  const opacity = scope.opacity;
+  if (opacity < 1)
+    p.opacity = round2(opacity);
+  if (decorate) {
+    const clip = reference(c, attrs, "clip-path", ctx);
+    if (clip)
+      p.clip = clipOf(clip, scope, bbox, ctx);
+    const mask = reference(c, attrs, "mask", ctx);
+    if (mask)
+      p.mask = maskOf(mask, scope, ctx);
+  }
+  return p;
+}
+function clipOf(el, scope, bbox, ctx) {
+  if (el.tag !== "clippath") {
+    ctx.notes.push(`unmapped: svg clip-path url(#${el.attrs["id"]})`);
+    return;
+  }
+  const units = el.attrs["clippathunits"] === "objectBoundingBox" ? multiply(scope.ctm, [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y]) : scope.ctm;
+  const inner = { ...scope, ctm: multiply(units, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
+  const parts = [];
+  let eoFill;
+  for (const c of el.children) {
+    if (!SVG_SHAPE_TAGS[c.tag] && c.tag !== "use")
+      continue;
+    const before = ctx.paths.length;
+    if (c.tag === "use")
+      instantiate(c, inner, ctx);
+    else {
+      const p = shapeToPath(c, childScope(c, inner, ctx), ctx, false);
+      if (p)
+        ctx.paths.push(p);
+    }
+    for (const p of ctx.paths.splice(before))
+      parts.push(p.d);
+    if ((c.attrs["clip-rule"] ?? el.attrs["clip-rule"]) === "evenodd")
+      eoFill = true;
+  }
+  if (!parts.length)
+    return;
+  const clip = { d: parts.join(" ") };
+  if (eoFill)
+    clip.eoFill = true;
+  return clip;
+}
+function maskOf(el, scope, ctx) {
+  if (el.tag !== "mask") {
+    ctx.notes.push(`unmapped: svg mask url(#${el.attrs["id"]})`);
+    return;
+  }
+  ctx.notes.push("approximated: svg mask → luminance mask");
+  const inner = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
+  const before = ctx.paths.length;
+  visitChildren(el, inner, ctx);
+  const paths = ctx.paths.splice(before);
+  return paths.length ? paths : undefined;
+}
+
+// src/analysis/svg/build.ts
+function buildSvg(n, base, doc = n, bundledFamilies = {}) {
+  const vb = (n.attrs["viewbox"] ?? `0 0 ${n.bounds.w} ${n.bounds.h}`).split(/[\s,]+/).map(Number);
+  const ctx = { bundledFamilies, ids: idIndex(doc), notes: base.notes, vb, frame: n.bounds, paths: [], texts: [] };
+  visitChildren(n, { attrs: inherit({}, n.attrs), ctm: IDENTITY2, opacity: 1, depth: 0 }, ctx);
+  base.width = { kind: "fixed", px: round2(n.bounds.w) };
+  base.height = { kind: "fixed", px: round2(n.bounds.h) };
+  const node = { ...base, kind: "svg", viewBox: vb, paths: ctx.paths };
+  if (ctx.texts.length)
+    node.texts = ctx.texts;
+  const title = textContent(n.children.find((c) => c.tag === "title")).trim();
+  if (title)
+    node.label = title;
+  if (n.attrs["preserveaspectratio"]?.trim().startsWith("none"))
+    node.stretch = true;
+  return node;
+}
+var ID_INDEX = new WeakMap;
+function idIndex(doc) {
+  let index = ID_INDEX.get(doc);
+  if (index)
+    return index;
+  index = {};
+  const walk = (el) => {
+    const id = el.attrs["id"];
+    if (id && !index[id])
+      index[id] = el;
+    for (const c of el.children)
+      walk(c);
+  };
+  walk(doc);
+  ID_INDEX.set(doc, index);
+  return index;
+}
 // src/analysis/svg/markup.ts
 function svgFromMarkup(markup, frame) {
   const handler = new DomHandler;
@@ -11259,12 +11318,11 @@ function svgFromMarkup(markup, frame) {
     children: el.children.flatMap((c) => c.type === "tag" ? [toLayout(c)] : c.type === "text" ? [{ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.data, children: [] }] : [])
   });
   const root = toLayout(rootEl);
-  if (!root.attrs["viewbox"]) {
-    const w = num(root.attrs["width"]), h = num(root.attrs["height"]);
-    if (w <= 0 || h <= 0)
-      return;
-    root.attrs["viewbox"] = `0 0 ${w} ${h}`;
-  }
+  const dimensions = svgRootDimensions(root.attrs);
+  if (!dimensions)
+    return;
+  if (!root.attrs["viewbox"])
+    root.attrs["viewbox"] = dimensions.viewBox.join(" ");
   root.bounds = frame;
   const base = {
     id: "svg-markup",
@@ -11278,6 +11336,12 @@ function svgFromMarkup(markup, frame) {
     overlays: []
   };
   const node = buildSvg(root, base);
+  node.intrinsicSize = dimensions.size;
+  node.invalidIntrinsic = dimensions.invalid;
+  node.notes.push(...dimensions.notes);
+  const ratio = root.attrs["preserveaspectratio"]?.trim();
+  if (ratio && !/^(?:none|xMidYMid(?:\s+meet)?)$/i.test(ratio))
+    node.notes.push(`approximated: SVG preserveAspectRatio ${ratio} uses centred meet alignment`);
   if (node.notes.some((s) => s.startsWith("unmapped")))
     node.confidence = "unmapped";
   else if (node.notes.some((s) => s.startsWith("approximated")))
@@ -11637,7 +11701,7 @@ function layerValue(list, i) {
   return parts.length ? parts[i % parts.length] : undefined;
 }
 function imagePaint(url, s, prop, i, w, h) {
-  const img = imageSize(url);
+  const img = imageSize(url, w, h);
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
   const paint = { kind: "image", url };
   if (size !== undefined)
@@ -13567,7 +13631,7 @@ function note(n, text) {
 
 // src/swift/images.ts
 function imageLayer(p, n, prop, ctx) {
-  const src = imageSource(p.url, n, prop, ctx);
+  const src = imageSource(p.url, n, prop, ctx, p.size !== undefined);
   if (!src)
     return;
   const box = n.frame;
@@ -13600,7 +13664,7 @@ function imageLayer(p, n, prop, ctx) {
   const [x, y] = p.position;
   return ["Color.clear", ".overlay(alignment: .topLeading) {", ...indent(x || y ? [...view, `.offset(x: ${num3(x)}, y: ${num3(y)})`] : view, 1), "}"];
 }
-function imageSource(url, n, prop, ctx) {
+function imageSource(url, n, prop, ctx, sizedBackground = false) {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url))
@@ -13617,18 +13681,23 @@ function imageSource(url, n, prop, ctx) {
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
   if (!svg) {
-    note(n, `unmapped: ${prop} svg data: URL has no viewBox; layer dropped`);
+    note(n, `unmapped: ${prop} svg data: URL has no usable viewBox or intrinsic size; layer dropped`);
     return;
   }
   for (const t of svg.notes)
     note(n, t);
+  if (svg.invalidIntrinsic) {
+    if (prop !== "img" && !sizedBackground) {
+      note(n, `unmapped: ${prop} ${svg.invalidIntrinsic}; automatic-size layer dropped`);
+      return;
+    }
+    note(n, `approximated: ${prop} ${svg.invalidIntrinsic}; sizing uses viewBox ratio`);
+  }
   return {
     kind: "vector",
-    size: [svg.viewBox[2], svg.viewBox[3]],
-    view: (w, h, stretch = false) => {
+    size: svg.intrinsicSize ?? [svg.viewBox[2], svg.viewBox[3]],
+    view: (w, h) => {
       svg.frame = { x: 0, y: 0, w, h };
-      if (stretch)
-        svg.stretch = true;
       return [...svgExpr(svg, ctx.shapes, ctx), `.frame(width: ${num3(w)}, height: ${num3(h)})`];
     }
   };
@@ -13672,8 +13741,9 @@ function imageNodeExpr(n, ctx) {
     return [src.expr(sizing), ...a11y];
   }
   const [vw, vh] = src.size;
-  if (n.contentMode === "stretch")
-    return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
+  if (n.contentMode === "stretch") {
+    return [...src.view(n.frame.w, n.frame.h), ...a11y];
+  }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
 }

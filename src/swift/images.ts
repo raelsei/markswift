@@ -10,17 +10,17 @@ type ImagePaint = Extract<Paint, { kind: "image" }>;
 /**
  * An image sized and placed like a CSS background layer: a box-filling `Color.clear` carries
  * the image as an overlay so cover/contain overflow is aligned to the box and clipped by the
- * caller. Vector sources are scaled here (cover/contain/explicit size against the viewBox);
+ * caller. Vector sources are scaled here (cover/contain/explicit size against the intrinsic SVG viewport);
  * raster ones let SwiftUI scale. Repeats tile through `MarkswiftTile` whenever the tile size is
  * known (vector viewBox or explicit size); a raster at its intrinsic size uses `.tile`.
  * `undefined` when the source cannot be shown (noted on the node).
  */
 export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitContext): string[] | undefined {
-  const src = imageSource(p.url, n, prop, ctx);
+  const src = imageSource(p.url, n, prop, ctx, p.size !== undefined);
   if (!src) return undefined;
   const box = n.frame;
   const repeat = p.repeat !== undefined && p.repeat !== "no-repeat";
-  // Tile size: explicit, or the vector's viewBox; a raster's intrinsic size is unknown here.
+  // Tile size: explicit, or the vector's intrinsic viewport; a raster's intrinsic size is unknown here.
   const tile: [number, number] | undefined = repeat ? (typeof p.size === "object" ? [p.size.w, p.size.h] : src.kind === "vector" ? src.size : undefined) : undefined;
   let view: string[];
   if (src.kind === "vector") {
@@ -50,8 +50,8 @@ export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitCon
 type ImageSource =
   /** A raster view; `sizing` is spliced where the resizable modifiers belong. */
   | { kind: "raster"; expr: (sizing: string) => string }
-  /** Standalone SVG drawn as Shapes; `size` is the viewBox, `view` renders it at a given size. */
-  | { kind: "vector"; size: [number, number]; view: (w: number, h: number, stretch?: boolean) => string[] };
+  /** Standalone SVG drawn as Shapes; `size` is its natural viewport, distinct from its viewBox. */
+  | { kind: "vector"; size: [number, number]; view: (w: number, h: number) => string[] };
 
 /**
  * Image source for a URL. Inline `data:` payloads: SVG markup becomes vector Shapes (UIImage
@@ -59,7 +59,7 @@ type ImageSource =
  * force-unwrapped). `http(s)` loads asynchronously; anything else is an asset-catalog name.
  * `undefined` (with a note) when the payload is unusable.
  */
-function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
+function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext, sizedBackground = false): ImageSource | undefined {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
@@ -75,16 +75,22 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
   if (!svg) {
-    note(n, `unmapped: ${prop} svg data: URL has no viewBox; layer dropped`);
+    note(n, `unmapped: ${prop} svg data: URL has no usable viewBox or intrinsic size; layer dropped`);
     return undefined;
   }
   for (const t of svg.notes) note(n, t);
+  if (svg.invalidIntrinsic) {
+    if (prop !== "img" && !sizedBackground) {
+      note(n, `unmapped: ${prop} ${svg.invalidIntrinsic}; automatic-size layer dropped`);
+      return undefined;
+    }
+    note(n, `approximated: ${prop} ${svg.invalidIntrinsic}; sizing uses viewBox ratio`);
+  }
   return {
     kind: "vector",
-    size: [svg.viewBox[2], svg.viewBox[3]],
-    view: (w, h, stretch = false) => {
+    size: svg.intrinsicSize ?? [svg.viewBox[2], svg.viewBox[3]],
+    view: (w, h) => {
       svg.frame = { x: 0, y: 0, w, h };
-      if (stretch) svg.stretch = true;
       // No node id: the extractor does not enumerate the colours of an SVG inlined through a
       // `data:` URL, so they stay literals.
       return [...svgExpr(svg, ctx.shapes, ctx), `.frame(width: ${num(w)}, height: ${num(h)})`];
@@ -141,12 +147,16 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     return [src.expr(sizing), ...a11y];
   }
   // Vector: `fit` draws inside the box; `fill` covers it; `stretch` scales both axes
-  // independently, and `none` leaves the viewBox at intrinsic size. The overlay's
+  // independently, and `none` leaves the natural viewport at intrinsic size. The overlay's
   // primary view owns the measured <img> box. An oversized vector must not set the
   // box's ideal size, otherwise SwiftUI's later fill frame can crop from the wrong
   // edge; a narrower vector must likewise remain centred in that box.
   const [vw, vh] = src.size;
-  if (n.contentMode === "stretch") return [...src.view(n.frame.w, n.frame.h, true), ...a11y];
+  if (n.contentMode === "stretch") {
+    // SVG is rerendered at the CSS image viewport. Its own preserveAspectRatio
+    // still governs how the viewBox fits that new viewport.
+    return [...src.view(n.frame.w, n.frame.h), ...a11y];
+  }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
   return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
 }

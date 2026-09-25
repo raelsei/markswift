@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import sharp from "sharp";
+import { chromium } from "playwright-core";
 import { convertHtml } from "../../src/index.ts";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { visit } from "../../src/swift/traversal.ts";
@@ -63,4 +64,51 @@ browserTest("SVG data images centre cover and contain artwork in the measured im
   expect(result.code).toMatch(/Color\.clear\s*\.overlay\(alignment: \.center\) \{[\s\S]*?height: 176\.0\)[\s\S]*?\.accessibilityLabel\("cover"\)/);
   expect(result.code).toMatch(/Color\.clear\s*\.overlay\(alignment: \.center\) \{[\s\S]*?height: 110\.0\)[\s\S]*?\.accessibilityLabel\("contain"\)/);
   expect(result.diagnostics.filter(item => ["#cover", "#contain", "#fill"].includes(item.id))).toHaveLength(0);
+}, 30_000);
+
+browserTest("SVG intrinsic viewport, not viewBox, drives object-fit sizing", async () => {
+  const markup = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="160" viewBox="0 0 100 100"><rect width="100" height="100" fill="#9333ea"/><circle cx="50" cy="50" r="25" fill="#fbbf24"/></svg>';
+  const src = "data:image/svg+xml," + encodeURIComponent(markup);
+  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  try {
+    const page = await browser.newPage();
+    const natural = await page.evaluate(async (url) => {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      return [image.naturalWidth, image.naturalHeight];
+    }, src);
+    expect(natural).toEqual([100, 160]);
+  } finally { await browser.close(); }
+
+  const result = await convertHtml(`<main data-markswift-root style="width:600px;display:flex;gap:8px">${["cover", "contain", "none", "fill"].map(fit =>
+    `<img id="${fit}" src="${src}" alt="${fit}" style="width:110px;height:110px;object-fit:${fit}">`
+  ).join("")}</main>`, { name: "IntrinsicVectorFit" });
+  const imageCode = (alt: string) => {
+    const label = `.accessibilityLabel("${alt}")`;
+    const end = result.code.indexOf(label);
+    expect(end).toBeGreaterThan(0);
+    return result.code.slice(Math.max(0, end - 500), end);
+  };
+  expect(imageCode("cover")).toContain(".frame(width: 110.0, height: 176.0)");
+  expect(imageCode("contain")).toContain(".frame(width: 68.75, height: 110.0)");
+  expect(imageCode("none")).toContain(".frame(width: 100.0, height: 160.0)");
+  // object-fit:fill re-renders the SVG at the image box size; the SVG's own
+  // preserveAspectRatio is then applied inside that box.
+  expect(imageCode("fill")).toContain(".frame(width: 110.0, height: 110.0)");
+  expect(result.diagnostics.filter(item => ["#cover", "#contain", "#none", "#fill"].includes(item.id)).map(item => item.notes.join(" "))).toEqual([
+    expect.stringContaining("object-fit: none"),
+  ]);
+
+  const backgrounds = await convertHtml(`<main data-markswift-root style="width:240px;display:flex">${["cover", "contain"].map(size =>
+    `<div style="width:110px;height:110px;background-image:url('${src}');background-size:${size};background-repeat:no-repeat"></div>`
+  ).join("")}</main>`, { name: "IntrinsicVectorBackground" });
+  expect(backgrounds.code).toContain(".frame(width: 110.0, height: 176.0)");
+  expect(backgrounds.code).toContain(".frame(width: 68.75, height: 110.0)");
+}, 30_000);
+
+browserTest("unsupported SVG preserveAspectRatio alignment is reported", async () => {
+  const src = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="160" viewBox="0 0 100 100" preserveAspectRatio="xMinYMin slice"><rect width="100" height="100" fill="purple"/></svg>');
+  const result = await convertHtml(`<img data-markswift-root id="aligned" src="${src}" style="width:110px;height:110px;object-fit:contain">`, { name: "VectorAlignment" });
+  expect(result.diagnostics.find(item => item.id === "#aligned")?.notes.join(" ")).toContain("preserveAspectRatio xMinYMin slice");
 }, 30_000);
