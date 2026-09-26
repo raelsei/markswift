@@ -46,7 +46,7 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
-nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
+@MainActor struct MarkswiftMarkToggleStyle: ToggleStyle {
     enum Mark { case check, dot }
     let mark: Mark
     let tint: Color

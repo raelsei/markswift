@@ -1,0 +1,10 @@
+html, body { margin: 0; background: #fff; }
+* { box-sizing: border-box; }
+.story { width: 100%; height: 480px; padding: 23px; background: #fff; color: #1d2634; font: 16px/24px system-ui; }
+.eyebrow { font-size: 11px; letter-spacing: 2px; color: #7e6170; }
+.story h1 { font: 700 31px/35px system-ui; margin: 16px 0; }
+.story p { margin: 12px 0; }
+.story .intro { font-size: 18px; line-height: 27px; }
+.story a { color: #2563eb; text-decoration: underline; }
+.story pre { font: 14px/20px ui-monospace, monospace; background: #eef1f5; padding: 12px; white-space: pre; }
+.story blockquote { border-left: 4px solid #d59c71; padding-left: 12px; margin: 20px 0; color: #765c50; }

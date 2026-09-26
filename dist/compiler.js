@@ -13070,16 +13070,17 @@ function textExpr(n, ctx) {
   return out;
 }
 function usesGreedyWords(n) {
-  if (n.sourceTag !== "p" || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate)
+  const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
+  if (n.sourceTag !== "p" && !heading || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate)
     return false;
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden)
     return false;
   const r = n.runs[0];
   if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
     return false;
-  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined)
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || !heading && r.font.weight !== 400 || r.font.lineHeight === undefined)
     return false;
-  if (r.font.lineHeight < naturalLineHeight(r.font, {}))
+  if (!heading && r.font.lineHeight < naturalLineHeight(r.font, {}))
     return false;
   if (n.notes.some((note) => note.includes("font-family")))
     return false;
@@ -13185,7 +13186,7 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
-nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
+@MainActor struct MarkswiftMarkToggleStyle: ToggleStyle {
     enum Mark { case check, dot }
     let mark: Mark
     let tint: Color

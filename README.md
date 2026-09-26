@@ -117,7 +117,7 @@ The checked-in HTML policy lists 115 tags from a September 2026 element inventor
 6. **Visual acceptance:** compare representative components and full pages in Chrome and an iOS Simulator at multiple widths, themes and both output modes. Publish explicit per-family quality gates and known limits before a public alpha.
 7. **Playground:** the separate static frontend and bounded conversion service are in place. Public hosting needs Chrome on the service, edge rate limiting and deployment checks; native SwiftUI preview is a later capability.
 
-Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome; `bun run test:native` compiles generated Swift with Xcode on macOS. The normal test command skips the browser/native suites. A release must pass all three classes and an installed-package smoke test; visual acceptance is tracked separately.
+Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome; `bun run test:native` compiles generated Swift with Xcode on macOS. The opt-in `bun run test:visual` captures one rich-text fixture in Chrome at 390 and 320 points, compiles the 390-point app-mode view once, renders it at both widths on an iOS 18+ iPhone Simulator, and fails if either exact-size image exceeds its mean RGB error threshold. It requires Chrome and Xcode; PNGs are saved under ignored `out/visual-smoke/` for inspection. This is a narrow resize and text-wrapping smoke check, not representative visual acceptance or SSIM. The normal test command skips the browser/native suites. A release must pass all three classes and an installed-package smoke test; visual acceptance is tracked separately.
 
 | Path | Responsibility |
 | --- | --- |

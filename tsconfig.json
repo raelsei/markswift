@@ -29,6 +29,8 @@
     "tests/architecture/**/*.ts",
     "tests/integration/**/*.ts",
     "tools/quality.ts",
-    "tools/verify/typecheck.ts"
+    "tools/verify/typecheck.ts",
+    "tools/verify/visual.ts",
+    "tools/verify/visual-native.ts"
   ]
 }

@@ -145,14 +145,16 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   return out;
 }
 
-/** Keep word layout on a narrow, static subset; styled/interactive text retains native Text. */
+/** Keep word layout on plain paragraphs/headings; styled or interactive text retains native Text. */
 function usesGreedyWords(n: TextNode): boolean {
-  if (n.sourceTag !== "p" || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate) return false;
+  const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
+  if ((n.sourceTag !== "p" && !heading) || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate) return false;
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden) return false;
   const r = n.runs[0]!;
   if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
-  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined) return false;
-  if (r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || (!heading && r.font.weight !== 400) || r.font.lineHeight === undefined) return false;
+  // Headings often set a tight line-height; MarkswiftFlow can preserve its negative row gap.
+  if (!heading && r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
   if (n.notes.some((note) => note.includes("font-family"))) return false;
   return /^[\x21-\x7E]+(?: [\x21-\x7E]+)+$/.test(r.text);
 }

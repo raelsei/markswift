@@ -22,6 +22,12 @@ __pycache__/
 !/tools/verify/
 /tools/verify/*
 !/tools/verify/typecheck.ts
+!/tools/verify/visual.ts
+!/tools/verify/visual-native.ts
+!/tools/verify/fixtures/
+/tools/verify/fixtures/*
+!/tools/verify/fixtures/rich-text.html
+!/tools/verify/fixtures/rich-text.css
 
 # Generated output and editor/agent state
 /generated/
