@@ -7,6 +7,7 @@ export interface ControlDeps {
     child: (n: SemNode) => string[];
     /** Control → `@State` property name; built by `controlMembers`. */
     stateOf: Map<SemNode, string>;
+    radioBindingOf?: Map<SemNode, string>;
     /** `onclick` source → callback property name; built by `controlMembers`. */
     actionOf: Map<string, string>;
     mode: EmitMode;

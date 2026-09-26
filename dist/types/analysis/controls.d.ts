@@ -15,6 +15,7 @@ export interface ControlSpec {
     captionTransform?: TextTransform;
     placeholder?: string;
     checked?: boolean;
+    radioGroup?: string;
     disabled?: boolean;
     readOnly?: boolean;
     dateKind?: ControlNode["dateKind"];
@@ -26,6 +27,9 @@ export interface ControlSpec {
     };
     level?: ControlNode["level"];
     options?: string[];
+    choices?: ControlNode["choices"];
+    selectedChoice?: number;
+    selectStatic?: boolean;
     href?: string;
     action?: string;
     expanded?: boolean;

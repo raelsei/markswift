@@ -14,7 +14,7 @@
     "test": "bun test tests/unit tests/architecture tests/integration",
     "quality": "bun run tools/quality.ts",
     "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration",
-    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/integration/responsive-compile.test.ts tests/integration/inline-link.test.ts tests/integration/compile-layouts.test.ts tests/unit/swift/toggle-style.test.ts tests/unit/swift/wrapping.test.ts",
+    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/integration/responsive-compile.test.ts tests/integration/inline-link.test.ts tests/integration/compile-layouts.test.ts tests/integration/select-controls.test.ts tests/unit/swift/toggle-style.test.ts tests/unit/swift/wrapping.test.ts tests/unit/swift/radio-state.test.ts tests/unit/swift/select-controls.test.ts",
     "test:visual": "bun run tools/verify/visual.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture"

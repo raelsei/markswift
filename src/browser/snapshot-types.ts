@@ -23,6 +23,8 @@ export interface DomSnapshot {
       attributes: number[][];
       /** `before` / `after` / `marker` / … for pseudo-element nodes. */
       pseudoType?: RareStringData;
+      /** Shadow-tree provenance; CDP flattens the root itself out of the node tree. */
+      shadowRootType?: RareStringData;
       /** `img.currentSrc` (absolute URL) for every `<img>`. */
       currentSourceURL?: RareStringData;
       /** Live form properties, separate from the often-stale authored attributes. */
@@ -52,12 +54,17 @@ export interface Raw {
   attrs: Record<string, string>;
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
+  formOwner?: LayoutNode["formOwner"];
+  selectedIndex?: LayoutNode["selectedIndex"];
+  option?: LayoutNode["option"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
   bounds?: Rect;
   /** CSSOM offset rect (relative to the offsetParent's padding edge). */
   offset?: Rect;
   /** `before` / `after` / `marker` for pseudo-element nodes. */
   pseudo?: string;
+  /** The DOM tree containing this node: `open`, `closed`, or `user-agent` shadow root. */
+  shadowRootType?: string;
   /** Pseudo-elements only: border box derived from `offset` (see `pseudoBox`). */
   box?: Rect;
   /** Text nodes: measured line boxes (`textBoxes`), in layout order; `start`/`length` index `text`. */

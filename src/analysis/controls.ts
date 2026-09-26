@@ -10,6 +10,8 @@ import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
 import { nativeExternalURL } from "./link-destination.ts";
 import { applyDateInput } from "./date-input.ts";
+import { applyRadioInput } from "./radio-input.ts";
+import { applySelectInput } from "./select-input.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -19,6 +21,7 @@ export interface ControlSpec {
   captionTransform?: TextTransform;
   placeholder?: string;
   checked?: boolean;
+  radioGroup?: string;
   disabled?: boolean;
   readOnly?: boolean;
   dateKind?: ControlNode["dateKind"];
@@ -26,6 +29,9 @@ export interface ControlSpec {
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
   options?: string[];
+  choices?: ControlNode["choices"];
+  selectedChoice?: number;
+  selectStatic?: boolean;
   href?: string;
   action?: string;
   expanded?: boolean;
@@ -75,21 +81,8 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       return spec;
     }
     case "select": {
-      const options: string[] = [];
-      let selected: string | undefined;
-      for (const o of optionsOf(n)) {
-        // `@label` overrides the element's text; the text itself may be missing from the snapshot.
-        const label = (o.attrs["label"] ?? textOf(o)).trim();
-        if (label) options.push(label);
-        if ("selected" in o.attrs) selected = label;
-      }
-      const spec: ControlSpec = { control: "picker", options, notes };
-      // A closed `<select>` shows the selected option, or the first one when the page names none.
-      const shown = selected || options[0];
-      if (shown) spec.value = shown;
-      // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
-      if (!options.length) notes.push("approximated: <select> option labels are not in the snapshot → picker with no choices");
-      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1)) notes.push("approximated: <select multiple/size> list box → menu picker");
+      const spec: ControlSpec = { control: "picker", notes };
+      applySelectInput(n, spec);
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -124,7 +117,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       else if (type === "submit") spec.value = "Submit";
       else if (type === "reset") spec.value = "Reset";
       if (control === "datePicker") applyDateInput(n, type as NonNullable<ControlNode["dateKind"]>, spec);
-      if (control === "radio") notes.push('approximated: radio selection → independent native toggle; mutual exclusion and browser deselection rules require app state');
+      if (control === "radio") applyRadioInput(n, spec);
       if (type === "submit") notes.push('approximated: <input type="submit"> form submission and validation require an app action');
       if (type === "reset") notes.push('approximated: <input type="reset"> form reset requires an app action');
       if (type === "button" || type === "submit" || type === "reset") {
@@ -249,16 +242,6 @@ const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = { textField: true, s
 function textOf(n: LayoutNode): string {
   if (n.tag === "#text") return n.text ?? "";
   return n.children.map(textOf).join("");
-}
-
-/** `<option>` children, including those inside `<optgroup>`. */
-function optionsOf(n: LayoutNode): LayoutNode[] {
-  const out: LayoutNode[] = [];
-  for (const c of n.children) {
-    if (c.tag === "option") out.push(c);
-    else if (c.tag === "optgroup") out.push(...optionsOf(c));
-  }
-  return out;
 }
 
 function num(v: string | undefined): number | undefined {

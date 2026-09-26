@@ -6902,6 +6902,9 @@ var LayoutNode = lazy(() => object({
   styles: record(string2(), string2()),
   flattenedCustomElements: array(object({ tag: string2(), id: string2().optional() })).optional(),
   preferredSize: PreferredSize.optional(),
+  formOwner: string2().optional(),
+  selectedIndex: number2().int().min(-1).optional(),
+  option: object({ label: string2(), value: string2(), hidden: boolean2().optional() }).optional(),
   bounds: Rect,
   text: string2().optional(),
   lines: array(object({ bounds: Rect, start: number2(), length: number2() })).optional(),
@@ -10394,6 +10397,79 @@ function timeComponents(value) {
   return { hour, minute, second, nanosecond };
 }
 
+// src/analysis/radio-input.ts
+function applyRadioInput(node, spec) {
+  spec.value = node.attrs.value ?? "on";
+  const name = node.attrs.name;
+  if (!name)
+    return;
+  if (node.formOwner === undefined) {
+    spec.notes.push("approximated: radio capture has no form ownership metadata → independent selection; recapture to preserve named groups");
+    return;
+  }
+  spec.radioGroup = JSON.stringify([node.formOwner, name]);
+}
+
+// src/analysis/select-input.ts
+function applySelectInput(node, spec) {
+  const options = [];
+  const grouped = collectOptions(node, false, options);
+  const choices = options.map(({ node: option, disabled, hidden }, id) => {
+    const text = optionText(option).replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
+    return {
+      id,
+      value: option.option?.value ?? option.attrs.value ?? text,
+      label: option.option?.label ?? (option.attrs.label || text),
+      disabled,
+      ...option.option?.hidden ?? hidden ? { hidden: true } : {}
+    };
+  });
+  spec.choices = choices;
+  spec.options = choices.map((choice) => choice.label);
+  const selected = options.flatMap(({ node: option }, index) => option.attrs.selected !== undefined ? [index] : []);
+  const multiple = node.attrs.multiple !== undefined;
+  const listbox = multiple || Number.parseInt(node.attrs.size ?? "0", 10) > 1;
+  spec.selectedChoice = node.selectedIndex ?? (multiple ? selected[0] : selected.at(-1)) ?? (listbox ? -1 : choices.find((choice) => !choice.disabled)?.id ?? -1);
+  if (listbox) {
+    spec.selectStatic = true;
+    const indices = multiple ? selected : [spec.selectedChoice];
+    spec.value = indices.map((index) => choices[index]?.label ?? "").join(`
+`);
+    spec.notes.push("approximated: <select multiple/size> list box → static selected labels; option rows, scrolling and editing require a custom selection view");
+  } else {
+    spec.value = choices[spec.selectedChoice]?.label ?? "";
+    spec.notes.push("approximated: <select> → native menu; browser option appearance and form submission require app integration");
+  }
+  if (!choices.length) {
+    spec.selectStatic = true;
+    spec.notes.push("approximated: <select> has no captured options → static empty selection");
+  }
+  if (grouped) {
+    spec.notes.push("approximated: <select> optgroup headings are flattened; disabled groups keep their options disabled");
+  }
+}
+function collectOptions(node, inheritedDisabled, options, inGroup = false, inheritedHidden = false) {
+  let grouped = false;
+  for (const child of node.children) {
+    if (["select", "datalist", "hr"].includes(child.tag) || inGroup && child.tag === "optgroup")
+      continue;
+    const hidden = inheritedHidden || child.attrs.hidden !== undefined || child.styles.display === "none";
+    if (child.tag === "option")
+      options.push({ node: child, disabled: inheritedDisabled || child.attrs.disabled !== undefined, hidden });
+    else {
+      const isGroup = child.tag === "optgroup";
+      grouped = isGroup || grouped;
+      grouped = collectOptions(child, inheritedDisabled || isGroup && child.attrs.disabled !== undefined, options, inGroup || isGroup, hidden) || grouped;
+    }
+  }
+  return grouped;
+}
+function optionText(node) {
+  if (node.tag === "#text")
+    return node.text ?? "";
+  return node.children.map(optionText).join("");
+}
+
 // src/analysis/controls.ts
 function controlOf(n) {
   const a = n.attrs;
@@ -10433,23 +10509,8 @@ function controlOf(n) {
       return spec;
     }
     case "select": {
-      const options = [];
-      let selected;
-      for (const o of optionsOf(n)) {
-        const label = (o.attrs["label"] ?? textOf(o)).trim();
-        if (label)
-          options.push(label);
-        if ("selected" in o.attrs)
-          selected = label;
-      }
-      const spec = { control: "picker", options, notes };
-      const shown = selected || options[0];
-      if (shown)
-        spec.value = shown;
-      if (!options.length)
-        notes.push("approximated: <select> option labels are not in the snapshot → picker with no choices");
-      if (a["multiple"] !== undefined || a["size"] !== undefined && Number(a["size"]) > 1)
-        notes.push("approximated: <select multiple/size> list box → menu picker");
+      const spec = { control: "picker", notes };
+      applySelectInput(n, spec);
       if (disabled)
         spec.disabled = true;
       return spec;
@@ -10495,7 +10556,7 @@ function controlOf(n) {
       if (control === "datePicker")
         applyDateInput(n, type, spec);
       if (control === "radio")
-        notes.push("approximated: radio selection → independent native toggle; mutual exclusion and browser deselection rules require app state");
+        applyRadioInput(n, spec);
       if (type === "submit")
         notes.push('approximated: <input type="submit"> form submission and validation require an app action');
       if (type === "reset")
@@ -10594,16 +10655,6 @@ function textOf(n) {
   if (n.tag === "#text")
     return n.text ?? "";
   return n.children.map(textOf).join("");
-}
-function optionsOf(n) {
-  const out = [];
-  for (const c of n.children) {
-    if (c.tag === "option")
-      out.push(c);
-    else if (c.tag === "optgroup")
-      out.push(...optionsOf(c));
-  }
-  return out;
 }
 function num2(v) {
   if (v === undefined)
@@ -12832,6 +12883,27 @@ function walk(n, fn, depth = 0) {
   }
 }
 
+// src/swift/radio-state.ts
+function radioMembers(root) {
+  const members = new Map;
+  const named = new Map;
+  walk(root, (node) => {
+    if (node.kind !== "control" || node.control !== "radio")
+      return;
+    const group = (node.radioGroup ? named.get(node.radioGroup) : undefined) ?? { owner: node };
+    if (node.radioGroup)
+      named.set(node.radioGroup, group);
+    const choice = members.size;
+    if (node.checked)
+      group.selected = choice;
+    members.set(node, { group, choice });
+  });
+  return members;
+}
+function radioBinding(state, choice, disabled = false) {
+  return `Binding<Bool>(get: { ${state} == ${choice} }, set: { selected in ${disabled ? "_ = selected" : `if selected { ${state} = ${choice} }`} })`;
+}
+
 // src/swift/control-state.ts
 function stateDecl(n) {
   if (n.readOnly)
@@ -12842,10 +12914,14 @@ function stateDecl(n) {
     case "textField":
     case "secureField":
     case "textEditor":
+      return { type: "String", value: str(n.value ?? "") };
     case "picker":
+      if (n.selectStatic)
+        return;
+      if (n.choices !== undefined)
+        return { type: "Int", value: String(n.selectedChoice ?? -1) };
       return { type: "String", value: str(n.value ?? "") };
     case "toggle":
-    case "radio":
       return { type: "Bool", value: n.checked ? "true" : "false" };
     case "disclosure":
       return { type: "Bool", value: n.expanded ? "true" : "false" };
@@ -12881,7 +12957,9 @@ function dateSeed(n) {
   const components = Object.entries(fields).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}: ${value}`).join(", ");
   return `Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: .current, ${components})) ?? .now`;
 }
-function controlMembers(root) {
+function controlMembers(root, mode = "app") {
+  const radios = radioMembers(root);
+  const radioBindingOf = new Map;
   const stateOf = new Map;
   const actionOf = new Map;
   const decls = [];
@@ -12889,12 +12967,20 @@ function controlMembers(root) {
   walk(root, (n) => {
     if (n.kind !== "control")
       return;
-    const decl = stateDecl(n);
+    const radio = mode === "app" ? radios.get(n) : undefined;
+    const shared = radio ? stateOf.get(radio.group.owner) : undefined;
+    if (shared && radio) {
+      stateOf.set(n, shared);
+      radioBindingOf.set(n, radioBinding(shared, radio.choice, n.disabled));
+    }
+    const decl = radio ? shared ? undefined : { type: "Int?", value: String(radio.group.selected ?? "nil") } : stateDecl(n);
     if (decl) {
       const base = `s_${n.id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "control"}${decl.suffix ?? ""}`;
       const k = seen[base] = (seen[base] ?? 0) + 1;
       const name = k === 1 ? base : `${base}_r${k}`;
       stateOf.set(n, name);
+      if (radio)
+        radioBindingOf.set(n, radioBinding(name, radio.choice, n.disabled));
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
     }
     if (n.action !== undefined && !actionOf.has(n.action)) {
@@ -12907,7 +12993,7 @@ function controlMembers(root) {
       decls.push(`var ${name}: () -> Void = {}`);
     }
   });
-  return { decls, stateOf, actionOf };
+  return { decls, stateOf, radioBindingOf, actionOf };
 }
 function numericValue(n) {
   const r = n.range ?? { min: 0, max: 100 };
@@ -13474,6 +13560,57 @@ function transformLiteral(text, t) {
     return text.toLowerCase();
   return text.replace(/(^|[^\p{L}\p{N}'’])(\p{L})/gu, (_, before, letter) => before + letter.toUpperCase());
 }
+
+// src/swift/select-control.ts
+function selectExpr(node, state, still, label) {
+  if (node.selectStatic || still || !state && node.choices !== undefined) {
+    const text = painted(node.value ?? "", node.selectStatic ? ".topLeading" : ".leading");
+    return node.selectStatic ? text : ["HStack(spacing: 4.0) {", ...indent(text, 1), '    Image(systemName: "chevron.down")', "}"];
+  }
+  if (node.choices !== undefined) {
+    const choices = node.choices.map((choice) => `(id: ${choice.id}, value: ${str(choice.value)}, label: ${str(choice.label)}, disabled: ${choice.disabled ? "true" : "false"}, hidden: ${choice.hidden ? "true" : "false"})`);
+    return [
+      "Group {",
+      `    let choices: [(id: Int, value: String, label: String, disabled: Bool, hidden: Bool)] = [${choices.join(", ")}]`,
+      `    let selected = choices.first(where: { $0.id == ${state} })`,
+      "    SwiftUI.Menu {",
+      "        ForEach(choices.indices, id: \\.self) { index in",
+      "            let choice = choices[index]",
+      "            if !choice.hidden {",
+      "                Button {",
+      `                    ${state} = choice.id`,
+      "                } label: {",
+      "                    Text(verbatim: choice.label)",
+      "                }",
+      "                .disabled(choice.disabled)",
+      "            }",
+      "        }",
+      "    } label: {",
+      "        HStack(spacing: 4.0) {",
+      '            Text(verbatim: selected?.label ?? "")',
+      "                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)",
+      '            Image(systemName: "chevron.down")',
+      "        }",
+      "    }",
+      "    .buttonStyle(.plain)",
+      "}"
+    ];
+  }
+  const options = node.options?.length ? node.options : node.value !== undefined ? [node.value] : [];
+  return [
+    `Picker(selection: ${state ? `$${state}` : ""}) {`,
+    `    ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
+    "        Text(option)",
+    "    }",
+    "} label: {",
+    ...indent(label, 1),
+    "}",
+    ".pickerStyle(.menu)"
+  ];
+}
+function painted(text, alignment) {
+  return [`Text(verbatim: ${str(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
+}
 // src/swift/control-runtime.ts
 var CONTROL_RUNTIME = `
 // \`UTType\` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
@@ -13684,20 +13821,23 @@ function core2(n, deps) {
     }
     case "textField":
       if (still)
-        return painted(n.value || n.placeholder || "", ".leading");
+        return painted2(n.value || n.placeholder || "", ".leading");
       return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "secureField":
       if (still)
-        return painted(n.value ? "•".repeat(n.value.length) : n.placeholder ?? "", ".leading");
+        return painted2(n.value ? "•".repeat(n.value.length) : n.placeholder ?? "", ".leading");
       return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "textEditor":
       if (still)
-        return painted(n.value || n.placeholder || "", ".topLeading");
+        return painted2(n.value || n.placeholder || "", ".topLeading");
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
-    case "toggle":
     case "radio": {
+      const radio = still ? `.constant(${n.checked ? "true" : "false"})` : deps.radioBindingOf?.get(n) ?? `.constant(${n.checked ? "true" : "false"})`;
+      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[deps.theme].accent}))`]);
+    }
+    case "toggle": {
       const ua = UA[deps.theme];
-      const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const style = n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
       return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
     }
     case "slider": {
@@ -13709,32 +13849,15 @@ function core2(n, deps) {
     case "stepper": {
       const r = n.range ?? { min: 0, max: 100 };
       if (still)
-        return painted(n.value ?? "", ".leading");
+        return painted2(n.value ?? "", ".leading");
       return [`Stepper(value: ${binding}, in: ${num3(r.min)}...${num3(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num3(r.step)}` : ""}) {`, "    EmptyView()", "}", ".labelsHidden()"];
     }
     case "picker": {
-      if (still)
-        return [
-          "HStack(spacing: 4.0) {",
-          ...indent(painted(n.value ?? "", ".leading"), 1),
-          '    Image(systemName: "chevron.down")',
-          "}"
-        ];
-      const options = n.options?.length ? n.options : n.value !== undefined ? [n.value] : [];
-      return [
-        `Picker(selection: ${binding}) {`,
-        `    ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
-        "        Text(option)",
-        "    }",
-        "} label: {",
-        ...indent(body(n, deps), 1),
-        "}",
-        ".pickerStyle(.menu)"
-      ];
+      return selectExpr(n, state, still, body(n, deps));
     }
     case "datePicker": {
       if (still || n.dateKind === "month" || n.dateKind === "week")
-        return painted(n.value ?? "", ".leading");
+        return painted2(n.value ?? "", ".leading");
       const components = n.dateKind === "time" ? ".hourAndMinute" : n.dateKind === "datetime-local" ? "[.date, .hourAndMinute]" : ".date";
       return [`DatePicker(selection: ${binding}, displayedComponents: ${components}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
     }
@@ -13776,7 +13899,7 @@ var LEVEL_TINT = {
   suboptimal: "Color.markswift(1.0, 0.725, 0.0)",
   poor: "Color.markswift(0.847, 0.231, 0.004)"
 };
-function painted(text, alignment) {
+function painted2(text, alignment) {
   return [`Text(verbatim: ${str(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
 }
 function fraction2(n) {
@@ -13792,7 +13915,7 @@ function barHeight(n) {
 function body(n, deps) {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
   if (n.control === "button" && !n.files && !nodes.length && n.value !== undefined) {
-    const caption = painted(n.value, ".center");
+    const caption = painted2(n.value, ".center");
     if (n.captionTransform === "uppercase" || n.captionTransform === "lowercase")
       caption.splice(1, 0, `.textCase(.${n.captionTransform})`);
     return caption;
@@ -14206,7 +14329,7 @@ function leafExpr(n, ctx) {
       break;
     case "control":
       core = controlExpr(n, { child: (c) => ctx.renderNode(c).split(`
-`), stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
+`), stateOf: ctx.control.stateOf, radioBindingOf: ctx.control.radioBindingOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
       break;
     case "box":
       core = ["Color.clear"];
@@ -14813,7 +14936,7 @@ function emitSwift(screen, viewName, opts) {
   const nameOf = new Map;
   for (const p of props)
     nameOf.set(p.node, p.name);
-  const control = controlMembers(screen.root);
+  const control = controlMembers(screen.root, opts.mode);
   const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, renderNode: (node) => refOf(node, ctx) };
   const w = new Writer;
   const comment = (value) => value.replace(/[\r\n\u2028\u2029]/g, " ");

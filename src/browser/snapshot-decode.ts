@@ -2,6 +2,7 @@ import type { DomSnapshot, Raw } from "./snapshot-types.ts";
 import { attachLayoutColumns } from "./snapshot-columns.ts";
 import { markCurrentSrc } from "./snapshot-assets.ts";
 import { applyInheritedDisabledState } from "./form-state.ts";
+import { attachSelectMetadata } from "./select-metadata.ts";
 
 /**
  * @param snap     snapshot as painted (styles incl. transform matrices, paint order)
@@ -38,8 +39,11 @@ export function snapshotToTree(snap: DomSnapshot, boxes?: DomSnapshot): Raw {
     }
   }
   applyInheritedDisabledState(raws);
+  attachSelectMetadata(raws, doc.nodes.optionSelected !== undefined);
   const pseudo = doc.nodes.pseudoType;
   if (pseudo) for (let k = 0; k < pseudo.index.length; k++) raws[pseudo.index[k]!]!.pseudo = str(pseudo.value[k]!);
+  const shadow = doc.nodes.shadowRootType;
+  if (shadow) for (let k = 0; k < shadow.index.length; k++) raws[shadow.index[k]!]!.shadowRootType = str(shadow.value[k]!);
   attachLayoutColumns(doc, raws, S, boxes);
   const cur = doc.nodes.currentSourceURL;
   if (cur) {

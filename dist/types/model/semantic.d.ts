@@ -410,6 +410,8 @@ export interface ControlNode extends SemBase {
     placeholder?: string;
     /** `@checked`: initial on state of a toggle/radio. */
     checked?: boolean;
+    /** Captured DOM tree/form owner plus nonempty name; absent radios select independently. */
+    radioGroup?: string;
     /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
     disabled?: boolean;
     /** Read-only text controls retain their value without an editable native binding. */
@@ -439,6 +441,18 @@ export interface ControlNode extends SemBase {
     level?: "optimum" | "suboptimal" | "poor";
     /** Picker choices in document order (`<option>` labels). */
     options?: string[];
+    /** HTML options keyed by flattened ordinal, independently of duplicate values or labels. */
+    choices?: Array<{
+        id: number;
+        value: string;
+        label: string;
+        disabled: boolean;
+        hidden?: boolean;
+    }>;
+    /** Captured selected option ordinal; -1 retains an intentionally empty selection. */
+    selectedChoice?: number;
+    /** Multiple/listbox selects expose captured selected labels without inventing native editing. */
+    selectStatic?: boolean;
     /** Serialized external destination, or authored href when app-specific navigation is needed. */
     href?: string;
     /**

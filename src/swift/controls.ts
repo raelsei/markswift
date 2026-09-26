@@ -1,4 +1,5 @@
 import { numericValue } from "./control-state.ts";
+import { selectExpr } from "./select-control.ts";
 /**
  * `ControlNode` → SwiftUI. The node's box (fill, border, radius, padding, frame) is painted by
  * the shared modifier chain in `modifiers.ts`; this file emits only the interactive core that goes
@@ -23,6 +24,7 @@ export interface ControlDeps {
   child: (n: SemNode) => string[];
   /** Control → `@State` property name; built by `controlMembers`. */
   stateOf: Map<SemNode, string>;
+  radioBindingOf?: Map<SemNode, string>;
   /** `onclick` source → callback property name; built by `controlMembers`. */
   actionOf: Map<string, string>;
   mode: EmitMode;
@@ -108,12 +110,15 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (still) return painted(n.value || n.placeholder || "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
-    case "toggle":
     case "radio": {
+      const radio = still ? `.constant(${n.checked ? "true" : "false"})` : deps.radioBindingOf?.get(n) ?? `.constant(${n.checked ? "true" : "false"})`;
+      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[deps.theme].accent}))`]);
+    }
+    case "toggle": {
       // A switch is the right control only when the design drew one: HTML checkboxes and radios
       // are small squares/circles, and an iOS switch would not fit their measured box.
       const ua = UA[deps.theme];
-      const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const style = n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
       return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
     }
     case "slider": {
@@ -127,25 +132,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return [`Stepper(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""}) {`, "    EmptyView()", "}", ".labelsHidden()"];
     }
     case "picker": {
-      // Closed, a picker shows its selection and a menu indicator — exactly what `<select>` paints.
-      if (still)
-        return [
-          "HStack(spacing: 4.0) {",
-          ...indent(painted(n.value ?? "", ".leading"), 1),
-          '    Image(systemName: "chevron.down")',
-          "}",
-        ];
-      const options = n.options?.length ? n.options : n.value !== undefined ? [n.value] : [];
-      return [
-        `Picker(selection: ${binding}) {`,
-        `    ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
-        "        Text(option)",
-        "    }",
-        "} label: {",
-        ...indent(body(n, deps), 1),
-        "}",
-        ".pickerStyle(.menu)",
-      ];
+      return selectExpr(n, state, still, body(n, deps));
     }
     case "datePicker": {
       if (still || n.dateKind === "month" || n.dateKind === "week") return painted(n.value ?? "", ".leading");

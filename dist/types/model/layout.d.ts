@@ -47,6 +47,16 @@ export interface LayoutNode {
     }>;
     /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
     preferredSize?: PreferredSize;
+    /** Capture-local form/tree identity, resolved before boxless ancestors are flattened. */
+    formOwner?: string;
+    /** Live selection ordinal; -1 means explicitly unselected, absent means a legacy capture. */
+    selectedIndex?: number;
+    /** Rendered option label and submitted value before unmeasured descendants are discarded. */
+    option?: {
+        label: string;
+        value: string;
+        hidden?: boolean;
+    };
     /** Box relative to the capture root, CSS px. */
     bounds: Rect;
     /** Laid-out text for `#text` nodes. */

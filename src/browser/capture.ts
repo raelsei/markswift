@@ -11,6 +11,7 @@ import { chromium, type Browser, type BrowserContext } from "playwright-core";
 import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
+import { readFormSnapshot, attachFormSnapshot } from "./form-snapshot.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
 import { generatedContentWarnings } from "./generated-content.ts";
@@ -139,6 +140,7 @@ export class BrowserCapture {
       const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
+      const formSnapshot = await readFormSnapshot(page);
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
@@ -153,6 +155,7 @@ export class BrowserCapture {
       await page.evaluate(() => document.getElementById("__h2s_notransform")?.remove());
       await cdp.detach();
       const tree = snapshotToTree(snapA, snapB);
+      attachFormSnapshot(tree, formSnapshot);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       restoreTransitionProperties(rootRaw, transitionProperties);

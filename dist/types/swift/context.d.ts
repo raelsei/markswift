@@ -76,5 +76,7 @@ export interface ControlMembers {
     /** `@State` / callback declarations to put before `var body`. Empty when the screen has none. */
     decls: string[];
     stateOf: Map<SemNode, string>;
+    /** Selection-only bindings over shared radio-group state. */
+    radioBindingOf?: Map<SemNode, string>;
     actionOf: Map<string, string>;
 }

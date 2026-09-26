@@ -1,3 +1,4 @@
+import { radioBinding, radioMembers } from "./radio-state.ts";
 import { parseColor } from "../css/index.ts";
 import { colorArgs } from "./format.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
@@ -17,10 +18,12 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "textField":
     case "secureField":
     case "textEditor":
+      return { type: "String", value: str(n.value ?? "") };
     case "picker":
+      if (n.selectStatic) return undefined;
+      if (n.choices !== undefined) return { type: "Int", value: String(n.selectedChoice ?? -1) };
       return { type: "String", value: str(n.value ?? "") };
     case "toggle":
-    case "radio":
       return { type: "Bool", value: n.checked ? "true" : "false" };
     case "disclosure":
       return { type: "Bool", value: n.expanded ? "true" : "false" };
@@ -58,19 +61,28 @@ function dateSeed(n: ControlNode): string {
  * Every control's state property and every distinct action callback for one screen. Names come
  * from the node ids, so regenerating an unchanged design produces the same members.
  */
-export function controlMembers(root: SemNode): ControlMembers {
+export function controlMembers(root: SemNode, mode: "app" | "fidelity" = "app"): ControlMembers {
+  const radios = radioMembers(root);
+  const radioBindingOf = new Map<SemNode, string>();
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const decls: string[] = [];
   const seen: Record<string, number> = {};
   walk(root, (n) => {
     if (n.kind !== "control") return;
-    const decl = stateDecl(n);
+    const radio = mode === "app" ? radios.get(n) : undefined;
+    const shared = radio ? stateOf.get(radio.group.owner) : undefined;
+    if (shared && radio) {
+      stateOf.set(n, shared);
+      radioBindingOf.set(n, radioBinding(shared, radio.choice, n.disabled));
+    }
+    const decl = radio ? (shared ? undefined : { type: "Int?", value: String(radio.group.selected ?? "nil") }) : stateDecl(n);
     if (decl) {
       const base = `s_${n.id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "control"}${decl.suffix ?? ""}`;
       const k = (seen[base] = (seen[base] ?? 0) + 1);
       const name = k === 1 ? base : `${base}_r${k}`;
       stateOf.set(n, name);
+      if (radio) radioBindingOf.set(n, radioBinding(name, radio.choice, n.disabled));
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
     }
     // A handler used by several controls is one callback: the design calls the same function.
@@ -92,7 +104,7 @@ export function controlMembers(root: SemNode): ControlMembers {
       decls.push(`var ${name}: () -> Void = {}`);
     }
   });
-  return { decls, stateOf, actionOf };
+  return { decls, stateOf, radioBindingOf, actionOf };
 }
 
 /** The SwiftUI control itself; the caller appends the node's box modifiers. */

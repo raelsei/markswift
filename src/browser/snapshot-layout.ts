@@ -81,6 +81,9 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
     ...(raw.preferredSize ? { preferredSize: raw.preferredSize } : {}),
+    ...(raw.formOwner !== undefined ? { formOwner: raw.formOwner } : {}),
+    ...(raw.selectedIndex !== undefined ? { selectedIndex: raw.selectedIndex } : {}),
+    ...(raw.option !== undefined ? { option: raw.option } : {}),
   };
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined) node.id = id;
@@ -121,7 +124,7 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
     const childPath = path === "" ? `${i++}` : `${path}/${i++}`;
     if (SKIP_TAGS[c.name]) continue;
     if (c.bounds || KEEP_WITHOUT_LAYOUT[c.name]) out.push(element(c, origin, identity, childPath));
-    else if (hasLayout(c)) {
+    else if (hasLayout(c) || ((host.tag === "select" || host.tag === "optgroup") && hasOption(c))) {
       // `display: contents` has no box to emit. Keep its custom semantics on the nearest
       // surviving host instead of inserting a synthetic wrapper that would alter flow.
       if (c.name.includes("-")) (host.flattenedCustomElements ??= []).push({ tag: c.name, ...(c.attrs.id ? { id: c.attrs.id } : {}) });
@@ -134,6 +137,13 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
 
 function hasLayout(raw: Raw): boolean {
   return raw.bounds !== undefined || raw.children.some(hasLayout);
+}
+
+/** Modern selects may wrap popup options in boxless divs; retain their choices, not their boxes. */
+function hasOption(raw: Raw): boolean {
+  if (raw.name === "option") return true;
+  if (SKIP_TAGS[raw.name] || ["select", "datalist", "hr"].includes(raw.name)) return false;
+  return raw.children.some(hasOption);
 }
 
 function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, parentPath: string): LayoutNode | undefined {
