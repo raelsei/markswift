@@ -1,9 +1,7 @@
-import type { ConvertOptions } from "./core.ts";
-import { conversionOptions, InputError, parseConversionInput } from "./input.ts";
+import { convertInput, type Converters } from "./conversion.ts";
+import { InputError, parseConversionInput } from "./input.ts";
 import { convertIsolated, WorkerError } from "./isolated.ts";
-import { serializeResult, type PublicResult, type ServiceResult } from "./output.ts";
-
-type Converter = (source: { html: string }, options: ConvertOptions) => Promise<PublicResult>;
+import type { ServiceResult } from "./output.ts";
 
 export interface PlaygroundServiceOptions {
   /** Exact origin of a separately hosted static playground, for example https://playground.example.com. */
@@ -17,7 +15,8 @@ export interface PlaygroundServiceOptions {
   /** Hard deadline for the isolated Chrome conversion process. */
   conversionTimeoutMs?: number;
   /** Test seam; production uses an isolated worker importing markswift's public API. */
-  convert?: Converter;
+  convert?: Converters["convert"];
+  convertResponsive?: Converters["convertResponsive"];
   /** Receives internal failures without exposing them to the browser. */
   logError?: (error: unknown) => void;
 }
@@ -78,7 +77,13 @@ export function createPlaygroundHandler(options: PlaygroundServiceOptions = {}):
       catch { throw new InputError("Request body must be valid UTF-8 JSON."); }
       const input = parseConversionInput(parsed);
       let result: ServiceResult;
-      if (options.convert) result = serializeResult(await options.convert({ html: input.html }, conversionOptions(input)));
+      if (options.convert || options.convertResponsive) {
+        const unavailable = async (): Promise<never> => { throw new Error("Converter test seam is not configured for this mode."); };
+        result = await convertInput(input, {
+          convert: options.convert ?? unavailable,
+          convertResponsive: options.convertResponsive ?? unavailable,
+        });
+      }
       else result = await convertIsolated(input, { timeoutMs: conversionTimeoutMs, signal: request.signal });
       return json(result);
     } catch (error) {

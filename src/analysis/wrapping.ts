@@ -6,13 +6,15 @@ import { parseDeclared, px, resolveLength, round2 } from "../css/syntax.ts";
 import { insetsOf, renders, EDGES, unionRect } from "./geometry.ts";
 import { linesOf } from "./flow-layout.ts";
 import { measuredLayoutOf } from "./measured-layout.ts";
+import { equalWrappingColumns } from "./wrapping-tracks.ts";
+import { finish } from "./node-base.ts";
 
 function gap(value: string | undefined): number | undefined {
   if (!value || value === "normal") return 0;
   return /^(?:0|\d*\.?\d+px)$/.test(value) ? Math.max(0, px(value)) : undefined;
 }
 
-function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis: Axis, align: CrossAlign, distribution: Distribution, columnGap: number | undefined, rowGap: number | undefined): string | undefined {
+function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis: Axis, align: CrossAlign, distribution: Distribution, columnGap: number | undefined, rowGap: number | undefined, columns?: number): string | undefined {
   const direction = n.styles["flex-direction"] ?? "row";
   if (axis !== "h" || direction !== "row") return `${direction} wrapping`;
   if (n.styles["flex-wrap"] !== "wrap") return "wrap-reverse";
@@ -24,21 +26,21 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
   for (const item of items) {
     const s = item.node.styles;
     // A capture can fit perfectly while a narrower native proposal activates CSS shrinking.
-    if (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0) return "flex grow/shrink allocation";
-    if (align === "stretch") {
+    if (!columns && (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0)) return "flex grow/shrink allocation";
+    if (!columns && align === "stretch") {
       const declaredHeight = item.node.preferredSize?.height ?? parseDeclared(item.node.attrs.style)["height"];
       const [pt, , pb] = insetsOf(s);
       const wanted = declaredHeight && /^(?:0|\d*\.?\d+px)$/.test(declaredHeight) ? resolveLength(declaredHeight, 0) : undefined;
       if (wanted === undefined || Math.abs(item.sem.frame.h - wanted - (s["box-sizing"] === "border-box" ? 0 : pt + pb)) > 1) return "stretch-dependent child heights";
     }
-    if (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed") return "intrinsic or filling child sizes";
+    if (!columns && (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed")) return "intrinsic or filling child sizes";
     if (EDGES.some(edge => s[`margin-${edge}`] === "auto" || Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
     if (![undefined, "", "auto", "normal"].includes(s["align-self"])) return `align-self ${s["align-self"]}`;
     if (px(s.order) !== 0) return "CSS order allocation";
     const preferred = item.node.preferredSize?.width ?? parseDeclared(item.node.attrs.style)["width"];
     const basis = s["flex-basis"];
     const mainSize = basis && basis !== "auto" && basis !== "content" ? basis : preferred;
-    if (mainSize && mainSize !== "auto" && !/^(?:0|\d*\.?\d+px)$/.test(mainSize)) return "relative or intrinsic child width";
+    if (!columns && mainSize && mainSize !== "auto" && !/^(?:0|\d*\.?\d+px)$/.test(mainSize)) return "relative or intrinsic child width";
   }
 
   const lines = linesOf(items);
@@ -87,16 +89,25 @@ export function buildWrapping(n: LayoutNode, base: SemBase, all: AnalyzedChild[]
   const plain: SemBase = { ...base, padding: insetsOf(n.styles) };
   const items = all.filter(item => renders(item.node));
   const columnGap = gap(n.styles["column-gap"]), rowGap = gap(n.styles["row-gap"]);
-  const reason = unsupported(n, plain, items, axis, align, distribution, columnGap, rowGap);
+  const columns = equalWrappingColumns(n, plain, items, columnGap);
+  const live = columns ? { ...plain, height: { kind: "hug" as const } } : plain;
+  const reason = unsupported(n, live, items, axis, align, distribution, columnGap, rowGap, columns);
   const ordered = reason
     ? [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0))
     : linesOf(items).flat();
-  const stack: StackNode = { ...plain, kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map(item => item.sem) };
+  const stack: StackNode = { ...(reason ? plain : live), kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map(item => item.sem) };
   if (reason) {
     stack.measured = measuredLayoutOf(plain, stack.children);
     stack.notes.push(`approximated: flex-wrap ${reason} → captured child positions; cannot reflow at another size`);
   } else {
-    stack.wrap = { columnGap: round2(columnGap!), rowGap: round2(rowGap!) };
+    stack.wrap = { columnGap: round2(columnGap!), rowGap: round2(rowGap!), ...(columns ? { columns } : {}) };
+    if (columns) for (const item of ordered) {
+      item.sem.width = { kind: "fill" };
+      item.sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+      // The track identity has now been verified; remove only its superseded width warning.
+      item.sem.notes = item.sem.notes.filter(note => !(note.startsWith("approximated: width:") && note.endsWith("generated view may not resize proportionally with its parent")));
+      finish(item.sem);
+    }
   }
   return stack;
 }

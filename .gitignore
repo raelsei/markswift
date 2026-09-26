@@ -26,6 +26,7 @@ __pycache__/
 !/tools/verify/visual-native.ts
 !/tools/verify/visual-fixtures.ts
 !/tools/verify/visual-metrics.ts
+!/tools/verify/visual-checks.ts
 !/tools/verify/fixtures/
 /tools/verify/fixtures/*
 !/tools/verify/fixtures/rich-text.html
@@ -34,6 +35,16 @@ __pycache__/
 !/tools/verify/fixtures/full-page.css
 !/tools/verify/fixtures/image-position.html
 !/tools/verify/fixtures/image-position.css
+!/tools/verify/fixtures/flex.html
+!/tools/verify/fixtures/flex.css
+!/tools/verify/fixtures/grid.html
+!/tools/verify/fixtures/grid.css
+!/tools/verify/fixtures/table.html
+!/tools/verify/fixtures/table.css
+!/tools/verify/fixtures/form.html
+!/tools/verify/fixtures/form.css
+!/tools/verify/fixtures/effects.html
+!/tools/verify/fixtures/effects.css
 
 # Generated output and editor/agent state
 /generated/

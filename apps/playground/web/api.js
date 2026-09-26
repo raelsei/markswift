@@ -37,7 +37,14 @@ export async function convertSource(payload, signal) {
     const detail = typeof body?.error === "string" ? body.error : typeof body?.message === "string" ? body.message : `Converter returned ${response.status}.`;
     throw new Error(detail);
   }
-  if (!body || typeof body.files !== "object" || !body.mapping || !Array.isArray(body.diagnostics)) {
+  const validMapping = (view) => view?.mapping && Array.isArray(view.diagnostics);
+  const validBranches = Array.isArray(body?.branches) && body.branches.length === 2
+    && body.branches[0]?.branch === "compact" && body.branches[1]?.branch === "regular"
+    && Number.isInteger(body.breakpoint)
+    && body.branches.every(branch => validMapping(branch) && Array.isArray(branch.warnings)
+      && Number.isInteger(branch.width) && Number.isInteger(branch.height));
+  if (!body || !body.files || typeof body.files !== "object" || Array.isArray(body.files)
+    || !Array.isArray(body.warnings) || !(body.branches ? validBranches : validMapping(body))) {
     throw new Error("Converter returned an incomplete result.");
   }
   return body;

@@ -77,6 +77,11 @@ struct FlowFixture: View {
             Color.green.frame(width: 80, height: 40)
         }
         .frame(width: 200)
+        MarkswiftFlow(columnGap: 12, rowGap: 12, columns: 2, stretch: true) {
+            Text("Measured browser layout that wraps").frame(maxWidth: .infinity, minHeight: 96, maxHeight: .infinity)
+            Text("Second card").frame(maxWidth: .infinity, minHeight: 96, maxHeight: .infinity)
+        }
+        .frame(width: 284)
     }
 }
 `);

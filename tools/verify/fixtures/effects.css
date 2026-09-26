@@ -1,0 +1,20 @@
+html, body { margin: 0; background: #fff; }
+* { box-sizing: border-box; }
+.effects { width: 100%; height: 610px; padding: 20px; background: #fff; color: #243044; font: 15px/22px system-ui; }
+.effects h1 { font: 700 24px/29px system-ui; margin: 0 0 20px; }
+.gradient, .radial, .shadow, .pseudo { width: 100%; height: 80px; margin-bottom: 18px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.gradient { background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%); color: #fff; }
+.radial { background: radial-gradient(circle at 50% 50%, #fde68a 0%, #f97316 100%); color: #452107; }
+.shadow { border: 2px solid #64748b; background: #e2e8f0; box-shadow: 0 4px 8px rgba(15,23,42,.25), inset 0 2px 0 #fff; }
+.pseudo { position: relative; overflow: hidden; background: #dbeafe; }
+.pseudo::before { content: ""; position: absolute; left: -18px; top: -16px; width: 65px; height: 105px; border-radius: 50%; background: #93c5fd; transform: rotate(-20deg); }
+.pseudo span { position: relative; z-index: 1; }
+.vector { display: flex; align-items: center; gap: 16px; }
+.vector svg { display: block; flex-shrink: 0; }
+@media (prefers-color-scheme: dark) {
+  html, body, .effects { background: #1c1b23; }
+  .effects { color: #efedf6; }
+  .shadow { background: #334155; border-color: #94a3b8; box-shadow: 0 4px 8px rgba(0,0,0,.5), inset 0 2px 0 #64748b; }
+  .pseudo { background: #1e3a5f; }
+  .pseudo::before { background: #2563eb; }
+}

@@ -2,6 +2,16 @@ import sharp from "sharp";
 
 export type Theme = "light" | "dark";
 export type Rgb = [number, number, number];
+export interface VisualRegion {
+  id?: string;
+  tag?: string;
+  label: string;
+  maxError?: number;
+  minForeground?: number;
+  /** Inset text checks past widget borders, using their own flat field background. */
+  inset?: number;
+  background?: Record<Theme, Rgb>;
+}
 
 export interface VisualFixture {
   id: string;
@@ -9,7 +19,8 @@ export interface VisualFixture {
   name: string;
   responsive: boolean;
   background: Record<Theme, Rgb>;
-  samples?: Array<{ x: number; y: number; rgb: Rgb }>;
+  samples?: Array<{ x: number; y: number; rgb: Rgb | Record<Theme, Rgb> }>;
+  regions?: VisualRegion[];
 }
 
 export const visualFixtures: VisualFixture[] = [
@@ -17,6 +28,47 @@ export const visualFixtures: VisualFixture[] = [
     background: { light: [255, 255, 255], dark: [23, 29, 39] } },
   { id: "full-page", height: 650, name: "VisualSmokeFullPage", responsive: true,
     background: { light: [243, 239, 232], dark: [28, 27, 35] } },
+  { id: "flex", height: 350, name: "VisualSmokeFlex", responsive: false,
+    background: { light: [246, 248, 251], dark: [22, 30, 43] },
+    regions: [{ id: "flex-tracks", label: "wrapped tracks", maxError: 16 }],
+    samples: [{ x: 32, y: 174, rgb: { light: [219, 234, 254], dark: [36, 59, 89] } },
+      { x: 240, y: 174, rgb: { light: [220, 252, 231], dark: [35, 66, 56] } }],
+  },
+  { id: "grid", height: 330, name: "VisualSmokeGrid", responsive: false,
+    background: { light: [246, 248, 251], dark: [22, 30, 43] },
+    regions: [{ id: "activity-grid", label: "grid tiles", maxError: 16 }],
+    samples: [{ x: 32, y: 174, rgb: { light: [219, 234, 254], dark: [36, 59, 89] } },
+      { x: 240, y: 174, rgb: { light: [220, 252, 231], dark: [35, 66, 56] } },
+      { x: 32, y: 284, rgb: { light: [254, 243, 199], dark: [76, 58, 36] } },
+      { x: 240, y: 284, rgb: { light: [252, 231, 243], dark: [73, 44, 66] } }],
+  },
+  { id: "table", height: 320, name: "VisualSmokeTable", responsive: false,
+    background: { light: [246, 248, 251], dark: [22, 30, 43] },
+    regions: [{ id: "release-caption", label: "table caption" }, { id: "release-table", label: "table cells", maxError: 16 }],
+    samples: [{ x: 30, y: 120, rgb: { light: [226, 232, 240], dark: [44, 57, 76] } },
+      { x: 30, y: 168, rgb: { light: [219, 234, 254], dark: [36, 59, 89] } },
+      { x: 140, y: 168, rgb: { light: [254, 243, 199], dark: [76, 58, 36] } },
+      { x: 285, y: 168, rgb: { light: [220, 252, 231], dark: [35, 66, 56] } }],
+  },
+  { id: "form", height: 640, name: "VisualSmokeForm", responsive: false,
+    background: { light: [255, 255, 255], dark: [23, 29, 39] },
+    regions: [
+      { id: "workspace", label: "text field value", inset: 4, background: { light: [244, 246, 250], dark: [41, 52, 68] } },
+      { id: "token", label: "password field value", inset: 4, background: { light: [244, 246, 250], dark: [41, 52, 68] } },
+      { id: "region", label: "selected option", inset: 4, background: { light: [244, 246, 250], dark: [41, 52, 68] } },
+      { id: "notes", label: "readonly text", inset: 4, background: { light: [244, 246, 250], dark: [41, 52, 68] } },
+    ],
+  },
+  { id: "effects", height: 610, name: "VisualSmokeEffects", responsive: false,
+    background: { light: [255, 255, 255], dark: [28, 27, 35] },
+    regions: [
+      { id: "linear-paint", label: "linear gradient", maxError: 16 },
+      { id: "radial-paint", label: "radial gradient", maxError: 16 },
+      { id: "shadow-paint", label: "border and inset shadow", maxError: 16 },
+      { id: "pseudo-paint", label: "clipped pseudo decoration", maxError: 16 },
+      { tag: "svg", label: "SVG paint", maxError: 16 },
+    ],
+  },
   { id: "image-position", height: 255, name: "VisualSmokeImagePosition", responsive: false,
     background: { light: [255, 255, 255], dark: [24, 24, 32] }, samples: [
       { x: 42, y: 42, rgb: [255, 0, 0] },

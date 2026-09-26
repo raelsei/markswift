@@ -47,9 +47,9 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
   if (n.font) {
     out.push(`.font(${fontExpr(n.font, deps)})`);
-    // A field showing its placeholder paints it in the prompt colour, as the browser does; in app
-    // mode the live control styles its own prompt and this would colour the typed text instead.
-    const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
+    // Static fields, including readonly app fields, paint the prompt themselves. Editable app
+    // controls style their native prompt; this would colour their typed text instead.
+    const prompt = (deps.mode === "fidelity" || n.readOnly === true) && !n.value && n.placeholder !== undefined;
     if (prompt) out.push(".foregroundStyle(Color(uiColor: .placeholderText))");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
   }
@@ -63,7 +63,7 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
   const binding = state ? `$${state}` : "";
-  const still = deps.mode === "fidelity";
+  const still = deps.mode === "fidelity" || n.readOnly === true;
   switch (n.control) {
     case "button": {
       const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
@@ -98,14 +98,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return wrap(`Link(destination: markswiftURL(${str(href)})) {`, body(n, deps), ["}"]);
     }
     case "textField":
-      if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
+      if (still) return painted(n.value || n.placeholder || "", ".leading");
       return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "secureField":
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
       return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "textEditor":
-      if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
+      if (still) return painted(n.value || n.placeholder || "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
     case "toggle":
@@ -147,9 +147,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         ".pickerStyle(.menu)",
       ];
     }
-    case "datePicker":
-      if (still) return painted(n.value ?? "", ".leading");
-      return [`DatePicker(selection: ${binding}, displayedComponents: .date) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+    case "datePicker": {
+      if (still || n.dateKind === "month" || n.dateKind === "week") return painted(n.value ?? "", ".leading");
+      const components = n.dateKind === "time" ? ".hourAndMinute"
+        : n.dateKind === "datetime-local" ? "[.date, .hourAndMinute]" : ".date";
+      return [`DatePicker(selection: ${binding}, displayedComponents: ${components}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+    }
     case "colorPicker": {
       const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
       if (still) return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];

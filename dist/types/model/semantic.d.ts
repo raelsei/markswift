@@ -314,10 +314,11 @@ export interface StackNode extends SemBase {
     /** Leading offset before the first child that padding does not explain. */
     leadInset: number;
     scroll?: Axis;
-    /** Fixed-size row items that reflow natively when available width changes. */
+    /** Fixed-size row items, or guarded equal-width tracks, that reflow at the offered width. */
     wrap?: {
         columnGap: number;
         rowGap: number;
+        columns?: number;
     };
     /** Captured positions for wrapping combinations without a native layout mapping. */
     measured?: MeasuredLayout;
@@ -411,6 +412,20 @@ export interface ControlNode extends SemBase {
     checked?: boolean;
     /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
     disabled?: boolean;
+    /** Read-only text controls retain their value without an editable native binding. */
+    readOnly?: boolean;
+    /** HTML date-family granularity; month/week require a custom selector and remain static. */
+    dateKind?: "date" | "time" | "datetime-local" | "month" | "week";
+    /** Gregorian/local wall-clock components, never a timestamp derived in the build timezone. */
+    dateComponents?: {
+        year?: number;
+        month?: number;
+        day?: number;
+        hour?: number;
+        minute?: number;
+        second?: number;
+        nanosecond?: number;
+    };
     /** Numeric domain of a slider/progress/gauge, resolved from `@min`/`@max`/`@step`. */
     range?: {
         min: number;

@@ -1030,10 +1030,10 @@ import { readFile as readFile6 } from "node:fs/promises";
 // src/compiler/naming.ts
 function validateName(name) {
   const reserved = new Set("Self Any Type Protocol View Text Color Image Font Path Shape CGRect CGSize CGPoint CGFloat URL Data String Int Double Float Bool UUID Bundle State Binding Button Toggle Slider TextField SecureField TextEditor Picker ProgressView ScrollView VStack HStack ZStack Grid GridRow Spacer Divider Rectangle RoundedRectangle Ellipse Circle Capsule AngularGradient LinearGradient RadialGradient GeometryReader AnyView Edge UnitPoint Alignment HorizontalAlignment VerticalAlignment ContentMode BlendMode DesignSupport DesignTokens".split(" "));
-  for (const type of "UIImage UIFont UIFontDescriptor UIColor UITraitCollection CGAffineTransform CGVector CGPath CGColor StrokeStyle AsyncImage Array Set ClosedRange Axis EdgeInsets EmptyView ForEach ColorPicker DatePicker DisclosureGroup Gauge Link Stepper UnevenRoundedRectangle UTType SwiftUI UIKit Foundation CoreText UniformTypeIdentifiers ViewBuilder ShapeStyle InsettableShape ProgressViewStyle GaugeStyle ToggleStyle ButtonStyle Date Optional Never Void Error".split(" "))
+  for (const type of "UIImage UIFont UIFontDescriptor UIColor UITraitCollection CGAffineTransform CGVector CGPath CGColor StrokeStyle AsyncImage Array Set ClosedRange Axis EdgeInsets EmptyView ForEach ColorPicker DatePicker DisclosureGroup Gauge Link Stepper UnevenRoundedRectangle UTType SwiftUI UIKit Foundation CoreText UniformTypeIdentifiers ViewBuilder ShapeStyle InsettableShape ProgressViewStyle GaugeStyle ToggleStyle ButtonStyle Date Calendar DateComponents Optional Never Void Error".split(" "))
     reserved.add(type);
   if (!/^[A-Z][A-Za-z0-9_]*$/.test(name) || name.startsWith("Markswift") || reserved.has(name)) {
-    throw new Error("name must be a Swift type identifier starting with an uppercase ASCII letter (e.g. ProfileCard)");
+    throw new Error("name must be a Swift type identifier starting with an uppercase ASCII letter (e.g. ProfileCard); reserved framework names and the Markswift prefix are not allowed");
   }
 }
 
@@ -7487,6 +7487,23 @@ function srcsetUrls(srcset) {
   return out;
 }
 
+// src/browser/form-state.ts
+function applyInheritedDisabledState(nodes) {
+  for (const node of nodes) {
+    if (!["input", "button", "select", "textarea"].includes(node.name))
+      continue;
+    for (let ancestor = node.parent, branch = node;ancestor; branch = ancestor, ancestor = ancestor.parent) {
+      if (ancestor.name !== "fieldset" || ancestor.attrs.disabled === undefined)
+        continue;
+      const legend = ancestor.children.find((child) => child.type === 1 && child.name === "legend");
+      if (branch === legend)
+        continue;
+      node.attrs.disabled = "";
+      break;
+    }
+  }
+}
+
 // src/browser/snapshot-decode.ts
 function snapshotToTree(snap, boxes) {
   const doc = snap.documents[0];
@@ -7519,6 +7536,7 @@ function snapshotToTree(snap, boxes) {
       raws[i].parent = raws[p];
     }
   }
+  applyInheritedDisabledState(raws);
   const pseudo = doc.nodes.pseudoType;
   if (pseudo)
     for (let k = 0;k < pseudo.index.length; k++)
@@ -11681,6 +11699,55 @@ function linkDestinationLoss(href) {
   return /^[a-z][a-z0-9+.-]*:/i.test(href) ? "unsupported or malformed URL" : "app navigation route or fragment";
 }
 
+// src/analysis/date-input.ts
+function applyDateInput(node, kind, spec) {
+  spec.dateKind = kind;
+  spec.notes.push(`approximated: <input type="${kind}"> browser control appearance and locale formatting are not preserved`);
+  if (kind === "month" || kind === "week") {
+    spec.notes.push(`approximated: <input type="${kind}"> ${kind}-only selection has no equivalent SwiftUI DatePicker → static captured value; editing requires a custom selector`);
+    return;
+  }
+  spec.dateComponents = dateComponents(spec.value ?? "", kind);
+  if (!spec.readOnly && !spec.dateComponents) {
+    spec.notes.push(`approximated: <input type="${kind}"> ${spec.value ? "invalid captured value" : "empty selection"} → native picker starts at the current local date/time`);
+  }
+  if (!spec.readOnly && kind !== "date" && ((spec.dateComponents?.second ?? 0) !== 0 || (spec.dateComponents?.nanosecond ?? 0) !== 0 || node.attrs.step !== undefined && Number(node.attrs.step) > 0 && Number(node.attrs.step) < 60)) {
+    spec.notes.push("approximated: captured seconds/fractions remain in the initial value; native date/time picker exposes hour and minute selection only");
+  }
+  if (!spec.readOnly && ["min", "max", "step"].some((attribute) => node.attrs[attribute] !== undefined)) {
+    spec.notes.push(`approximated: <input type="${kind}"> min/max/step validation constraints are not translated`);
+  }
+}
+function dateComponents(value, kind) {
+  if (kind === "time")
+    return timeComponents(value);
+  const [date, time, ...extra] = kind === "datetime-local" ? value.split(/[T ]/) : [value];
+  if (extra.length)
+    return;
+  const parts = /^(\d{4,})-(\d{2})-(\d{2})$/.exec(date ?? "");
+  if (!parts)
+    return;
+  const [year, month, day] = parts.slice(1).map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (!Number.isSafeInteger(year) || year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1])
+    return;
+  if (kind === "date")
+    return { year, month, day };
+  const clock = timeComponents(time ?? "");
+  return clock ? { year, month, day, ...clock } : undefined;
+}
+function timeComponents(value) {
+  const parts = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(value);
+  if (!parts)
+    return;
+  const hour = Number(parts[1]), minute = Number(parts[2]), second = Number(parts[3] ?? 0);
+  if (hour > 23 || minute > 59 || second > 59)
+    return;
+  const nanosecond = Number((parts[4] ?? "").padEnd(3, "0")) * 1e6;
+  return { hour, minute, second, nanosecond };
+}
+
 // src/analysis/controls.ts
 function controlOf(n) {
   const a = n.attrs;
@@ -11709,6 +11776,7 @@ function controlOf(n) {
     }
     case "textarea": {
       const spec = { control: "textEditor", notes };
+      applyReadOnly(n, spec);
       const text = a["value"] ?? textOf(n).trim();
       if (text)
         spec.value = text;
@@ -11768,6 +11836,7 @@ function controlOf(n) {
       if (!Object.hasOwn(INPUT_CONTROLS, type))
         notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
       const spec = { control, notes };
+      applyReadOnly(n, spec);
       if (control === "toggle" || control === "radio") {
         if ("checked" in a)
           spec.checked = true;
@@ -11777,6 +11846,10 @@ function controlOf(n) {
         spec.value = "Submit";
       else if (type === "reset")
         spec.value = "Reset";
+      if (control === "datePicker")
+        applyDateInput(n, type, spec);
+      if (control === "radio")
+        notes.push("approximated: radio selection → independent native toggle; mutual exclusion and browser deselection rules require app state");
       if (type === "submit")
         notes.push('approximated: <input type="submit"> form submission and validation require an app action');
       if (type === "reset")
@@ -11815,6 +11888,12 @@ function controlOf(n) {
     default:
       return;
   }
+}
+function applyReadOnly(node, spec) {
+  if (node.attrs.readonly === undefined || !["textField", "secureField", "textEditor", "datePicker"].includes(spec.control))
+    return;
+  spec.readOnly = true;
+  spec.notes.push(`approximated: readonly <${node.tag}> → noneditable text; browser selection and focus behavior are not translated`);
 }
 function buildControl(spec, parts) {
   const { control, notes, ...state } = spec;
@@ -12690,10 +12769,14 @@ function equalFixedTable(table, parent) {
   }
   const members = [table];
   const rows = [];
+  let caption;
   for (const child of table.children) {
     if (child.tag === "tr")
       rows.push(child);
-    else if (groups.has(child.tag) && ordinary(child) && autoWidth(child)) {
+    else if (child.tag === "caption" && !caption && ordinary(child) && autoWidth(child) && unconstrained(child) && child.styles.display === "table-caption" && Math.abs(child.bounds.w - table.bounds.w) <= 1 && Math.abs(child.bounds.x - table.bounds.x) <= 1) {
+      caption = child;
+      members.push(child);
+    } else if (groups.has(child.tag) && ordinary(child) && autoWidth(child)) {
       members.push(child);
       if (!child.children.length || child.children.some((row) => row.tag !== "tr"))
         return;
@@ -13160,6 +13243,82 @@ function markBaselineShifts(built, host, note) {
   }
 }
 
+// src/analysis/inline-effects.ts
+function inlinePresentation(host, element) {
+  let opacity = 1;
+  let visibility = host.styles.visibility ?? "visible";
+  for (const inline of inlineChain(host, element)) {
+    const ownOpacity = Number.parseFloat(inline.styles.opacity ?? "1");
+    if (Number.isFinite(ownOpacity))
+      opacity *= Math.max(0, Math.min(1, ownOpacity));
+    visibility = inline.styles.visibility ?? visibility;
+  }
+  return { opacity, hidden: visibility === "hidden" || visibility === "collapse" };
+}
+var unsupportedEffects = {
+  filter: "none",
+  "backdrop-filter": "none",
+  "mask-image": "none",
+  "clip-path": "none",
+  "mix-blend-mode": "normal",
+  isolation: "auto"
+};
+function inlineBoxHasPaint(inline) {
+  const styles = inline.styles;
+  const image = styles["background-image"];
+  if (image && image !== "none" || (parseColor(styles["background-color"])?.a ?? 0) > 0)
+    return true;
+  const outline = styles["outline-style"];
+  if (outline && outline !== "none" && outline !== "hidden" && px(styles["outline-width"]) > 0 && (parseColor(styles["outline-color"] ?? styles.color)?.a ?? 0) > 0)
+    return true;
+  if (EDGES.some((edge) => edgeWidth(styles, edge) > 0 && (parseColor(styles[`border-${edge}-color`] ?? styles.color)?.a ?? 0) > 0))
+    return true;
+  return parseShadows(styles["box-shadow"]).some((shadow) => shadow.color.a > 0);
+}
+function applyInlineEffects(host, element, run, note) {
+  const chain = inlineChain(host, element);
+  for (const inline of chain) {
+    reportStaticMotion(inline.styles, note);
+    for (const [property, initial] of Object.entries(unsupportedEffects)) {
+      const value = inline.styles[property];
+      if (value && value !== initial)
+        note(`approximated: inline ${property}: ${value} is not applied to merged text; inline box decoration may differ`);
+    }
+  }
+  const { opacity, hidden } = inlinePresentation(host, element);
+  if (!hidden && (host.styles.visibility === "hidden" || host.styles.visibility === "collapse")) {
+    note("approximated: inline visibility: visible inside a hidden text host remains hidden; the host and its text share one native view");
+  }
+  const alpha = hidden ? 0 : opacity;
+  run.color = fade(run.color, alpha);
+  if (hidden) {
+    delete run.paint;
+    delete run.decoration;
+    delete run.shadow;
+    delete run.href;
+    return;
+  }
+  if (run.decoration?.color)
+    run.decoration = { ...run.decoration, color: fade(run.decoration.color, alpha) };
+  if (run.shadow)
+    run.shadow = { ...run.shadow, color: fade(run.shadow.color, alpha) };
+  if (run.paint)
+    run.paint = fadePaint(run.paint, alpha);
+  if (opacity > 0 && opacity < 1 && chain.some(inlineBoxHasPaint)) {
+    note("approximated: inline opacity is applied to glyph and box paints separately; overlapping paint is not composited as a CSS group");
+  }
+}
+function fade(color, alpha) {
+  return { ...color, a: color.a * alpha };
+}
+function fadePaint(paint, alpha) {
+  if ("stops" in paint)
+    return { ...paint, stops: paint.stops.map((stop) => ({ ...stop, color: fade(stop.color, alpha) })) };
+  if (paint.kind === "solid")
+    return { ...paint, color: fade(paint.color, alpha) };
+  return paint;
+}
+
 // src/analysis/text-run-builder.ts
 var NUMERIC_FEATURES = { normal: true, "tabular-nums": true };
 function buildTextRuns(host, runs, ctx, note) {
@@ -13171,8 +13330,6 @@ function buildTextRuns(host, runs, ctx, note) {
   let prevRun;
   for (const r of runs) {
     const s = r.styleOf.styles;
-    for (const inline of inlineChain(host, r.styleOf))
-      reportStaticMotion(inline.styles, note);
     const boundary = r.node.tag === "br" ? `
 ` : r.node.tag === "wbr" ? "​" : undefined;
     if (r.node.tag === "wbr")
@@ -13255,10 +13412,11 @@ function buildTextRuns(host, runs, ctx, note) {
     if (paint)
       run.paint = paint;
     const el = r.styleOf;
-    if (el !== host && !painted.includes(el)) {
-      const bg = parseColor(el.styles["background-color"]);
-      if (bg && bg.a > 0 || EDGES.some((e) => edgeWidth(el.styles, e) > 0))
-        painted.push(el);
+    for (const inline of inlineChain(host, el)) {
+      if (painted.includes(inline))
+        continue;
+      if (inlineBoxHasPaint(inline))
+        painted.push(inline);
     }
     const link = inlineChain(host, el).find((a) => a.tag === "a" && a.attrs["href"] !== undefined);
     if (link) {
@@ -13271,6 +13429,7 @@ function buildTextRuns(host, runs, ctx, note) {
       if (link.attrs["onclick"])
         note("approximated: inline link onclick handler requires an app action");
     }
+    applyInlineEffects(host, el, run, note);
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
@@ -13308,7 +13467,15 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
   markBaselineShifts(built, host, note);
   markLineBreaks(built);
   for (const el of painted) {
-    const style = styleOf(el, []);
+    const boxNotes = [];
+    const style = styleOf(el, boxNotes);
+    for (const message of boxNotes)
+      note(message);
+    const presentation = inlinePresentation(host, el);
+    if (presentation.opacity < 1)
+      style.opacity = presentation.opacity;
+    if (presentation.hidden)
+      style.hidden = true;
     const boxes = el.bounds.h > lh * 1.5 ? inlineFragments(el) : [el.bounds];
     boxes.forEach((b, i) => {
       const box = {
@@ -13550,13 +13717,54 @@ function linesOf(all) {
   return lines;
 }
 
+// src/analysis/wrapping-tracks.ts
+var preferred = (node, axis) => node.preferredSize?.[axis] ?? parseDeclared(node.attrs.style)[axis];
+var automatic = (value) => value === undefined || value === "auto";
+var zeroMinimum = (value) => value === undefined || /^(?:auto|0(?:px)?)$/.test(value);
+function fluidContent(node) {
+  if (node.overlays.length || node.width.kind === "fixed" || node.maxHeight !== undefined)
+    return false;
+  if (node.style.mask || node.style.clipPath || node.style.transform || node.style.fills.some((fill) => fill.kind !== "solid"))
+    return false;
+  if (node.kind === "text")
+    return node.height.kind === "hug" && node.runs.every((run) => run.paint === undefined);
+  return node.kind === "stack" && node.axis === "v" && !node.measured && !node.wrap && !node.scroll && node.height.kind === "hug" && node.children.every(fluidContent);
+}
+function equalWrappingColumns(n, base, items, columnGap) {
+  if (columnGap === undefined || items.length < 2 || !automatic(preferred(n, "height")) || !zeroMinimum(n.styles["min-height"]) || (n.styles["max-height"] ?? "none") !== "none")
+    return;
+  const declaration = preferred(items[0].node, "width");
+  const match = /^calc\(\s*(\d+(?:\.\d+)?)%\s*-\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(declaration ?? "");
+  if (!match)
+    return;
+  const fraction = Number(match[1]) / 100, offset = Number(match[2]);
+  const columns = Math.round(1 / fraction);
+  if (columns < 2 || columns > items.length || Math.abs(columns * fraction - 1) > 0.00001 || Math.abs(columns * offset - columnGap * (columns - 1)) > 0.001)
+    return;
+  const width = (base.frame.w - base.padding[1] - base.padding[3] - columnGap * (columns - 1)) / columns;
+  if (!(width > 0))
+    return;
+  for (const item of items) {
+    const s = item.node.styles;
+    if (preferred(item.node, "width") !== declaration || !automatic(preferred(item.node, "height")) || s["box-sizing"] !== "border-box" || !zeroMinimum(s["min-width"]) || (s["max-width"] ?? "none") !== "none" || (s["max-height"] ?? "none") !== "none" || !/^(?:auto|0|\d*\.?\d+px)$/.test(s["min-height"] ?? "auto") || (s["aspect-ratio"] ?? "auto") !== "auto" || px(s["flex-grow"]) !== 0 || (s["flex-basis"] ?? "auto") !== "auto" || (s.position ?? "static") !== "static" || (s.float ?? "none") !== "none" || Math.abs(item.sem.frame.w - width) > 1 || EDGES.some((edge) => Math.abs(px(s[`margin-${edge}`])) > 0.5))
+      return;
+    if (item.sem.overlays.length || item.sem.style.mask || item.sem.style.clipPath || item.sem.style.transform || item.sem.style.fills.some((fill) => fill.kind !== "solid"))
+      return;
+    if (item.sem.kind !== "box" && !(item.sem.kind === "stack" && item.sem.axis === "v" && !item.sem.measured && !item.sem.wrap && !item.sem.scroll && item.sem.children.every(fluidContent)))
+      return;
+    if (insetsOf(s)[1] + insetsOf(s)[3] >= width)
+      return;
+  }
+  return columns;
+}
+
 // src/analysis/wrapping.ts
 function gap(value) {
   if (!value || value === "normal")
     return 0;
   return /^(?:0|\d*\.?\d+px)$/.test(value) ? Math.max(0, px(value)) : undefined;
 }
-function unsupported(n, base, items, axis, align, distribution, columnGap, rowGap) {
+function unsupported(n, base, items, axis, align, distribution, columnGap, rowGap, columns) {
   const direction = n.styles["flex-direction"] ?? "row";
   if (axis !== "h" || direction !== "row")
     return `${direction} wrapping`;
@@ -13572,16 +13780,16 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
     return "relative or complex row/column gaps";
   for (const item of items) {
     const s = item.node.styles;
-    if (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0)
+    if (!columns && (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0))
       return "flex grow/shrink allocation";
-    if (align === "stretch") {
+    if (!columns && align === "stretch") {
       const declaredHeight = item.node.preferredSize?.height ?? parseDeclared(item.node.attrs.style)["height"];
       const [pt, , pb] = insetsOf(s);
       const wanted = declaredHeight && /^(?:0|\d*\.?\d+px)$/.test(declaredHeight) ? resolveLength(declaredHeight, 0) : undefined;
       if (wanted === undefined || Math.abs(item.sem.frame.h - wanted - (s["box-sizing"] === "border-box" ? 0 : pt + pb)) > 1)
         return "stretch-dependent child heights";
     }
-    if (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed")
+    if (!columns && (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed"))
       return "intrinsic or filling child sizes";
     if (EDGES.some((edge) => s[`margin-${edge}`] === "auto" || Math.abs(px(s[`margin-${edge}`])) > 0.5))
       return "child margins";
@@ -13592,7 +13800,7 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
     const preferred = item.node.preferredSize?.width ?? parseDeclared(item.node.attrs.style)["width"];
     const basis = s["flex-basis"];
     const mainSize = basis && basis !== "auto" && basis !== "content" ? basis : preferred;
-    if (mainSize && mainSize !== "auto" && !/^(?:0|\d*\.?\d+px)$/.test(mainSize))
+    if (!columns && mainSize && mainSize !== "auto" && !/^(?:0|\d*\.?\d+px)$/.test(mainSize))
       return "relative or intrinsic child width";
   }
   const lines = linesOf(items);
@@ -13642,14 +13850,23 @@ function buildWrapping(n, base, all, axis, align, distribution) {
   const plain = { ...base, padding: insetsOf(n.styles) };
   const items = all.filter((item) => renders(item.node));
   const columnGap = gap(n.styles["column-gap"]), rowGap = gap(n.styles["row-gap"]);
-  const reason = unsupported(n, plain, items, axis, align, distribution, columnGap, rowGap);
+  const columns = equalWrappingColumns(n, plain, items, columnGap);
+  const live = columns ? { ...plain, height: { kind: "hug" } } : plain;
+  const reason = unsupported(n, live, items, axis, align, distribution, columnGap, rowGap, columns);
   const ordered = reason ? [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0)) : linesOf(items).flat();
-  const stack = { ...plain, kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map((item) => item.sem) };
+  const stack = { ...reason ? plain : live, kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map((item) => item.sem) };
   if (reason) {
     stack.measured = measuredLayoutOf(plain, stack.children);
     stack.notes.push(`approximated: flex-wrap ${reason} → captured child positions; cannot reflow at another size`);
   } else {
-    stack.wrap = { columnGap: round2(columnGap), rowGap: round2(rowGap) };
+    stack.wrap = { columnGap: round2(columnGap), rowGap: round2(rowGap), ...columns ? { columns } : {} };
+    if (columns)
+      for (const item of ordered) {
+        item.sem.width = { kind: "fill" };
+        item.sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+        item.sem.notes = item.sem.notes.filter((note) => !(note.startsWith("approximated: width:") && note.endsWith("generated view may not resize proportionally with its parent")));
+        finish(item.sem);
+      }
   }
   return stack;
 }
@@ -13971,6 +14188,8 @@ function walk(n, fn, depth = 0) {
 
 // src/swift/control-state.ts
 function stateDecl(n) {
+  if (n.readOnly)
+    return;
   if (n.files)
     return { type: "Bool", value: "false", suffix: "_presented" };
   switch (n.control) {
@@ -13988,7 +14207,9 @@ function stateDecl(n) {
     case "stepper":
       return { type: "Double", value: num3(numericValue(n)) };
     case "datePicker":
-      return { type: "Date", value: ".now" };
+      if (n.dateKind === "month" || n.dateKind === "week")
+        return;
+      return { type: "Date", value: dateSeed(n) };
     case "colorPicker": {
       const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
       return { type: "Color", value: `.markswift(${colorArgs(c)})` };
@@ -13996,6 +14217,23 @@ function stateDecl(n) {
     default:
       return;
   }
+}
+function dateSeed(n) {
+  const captured = n.dateComponents;
+  if (!captured)
+    return ".now";
+  const date = n.dateKind === "time" ? { year: 2001, month: 1, day: 1 } : captured;
+  const fields = {
+    year: date.year,
+    month: date.month,
+    day: date.day,
+    hour: captured.hour ?? 12,
+    minute: captured.minute ?? 0,
+    second: captured.second ?? 0,
+    nanosecond: captured.nanosecond ?? 0
+  };
+  const components = Object.entries(fields).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}: ${value}`).join(", ");
+  return `Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: .current, ${components})) ?? .now`;
 }
 function controlMembers(root) {
   const stateOf = new Map;
@@ -14759,7 +14997,7 @@ function controlExpr(n, deps) {
   const out = core2(n, deps);
   if (n.font) {
     out.push(`.font(${fontExpr(n.font, deps)})`);
-    const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
+    const prompt = (deps.mode === "fidelity" || n.readOnly === true) && !n.value && n.placeholder !== undefined;
     if (prompt)
       out.push(".foregroundStyle(Color(uiColor: .placeholderText))");
     else if (n.color)
@@ -14772,7 +15010,7 @@ function controlExpr(n, deps) {
 function core2(n, deps) {
   const state = deps.stateOf.get(n);
   const binding = state ? `$${state}` : "";
-  const still = deps.mode === "fidelity";
+  const still = deps.mode === "fidelity" || n.readOnly === true;
   switch (n.control) {
     case "button": {
       const action = n.action !== undefined ? deps.actionOf.get(n.action) ?? "{}" : "{}";
@@ -14800,7 +15038,7 @@ function core2(n, deps) {
     }
     case "textField":
       if (still)
-        return painted(n.value ?? n.placeholder ?? "", ".leading");
+        return painted(n.value || n.placeholder || "", ".leading");
       return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "secureField":
       if (still)
@@ -14808,7 +15046,7 @@ function core2(n, deps) {
       return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
     case "textEditor":
       if (still)
-        return painted(n.value ?? n.placeholder ?? "", ".topLeading");
+        return painted(n.value || n.placeholder || "", ".topLeading");
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
     case "toggle":
     case "radio": {
@@ -14848,10 +15086,12 @@ function core2(n, deps) {
         ".pickerStyle(.menu)"
       ];
     }
-    case "datePicker":
-      if (still)
+    case "datePicker": {
+      if (still || n.dateKind === "month" || n.dateKind === "week")
         return painted(n.value ?? "", ".leading");
-      return [`DatePicker(selection: ${binding}, displayedComponents: .date) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+      const components = n.dateKind === "time" ? ".hourAndMinute" : n.dateKind === "datetime-local" ? "[.date, .hourAndMinute]" : ".date";
+      return [`DatePicker(selection: ${binding}, displayedComponents: ${components}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+    }
     case "colorPicker": {
       const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
       if (still)
@@ -15350,12 +15590,14 @@ function wrappingExpr(n, ctx) {
   const gap = n.wrap;
   const horizontal = n.distribution === "center" ? ".center" : n.distribution === "end" ? ".trailing" : ".leading";
   const vertical = n.align === "center" ? ".center" : n.align === "end" ? ".bottom" : ".top";
-  const out = [`MarkswiftFlow(columnGap: ${num3(gap.columnGap)}, rowGap: ${num3(gap.rowGap)}, horizontal: ${horizontal}, vertical: ${vertical}) {`];
+  const columns = ctx.mode === "app" ? gap.columns : undefined;
+  const tracks = columns ? `, columns: ${columns}, stretch: ${n.align === "stretch"}` : "";
+  const out = [`MarkswiftFlow(columnGap: ${num3(gap.columnGap)}, rowGap: ${num3(gap.rowGap)}, horizontal: ${horizontal}, vertical: ${vertical}${tracks}) {`];
   for (const child of n.children)
     out.push(...indent([
       ...ctx.renderNode(child).split(`
 `),
-      `.frame(width: ${num3(child.frame.w)}, height: ${num3(child.frame.h)}, alignment: .topLeading)`
+      ...!columns ? [`.frame(width: ${num3(child.frame.w)}, height: ${num3(child.frame.h)}, alignment: .topLeading)`] : []
     ], 1));
   out.push("}");
   return out;
@@ -15470,6 +15712,8 @@ struct MarkswiftFlow: Layout {
     var rowGap: CGFloat
     var horizontal: HorizontalAlignment = .leading
     var vertical: VerticalAlignment = .top
+    var columns: Int? = nil
+    var stretch: Bool = false
 
     private struct Item {
         var index: Int
@@ -15483,7 +15727,7 @@ struct MarkswiftFlow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let available = finiteWidth(proposal.width)
+        let available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
         let rows = rows(width: available ?? .infinity, subviews: subviews)
         let width = available ?? rows.map { $0.width }.max() ?? 0
         let height = rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowGap
@@ -15497,10 +15741,11 @@ struct MarkswiftFlow: Layout {
             let remaining = bounds.width - row.width
             var x = bounds.minX + (horizontal == .center ? remaining / 2 : horizontal == .trailing ? remaining : 0)
             for item in row.items {
-                let slack = row.height - item.size.height
+                let height = stretch ? row.height : item.size.height
+                let slack = row.height - height
                 let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
                 subviews[item.index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
-                                          proposal: ProposedViewSize(width: item.size.width, height: item.size.height))
+                                          proposal: ProposedViewSize(width: item.size.width, height: height))
                 x += item.size.width + columnGap
             }
             y += row.height + rowGap
@@ -15512,15 +15757,25 @@ struct MarkswiftFlow: Layout {
         return max(0, value)
     }
 
+    private func idealTrackWidth(_ subviews: Subviews) -> CGFloat? {
+        guard let columns, columns > 0 else { return nil }
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.filter { $0.isFinite }.max() ?? 0
+        return max(0, ideal) * CGFloat(columns) + CGFloat(columns - 1) * columnGap
+    }
+
     private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
         var result: [Row] = []
         var row = Row()
+        let columnWidth = columns.flatMap { count in
+            count > 0 && width.isFinite ? max(0, (width - CGFloat(count - 1) * columnGap) / CGFloat(count)) : nil
+        }
         for (index, subview) in subviews.enumerated() {
-            let measured = subview.sizeThatFits(.unspecified)
-            let size = CGSize(width: measured.width.isFinite ? max(0, measured.width) : 0,
+            let measured = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
+            let size = CGSize(width: columnWidth ?? (measured.width.isFinite ? max(0, measured.width) : 0),
                               height: measured.height.isFinite ? max(0, measured.height) : 0)
             let gap = row.items.isEmpty ? 0 : columnGap
-            if !row.items.isEmpty && row.width + gap + size.width > width + 0.0001 {
+            let full = columns.map { row.items.count >= $0 } ?? (row.width + gap + size.width > width + 0.0001)
+            if !row.items.isEmpty && full {
                 result.append(row)
                 row = Row()
             }

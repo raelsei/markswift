@@ -33,6 +33,7 @@
     "tools/verify/visual.ts",
     "tools/verify/visual-native.ts",
     "tools/verify/visual-fixtures.ts",
-    "tools/verify/visual-metrics.ts"
+    "tools/verify/visual-metrics.ts",
+    "tools/verify/visual-checks.ts"
   ]
 }

@@ -53,6 +53,10 @@ main { padding: 25px 28px 28px; }
 .setting-select { flex: 0 1 125px; }
 .setting-select select { width: 100%; }
 .viewport-setting { flex: 0 1 170px; }
+.responsive-options { order: 1; display: flex; align-items: end; flex: 1 1 100%; gap: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.responsive-setting { flex: 0 1 145px; }
+.responsive-setting input { width: 100%; }
+.responsive-help { flex: 1; max-width: 530px; margin: 0 0 2px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .dimensions { display: flex; align-items: center; padding: 0 8px; gap: 5px; }
 .dimensions input { border: 0; width: 50px; min-width: 0; height: 30px; padding: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .dimensions input:hover { border: 0; }
@@ -100,7 +104,7 @@ kbd { font-family: inherit; font-size: 10px; border: 1px solid var(--line); bord
 .preview-pane { background: #f8fafd; }
 .preview-disclaimer { flex: none; margin: 0; padding: 10px 17px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 .preview-scroller { flex: 1; min-height: 0; overflow: auto; padding: 20px; display: flex; align-items: flex-start; justify-content: safe center; }
-#html-preview { flex: none; display: block; width: 393px; height: 852px; border: 1px solid var(--line-strong); background: #fff; box-shadow: 0 8px 25px rgba(25, 43, 77, .09); }
+#html-preview { box-sizing: content-box; flex: none; display: block; width: 393px; height: 852px; border: 1px solid var(--line-strong); background: #fff; box-shadow: 0 8px 25px rgba(25, 43, 77, .09); }
 .report-pane { overflow: auto; }
 .report-content { padding: 18px 19px 35px; }
 .report-content h3 { margin: 24px 0 9px; font-size: 12px; }
@@ -132,7 +136,8 @@ kbd { font-family: inherit; font-size: 10px; border: 1px solid var(--line); bord
   main { padding: 21px 16px 24px; }
   .settings { gap: 10px; }
   .setting-name { max-width: none; }
-  .convert-button { flex: 1 1 100%; margin-left: 0; }
+  .responsive-options { order: 0; }
+  .convert-button { order: 1; flex: 1 1 100%; margin-left: 0; }
   .workspace { display: flex; flex-direction: column; height: auto; min-height: 0; }
   .source-panel { height: 420px; }
   .result-panel { height: 530px; }
@@ -151,6 +156,9 @@ kbd { font-family: inherit; font-size: 10px; border: 1px solid var(--line); bord
   .setting-name { flex-basis: 100%; }
   .viewport-setting { flex: 1 1 45%; }
   .setting-select { flex: 1 1 25%; }
+  .responsive-options { flex-wrap: wrap; gap: 10px; }
+  .responsive-setting { flex: 1 1 40%; }
+  .responsive-help { flex-basis: 100%; }
   .panel-heading { padding: 11px 13px; }
   .tab-bar { padding: 0 6px; }
   .tab { padding: 0 8px; font-size: 11px; }

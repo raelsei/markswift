@@ -1,7 +1,8 @@
 import { checkHealth, convertSource } from "./api.js";
 import { bundleZip, downloadBlob } from "./bundle.js";
 import { renderPreview } from "./preview.js";
-import { mappingText, renderReport } from "./report.js";
+import { inputSnapshot, validateInput } from "./input.js";
+import { mappingSummary, renderReport } from "./report.js";
 import { sample } from "./sample.js";
 
 const $ = (id) => document.getElementById(id);
@@ -9,6 +10,7 @@ const fields = {
   html: $("html-input"), css: $("css-input"), name: $("view-name"),
   width: $("viewport-width"), height: $("viewport-height"),
   theme: $("theme"), mode: $("mode"),
+  layout: $("layout"), compactWidth: $("compact-width"), breakpoint: $("breakpoint"),
 };
 const state = { result: null, convertedInput: null, sourceTab: "html", resultTab: "swift", pending: false };
 let previewTimer;
@@ -19,21 +21,13 @@ function setStatus(message, error = false) {
   label.classList.toggle("status-error", error);
 }
 
-function inputSnapshot() {
-  return {
-    html: fields.html.value, css: fields.css.value, name: fields.name.value.trim(),
-    mode: fields.mode.value, theme: fields.theme.value,
-    viewport: { width: Number(fields.width.value), height: Number(fields.height.value) },
-  };
-}
-
-function inputKey() { return JSON.stringify(inputSnapshot()); }
+function inputKey() { return JSON.stringify(inputSnapshot(fields)); }
 
 function markStale() {
   if (!state.result) return;
   const stale = state.convertedInput !== inputKey();
   $("result-subtitle").textContent = stale ? "Source changed since conversion" : `${Object.keys(state.result.files).length} generated files`;
-  $("mapping-summary").textContent = stale ? "Previous result · convert again" : mappingText(state.result.mapping);
+  $("mapping-summary").textContent = stale ? "Previous result · convert again" : mappingSummary(state.result);
   if (stale) setStatus("Source changed. Convert again to update the Swift output.");
 }
 
@@ -73,9 +67,10 @@ function bindTabs(kind) {
 }
 
 function updatePreview() {
-  const width = Math.min(1920, Math.max(240, Number(fields.width.value) || 393));
+  const compact = fields.layout.value === "responsive" && $("preview-width").value === "compact";
+  const width = Math.min(1920, Math.max(240, Number(compact ? fields.compactWidth.value : fields.width.value) || 393));
   const height = Math.min(2400, Math.max(240, Number(fields.height.value) || 852));
-  renderPreview($("html-preview"), fields.html.value, fields.css.value, { width, height });
+  renderPreview($("html-preview"), fields.html.value, fields.css.value, { width, height }, fields.theme.value);
 }
 
 function schedulePreview() {
@@ -83,16 +78,14 @@ function schedulePreview() {
   previewTimer = setTimeout(updatePreview, 180);
 }
 
-function validatedInput() {
-  const input = inputSnapshot();
-  if (!input.html.trim()) throw new Error("Paste HTML before converting.");
-  if (!/^[A-Z][A-Za-z0-9_]*$/.test(input.name)) throw new Error("View name must start with an uppercase letter and use letters, numbers or underscores.");
-  if (input.name.length > 80) throw new Error("View name must be 80 characters or fewer.");
-  const { width, height } = input.viewport;
-  if (!Number.isInteger(width) || width < 240 || width > 1920 || !Number.isInteger(height) || height < 240 || height > 2400) {
-    throw new Error("Viewport width must be 240–1920 px and height 240–2400 px.");
-  }
-  return input;
+function syncResponsiveControls() {
+  const responsive = fields.layout.value === "responsive";
+  $("responsive-options").hidden = !responsive;
+  $("preview-width-setting").hidden = !responsive;
+  fields.compactWidth.disabled = fields.breakpoint.disabled = !responsive;
+  $("viewport-label").textContent = responsive ? "Regular viewport" : "Viewport";
+  $("preview-width").options[0].textContent = `Regular · ${fields.width.value} px`;
+  $("preview-width").options[1].textContent = `Compact · ${fields.compactWidth.value} px`;
 }
 
 function renderSelectedFile() {
@@ -110,7 +103,7 @@ function renderResult(result) {
   $("download-file").disabled = names.length === 0;
   $("download-bundle").disabled = names.length === 0;
   $("result-subtitle").textContent = `${names.length} generated files`;
-  $("mapping-summary").textContent = mappingText(result.mapping);
+  $("mapping-summary").textContent = mappingSummary(result);
   renderSelectedFile();
   const reportCount = renderReport($("report-content"), result);
   $("report-count").textContent = String(reportCount);
@@ -122,13 +115,13 @@ async function convert(event) {
   event.preventDefault();
   if (state.pending) return;
   let input;
-  try { input = validatedInput(); }
+  try { input = validateInput(inputSnapshot(fields)); }
   catch (error) { setStatus(error.message, true); return; }
   const key = inputKey();
   state.pending = true;
   $("convert-button").disabled = true;
   $("convert-button").firstElementChild.textContent = "Converting…";
-  setStatus("Chrome is measuring the page and generating SwiftUI…");
+  setStatus(input.compactWidth === undefined ? "Chrome is measuring the page and generating SwiftUI…" : "Chrome is measuring both widths and generating responsive SwiftUI…");
   try {
     const result = await convertSource(input);
     renderResult(result);
@@ -162,9 +155,10 @@ async function initialize() {
   $("convert-form").addEventListener("submit", convert);
   $("load-example").addEventListener("click", loadExample);
   $("file-select").addEventListener("change", renderSelectedFile);
+  $("preview-width").addEventListener("change", updatePreview);
   for (const field of Object.values(fields)) {
-    field.addEventListener("input", () => { sourceCount(); schedulePreview(); markStale(); });
-    field.addEventListener("change", () => { schedulePreview(); markStale(); });
+    field.addEventListener("input", () => { syncResponsiveControls(); sourceCount(); schedulePreview(); markStale(); });
+    field.addEventListener("change", () => { syncResponsiveControls(); schedulePreview(); markStale(); });
   }
   $("copy-file").addEventListener("click", async () => {
     const text = state.result?.files?.[$("file-select").value];
@@ -188,6 +182,7 @@ async function initialize() {
       $("convert-form").requestSubmit();
     }
   });
+  syncResponsiveControls();
   loadExample();
   sourceCount();
   const ready = await checkHealth();

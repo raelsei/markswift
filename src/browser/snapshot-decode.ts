@@ -1,6 +1,7 @@
 import type { DomSnapshot, Raw } from "./snapshot-types.ts";
 import { attachLayoutColumns } from "./snapshot-columns.ts";
 import { markCurrentSrc } from "./snapshot-assets.ts";
+import { applyInheritedDisabledState } from "./form-state.ts";
 
 /**
  * @param snap     snapshot as painted (styles incl. transform matrices, paint order)
@@ -36,6 +37,7 @@ export function snapshotToTree(snap: DomSnapshot, boxes?: DomSnapshot): Raw {
       raws[i]!.parent = raws[p];
     }
   }
+  applyInheritedDisabledState(raws);
   const pseudo = doc.nodes.pseudoType;
   if (pseudo) for (let k = 0; k < pseudo.index.length; k++) raws[pseudo.index[k]!]!.pseudo = str(pseudo.value[k]!);
   attachLayoutColumns(doc, raws, S, boxes);

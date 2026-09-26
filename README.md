@@ -29,7 +29,7 @@ For an existing HTML file, use `bun src/cli.ts convert ./page.html --out ./gener
 
 For one known CSS width breakpoint, add `--compact-width 320 --breakpoint 350 --width 390` to the same `convert` command. The CLI captures both widths from the same source and writes one Swift view that selects the compact branch through 350 points. `--height` applies to both captures. It prints mapping counts separately for compact and regular; those counts are not visual accuracy. Use a new output directory for each run.
 
-The CLI exits with 0 on conversion, 2 on invalid options and 1 on input/conversion errors. Warnings and specific approximation notes go to stderr. It also prints a node-mapping summary; **that percentage is not visual accuracy**.
+The CLI exits with 0 on conversion, 2 on invalid options and 1 on input/conversion errors. Swift view names must start with an uppercase ASCII letter; framework type names and the `Markswift` prefix are reserved. Warnings and specific approximation notes go to stderr. It also prints a node-mapping summary; **that percentage is not visual accuracy**.
 
 ## Use the library
 
@@ -69,7 +69,7 @@ const result = await convertResponsive(
 console.log(result.code, result.views, result.warnings);
 ```
 
-Both captures use the same source, stylesheet, theme and `prepare(page)` hook; the hook runs once per capture. The compact width must be at or below the breakpoint, and the regular width above it. `result.layouts` retains both measured documents, `result.views` reports each generated branch, and `result.branchWarnings` keeps capture warnings separately. The wrapper selects from two captured layouts using its offered SwiftUI width. It does not interpolate CSS at intermediate widths, reconstruct every `@media` condition, or react to orientation and container queries. This API is available in the library and CLI; the playground still converts one captured state per request.
+Both captures use the same source, stylesheet, theme and `prepare(page)` hook; the hook runs once per capture. The compact width must be at or below the breakpoint, and the regular width above it. `result.layouts` retains both measured documents, `result.views` reports each generated branch, and `result.branchWarnings` keeps capture warnings separately. The wrapper selects from two captured layouts using its offered SwiftUI width. It does not interpolate CSS at intermediate widths, reconstruct every `@media` condition, or react to orientation and container queries. This API is available in the library, CLI and playground.
 
 `compileLayout(layout)` is a synchronous browser-free compiler for an already measured `LayoutDoc`; import it from `markswift/compiler`. For several captured components in one Swift target, use `compileLayouts([{ layout: first, name: "FirstView" }, { layout: second, name: "SecondView" }])`. It returns one `files` bundle with shared runtime, tokens and shapes, plus per-view diagnostics in `views`; duplicate view names or conflicting resource paths fail explicitly. Give light and dark captures of the same component one `componentId` and distinct view names to pair their colors. The package includes built JavaScript, type declarations and a `markswift` CLI for Node.js, plus Bun source exports. Both runtimes still need Chrome for HTML/CSS capture. Building or repacking from source requires Bun.
 
@@ -87,7 +87,9 @@ Chrome is needed to resolve the CSS cascade, fonts and geometry before conversio
 
 ## Playground
 
-The playground lives in `apps/playground`. It is a separate application that calls the public `markswift` library through a small Bun service. Its HTML preview shows the **browser source**, not rendered SwiftUI. The output panel shows every generated Swift file, a downloadable bundle and the mapping report. Pasted scripts and external requests are blocked in the preview and conversion service.
+The playground lives in `apps/playground`. It is a separate application that calls the public `markswift` library through a small Bun service. Its HTML preview shows the **browser source**, not rendered SwiftUI. The output panel shows every generated Swift file, a downloadable bundle and the mapping report. Choose **Two widths** to capture compact and regular states with an explicit breakpoint; each branch has its own mapping report, diagnostics and capture warnings. The HTML preview can switch between those widths. Pasted scripts and external requests are blocked in the preview and conversion service.
+
+The source preview applies the selected theme to CSS color-scheme media queries and literal light/dark scheme lists. Variable-derived `color-scheme` choices can retain the host browser's native control palette; conversion uses Chrome's actual requested theme independently of this preview.
 
 Run it locally after installing the repository's root dependencies:
 
@@ -99,6 +101,8 @@ bun run dev
 
 Open `http://127.0.0.1:4325/`. This local server serves both the static frontend and `/api/convert`; installed Google Chrome is required for conversion. `bun run typecheck`, `bun run test` and `MARKSWIFT_BROWSER_TESTS=1 bun run test` check the app and service. The service accepts pasted HTML and compiled CSS only, with bounded inputs, two concurrent conversions and a 60-second conversion deadline.
 
+The default request to `/api/convert` captures one width. For responsive conversion, send `compactWidth` and `breakpoint` together with an explicit regular `viewport`; `compactWidth ≤ breakpoint < viewport.width` is required. Both branches share the requested height, CSS, theme and mode, and run within the same worker deadline. The response contains `breakpoint` and a `branches` array with each branch's dimensions, mapping, diagnostics and warnings, alongside shared files, assets and aggregate warnings.
+
 The frontend can be deployed as **static files**, including to GitHub Pages. Build it with `PLAYGROUND_API_ORIGIN=https://your-api-origin.example bun run build` from `apps/playground`, then publish `apps/playground/dist/`. [GitHub Pages from a private repository requires an eligible GitHub plan](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site), and its published site is public even when the source repository is private. Start the service separately on a Bun host with Chrome installed:
 
 ```sh
@@ -109,19 +113,40 @@ Deploy the API from the whole repository checkout after the root `bun install --
 
 The checked-in HTML policy lists 115 tags from a September 2026 element inventory. Container and inline-text families share generic layout/text paths; elements do not each need a custom renderer. Complex tables, ruby, modal lifecycle, relative links and some controls have explicit approximations. Canvas, embedded documents, MathML, SVG `foreignObject` and audio/video content need dedicated renderers and currently use diagnosed fallbacks. A `<video poster>` retains its static poster image, while playback and controls remain unsupported; audio and videos without posters keep their diagnosed placeholders. Embedded PNG, JPEG, GIF and WebP backgrounds retain their intrinsic size and position. Embedded `<img>` sources with known intrinsic size support `object-position` keywords and percentages with `cover` or `contain`; JPEG EXIF rotation is included in their displayed size. Length offsets and images with unknown dimensions remain diagnosed approximations. Source JavaScript behavior, CSS animation timelines, navigation and full responsive CSS rules are not reconstructed from captured states. Active animation and transition styles receive node diagnostics; readable `@keyframes` and `@media` rules receive capture warnings even when they are dormant at the chosen viewport. Simple in-flow block percentage widths and equal `calc()`-sized flex tracks that fill their row resize in app mode; other complex percentage widths keep their captured pixels and a resize limitation note. Unknown custom elements retain measured content with a limitation note. Inline and block links with supported absolute http(s), mailto or tel destinations emit native links; relative, fragment and unsupported schemes need app navigation and stay diagnosed. A guarded subset of full-width, equal-column fixed tables resizes with its container; spans, other column rules and table accessibility remain approximated.
 
-## Roadmap and release gates
+Form capture includes effective `fieldset disabled` state, with the first-legend exception. Readonly text fields and text areas retain their value or placeholder as noneditable text; browser focus and selection behavior remain approximated. Date, time and datetime-local pickers start from the captured Gregorian/local components and expose matching native selection components. Month/week selection retains the exact value as static text. Empty date selections, seconds, validation constraints, locale appearance and independent radio state receive explicit diagnostics.
 
-1. **Core and CLI:** reproducible clean install; file, stdin and URL input; complete non-overwriting Swift bundle; diagnostics and node-mapping counts.
-2. **No silent element loss:** conformance fixtures by element family and CSS family; captured state for controls, inline break opportunities, placeholders and unknown elements. Every unsupported visible case must leave content or a diagnosed fallback.
-3. **Smaller modules:** split long text inference, semantic dispatch and browser snapshot responsibilities while keeping generated output stable on existing fixtures.
-4. **Portable package:** ship built JavaScript, types and CLI; exercise the full capture API in installed Bun and Node consumers. Keep generated files in Git so a private Git dependency works without a build hook.
-5. **Responsive states:** the library and CLI capture both sides of one explicit width breakpoint, compile one shared Swift bundle and select the matching view at native runtime. Orientation, container queries, intermediate widths, additional breakpoints and playground controls need separate coverage.
-6. **Visual acceptance:** compare representative components and full pages in Chrome and an iOS Simulator at multiple widths, themes and both output modes. Publish explicit per-family quality gates and known limits before a public alpha.
-7. **Playground:** the separate static frontend and bounded conversion service are in place. Public hosting needs Chrome on the service, edge rate limiting and deployment checks; native SwiftUI preview is a later capability.
+## Alpha scope and release gates
 
-Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome; `bun run test:native` compiles generated Swift with Xcode on macOS. The opt-in `bun run test:visual` makes 24 Chrome–iOS comparisons: three fixtures at 390 and 320 points, in light/dark themes and app/fidelity modes. The CSS changes colors through `prefers-color-scheme`; corner pixels verify the selected palette. In app mode, rich text and images resize from one 390-point capture; the full-page `@media` fixture uses both captures in one responsive view. Fidelity is compared at each capture's own width. Both text fixtures check heading-region RGB error and foreground retention, so missing text cannot hide in a whole-page average. The image fixture checks left/right, top/bottom and EXIF-rotated JPEG crop pixels.
+The alpha implementation covers these seven parts:
 
-Each exact-size comparison must have mean RGB channel error at most 8 out of 255; heading regions must have error at most 32 and retain at least 70% of contrasting foreground pixels. These are regression gates for these fixtures, not conversion percentages or representative visual acceptance. The command requires Chrome and Xcode with an iOS 18+ iPhone Simulator; PNGs are saved under ignored `out/visual-smoke/` for inspection. The normal test command skips the browser/native suites. A release must pass the portable, browser and native checks plus an installed-package smoke test; broader visual acceptance remains a separate release gate.
+1. **Core and CLI:** file, stdin and URL input; explicit options and exit codes; a complete non-overwriting Swift bundle; diagnostics and node-mapping counts.
+2. **Element policy:** 115 classified tags, shared container/text routes and conformance tests by element family. Unsupported content retains measured content or a diagnosed placeholder.
+3. **Module boundaries:** capture, CSS parsing, semantic inference, Swift generation and output writing are separate. Architecture tests prohibit runtime cycles and browser/filesystem dependencies in the standalone compiler.
+4. **Bun and Node:** built JavaScript, declarations and CLI are committed for Git installation. Installed-package tests exercise capture and conversion in both runtimes.
+5. **Responsive states:** the library, CLI and playground capture both sides of one explicit width breakpoint and emit one shared Swift bundle.
+6. **Visual regression gates:** eight fixture families compare Chrome with generated Swift on an iOS Simulator at two widths, two themes and in both output modes.
+7. **Playground:** a compact frontend, branch-specific reports, downloadable output and a bounded isolated conversion worker. Static frontend deployment uses a separately hosted Bun/Chrome API.
+
+These are bounded alpha capabilities. Further work includes general flex/grid allocation, irregular tables and spans, grouped radio state, month/week editing, browser validation, additional breakpoints, container/orientation queries, complete CSS effects and animation timelines, and JavaScript application behavior. Embedded documents, canvas, MathML and media playback still need dedicated renderers. Public hosting also needs deployment checks, an edge rate limit and a selected public license. Native SwiftUI preview is a separate future capability.
+
+Run the portable checks with `bun run typecheck` and `bun run test`. `bun run test:browser` exercises Chrome and installed Bun/Node consumers; `bun run test:native` compiles generated Swift with Xcode on macOS. The normal test command skips opt-in browser/native tests.
+
+The opt-in `bun run test:visual` performs **64 Chrome–iOS comparisons**: eight fixtures at 390 and 320 points, in light/dark themes and app/fidelity modes. In app mode, most fixtures resize from one 390-point capture; the full-page CSS breakpoint fixture uses two captures in one responsive view. Fidelity uses each capture's own geometry. Form app snapshots mount a real UIKit-hosted SwiftUI view so live fields are present; other snapshots use SwiftUI's ImageRenderer.
+
+| Fixture family | Checked behavior |
+| --- | --- |
+| Rich text | Inline fonts, decoration, line breaks and heading glyphs |
+| Full page | Nested sections and compact/regular CSS breakpoint branches |
+| Flex cards | Equal wrapping tracks, live widths and text-driven row heights |
+| Grid | Equal grid tracks and colored tile positions |
+| Table | Full-width fixed equal columns, cell geometry and caption text |
+| Form | Captured text/password values, selected option, readonly text and native control paint |
+| Effects and SVG | Linear/radial gradients, border/inset shadow, clipped pseudo decoration and native SVG paint |
+| Image placement | Horizontal/vertical crops and EXIF-rotated JPEG positioning |
+
+Each exact-size comparison must have mean RGB channel error at most **8 out of 255**. Heading and form-value regions must have error at most **32** and retain at least **70%** of contrasting foreground pixels. Layout and effect regions use a tighter RGB error limit of **16**; sampled pixels verify theme, track colors and image crops. Form-value checks exclude borders and measure against the field background so borders cannot substitute for missing text. These are regression gates for the named fixtures, not conversion percentages or evidence that arbitrary pages are visually identical.
+
+The visual command requires Chrome and Xcode with an iOS 18+ iPhone Simulator. It saves PNGs under ignored `out/visual-smoke/`. To rerun selected families during development, use `MARKSWIFT_VISUAL_FIXTURES=flex,form bun run test:visual`. Release validation includes all families, portable/browser/native checks and the playground's tests, typecheck and static build.
 
 | Path | Responsibility |
 | --- | --- |

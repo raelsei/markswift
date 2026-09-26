@@ -10,6 +10,7 @@ import type { ControlMembers } from "./context.ts";
  * names storage that is not the control's value (a file button's presentation flag).
  */
 function stateDecl(n: ControlNode): { type: string; value: string; suffix?: string } | undefined {
+  if (n.readOnly) return undefined;
   // A file button holds no value: the only thing it owns is the flag its `.fileImporter` binds to.
   if (n.files) return { type: "Bool", value: "false", suffix: "_presented" };
   switch (n.control) {
@@ -27,7 +28,8 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "stepper":
       return { type: "Double", value: num(numericValue(n)) };
     case "datePicker":
-      return { type: "Date", value: ".now" };
+      if (n.dateKind === "month" || n.dateKind === "week") return undefined;
+      return { type: "Date", value: dateSeed(n) };
     case "colorPicker": {
       const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
       return { type: "Color", value: `.markswift(${colorArgs(c)})` };
@@ -35,6 +37,21 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     default:
       return undefined;
   }
+}
+
+/** Resolve captured wall-clock components in the destination's local zone, not the build zone. */
+function dateSeed(n: ControlNode): string {
+  const captured = n.dateComponents;
+  if (!captured) return ".now";
+  // A time input carries no date. The hidden stable Gregorian anchor keeps only its clock meaningful.
+  const date = n.dateKind === "time" ? { year: 2001, month: 1, day: 1 } : captured;
+  const fields = {
+    year: date.year, month: date.month, day: date.day,
+    hour: captured.hour ?? 12, minute: captured.minute ?? 0,
+    second: captured.second ?? 0, nanosecond: captured.nanosecond ?? 0,
+  };
+  const components = Object.entries(fields).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}: ${value}`).join(", ");
+  return `Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: .current, ${components})) ?? .now`;
 }
 
 /**

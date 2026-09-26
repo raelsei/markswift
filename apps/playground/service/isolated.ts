@@ -20,7 +20,7 @@ export interface WorkerOptions {
 
 const worker = fileURLToPath(new URL("./worker.ts", import.meta.url));
 
-/** One browser capture per process, so a deadline can stop Chrome and its descendants. */
+/** One conversion request per process, so a deadline can stop Chrome and its descendants. */
 export function convertIsolated(input: ConversionInput, options: WorkerOptions): Promise<ServiceResult> {
   const command = options.command ?? [process.execPath, worker];
   const child = spawn(command[0]!, command.slice(1), {

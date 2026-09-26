@@ -7,6 +7,7 @@ import { finish } from "./node-base.ts";
 import { collapseOf, noWrap } from "./text-runs.ts";
 import { trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlineGaps } from "./text-layout.ts";
 import { styleOf } from "./style.ts";
+import { inlinePresentation } from "./inline-effects.ts";
 import { type BuiltTextRuns } from "./text-run-builder.ts";
 
 export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: SemBase, leaf: boolean, constructed: BuiltTextRuns, note: (s: string) => void): TextNode {
@@ -53,7 +54,12 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
   // one layer per line; otherwise a long wrapped `<code>` would flood the whole paragraph
   // rectangle with its background.
   for (const el of painted) {
-    const style = styleOf(el, []);
+    const boxNotes: string[] = [];
+    const style = styleOf(el, boxNotes);
+    for (const message of boxNotes) note(message);
+    const presentation = inlinePresentation(host, el);
+    if (presentation.opacity < 1) style.opacity = presentation.opacity;
+    if (presentation.hidden) style.hidden = true;
     const boxes = el.bounds.h > lh * 1.5 ? inlineFragments(el) : [el.bounds];
     boxes.forEach((b, i) => {
       const box: SemNode = {

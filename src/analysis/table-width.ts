@@ -7,7 +7,7 @@ const tableWidths = new WeakMap<LayoutNode, WeakSet<LayoutNode>>();
 const groups = new Set(["thead", "tbody", "tfoot"]);
 const cells = new Set(["td", "th"]);
 
-/** Table, row groups, rows and cells may fill equally in native layout for this subset. */
+/** Table, ordinary full-width captions, row groups, rows and cells may fill in this subset. */
 export function hasEqualFixedTableWidth(root: LayoutNode, node: LayoutNode): boolean {
   let indexed = tableWidths.get(root);
   if (!indexed) {
@@ -38,13 +38,20 @@ function equalFixedTable(table: LayoutNode, parent: LayoutNode | undefined): Lay
 
   const members: LayoutNode[] = [table];
   const rows: LayoutNode[] = [];
+  let caption: LayoutNode | undefined;
   for (const child of table.children) {
     if (child.tag === "tr") rows.push(child);
+    else if (child.tag === "caption" && !caption && ordinary(child) && autoWidth(child) && unconstrained(child) &&
+      child.styles.display === "table-caption" && Math.abs(child.bounds.w - table.bounds.w) <= 1 &&
+      Math.abs(child.bounds.x - table.bounds.x) <= 1) {
+      caption = child;
+      members.push(child);
+    }
     else if (groups.has(child.tag) && ordinary(child) && autoWidth(child)) {
       members.push(child);
       if (!child.children.length || child.children.some((row) => row.tag !== "tr")) return;
       rows.push(...child.children);
-    } else return; // Captions, colgroups and anonymous/irregular tracks need their own model.
+    } else return; // Constrained captions, colgroups and anonymous/irregular tracks need their own model.
   }
   if (!rows.length) return;
 

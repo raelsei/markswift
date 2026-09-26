@@ -35,7 +35,7 @@ test("serialized CSS sizing intent survives public compilation without changing 
 });
 
 test("invalid and conflicting type names cannot corrupt output files or Swift types", () => {
-  for (const name of ["../View", "bad name", "1Card", "Self", "View", "Text", "Color", "UIImage", "UIFont", "UIFontDescriptor", "StrokeStyle", "AsyncImage", "DesignSupport", "DesignTokens", "MarkswiftShapes"]) {
+  for (const name of ["../View", "bad name", "1Card", "Self", "View", "Text", "Color", "Calendar", "DateComponents", "UIImage", "UIFont", "UIFontDescriptor", "StrokeStyle", "AsyncImage", "DesignSupport", "DesignTokens", "MarkswiftShapes"]) {
     expect(() => compileLayout(layout, { name })).toThrow();
   }
 });

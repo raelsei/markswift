@@ -1,0 +1,18 @@
+html, body { margin: 0; background: #fff; }
+* { box-sizing: border-box; }
+.form-card { width: 100%; height: 640px; padding: 20px; background: #fff; color: #243044; font: 15px/22px system-ui; }
+.form-card h1 { font: 700 24px/29px system-ui; margin: 0 0 20px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; margin-bottom: 6px; font-size: 13px; }
+.field input, .field select, .field textarea { width: 100%; height: 38px; font: 15px system-ui; color: #243044; padding: 8px 10px; border: 1px solid #a6b2c3; border-radius: 6px; background: #f4f6fa; }
+.field textarea { height: 60px; resize: none; }
+.choice { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.choice input { margin: 0; width: 16px; height: 16px; }
+.field progress { display: block; width: 100%; height: 16px; }
+.submit { width: 100%; height: 40px; border: 0; border-radius: 6px; padding: 8px 10px; font: 600 15px system-ui; color: #fff; background: #2563eb; }
+@media (prefers-color-scheme: dark) {
+  html, body, .form-card { background: #171d27; }
+  .form-card { color: #edf0f6; color-scheme: dark; }
+  .field input, .field select, .field textarea { color: #edf0f6; border-color: #617087; background: #293444; }
+  .submit { background: #2563eb; }
+}

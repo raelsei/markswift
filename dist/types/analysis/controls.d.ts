@@ -16,6 +16,9 @@ export interface ControlSpec {
     placeholder?: string;
     checked?: boolean;
     disabled?: boolean;
+    readOnly?: boolean;
+    dateKind?: ControlNode["dateKind"];
+    dateComponents?: ControlNode["dateComponents"];
     range?: {
         min: number;
         max: number;

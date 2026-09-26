@@ -55,6 +55,21 @@
             <span>Output</span>
             <select id="mode" name="mode"><option value="app">App layout</option><option value="fidelity">Fixed capture</option></select>
           </label>
+          <label class="setting setting-select">
+            <span>Widths</span>
+            <select id="layout"><option value="single">Single width</option><option value="responsive">Two widths</option></select>
+          </label>
+          <div id="responsive-options" class="responsive-options" hidden>
+            <label class="setting responsive-setting">
+              <span>Compact width · px</span>
+              <input id="compact-width" type="number" min="240" max="1920" value="320" inputmode="numeric" disabled>
+            </label>
+            <label class="setting responsive-setting">
+              <span>Breakpoint · points</span>
+              <input id="breakpoint" type="number" min="240" max="1919" value="350" inputmode="numeric" disabled>
+            </label>
+            <p class="responsive-help">Compact ≤ breakpoint &lt; regular. Both captures share the viewport height; Swift switches between the two layouts.</p>
+          </div>
           <button id="convert-button" class="convert-button" type="submit"><span>Convert to SwiftUI</span><span class="button-arrow" aria-hidden="true">↗</span></button>
         </form>
 
@@ -106,6 +121,10 @@
             </div>
             <div class="result-body preview-pane" id="preview-pane" role="tabpanel" aria-labelledby="preview-tab" hidden>
               <p class="preview-disclaimer">Browser HTML reference only, not SwiftUI. Scripts and external resources are blocked.</p>
+              <div class="file-toolbar" id="preview-width-setting" hidden>
+                <label for="preview-width">Width</label>
+                <select id="preview-width"><option value="regular">Regular · 393 px</option><option value="compact">Compact · 320 px</option></select>
+              </div>
               <div class="preview-scroller"><iframe id="html-preview" title="Sandboxed HTML source preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
             </div>
             <div class="result-body report-pane" id="report-pane" role="tabpanel" aria-labelledby="report-tab" hidden>

@@ -7,8 +7,8 @@ import { type Collapse, collapseOf, normalizeWhitespace, decorationOf } from "./
 import { hostSpace, inlineChain } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { textPaintOf } from "./style.ts";
-import { EDGES, edgeWidth, unionRect } from "./geometry.ts";
-import { reportStaticMotion } from "./style-effects.ts";
+import { unionRect } from "./geometry.ts";
+import { applyInlineEffects, inlineBoxHasPaint } from "./inline-effects.ts";
 import { linkDestinationLoss, nativeExternalURL } from "./link-destination.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
@@ -30,9 +30,6 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
   let prevRun: SourceTextRun | undefined;
   for (const r of runs) {
     const s = r.styleOf.styles;
-    // Inline elements and generated pseudo text are folded into their host Text. Their own
-    // semantic nodes do not survive, so propagate motion loss to the host's diagnostic.
-    for (const inline of inlineChain(host, r.styleOf)) reportStaticMotion(inline.styles, note);
     const boundary = r.node.tag === "br" ? "\n" : r.node.tag === "wbr" ? "\u200b" : undefined;
     if (r.node.tag === "wbr") note("approximated: <wbr> → zero-width break opportunity; native line breaking may differ");
     const mode: Collapse = boundary === undefined ? collapseOf(s) : "preserve";
@@ -122,9 +119,9 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     const el = r.styleOf;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
     // carried by a run: SwiftUI has no per-run box. Collected for a background layer below.
-    if (el !== host && !painted.includes(el)) {
-      const bg = parseColor(el.styles["background-color"]);
-      if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
+    for (const inline of inlineChain(host, el)) {
+      if (painted.includes(inline)) continue;
+      if (inlineBoxHasPaint(inline)) painted.push(inline);
     }
     // Inline links remain in the paragraph's run order. A linked Text made from an
     // AttributedString preserves the per-run URL while the ordinary Text modifiers below
@@ -138,6 +135,7 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
       else note(`approximated: inline <a href="${href}"> → styled text run, destination dropped (${linkDestinationLoss(href)})`);
       if (link.attrs["onclick"]) note("approximated: inline link onclick handler requires an app action");
     }
+    applyInlineEffects(host, el, run, note);
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };

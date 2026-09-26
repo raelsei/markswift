@@ -11,6 +11,8 @@ export interface VisualSnapshot {
   bundle: Pick<CompileResult, "name" | "files">;
   layout: LayoutDoc;
   outputs: Record<number, string>;
+  /** UIKit-backed controls require a mounted view; ImageRenderer omits them. */
+  hosted?: boolean;
 }
 
 function packageManifest(modules: string[]): string {
@@ -60,16 +62,17 @@ function selectSimulator(inventory: SimulatorInventory): { udid: string; name: s
 }
 
 function renderTest(snapshots: VisualSnapshot[], modules: string[]): string {
-  const renders = snapshots.flatMap(({ bundle, layout, outputs }) => {
+  const renders = snapshots.flatMap(({ bundle, layout, outputs, hosted }) => {
     const color = parseColor(layout.canvas);
     if (!color) throw new Error(`Unsupported captured canvas color: ${layout.canvas}`);
     return Object.entries(outputs).map(([width, output]) => `
-        try snapshot(content: ${bundle.name}(), width: ${Number(width)}, height: ${layout.size.h},
+        try ${hosted ? "hostedSnapshot" : "snapshot"}(content: ${bundle.name}(), width: ${Number(width)}, height: ${layout.size.h},
                      canvas: Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}),
                      scheme: .${layout.combo.theme}, output: ${JSON.stringify(output)})`);
   }).join("");
   return `import XCTest
 import SwiftUI
+import UIKit
 ${modules.map(name => `@testable import ${name}`).join("\n")}
 
 final class PreviewTests: XCTestCase {
@@ -87,6 +90,42 @@ final class PreviewTests: XCTestCase {
         renderer.scale = 2
         renderer.proposedSize = ProposedViewSize(width: width, height: height)
         let image = try XCTUnwrap(renderer.uiImage, "SwiftUI did not render an image")
+        try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: output))
+    }
+
+    @MainActor
+    private func hostedSnapshot<Content: View>(content: Content, width: CGFloat, height: CGFloat, canvas: Color, scheme: ColorScheme, output: String) throws {
+        let framed = content
+            .frame(width: width, height: height, alignment: .topLeading)
+            .background(canvas)
+            .environment(\\.colorScheme, scheme)
+            .ignoresSafeArea()
+        let host = UIHostingController(rootView: framed)
+        host.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+        host.view.backgroundColor = .clear
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene {
+            window = UIWindow(windowScene: scene)
+            window.frame = bounds
+        } else {
+            window = UIWindow(frame: bounds)
+        }
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        // UIKit-backed SwiftUI controls commit their contents after layout.
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: window.bounds.size, format: format)
+        let image = renderer.image { context in
+            host.view.layer.render(in: context.cgContext)
+        }
         try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: output))
     }
 }

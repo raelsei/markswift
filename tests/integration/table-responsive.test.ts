@@ -75,3 +75,37 @@ browserTest("a colgroup keeps browser-measured column widths", async () => {
   expect(find(screen.root, "a")?.width.kind).toBe("fixed");
   expect(result.diagnostics.find((item) => item.id === "#table")?.confidence).toBe("approximated");
 }, 30000);
+
+browserTest("ordinary full-width top and bottom captions retain equal live table columns", async () => {
+  for (const side of ["top", "bottom"]) {
+    const html = page(`caption { caption-side: ${side}; text-align: left; margin: 6px 0; }`, rectangular)
+      .replace("<tbody>", '<caption id="caption">Release checklist</caption><tbody>');
+    const result = await convertHtml(html, { name: "CaptionedTable", viewport: { width: 390, height: 600 } });
+    const screen = inferScreen(result.layout, "captioned");
+    for (const id of ["caption", "a", "b", "c", "d", "e", "f"]) {
+      expect(find(screen.root, id)?.width).toEqual({ kind: "fill" });
+    }
+    const caption = findLayout(result.layout.root, "caption")!;
+    const table = findLayout(result.layout.root, "table")!;
+    expect(caption.bounds.w).toBeCloseTo(table.bounds.w, 1);
+    const tableNode = find(screen.root, "table")!;
+    if (tableNode.kind !== "stack") throw new Error("Expected captured table stack");
+    expect((side === "top" ? tableNode.children[0] : tableNode.children.at(-1))?.id).toBe("#caption");
+    expect(result.code).toContain("Release checklist");
+    expect(result.code).not.toContain("width: 129.66");
+    expect(result.diagnostics.find(item => item.id === "#table")?.confidence).toBe("approximated");
+    const compact = await convertHtml(html, { name: "CaptionedCompact", viewport: { width: 320, height: 600 } });
+    expect(findLayout(compact.layout.root, "caption")?.bounds.w).toBeCloseTo(320, 1);
+    expect(findLayout(compact.layout.root, "a")?.bounds.w).toBeLessThan(110);
+  }
+}, 120000);
+
+browserTest("constrained or positioned captions keep captured cell widths", async () => {
+  for (const rule of ["width: 200px", "max-width: 300px", "margin-left: 10px", "position: relative"]) {
+    const html = page(`caption { ${rule}; }`, rectangular)
+      .replace("<tbody>", '<caption id="caption">Release checklist</caption><tbody>');
+    const result = await convertHtml(html, { name: "GuardedCaption", viewport: { width: 390, height: 600 } });
+    expect(find(inferScreen(result.layout, "guarded-caption").root, "a")?.width.kind).toBe("fixed");
+    expect(result.diagnostics.find(item => item.id === "#table")?.confidence).toBe("approximated");
+  }
+}, 120000);

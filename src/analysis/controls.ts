@@ -9,6 +9,7 @@ import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
 import { nativeExternalURL } from "./link-destination.ts";
+import { applyDateInput } from "./date-input.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -19,6 +20,9 @@ export interface ControlSpec {
   placeholder?: string;
   checked?: boolean;
   disabled?: boolean;
+  readOnly?: boolean;
+  dateKind?: ControlNode["dateKind"];
+  dateComponents?: ControlNode["dateComponents"];
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
   options?: string[];
@@ -62,6 +66,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     }
     case "textarea": {
       const spec: ControlSpec = { control: "textEditor", notes };
+      applyReadOnly(n, spec);
       // CDP's live textValue is normalized onto `value`; child text is only the authored default.
       const text = a["value"] ?? textOf(n).trim();
       if (text) spec.value = text;
@@ -112,11 +117,14 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
       if (!Object.hasOwn(INPUT_CONTROLS, type)) notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
       const spec: ControlSpec = { control, notes };
+      applyReadOnly(n, spec);
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
       } else if (a["value"] !== undefined) spec.value = a["value"];
       else if (type === "submit") spec.value = "Submit";
       else if (type === "reset") spec.value = "Reset";
+      if (control === "datePicker") applyDateInput(n, type as NonNullable<ControlNode["dateKind"]>, spec);
+      if (control === "radio") notes.push('approximated: radio selection → independent native toggle; mutual exclusion and browser deselection rules require app state');
       if (type === "submit") notes.push('approximated: <input type="submit"> form submission and validation require an app action');
       if (type === "reset") notes.push('approximated: <input type="reset"> form reset requires an app action');
       if (type === "button" || type === "submit" || type === "reset") {
@@ -149,6 +157,12 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     default:
       return undefined;
   }
+}
+
+function applyReadOnly(node: LayoutNode, spec: ControlSpec): void {
+  if (node.attrs.readonly === undefined || !["textField", "secureField", "textEditor", "datePicker"].includes(spec.control)) return;
+  spec.readOnly = true;
+  spec.notes.push(`approximated: readonly <${node.tag}> → noneditable text; browser selection and focus behavior are not translated`);
 }
 
 /** A control's laid-out surroundings, as the generic container path produced them. */
