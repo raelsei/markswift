@@ -33,11 +33,10 @@ export async function softDeprecations(swiftDir: string): Promise<string[]> {
 
 /** `swiftc -typecheck` every generated file together against the iOS simulator SDK. */
 /**
- * Compiler settings target iOS 18, Swift 6 language mode,
- * strict concurrency, MainActor default isolation. Generated code must be clean under the
- * strict compiler configuration.
+ * Compiler settings target iOS 18 and Swift 6 strict concurrency without a project-wide
+ * MainActor default, so consumers do not need a particular Xcode project setting.
  */
-export const TYPECHECK_TARGET = { ios: "18.0", swiftVersion: "6", strictConcurrency: true, defaultIsolationMainActor: true };
+export const TYPECHECK_TARGET = { ios: "18.0", swiftVersion: "6", strictConcurrency: true, defaultIsolationMainActor: false };
 
 export async function typecheck(swiftDir: string, target = TYPECHECK_TARGET): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
   const files = (await readdir(swiftDir)).filter((f) => f.endsWith(".swift")).map((f) => join(swiftDir, f));

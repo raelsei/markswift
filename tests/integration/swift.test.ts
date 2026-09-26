@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convertHtml } from "../../src/index.ts";
-import { typecheck } from "../../tools/verify/typecheck.ts";
+import { TYPECHECK_TARGET, typecheck } from "../../tools/verify/typecheck.ts";
 
 const nativeTest = (process.env.MARKSWIFT_SWIFT_TESTS ?? process.env.H2S_SWIFT_TESTS) === "1" ? test : test.skip;
 
@@ -26,6 +26,9 @@ nativeTest("public conversion produces complete Swift compilable in both modes",
       const check = await typecheck(output);
       if (!check.ok) throw new Error(check.output);
       expect(check.ok).toBe(true);
+      const isolated = await typecheck(output, { ...TYPECHECK_TARGET, defaultIsolationMainActor: true });
+      if (!isolated.ok) throw new Error(isolated.output);
+      expect(isolated.ok).toBe(true);
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
