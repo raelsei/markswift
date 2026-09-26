@@ -7,17 +7,25 @@ interface SimulatorInventory {
   devices: Record<string, Array<{ udid: string; name: string; state: string; isAvailable: boolean }>>;
 }
 
-const packageManifest = `// swift-tools-version: 5.9
+export interface VisualSnapshot {
+  bundle: Pick<CompileResult, "name" | "files">;
+  layout: LayoutDoc;
+  outputs: Record<number, string>;
+}
+
+function packageManifest(modules: string[]): string {
+  return `// swift-tools-version: 5.9
 import PackageDescription
 let package = Package(
     name: "MarkswiftVisualSmoke",
     platforms: [.iOS("18.0")],
     targets: [
-        .target(name: "Generated", resources: [.copy("Fonts")]),
-        .testTarget(name: "PreviewTests", dependencies: ["Generated"])
+${modules.map(name => `        .target(name: "${name}", resources: [.copy("Fonts")]),`).join("\n")}
+        .testTarget(name: "PreviewTests", dependencies: [${modules.map(name => `"${name}"`).join(", ")}])
     ]
 )
 `;
+}
 
 async function command(args: string[], cwd?: string, timeoutMs = 300_000): Promise<string> {
   const child = Bun.spawn(args, { cwd, stdout: "pipe", stderr: "pipe" });
@@ -51,15 +59,18 @@ function selectSimulator(inventory: SimulatorInventory): { udid: string; name: s
   return selected;
 }
 
-function renderTest(name: string, layout: LayoutDoc, outputs: Record<number, string>): string {
-  const color = parseColor(layout.canvas);
-  if (!color) throw new Error(`Unsupported captured canvas color: ${layout.canvas}`);
-  const height = layout.size.h;
-  const renders = Object.entries(outputs).map(([width, output]) => `
-        try snapshot(width: ${Number(width)}, height: ${height}, output: ${JSON.stringify(output)})`).join("");
+function renderTest(snapshots: VisualSnapshot[], modules: string[]): string {
+  const renders = snapshots.flatMap(({ bundle, layout, outputs }) => {
+    const color = parseColor(layout.canvas);
+    if (!color) throw new Error(`Unsupported captured canvas color: ${layout.canvas}`);
+    return Object.entries(outputs).map(([width, output]) => `
+        try snapshot(content: ${bundle.name}(), width: ${Number(width)}, height: ${layout.size.h},
+                     canvas: Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}),
+                     scheme: .${layout.combo.theme}, output: ${JSON.stringify(output)})`);
+  }).join("");
   return `import XCTest
 import SwiftUI
-@testable import Generated
+${modules.map(name => `@testable import ${name}`).join("\n")}
 
 final class PreviewTests: XCTestCase {
     @MainActor
@@ -67,12 +78,12 @@ final class PreviewTests: XCTestCase {
     }
 
     @MainActor
-    private func snapshot(width: CGFloat, height: CGFloat, output: String) throws {
-        let content = ${name}()
+    private func snapshot<Content: View>(content: Content, width: CGFloat, height: CGFloat, canvas: Color, scheme: ColorScheme, output: String) throws {
+        let framed = content
             .frame(width: width, height: height, alignment: .topLeading)
-            .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
-            .environment(\\.colorScheme, .light)
-        let renderer = ImageRenderer(content: content)
+            .background(canvas)
+            .environment(\\.colorScheme, scheme)
+        let renderer = ImageRenderer(content: framed)
         renderer.scale = 2
         renderer.proposedSize = ProposedViewSize(width: width, height: height)
         let image = try XCTUnwrap(renderer.uiImage, "SwiftUI did not render an image")
@@ -82,30 +93,36 @@ final class PreviewTests: XCTestCase {
 `;
 }
 
-/** Render both viewport widths from one compiled Swift bundle. */
-export async function renderVisualSnapshots(bundle: Pick<CompileResult, "name" | "files">, layout: LayoutDoc, outputs: Record<number, string>, work: string): Promise<void> {
+/** Keep independently compiled token/shape namespaces in separate Swift modules. */
+export async function renderVisualSnapshots(snapshots: VisualSnapshot[], work: string): Promise<void> {
+  if (!snapshots.length) throw new Error("Visual rendering needs at least one compiled snapshot");
+  const modules = snapshots.map((_, index) => `Generated${index}`);
+  const outputs = snapshots.flatMap(snapshot => Object.values(snapshot.outputs));
+  if (new Set(outputs).size !== outputs.length) throw new Error("Visual output paths must be distinct");
   const inventory = JSON.parse(await command(["xcrun", "simctl", "list", "devices", "available", "-j"], undefined, 15_000)) as SimulatorInventory;
   const device = selectSimulator(inventory);
-  const generated = join(work, "Sources", "Generated");
   const testDir = join(work, "Tests", "PreviewTests");
-  await rm(generated, { recursive: true, force: true });
-  await mkdir(join(generated, "Fonts"), { recursive: true });
+  await rm(join(work, "Sources"), { recursive: true, force: true });
   await mkdir(testDir, { recursive: true });
-  await Bun.write(join(work, "Package.swift"), packageManifest);
-  await Bun.write(join(generated, "Fonts", ".keep"), "");
-  for (const [file, source] of Object.entries(bundle.files)) {
-    if (file.endsWith(".swift")) await Bun.write(join(generated, file), source);
+  await Bun.write(join(work, "Package.swift"), packageManifest(modules));
+  for (const [index, snapshot] of snapshots.entries()) {
+    const generated = join(work, "Sources", modules[index]!);
+    await mkdir(join(generated, "Fonts"), { recursive: true });
+    await Bun.write(join(generated, "Fonts", ".keep"), "");
+    for (const [file, source] of Object.entries(snapshot.bundle.files)) {
+      if (file.endsWith(".swift")) await Bun.write(join(generated, file), source);
+    }
+    await Bun.write(join(generated, "MarkswiftPreviewResources.swift"), "import Foundation\nenum MarkswiftPreviewResources { static let bundle = Bundle.module }\n");
   }
-  await Bun.write(join(generated, "MarkswiftPreviewResources.swift"), "import Foundation\nenum MarkswiftPreviewResources { static let bundle = Bundle.module }\n");
-  await Bun.write(join(testDir, "PreviewTests.swift"), renderTest(bundle.name, layout, outputs));
-  for (const output of Object.values(outputs)) await rm(output, { force: true });
+  await Bun.write(join(testDir, "PreviewTests.swift"), renderTest(snapshots, modules));
+  for (const output of outputs) await rm(output, { force: true });
   console.log(`Rendering generated Swift on ${device.name}…`);
   await command([
     "xcodebuild", "test", "-scheme", "MarkswiftVisualSmoke-Package", "-destination", `platform=iOS Simulator,id=${device.udid}`,
     "-derivedDataPath", join(work, ".build", "DerivedData"), "-parallel-testing-enabled", "NO",
     "-only-testing:PreviewTests/PreviewTests/testSnapshots", "-quiet",
   ], work);
-  for (const output of Object.values(outputs)) {
+  for (const output of outputs) {
     if (!(await Bun.file(output).exists())) throw new Error(`Xcode finished without native image ${output}`);
   }
 }

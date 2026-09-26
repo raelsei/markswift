@@ -11755,10 +11755,17 @@ function trimRun(b, edge) {
     b.src.length = b.src.length - cut;
 }
 function markLineBreaks(built) {
+  let previousLine;
+  let previousShift = 0;
+  let explicitBreak = false;
   for (const b of built) {
-    const boxes = b.node.lines;
-    if (!boxes || boxes.length < 2)
+    if (!/[^\s\u200b]/u.test(b.run.text)) {
+      if (b.run.text.includes(`
+`))
+        explicitBreak = true;
       continue;
+    }
+    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0 }];
     const ordered = [...boxes].sort((p, q) => p.bounds.y - q.bounds.y || p.bounds.x - q.bounds.x);
     const starts = [];
     let lineTop = -Infinity;
@@ -11769,6 +11776,16 @@ function markLineBreaks(built) {
       starts.push(box);
     }
     const breaks = [];
+    const first = starts[0]?.bounds;
+    const shift = b.run.baselineOffset ?? 0;
+    const baseline = first ? first.y + ASCENT_RATIO * first.h + shift : undefined;
+    const previousBaseline = previousLine ? previousLine.y + ASCENT_RATIO * previousLine.h + previousShift : undefined;
+    const tolerance = Math.max(2, (first?.h ?? 0) * 0.05, (previousLine?.h ?? 0) * 0.05);
+    if (baseline !== undefined && previousBaseline !== undefined && baseline - previousBaseline >= tolerance && !explicitBreak && !/^[ \t]*\n/.test(b.run.text)) {
+      const at = collapseOf(b.styleOf.styles) !== "preserve" && b.run.text.startsWith(" ") ? 1 : 0;
+      if (at < b.run.text.length)
+        breaks.push(at);
+    }
     for (const box of starts.slice(1)) {
       const at = b.src.findIndex((i) => i >= box.start);
       if (at > 0 && b.run.text[at - 1] === `
@@ -11777,9 +11794,11 @@ function markLineBreaks(built) {
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at)
         breaks.push(at);
     }
-    if (!breaks.length)
-      continue;
-    b.run.breaks = breaks;
+    previousLine = starts[starts.length - 1]?.bounds ?? previousLine;
+    previousShift = shift;
+    explicitBreak = /\n[ \t\u200b]*$/.test(b.run.text);
+    if (breaks.length)
+      b.run.breaks = breaks;
   }
 }
 function markBaselineShifts(built, host, note) {
@@ -11950,8 +11969,8 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
   if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built);
   markBaselineShifts(built, host, note);
+  markLineBreaks(built);
   for (const el of painted) {
     const style = styleOf(el, []);
     const boxes = el.bounds.h > lh * 1.5 ? inlineFragments(el) : [el.bounds];

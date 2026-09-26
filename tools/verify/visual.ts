@@ -5,103 +5,45 @@ import { BrowserCapture, type Capture } from "../../src/browser/capture.ts";
 import { compileLayout, compileResponsiveLayouts } from "../../src/compiler/index.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
-import { renderVisualSnapshots } from "./visual-native.ts";
+import { loadVisualFixture, visualFixtures, type Theme, type VisualFixture } from "./visual-fixtures.ts";
+import { meanRgbError, regionComparison } from "./visual-metrics.ts";
+import { renderVisualSnapshots, type VisualSnapshot } from "./visual-native.ts";
 
 const widths = [390, 320] as const;
+const themes = ["light", "dark"] as const;
 const dpr = 2;
 const maxMeanRgbError = 8;
 const out = join(import.meta.dir, "..", "..", "out", "visual-smoke");
 
-interface Fixture {
-  id: string;
-  height: number;
-  name: string;
-  responsive: boolean;
-  samples?: Array<{ x: number; y: number; rgb: [number, number, number] }>;
-}
-
-const fixtures: Fixture[] = [
-  { id: "rich-text", height: 480, name: "VisualSmokeRichText", responsive: false },
-  { id: "full-page", height: 650, name: "VisualSmokeFullPage", responsive: true },
-  { id: "image-position", height: 255, name: "VisualSmokeImagePosition", responsive: false, samples: [
-    { x: 42, y: 42, rgb: [255, 0, 0] },
-    { x: 127, y: 42, rgb: [0, 0, 255] },
-    { x: 42, y: 127, rgb: [0, 255, 0] },
-    { x: 127, y: 127, rgb: [255, 255, 0] },
-    { x: 42, y: 212, rgb: [255, 0, 0] },
-    { x: 127, y: 212, rgb: [0, 0, 255] },
-  ] },
-];
-
-async function stripedImage(width: number, height: number, vertical: boolean, near: [number, number, number], far: [number, number, number], format: "png" | "jpeg" = "png"): Promise<string> {
-  const pixels = Buffer.alloc(width * height * 3);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const color = (vertical ? y < height / 2 : x < width / 2) ? near : far;
-    const offset = (y * width + x) * 3;
-    for (let channel = 0; channel < 3; channel++) pixels[offset + channel] = color[channel]!;
-  }
-  const source = sharp(pixels, { raw: { width, height, channels: 3 } });
-  const bytes = await (format === "jpeg" ? source.jpeg({ quality: 100 }).withMetadata({ orientation: 6 }) : source.png()).toBuffer();
-  return `data:image/${format};base64,${bytes.toString("base64")}`;
-}
-
-async function fixtureHtml(fixture: Fixture): Promise<string> {
-  const html = await Bun.file(new URL(`./fixtures/${fixture.id}.html`, import.meta.url)).text();
-  if (fixture.id !== "image-position") return html;
-  const horizontal = await stripedImage(80, 40, false, [255, 0, 0], [0, 0, 255]);
-  const vertical = await stripedImage(40, 80, true, [0, 255, 0], [255, 255, 0]);
-  const exif = await stripedImage(80, 40, false, [255, 0, 0], [0, 0, 255], "jpeg");
-  return html.replaceAll("__MARKSWIFT_HORIZONTAL_URL__", horizontal)
-    .replaceAll("__MARKSWIFT_VERTICAL_URL__", vertical)
-    .replaceAll("__MARKSWIFT_EXIF_URL__", exif);
-}
-
-async function captureAt(fixture: Fixture, width: number, html: string, css: string): Promise<Capture> {
+async function captureAt(fixture: VisualFixture, width: number, theme: Theme, html: string, css: string): Promise<Capture> {
   const browser = new BrowserCapture({ dpr, viewport: { width, height: 1000 } });
   await browser.start();
   try {
-    return await browser.capture({
-      key: fixture.id,
-      screen: fixture.id,
-      theme: "light",
-      url: `http://markswift.local/visual-smoke-${fixture.id}-${width}`,
-      html,
-      root: "[data-markswift-root]",
+    const capture = await browser.capture({
+      key: fixture.id, screen: fixture.id, theme,
+      url: `http://markswift.local/visual-smoke-${fixture.id}-${theme}-${width}`,
+      html, root: "[data-markswift-root]",
       prepare: async page => { await page.addStyleTag({ content: css }); },
     }, htmlIdentity, `visual-smoke/${fixture.id}`);
+    if (capture.layout.size.w !== width || capture.layout.size.h !== fixture.height) {
+      throw new Error(`Chrome ${fixture.id} ${theme} ${width}: unexpected root size ${capture.layout.size.w}×${capture.layout.size.h}`);
+    }
+    if (capture.fontFiles.length) throw new Error(`Visual smoke fixture ${fixture.id} unexpectedly needs bundled fonts`);
+    return capture;
   } finally {
     await browser.stop();
   }
 }
 
-async function meanRgbError(reference: string, actual: string, width: number, height: number): Promise<number> {
-  const [browser, native] = await Promise.all([
-    sharp(reference).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
-    sharp(actual).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
-  ]);
-  const expected = { width: width * dpr, height: height * dpr };
-  for (const [kind, image] of [["Chrome", browser], ["iOS", native]] as const) {
-    if (image.info.width !== expected.width || image.info.height !== expected.height) {
-      throw new Error(`${kind} ${width}: expected ${expected.width}×${expected.height} px, got ${image.info.width}×${image.info.height}`);
-    }
-  }
-  let total = 0;
-  for (let offset = 0; offset < browser.data.length; offset += 4) {
-    for (let channel = 0; channel < 3; channel++) {
-      total += Math.abs(browser.data[offset + channel]! - native.data[offset + channel]!);
-    }
-  }
-  return total / (expected.width * expected.height * 3);
-}
-
-async function checkSamples(path: string, fixture: Fixture, width: number, source: string): Promise<void> {
-  if (!fixture.samples) return;
+async function checkSamples(path: string, fixture: VisualFixture, theme: Theme): Promise<void> {
   const image = await sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  for (const sample of fixture.samples) {
+  // This corner must change between themes; a repeated light capture cannot pass as dark.
+  const samples = [{ x: 1, y: 1, rgb: fixture.background[theme] }, ...fixture.samples ?? []];
+  for (const sample of samples) {
     const offset = ((sample.y * dpr) * image.info.width + sample.x * dpr) * 4;
     const actual = [...image.data.subarray(offset, offset + 3)];
     if (sample.rgb.some((expected, channel) => Math.abs(expected - actual[channel]!) > 16)) {
-      throw new Error(`${fixture.id} ${width} ${source} pixel (${sample.x}, ${sample.y}): expected ${sample.rgb}, got ${actual}`);
+      throw new Error(`pixel (${sample.x}, ${sample.y}): expected ${sample.rgb}, got ${actual}`);
     }
   }
 }
@@ -116,10 +58,10 @@ function firstTag(node: LayoutNode, tag: string): LayoutNode | undefined {
 }
 
 /** A full-page mean can hide a missing heading in a large flat background. */
-async function checkHeading(browserPath: string, nativePath: string, capture: Capture, width: number): Promise<void> {
+async function checkHeading(browserPath: string, nativePath: string, capture: Capture, fixture: VisualFixture, label: string): Promise<void> {
   const root = capture.layout.root;
   const heading = firstTag(root, "h1");
-  if (!heading) throw new Error(`full-page ${width}: captured h1 is missing`);
+  if (!heading) throw new Error("captured h1 is missing");
   const region = {
     left: Math.floor((heading.bounds.x - root.bounds.x) * dpr),
     top: Math.floor((heading.bounds.y - root.bounds.y) * dpr),
@@ -130,65 +72,67 @@ async function checkHeading(browserPath: string, nativePath: string, capture: Ca
     sharp(browserPath).extract(region).ensureAlpha().raw().toBuffer(),
     sharp(nativePath).extract(region).ensureAlpha().raw().toBuffer(),
   ]);
-  let rgbError = 0, browserDark = 0, nativeDark = 0;
-  for (let offset = 0; offset < browser.length; offset += 4) {
-    let referenceDark = true, renderedDark = true;
-    for (let channel = 0; channel < 3; channel++) {
-      const expected = browser[offset + channel]!, actual = native[offset + channel]!;
-      rgbError += Math.abs(expected - actual);
-      if (expected >= 90) referenceDark = false;
-      if (actual >= 90) renderedDark = false;
-    }
-    if (referenceDark) browserDark++;
-    if (renderedDark) nativeDark++;
-  }
-  const mean = rgbError / (region.width * region.height * 3);
-  const retained = browserDark ? nativeDark / browserDark : 0;
-  console.log(`full-page ${width} heading: RGB error ${mean.toFixed(2)} / 32.00; dark-pixel retention ${retained.toFixed(2)} / 0.70`);
-  if (mean > 32 || retained < 0.7) throw new Error(`full-page ${width}: main heading differs or is missing`);
+  const metrics = regionComparison(browser, native, fixture.background[capture.layout.combo.theme]);
+  console.log(`${label} heading: RGB error ${metrics.meanRgbError.toFixed(2)} / 32.00; foreground retention ${metrics.foregroundRetention.toFixed(2)} / 0.70`);
+  if (metrics.meanRgbError > 32 || metrics.foregroundRetention < 0.7) throw new Error("main heading differs or is missing");
+}
+
+function snapshotsFor(fixture: VisualFixture, theme: Theme, captures: Map<number, Capture>): VisualSnapshot[] {
+  const regular = captures.get(390)!;
+  const name = `${fixture.name}App`;
+  const app = fixture.responsive
+    ? compileResponsiveLayouts({
+      name, breakpoint: 350, mode: "app",
+      compact: { layout: captures.get(320)!.layout, viewportWidth: 320 },
+      regular: { layout: regular.layout, viewportWidth: 390 },
+    })
+    : compileLayout(regular.layout, { name, mode: "app" });
+  const output = (mode: string, width: number) => join(out, `${fixture.id}-${theme}-${mode}-${width}-ios.png`);
+  return [
+    { bundle: app, layout: regular.layout, outputs: Object.fromEntries(widths.map(width => [width, output("app", width)])) },
+    // Fidelity freezes measured geometry: each snapshot uses its own captured width.
+    ...widths.map(width => ({
+      bundle: compileLayout(captures.get(width)!.layout, { name: `${fixture.name}Fidelity${width}`, mode: "fidelity" }),
+      layout: captures.get(width)!.layout, outputs: { [width]: output("fidelity", width) },
+    })),
+  ];
 }
 
 async function main(): Promise<void> {
   await mkdir(out, { recursive: true });
   const failures: string[] = [];
-  for (const fixture of fixtures) {
-    const html = await fixtureHtml(fixture);
-    const css = await Bun.file(new URL(`./fixtures/${fixture.id}.css`, import.meta.url)).text();
-    const captures = new Map<number, Capture>();
-    for (const width of widths) {
-      const capture = await captureAt(fixture, width, html, css);
-      if (capture.layout.size.w !== width || capture.layout.size.h !== fixture.height) {
-        throw new Error(`Chrome ${fixture.id} ${width}: unexpected root size ${capture.layout.size.w}×${capture.layout.size.h}`);
+  let compared = 0;
+  for (const fixture of visualFixtures) {
+    const { html, css } = await loadVisualFixture(fixture);
+    for (const theme of themes) {
+      const captures = new Map<number, Capture>();
+      const browserPath = (width: number) => join(out, `${fixture.id}-${theme}-${width}-chrome.png`);
+      for (const width of widths) {
+        const capture = await captureAt(fixture, width, theme, html, css);
+        captures.set(width, capture);
+        await Bun.write(browserPath(width), capture.png);
       }
-      if (capture.fontFiles.length) throw new Error(`Visual smoke fixture ${fixture.id} unexpectedly needs bundled fonts`);
-      captures.set(width, capture);
-      await Bun.write(join(out, `${fixture.id}-${width}-chrome.png`), capture.png);
-    }
-
-    const regular = captures.get(390)!;
-    const bundle = fixture.responsive
-      ? compileResponsiveLayouts({
-        name: fixture.name, breakpoint: 350, mode: "app",
-        compact: { layout: captures.get(320)!.layout, viewportWidth: 320 },
-        regular: { layout: regular.layout, viewportWidth: 390 },
-      })
-      : compileLayout(regular.layout, { name: fixture.name, mode: "app" });
-    const outputs = Object.fromEntries(widths.map(width => [width, join(out, `${fixture.id}-${width}-ios.png`)])) as Record<number, string>;
-    await renderVisualSnapshots(bundle, regular.layout, outputs, join(out, "native-work"));
-
-    for (const width of widths) {
-      const browserPath = join(out, `${fixture.id}-${width}-chrome.png`);
-      const error = await meanRgbError(browserPath, outputs[width]!, width, fixture.height);
-      const result = `${fixture.id} ${width}: mean RGB error ${error.toFixed(2)} / ${maxMeanRgbError.toFixed(2)}`;
-      console.log(result);
-      if (error > maxMeanRgbError) failures.push(result);
-      await checkSamples(browserPath, fixture, width, "Chrome");
-      await checkSamples(outputs[width]!, fixture, width, "iOS");
-      if (fixture.id === "full-page") await checkHeading(browserPath, outputs[width]!, captures.get(width)!, width);
+      const snapshots = snapshotsFor(fixture, theme, captures);
+      await renderVisualSnapshots(snapshots, join(out, "native-work"));
+      for (const [index, snapshot] of snapshots.entries()) for (const [widthString, nativePath] of Object.entries(snapshot.outputs)) {
+        const width = Number(widthString);
+        const label = `${fixture.id} ${theme} ${index === 0 ? "app" : "fidelity"} ${width}`;
+        try {
+          const error = await meanRgbError(browserPath(width), nativePath, width, fixture.height, dpr);
+          console.log(`${label}: mean RGB error ${error.toFixed(2)} / ${maxMeanRgbError.toFixed(2)}`);
+          if (error > maxMeanRgbError) throw new Error("mean RGB error exceeded threshold");
+          await checkSamples(browserPath(width), fixture, theme);
+          await checkSamples(nativePath, fixture, theme);
+          if (fixture.id !== "image-position") await checkHeading(browserPath(width), nativePath, captures.get(width)!, fixture, label);
+        } catch (error) {
+          failures.push(`${label}: ${error instanceof Error ? error.message : error}`);
+        }
+        compared++;
+      }
     }
   }
-  console.log(`Images: ${out}`);
-  if (failures.length) throw new Error(`Visual smoke exceeded its threshold:\n${failures.join("\n")}`);
+  console.log(`${compared} comparisons; images: ${out}`);
+  if (failures.length) throw new Error(`Visual smoke failed:\n${failures.join("\n")}`);
 }
 
 await main();

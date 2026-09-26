@@ -39,6 +39,8 @@ test("rich inline text keeps byte-stable Swift in app and fidelity modes", () =>
   }
   expect(outputs.map((result) => createHash("sha256").update(result.code).digest("hex"))).toEqual([
     "66ad7fd367e14929adb0525086e5e9664729c3e81e1275c8b82ef9f621feb27b",
-    "87597a5b9fc61af952267f57d948eb6eb57081f963335c5d290f8d5f3f06b1c1",
+    "4ae35899a6fdfb888371504dcea4f361ca7a425188d8c5bf5dc80336939fbda9",
   ]);
+  expect(outputs[1]!.code).toContain('Text(verbatim: "\\nlink")');
+  expect(outputs[1]!.code).not.toContain('Text(verbatim: "\\nFinish")');
 });

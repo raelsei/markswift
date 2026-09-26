@@ -9,3 +9,6 @@ html, body { margin: 0; background: #fff; }
 .crop-bottom { object-position: left bottom; }
 .crop-exif-top { object-position: left top; }
 .crop-exif-bottom { object-position: left bottom; }
+@media (prefers-color-scheme: dark) {
+  html, body, .crop-samples { background: #181820; }
+}

@@ -5,7 +5,7 @@ import { type BundledFamilies } from "../model/fonts.ts";
 import { parseColor, round2, px } from "../css/index.ts";
 import { type MeasuredTextRun } from "./context.ts";
 import { fontOf } from "./typography.ts";
-import { decorationOf, contains } from "./text-runs.ts";
+import { decorationOf, contains, collapseOf } from "./text-runs.ts";
 import { edgeWidth, unionRect, insetsOf } from "./geometry.ts";
 
 /**
@@ -127,9 +127,17 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
  * a break, and the first output character at or after its raw index is where it goes.
  */
 export function markLineBreaks(built: MeasuredTextRun[]): void {
+  let previousLine: Rect | undefined;
+  let previousShift = 0;
+  let explicitBreak = false;
   for (const b of built) {
-    const boxes = b.node.lines;
-    if (!boxes || boxes.length < 2) continue;
+    // Boundary-only runs do not have glyph geometry. Keep an explicit newline across any
+    // whitespace-only run; <wbr> supplies an opportunity, not a hard break of its own.
+    if (!/[^\s\u200b]/u.test(b.run.text)) {
+      if (b.run.text.includes("\n")) explicitBreak = true;
+      continue;
+    }
+    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0 }];
     const ordered = [...boxes].sort((p, q) => p.bounds.y - q.bounds.y || p.bounds.x - q.bounds.x);
     const starts: typeof ordered = [];
     let lineTop = -Infinity;
@@ -140,14 +148,32 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       starts.push(box);
     }
     const breaks: number[] = [];
+    const first = starts[0]?.bounds;
+    // CDP omits `lines` for a single-line text node. A new line can therefore start at the
+    // first character of a separate styled run, even though that run has no internal break.
+    // Compare baselines, including the measured vertical-align shift. Top edges differ on a
+    // shared baseline when font sizes differ; glyph boxes can overlap across genuine lines
+    // when CSS sets a tight line-height. Horizontal order is irrelevant for RTL text.
+    const shift = b.run.baselineOffset ?? 0;
+    const baseline = first ? first.y + ASCENT_RATIO * first.h + shift : undefined;
+    const previousBaseline = previousLine ? previousLine.y + ASCENT_RATIO * previousLine.h + previousShift : undefined;
+    const tolerance = Math.max(2, (first?.h ?? 0) * 0.05, (previousLine?.h ?? 0) * 0.05);
+    if (baseline !== undefined && previousBaseline !== undefined && baseline - previousBaseline >= tolerance && !explicitBreak && !/^[ \t]*\n/.test(b.run.text)) {
+      // A collapsible leading space was consumed by this wrap. Replacing it with the newline
+      // uses the existing emitter's space-at-boundary rule; offset zero would leave an indent.
+      const at = collapseOf(b.styleOf.styles) !== "preserve" && b.run.text.startsWith(" ") ? 1 : 0;
+      if (at < b.run.text.length) breaks.push(at);
+    }
     for (const box of starts.slice(1)) {
       const at = b.src.findIndex((i) => i >= box.start);
       // A preserved segment break already starts the line; a second one would double it.
       if (at > 0 && b.run.text[at - 1] === "\n") continue;
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at) breaks.push(at);
     }
-    if (!breaks.length) continue;
-    b.run.breaks = breaks;
+    previousLine = starts[starts.length - 1]?.bounds ?? previousLine;
+    previousShift = shift;
+    explicitBreak = /\n[ \t\u200b]*$/.test(b.run.text);
+    if (breaks.length) b.run.breaks = breaks;
   }
 }
 

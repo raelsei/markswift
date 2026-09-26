@@ -8,3 +8,11 @@ html, body { margin: 0; background: #fff; }
 .story a { color: #2563eb; text-decoration: underline; }
 .story pre { font: 14px/20px ui-monospace, monospace; background: #eef1f5; padding: 12px; white-space: pre; }
 .story blockquote { border-left: 4px solid #d59c71; padding-left: 12px; margin: 20px 0; color: #765c50; }
+@media (prefers-color-scheme: dark) {
+  html, body { background: #171d27; }
+  .story { background: #171d27; color: #edf0f6; }
+  .eyebrow { color: #d8adbd; }
+  .story a { color: #8ab4ff; }
+  .story pre { background: #293444; }
+  .story blockquote { border-color: #dfb18d; color: #dcc0ac; }
+}

@@ -23,3 +23,12 @@ html, body { margin: 0; background: #fff; }
   .cards { grid-template-columns: 1fr; }
   .copy h1 { font-size: 31px; }
 }
+@media (prefers-color-scheme: dark) {
+  html, body { background: #1c1b23; }
+  .page { background: #1c1b23; color: #efedf6; }
+  .page header { border-color: #696473; }
+  .copy small { color: #d4a887; }
+  .action { background: #d9caab; color: #26222f; }
+  .hero aside { background: #494135; }
+  .cards article { background: #2c2936; border-color: #615b6b; }
+}

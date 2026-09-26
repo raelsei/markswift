@@ -24,6 +24,8 @@ __pycache__/
 !/tools/verify/typecheck.ts
 !/tools/verify/visual.ts
 !/tools/verify/visual-native.ts
+!/tools/verify/visual-fixtures.ts
+!/tools/verify/visual-metrics.ts
 !/tools/verify/fixtures/
 /tools/verify/fixtures/*
 !/tools/verify/fixtures/rich-text.html

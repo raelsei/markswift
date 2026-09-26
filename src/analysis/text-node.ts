@@ -44,8 +44,8 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
   if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built);
   markBaselineShifts(built, host, note);
+  markLineBreaks(built);
   // An inline element with its own background or border cannot be expressed as a run — SwiftUI
   // has no per-run box. Its measured inline box becomes a background layer instead, so the
   // highlight or key cap lands exactly where the browser painted it. An inline box that wrapped
