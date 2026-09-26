@@ -94,6 +94,11 @@ describe("imageSize", () => {
     for (const [index, mime] of ["image/jpeg", "image/gif", "image/webp"].entries())
       expect(imageSize(`data:${mime};base64,${samples[index]!.toString("base64")}`)).toEqual({ w: 37, h: 19 });
   });
+  test("uses displayed dimensions for EXIF-rotated JPEGs", async () => {
+    const jpeg = await sharp({ create: { width: 80, height: 40, channels: 3, background: "#ff0000" } })
+      .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    expect(imageSize(`data:image/jpeg;base64,${jpeg.toString("base64")}`)).toEqual({ w: 40, h: 80 });
+  });
   test("reads width/height or viewBox from a data: svg; rejects malformed raster data", () => {
     const svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
     expect(imageSize(svg)).toEqual({ w: 160, h: 100 });

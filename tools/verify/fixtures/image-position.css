@@ -1,0 +1,11 @@
+html, body { margin: 0; background: #fff; }
+* { box-sizing: border-box; }
+.crop-samples { width: 100%; height: 255px; padding: 10px; display: flex; flex-direction: column; gap: 20px; background: #fff; }
+.crop-row { display: flex; gap: 20px; }
+.crop-samples img { width: 65px; height: 65px; display: block; object-fit: cover; }
+.crop-left { object-position: left top; }
+.crop-right { object-position: right top; }
+.crop-top { object-position: left top; }
+.crop-bottom { object-position: left bottom; }
+.crop-exif-top { object-position: left top; }
+.crop-exif-bottom { object-position: left bottom; }

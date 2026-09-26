@@ -1,19 +1,20 @@
 import { expect, test } from "bun:test";
+import sharp from "sharp";
 import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
 
 const svg = "data:image/svg+xml," + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="150" height="100" viewBox="0 0 150 100"><path d="M0 0 H150 V100 H0 Z" fill="blue"/></svg>',
 );
 
-function layout(fit: "cover" | "contain", width: string): LayoutDoc {
+function layout(fit: "cover" | "contain", width: string, position = "50% 50%", src = svg): LayoutDoc {
   return {
     version: 1, source: "image-fit.html", combo: { screen: "image-fit", theme: "light", demoState: "normal" },
     size: { w: 200, h: 125 }, dpr: 1, canvas: "white", fonts: [],
     root: {
       id: "root", tag: "main", attrs: {}, styles: { display: "block" },
       bounds: { x: 0, y: 0, w: 200, h: 125 }, children: [{
-        id: "#image", tag: "img", attrs: { src: svg, alt: fit, style: `width:${width};height:125px` },
-        styles: { display: "block", width: "200px", height: "125px", "object-fit": fit, "object-position": "50% 50%" },
+        id: "#image", tag: "img", attrs: { src, alt: fit, style: `width:${width};height:125px;object-position:${position}` },
+        styles: { display: "block", width: "200px", height: "125px", "object-fit": fit, "object-position": position },
         preferredSize: { width, height: "125px" }, bounds: { x: 0, y: 0, w: 200, h: 125 }, children: [],
       }],
     },
@@ -38,4 +39,43 @@ test("fixed app and fidelity SVG boxes keep their measured cover artwork", () =>
     expect(code).not.toContain("GeometryReader { geometry in");
     expect(code).toContain(".frame(width: 200.0, height: 133.333)");
   }
+});
+
+test("inline PNG and JPEG cover/contain use intrinsic dimensions and CSS edge position in a live box", async () => {
+  const pixels = Buffer.from([255, 0, 0, 0, 0, 255]);
+  for (const format of ["png", "jpeg"] as const) {
+    const bytes = await sharp(pixels, { raw: { width: 2, height: 1, channels: 3 } })[format]().toBuffer();
+    const src = `data:image/${format};base64,${bytes.toString("base64")}`;
+    for (const [fit, position, method, anchor] of [
+      ["cover", "left top", "max", "0.0"],
+      ["contain", "right bottom", "min", "1.0"],
+    ] as const) {
+      const result = compileLayout(layout(fit, "100%", position, src), { name: "PositionedRaster", mode: "app" });
+      expect(result.code).toContain(`let scale = ${method}(geometry.size.width / 2.0, geometry.size.height / 1.0)`);
+      expect(result.code).toContain(`.offset(x: (geometry.size.width - drawnWidth) * ${anchor}, y: (geometry.size.height - drawnHeight) * ${anchor})`);
+      if (fit === "cover") expect(result.code).toContain(".clipped()");
+      expect(result.diagnostics.some(item => item.id === "#image")).toBe(false);
+    }
+  }
+});
+
+test("positioned SVG cover supports fixed and live image boxes without changing centered output", () => {
+  const fixed = compileLayout(layout("cover", "200px", "left top"), { name: "PositionedVector", mode: "app" });
+  expect(fixed.code).toContain(".frame(width: 200.0, height: 133.333)");
+  expect(fixed.code).toContain(".offset(x: 0.0, y: 4.167)");
+  expect(fixed.diagnostics.some(item => item.id === "#image")).toBe(false);
+
+  const live = compileLayout(layout("contain", "100%", "right bottom"), { name: "PositionedVector", mode: "app" });
+  expect(live.code).toContain(".scaleEffect(scale)");
+  expect(live.code).toContain(".offset(x: (geometry.size.width - 150.0 * scale) * 0.5, y: (geometry.size.height - 100.0 * scale) * 0.5)");
+  expect(live.diagnostics.some(item => item.id === "#image")).toBe(false);
+
+  const centered = compileLayout(layout("cover", "200px"), { name: "CenteredVector", mode: "app" });
+  expect(centered.code).not.toContain(".offset(x:");
+});
+
+test("unsupported object-position values remain an explicit approximation", () => {
+  const result = compileLayout(layout("cover", "200px", "left 10px"), { name: "UnsupportedPosition" });
+  expect(result.diagnostics.find(item => item.id === "#image")?.notes.join(" ")).toContain("position syntax unsupported");
+  expect(result.code).toContain(".overlay(alignment: .center)");
 });

@@ -1025,7 +1025,7 @@ var require_svgpath = __commonJS(function(exports, module) {
 });
 
 // src/cli.ts
-import { readFile as readFile5 } from "node:fs/promises";
+import { readFile as readFile6 } from "node:fs/promises";
 
 // src/compiler/naming.ts
 function validateName(name) {
@@ -1059,6 +1059,8 @@ Options:
   --root <selector> Capture only this CSS selector
   --width <px>      Viewport width (default: 390)
   --height <px>     Viewport height (default: 844)
+  --compact-width <px>  Also capture this smaller width for one responsive Swift view
+  --breakpoint <px>     Required with --compact-width; selects compact at widths ≤ this value
   --theme <value>   light or dark (default: light)
   --mode <value>    app or fidelity (default: app)
   -h, --help        Show this help
@@ -1066,7 +1068,7 @@ Options:
 
 Requires Bun or Node.js and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
-var valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--mode"]);
+var valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--compact-width", "--breakpoint", "--theme", "--mode"]);
 function parseArgs(args) {
   if (args.length === 0 || args.length === 1 && ["--help", "-h"].includes(args[0]))
     return { kind: "help" };
@@ -1115,6 +1117,16 @@ function parseArgs(args) {
   const source = url ? { url } : positional[0] === "-" ? { stdin: true } : { file: positional[0] };
   const width = dimension(values.get("--width"), "--width", 390);
   const height = dimension(values.get("--height"), "--height", 844);
+  const hasCompact = values.has("--compact-width"), hasBreakpoint = values.has("--breakpoint");
+  if (hasCompact !== hasBreakpoint)
+    throw new UsageError("--compact-width and --breakpoint must be used together");
+  const responsive = hasCompact ? {
+    compactWidth: dimension(values.get("--compact-width"), "--compact-width", 320),
+    breakpoint: dimension(values.get("--breakpoint"), "--breakpoint", 350)
+  } : undefined;
+  if (responsive && !(responsive.compactWidth <= responsive.breakpoint && responsive.breakpoint < width)) {
+    throw new UsageError("Responsive widths must satisfy --compact-width ≤ --breakpoint < --width");
+  }
   const theme = values.get("--theme") ?? "light";
   const mode = values.get("--mode") ?? "app";
   const name = values.get("--name");
@@ -1134,7 +1146,8 @@ function parseArgs(args) {
     source,
     outDir,
     cssPath: values.get("--css"),
-    options: { name, root: values.get("--root"), theme, mode, viewport: { width, height } }
+    options: { name, root: values.get("--root"), theme, mode, viewport: { width, height } },
+    responsive
   };
 }
 function dimension(value, flag, fallback) {
@@ -1147,7 +1160,7 @@ function dimension(value, flag, fallback) {
 }
 
 // src/cli/run.ts
-import { readFile as readFile4, stat as stat2 } from "node:fs/promises";
+import { readFile as readFile5, stat as stat2 } from "node:fs/promises";
 
 // src/input/root.ts
 var DEFAULT_ROOT = "[data-markswift-root], [data-h2s-root], body:not(:has([data-markswift-root], [data-h2s-root]))";
@@ -10768,6 +10781,8 @@ function rasterDimensions(bytes) {
     return size(bytes.readUInt16LE(6), bytes.readUInt16LE(8));
   if (bytes.length >= 12 && bytes[0] === 255 && bytes[1] === 216) {
     let at = 2;
+    let orientation = 1;
+    let dimensions;
     while (at + 3 < bytes.length) {
       if (bytes[at++] !== 255)
         break;
@@ -10783,10 +10798,13 @@ function rasterDimensions(bytes) {
       const length = bytes.readUInt16BE(at);
       if (length < 2 || at + length > bytes.length)
         break;
+      if (marker === 225)
+        orientation = exifOrientation(bytes, at + 2, at + length) ?? orientation;
       if ((marker >= 192 && marker <= 195 || marker >= 197 && marker <= 199 || marker >= 201 && marker <= 203 || marker >= 205 && marker <= 207) && length >= 7)
-        return size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
+        dimensions = size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
       at += length;
     }
+    return dimensions && orientation >= 5 && orientation <= 8 ? { w: dimensions.h, h: dimensions.w } : dimensions;
   }
   if (bytes.length >= 30 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") {
     const chunk = bytes.toString("ascii", 12, 16);
@@ -10796,6 +10814,35 @@ function rasterDimensions(bytes) {
       return size(1 + bytes[21] + ((bytes[22] & 63) << 8), 1 + (bytes[22] >> 6) + (bytes[23] << 2) + ((bytes[24] & 15) << 10));
     if (chunk === "VP8X")
       return size(1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16), 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16));
+  }
+  return;
+}
+function exifOrientation(bytes, start, end) {
+  if (start + 14 > end || bytes.toString("ascii", start, start + 4) !== "Exif" || bytes[start + 4] !== 0 || bytes[start + 5] !== 0)
+    return;
+  const tiff = start + 6;
+  const order = bytes.toString("ascii", tiff, tiff + 2);
+  if (order !== "II" && order !== "MM")
+    return;
+  const read16 = (offset) => offset + 2 <= end ? order === "II" ? bytes.readUInt16LE(offset) : bytes.readUInt16BE(offset) : undefined;
+  const read32 = (offset) => offset + 4 <= end ? order === "II" ? bytes.readUInt32LE(offset) : bytes.readUInt32BE(offset) : undefined;
+  if (read16(tiff + 2) !== 42)
+    return;
+  const offset = read32(tiff + 4);
+  if (offset === undefined)
+    return;
+  const ifd = tiff + offset;
+  const count = read16(ifd);
+  if (count === undefined)
+    return;
+  for (let index = 0;index < count; index++) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end)
+      break;
+    if (read16(entry) !== 274 || read16(entry + 2) !== 3 || read32(entry + 4) !== 1)
+      continue;
+    const value = read16(entry + 8);
+    return value !== undefined && value >= 1 && value <= 8 ? value : undefined;
   }
   return;
 }
@@ -13691,18 +13738,25 @@ function build(n, ctx) {
   if (policy.route === "image") {
     const fit = n.styles["object-fit"] ?? "fill";
     const position = n.styles["object-position"] ?? "50% 50%";
+    const src = n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "";
+    const anchor = objectPosition(position);
+    const intrinsic = anchor && (anchor[0] !== 0.5 || anchor[1] !== 0.5) && (fit === "cover" || fit === "contain") ? imageSize(src) : undefined;
     const image = withBase(n, ctx, {
       kind: "image",
-      src: n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src,
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
+      ...intrinsic && intrinsic.w > 0 && intrinsic.h > 0 ? { intrinsicSize: [intrinsic.w, intrinsic.h] } : {},
       ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}
     });
     if (fit === "scale-down")
       image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
     if (fit === "none")
       image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");
-    if (fit !== "fill" && position !== "50% 50%" && position !== "center center" && position !== "center") {
-      image.notes.push(`approximated: object-position: ${position} → centered image content`);
+    if (fit !== "fill" && (anchor === undefined || anchor[0] !== 0.5 || anchor[1] !== 0.5)) {
+      if (anchor && intrinsic && intrinsic.w > 0 && intrinsic.h > 0 && (fit === "cover" || fit === "contain"))
+        image.objectPosition = anchor;
+      else
+        image.notes.push(`approximated: object-position: ${position} → centered image content; ${!anchor ? "position syntax unsupported" : fit !== "cover" && fit !== "contain" ? "object-fit mode unsupported" : "intrinsic image size unavailable"}`);
     }
     return finish(image);
   }
@@ -13763,6 +13817,28 @@ function build(n, ctx) {
   const stack = buildFlowStack(n, base, items, axis, display);
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   return finish(stack);
+}
+function objectPosition(value) {
+  const tokens = value.trim().toLowerCase().split(/\s+/);
+  if (!tokens.length || tokens.length > 2)
+    return;
+  const x = (token) => token === "left" ? 0 : token === "right" ? 1 : token === "center" ? 0.5 : percent(token);
+  const y = (token) => token === "top" ? 0 : token === "bottom" ? 1 : token === "center" ? 0.5 : percent(token);
+  if (tokens.length === 1) {
+    const token = tokens[0];
+    if (token === "top" || token === "bottom")
+      return [0.5, y(token)];
+    const horizontal = x(token);
+    return horizontal === undefined ? undefined : [horizontal, 0.5];
+  }
+  const [first, second] = tokens;
+  const verticalFirst = first === "top" || first === "bottom" || second === "left" || second === "right";
+  const horizontal = x(verticalFirst ? second : first);
+  const vertical = y(verticalFirst ? first : second);
+  return horizontal === undefined || vertical === undefined ? undefined : [horizontal, vertical];
+}
+function percent(value) {
+  return /^-?(?:\d+\.?\d*|\.\d+)%$/.test(value) ? Number.parseFloat(value) / 100 : undefined;
 }
 
 // src/analysis/infer.ts
@@ -14179,6 +14255,24 @@ function imageNodeExpr(n, ctx) {
     ];
   }
   if (src.kind === "raster") {
+    if (n.objectPosition && n.intrinsicSize && (n.contentMode === "fill" || n.contentMode === "fit")) {
+      const [iw, ih] = n.intrinsicSize;
+      const [x, y] = n.objectPosition;
+      return [
+        "Color.clear",
+        ".overlay {",
+        "    GeometryReader { geometry in",
+        `        let scale = ${n.contentMode === "fill" ? "max" : "min"}(geometry.size.width / ${num3(iw)}, geometry.size.height / ${num3(ih)})`,
+        `        let drawnWidth = ${num3(iw)} * scale`,
+        `        let drawnHeight = ${num3(ih)} * scale`,
+        `        ${src.expr(".resizable()")}`,
+        "            .frame(width: drawnWidth, height: drawnHeight)",
+        `            .offset(x: (geometry.size.width - drawnWidth) * ${num3(x)}, y: (geometry.size.height - drawnHeight) * ${num3(y)})`,
+        "    }",
+        "}",
+        ...a11y
+      ];
+    }
     const sizing = n.contentMode === "stretch" ? ".resizable()" : n.contentMode === "none" ? "" : `.resizable().aspectRatio(contentMode: .${n.contentMode})`;
     return [src.expr(sizing), ...a11y];
   }
@@ -14189,12 +14283,17 @@ function imageNodeExpr(n, ctx) {
   const liveBox = ctx.mode === "app" && (n.width.kind === "fill" || n.width.kind === "fraction" || n.height.kind === "fill");
   if (liveBox && n.contentMode !== "none") {
     const scale = n.contentMode === "fill" ? "max" : "min";
+    const [x, y] = n.objectPosition ?? [0.5, 0.5];
     return [
       "Color.clear",
       ".overlay {",
       "    GeometryReader { geometry in",
+      ...n.objectPosition ? [`        let scale = ${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)})`] : [],
       ...indent(src.view(vw, vh), 2),
-      `        .scaleEffect(${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)}))`,
+      `        .scaleEffect(${n.objectPosition ? "scale" : `${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)})`})`,
+      ...n.objectPosition ? [
+        `        .offset(x: (geometry.size.width - ${num3(vw)} * scale) * ${num3(x - 0.5)}, y: (geometry.size.height - ${num3(vh)} * scale) * ${num3(y - 0.5)})`
+      ] : [],
       "        .frame(width: geometry.size.width, height: geometry.size.height)",
       "    }",
       "}",
@@ -14202,7 +14301,11 @@ function imageNodeExpr(n, ctx) {
     ];
   }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
+  const drawn = src.view(vw * s, vh * s);
+  const [x, y] = n.objectPosition ?? [0.5, 0.5];
+  const offsetX = (n.frame.w - vw * s) * (x - 0.5);
+  const offsetY = (n.frame.h - vh * s) * (y - 0.5);
+  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(n.objectPosition ? [...drawn, `.offset(x: ${num3(offsetX)}, y: ${num3(offsetY)})`] : drawn, 1), "}", ...a11y];
 }
 
 // src/swift/paint.ts
@@ -16245,6 +16348,236 @@ function emitDesignTokens(set) {
 `) + `
 `;
 }
+// src/compiler/batch.ts
+function compileLayouts(inputs) {
+  if (!inputs.length)
+    throw new Error("compileLayouts requires at least one layout");
+  const names = new Set;
+  const componentThemes = new Map;
+  const prepared = inputs.map((input) => {
+    validateName(input.name);
+    const folded = input.name.toLowerCase();
+    if (names.has(folded))
+      throw new Error(`Duplicate view name: ${input.name}`);
+    names.add(folded);
+    const doc = LayoutDoc.parse(input.layout);
+    const componentId = input.componentId ?? input.name;
+    if (typeof componentId !== "string" || !componentId.trim())
+      throw new Error("componentId must be a non-empty string");
+    const themes = componentThemes.get(componentId) ?? new Set;
+    if (themes.has(doc.combo.theme))
+      throw new Error(`Duplicate component theme: ${componentId} (${doc.combo.theme})`);
+    themes.add(doc.combo.theme);
+    componentThemes.set(componentId, themes);
+    const screen = inferScreen(doc, `${componentId}-${doc.combo.theme}`, { bundledFamilies: input.bundledFamilies });
+    return { input, screen };
+  });
+  const tokens = extractTokens(prepared.map(({ screen }) => screen));
+  const files = {};
+  const assets = {};
+  const occupied = new Map;
+  const add = (name, contents, kind, label) => {
+    safePath(name);
+    const key = name.toLowerCase();
+    const previous = occupied.get(key);
+    if (previous) {
+      if (previous.name !== name)
+        throw new Error(`Case-insensitive output path collision: ${previous.name} and ${name}`);
+      if (previous.kind !== kind)
+        throw new Error(`Conflicting ${label}: ${name} is already a ${previous.kind}`);
+      if (kind === "file" && files[name] === contents)
+        return;
+      if (kind === "asset" && equalBytes(assets[name], contents))
+        return;
+      throw new Error(`Conflicting ${label}: ${name}`);
+    }
+    const segments = key.split("/");
+    for (let count = 1;count < segments.length; count++) {
+      const ancestor = occupied.get(segments.slice(0, count).join("/"));
+      if (ancestor)
+        throw new Error(`Output path collision (file/directory): ${ancestor.name} and ${name}`);
+    }
+    for (const [path, descendant] of occupied) {
+      if (path.startsWith(`${key}/`))
+        throw new Error(`Output path collision (file/directory): ${name} and ${descendant.name}`);
+    }
+    occupied.set(key, { name, kind });
+    if (kind === "file") {
+      if (typeof contents !== "string")
+        throw new Error(`Support file must contain text: ${name}`);
+      files[name] = contents;
+    } else {
+      if (!(contents instanceof Uint8Array))
+        throw new Error(`Asset must contain bytes: ${name}`);
+      assets[name] = new Uint8Array(contents);
+    }
+  };
+  const shapes = {};
+  const views = [];
+  for (const { input, screen } of prepared) {
+    const result = emitSwift(screen, input.name, {
+      mode: input.mode ?? "app",
+      tokens: screenTokens(tokens, screen),
+      fontMetrics: input.fontMetrics
+    });
+    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping });
+    add(`${input.name}.swift`, result.view, "file", "view file");
+    for (const [name, source] of Object.entries(result.shapes)) {
+      if (shapes[name] !== undefined && shapes[name] !== source)
+        throw new Error(`Conflicting shape definition: ${name}`);
+      shapes[name] = source;
+    }
+  }
+  add("MarkswiftRuntime.swift", SWIFT_RUNTIME, "file", "runtime file");
+  add("MarkswiftTokens.swift", emitDesignTokens(tokens), "file", "token file");
+  add("MarkswiftShapes.swift", `// Generated by Markswift — SVG paths as Shapes.
+import SwiftUI
+
+` + Object.keys(shapes).sort().map((key) => shapes[key]).join(`
+`), "file", "shape file");
+  for (const { input } of prepared) {
+    for (const [name, source] of Object.entries(input.supportFiles ?? {}))
+      add(name, source, "file", "support file");
+    for (const [name, bytes] of Object.entries(input.assets ?? {}))
+      add(name, bytes, "asset", "asset");
+  }
+  return { files, assets, views };
+}
+function safePath(name) {
+  if (!name || name.startsWith("/") || /^[A-Za-z]:/.test(name) || name.includes("\\") || name.includes("\x00") || name.split("/").some((part) => !part || part === "." || part === ".."))
+    throw new Error(`Unsafe output path: ${name}`);
+}
+function equalBytes(a, b) {
+  return a.length === b.length && a.every((byte, index) => byte === b[index]);
+}
+// src/swift/responsive-layout.ts
+var RESPONSIVE_LAYOUT_RUNTIME = `// Generated by Markswift — do not edit.
+import SwiftUI
+
+struct MarkswiftResponsiveLayout<Compact: View, Regular: View>: View {
+    let breakpoint: CGFloat
+    private let compact: () -> Compact
+    private let regular: () -> Regular
+
+    init(breakpoint: CGFloat, @ViewBuilder compact: @escaping () -> Compact,
+         @ViewBuilder regular: @escaping () -> Regular) {
+        self.breakpoint = breakpoint
+        self.compact = compact
+        self.regular = regular
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            MarkswiftRegularCandidate(minWidth: breakpoint.nextUp) { regular() }
+            compact()
+        }
+    }
+}
+
+private struct MarkswiftRegularCandidate: Layout {
+    let minWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let offered = finiteWidth(proposal.width)
+        let measured = child.sizeThatFits(ProposedViewSize(width: offered, height: proposal.height))
+        // ViewThatFits asks for the ideal width; report the breakpoint probe rather than
+        // the captured branch's intrinsic width, which can be wider than this viewport.
+        return CGSize(width: max(minWidth, offered ?? minWidth), height: measured.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, anchor: .topLeading,
+                    proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+
+    private func finiteWidth(_ width: CGFloat?) -> CGFloat? {
+        guard let width, width.isFinite else { return nil }
+        return max(0, width)
+    }
+}
+`;
+
+// src/compiler/responsive.ts
+function compileResponsiveLayouts(options) {
+  validateName(options.name);
+  const { breakpoint, compact, regular } = options;
+  if (!Number.isSafeInteger(breakpoint) || breakpoint <= 0)
+    throw new Error("breakpoint must be a positive integer");
+  for (const [label, capture] of [["compact", compact], ["regular", regular]]) {
+    if (!Number.isFinite(capture.viewportWidth) || capture.viewportWidth <= 0) {
+      throw new Error(`${label}.viewportWidth must be a positive finite number`);
+    }
+  }
+  if (!(compact.viewportWidth <= breakpoint && breakpoint < regular.viewportWidth)) {
+    throw new Error("breakpoint must satisfy compact.viewportWidth <= breakpoint < regular.viewportWidth");
+  }
+  const compactDoc = LayoutDoc.parse(compact.layout);
+  const regularDoc = LayoutDoc.parse(regular.layout);
+  if (compactDoc.combo.theme !== regularDoc.combo.theme)
+    throw new Error("responsive captures must use the same theme");
+  const compactName = `${options.name}Compact`;
+  const regularName = `${options.name}Regular`;
+  validateName(compactName);
+  validateName(regularName);
+  const bundle = compileLayouts([
+    {
+      layout: compactDoc,
+      name: compactName,
+      componentId: `${options.name}-compact`,
+      mode: options.mode,
+      bundledFamilies: options.bundledFamilies,
+      fontMetrics: options.fontMetrics,
+      supportFiles: options.supportFiles,
+      assets: options.assets
+    },
+    {
+      layout: regularDoc,
+      name: regularName,
+      componentId: `${options.name}-regular`,
+      mode: options.mode,
+      bundledFamilies: options.bundledFamilies,
+      fontMetrics: options.fontMetrics
+    }
+  ]);
+  const wrapperName = `${options.name}.swift`;
+  const runtimeName = "MarkswiftResponsiveLayout.swift";
+  for (const path of [wrapperName, runtimeName])
+    rejectCollision(path, bundle);
+  const code = wrapperSource(options.name, compactName, regularName, breakpoint);
+  return {
+    ...bundle,
+    name: options.name,
+    code,
+    files: { ...bundle.files, [wrapperName]: code, [runtimeName]: RESPONSIVE_LAYOUT_RUNTIME }
+  };
+}
+function rejectCollision(path, bundle) {
+  const candidate = path.toLowerCase();
+  for (const occupied of [...Object.keys(bundle.files), ...Object.keys(bundle.assets)]) {
+    const other = occupied.toLowerCase();
+    if (other === candidate || other.startsWith(`${candidate}/`) || candidate.startsWith(`${other}/`)) {
+      throw new Error(`Responsive output path collision: ${path} and ${occupied}`);
+    }
+  }
+}
+function wrapperSource(name, compactName, regularName, breakpoint) {
+  return `// Generated by Markswift — do not edit. Responsive captures at one breakpoint.
+import SwiftUI
+
+struct ${name}: View {
+    var body: some View {
+        MarkswiftResponsiveLayout(breakpoint: ${breakpoint}) {
+            ${compactName}()
+        } regular: {
+            ${regularName}()
+        }
+    }
+}
+`;
+}
+
 // src/compiler/index.ts
 function compileLayout(layout, options = {}) {
   const name = options.name ?? "ConvertedView";
@@ -16496,6 +16829,20 @@ function bundledFamilies(pkg) {
   }
   return out;
 }
+function unionFaces(docs) {
+  const byKey = {};
+  for (const doc of docs) {
+    for (const f of doc.fonts ?? []) {
+      const key = `${f.family}|${f.style}|${f.weight.join("-")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.file ?? s.url).join(",")}`;
+      const prev = byKey[key];
+      if (!prev)
+        byKey[key] = f;
+      else if (f.loaded && !prev.loaded)
+        byKey[key] = f;
+    }
+  }
+  return Object.keys(byKey).sort().map((k) => byKey[k]);
+}
 
 // src/input/identity.ts
 var htmlIdentity = (_tag, attrs, path) => {
@@ -16572,9 +16919,126 @@ async function convert(source, options = {}) {
   }
 }
 
+// src/api/responsive.ts
+import { mkdir as mkdir3, mkdtemp as mkdtemp2, readFile as readFile4, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
+import { tmpdir as tmpdir2 } from "node:os";
+import { join as join4 } from "node:path";
+async function convertResponsive(source, options) {
+  validateResponsiveInput(source, options);
+  const work = await mkdtemp2(join4(tmpdir2(), "markswift-responsive-"));
+  let prepared;
+  try {
+    prepared = await resolveSource(source);
+    const { html, url, label } = prepared;
+    const captureAt = async (branch) => {
+      const renderer = new BrowserCapture({
+        viewport: options[branch].viewport,
+        dpr: options.dpr ?? 1,
+        channel: options.browserChannel,
+        restricted: options.untrustedInput
+      });
+      try {
+        await renderer.start();
+        return await renderer.capture({
+          key: `${options.name}-${branch}-${options.theme ?? "light"}`,
+          screen: options.name,
+          theme: options.theme ?? "light",
+          url,
+          html,
+          root: options.root ?? DEFAULT_ROOT,
+          waitFor: options.waitFor,
+          inlineImages: true,
+          async prepare(page) {
+            if (options.css)
+              await page.addStyleTag({ content: options.css });
+            await options.prepare?.(page);
+            const actualViewport = page.viewportSize();
+            const expectedViewport = options[branch].viewport;
+            if (actualViewport?.width !== expectedViewport.width || actualViewport.height !== expectedViewport.height) {
+              throw new Error(`${branch} capture viewport changed during prepare(); expected ` + `${expectedViewport.width}×${expectedViewport.height}, received ` + `${actualViewport?.width ?? "unknown"}×${actualViewport?.height ?? "unknown"}`);
+            }
+          }
+        }, htmlIdentity, label);
+      } finally {
+        await renderer.stop();
+      }
+    };
+    const compact = await captureAt("compact");
+    const regular = await captureAt("regular");
+    const fontFiles = new Map;
+    for (const font of [...compact.fontFiles, ...regular.fontFiles])
+      fontFiles.set(font.name, font.bytes);
+    if (fontFiles.size)
+      await mkdir3(join4(work, "_fonts"), { recursive: true });
+    for (const [name, bytes] of fontFiles)
+      await writeFile3(join4(work, "_fonts", name), bytes);
+    const fontDir = join4(work, "output");
+    const fonts = await packageFonts(unionFaces([compact.layout, regular.layout]), fontDir, work);
+    const assets = {};
+    for (const face of fonts.faces)
+      assets[`Fonts/${face.file}`] = new Uint8Array(await readFile4(join4(fontDir, "Fonts", face.file)));
+    const supportFiles = fonts.faces.length ? {
+      "Font+Markswift.swift": fonts.swift,
+      "UIAppFonts.plist.fragment": fonts.plist
+    } : undefined;
+    const compiled = compileResponsiveLayouts({
+      name: options.name,
+      breakpoint: options.breakpoint,
+      compact: { layout: compact.layout, viewportWidth: options.compact.viewport.width },
+      regular: { layout: regular.layout, viewportWidth: options.regular.viewport.width },
+      mode: options.mode,
+      bundledFamilies: bundledFamilies(fonts),
+      fontMetrics: metricsForFonts(fonts),
+      supportFiles,
+      assets
+    });
+    return {
+      ...compiled,
+      layouts: { compact: compact.layout, regular: regular.layout },
+      warnings: aggregateWarnings(compact.warnings, regular.warnings, fonts.notes, options),
+      branchWarnings: { compact: compact.warnings, regular: regular.warnings }
+    };
+  } finally {
+    try {
+      await prepared?.close();
+    } finally {
+      await rm3(work, { recursive: true, force: true });
+    }
+  }
+}
+function aggregateWarnings(compact, regular, fontNotes, options) {
+  const warnings = [...new Set([...compact, ...regular, ...fontNotes])];
+  const mediaIndex = warnings.findIndex((message) => message.startsWith("CSS @media conditions "));
+  if (mediaIndex >= 0) {
+    const rest = warnings.filter((message) => !message.startsWith("CSS @media conditions "));
+    rest.splice(mediaIndex, 0, `CSS @media sampled at compact ${options.compact.viewport.width}px and regular ${options.regular.viewport.width}px; ` + `generated Swift switches branches at width ≤ ${options.breakpoint} points. ` + "Intermediate widths and other media states are not reconstructed.");
+    return rest;
+  }
+  return warnings;
+}
+function validateResponsiveInput(source, options) {
+  validateName(options.name);
+  const viewportValid = (viewport) => !!viewport && [viewport.width, viewport.height].every((n) => Number.isInteger(n) && n > 0);
+  if (!viewportValid(options?.compact?.viewport) || !viewportValid(options?.regular?.viewport)) {
+    throw new Error("compact and regular viewport dimensions must be positive integers");
+  }
+  if (!Number.isSafeInteger(options.breakpoint) || options.breakpoint <= 0 || options.compact.viewport.width > options.breakpoint || options.regular.viewport.width <= options.breakpoint) {
+    throw new Error("breakpoint must be a positive integer with compact.width <= breakpoint < regular.width");
+  }
+  if (options.dpr !== undefined && (!Number.isFinite(options.dpr) || options.dpr <= 0)) {
+    throw new Error("dpr must be positive and finite");
+  }
+  if (["html", "file", "url"].filter((key) => (key in source)).length !== 1) {
+    throw new Error("provide exactly one of html, file or url");
+  }
+  if (options.untrustedInput && (!("html" in source) || source.assetsDir || source.baseURL)) {
+    throw new Error("untrustedInput accepts pasted HTML without assetsDir or baseURL only");
+  }
+}
+
 // src/cli/output.ts
-import { lstat, mkdir as mkdir3, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname2, isAbsolute, join as join4, resolve as resolve4, win32 } from "node:path";
+import { lstat, mkdir as mkdir4, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
+import { dirname as dirname2, isAbsolute, join as join5, resolve as resolve4, win32 } from "node:path";
 async function ensureVacant(directory) {
   try {
     await lstat(directory);
@@ -16600,9 +17064,9 @@ async function writeBundle(result, directory) {
   }
   const output = resolve4(directory);
   await ensureVacant(output);
-  await mkdir3(dirname2(output), { recursive: true });
+  await mkdir4(dirname2(output), { recursive: true });
   try {
-    await mkdir3(output);
+    await mkdir4(output);
   } catch (error) {
     if (error.code === "EEXIST")
       throw new Error(`Output directory already exists: ${output}`);
@@ -16610,12 +17074,12 @@ async function writeBundle(result, directory) {
   }
   try {
     for (const [name, contents] of entries) {
-      const file = join4(output, name);
-      await mkdir3(dirname2(file), { recursive: true });
-      await writeFile3(file, contents, { flag: "wx" });
+      const file = join5(output, name);
+      await mkdir4(dirname2(file), { recursive: true });
+      await writeFile4(file, contents, { flag: "wx" });
     }
   } catch (error) {
-    await rm3(output, { recursive: true, force: true });
+    await rm4(output, { recursive: true, force: true });
     throw error;
   }
   return [...names].sort();
@@ -16638,12 +17102,44 @@ async function runConversion(command) {
   let css;
   if (command.cssPath) {
     try {
-      css = await readFile4(command.cssPath, "utf8");
+      css = await readFile5(command.cssPath, "utf8");
     } catch (error) {
       if (error.code === "ENOENT")
         throw new Error(`CSS file not found: ${command.cssPath} (--css is optional)`);
       throw error;
     }
+  }
+  if (command.responsive) {
+    const { compactWidth, breakpoint } = command.responsive;
+    const { viewport, name, ...shared } = command.options;
+    const regularViewport = viewport ?? { width: 390, height: 844 };
+    const result = await convertResponsive(source, {
+      ...shared,
+      css,
+      name: name ?? "ConvertedView",
+      breakpoint,
+      compact: { viewport: { width: compactWidth, height: regularViewport.height } },
+      regular: { viewport: regularViewport }
+    });
+    const files = await writeBundle(result, command.outDir);
+    process.stdout.write(`Wrote ${files.length} files for ${result.name} to ${command.outDir}
+`);
+    for (const [index, view] of result.views.entries()) {
+      const branch = index === 0 ? "compact" : "regular";
+      const { total, mapped, approximated, unmapped } = view.mapping;
+      const percent = total === 0 ? 0 : mapped / total * 100;
+      process.stdout.write(`Node mapping (${branch}): ${mapped}/${total} mapped (${percent.toFixed(1)}%); ${approximated} approximated; ${unmapped} unmapped. Visual fidelity not measured.
+`);
+      for (const diagnostic of view.diagnostics) {
+        for (const note of diagnostic.notes)
+          process.stderr.write(`Note ${branch} ${diagnostic.id}: ${note}
+`);
+      }
+    }
+    for (const warning of result.warnings)
+      process.stderr.write(`Warning: ${warning}
+`);
+    return;
   }
   const result = await convert(source, { ...command.options, css });
   const files = await writeBundle(result, command.outDir);
@@ -16679,7 +17175,7 @@ async function main() {
       return 0;
     }
     if (command.kind === "version") {
-      const manifest = JSON.parse(await readFile5(new URL("../package.json", import.meta.url), "utf8"));
+      const manifest = JSON.parse(await readFile6(new URL("../package.json", import.meta.url), "utf8"));
       process.stdout.write(`${manifest.version}
 `);
       return 0;

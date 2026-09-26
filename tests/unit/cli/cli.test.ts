@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseArgs, UsageError } from "../../../src/cli/args.ts";
 
 const entry = join(import.meta.dir, "../../../src/cli.ts");
 
@@ -88,4 +89,20 @@ test("invalid Swift names are usage errors before Chrome starts", async () => {
   expect(result.code).toBe(2);
   expect(result.stderr).toContain("Swift type identifier");
   expect(result.stderr).toContain("markswift convert --help");
+});
+
+test("responsive CLI options require a valid compact-to-regular breakpoint", () => {
+  const base = ["convert", "page.html", "--out", "generated"];
+  const command = parseArgs([...base, "--compact-width", "320", "--breakpoint", "350", "--width", "390"]);
+  expect(command.kind).toBe("convert");
+  if (command.kind !== "convert") throw new Error("Expected conversion command");
+  expect(command.responsive).toEqual({ compactWidth: 320, breakpoint: 350 });
+  for (const extra of [
+    ["--compact-width", "320"],
+    ["--breakpoint", "350"],
+    ["--compact-width", "350", "--breakpoint", "350", "--width", "350"],
+    ["--compact-width", "321", "--breakpoint", "320"],
+    ["--compact-width", "0", "--breakpoint", "350"],
+    ["--compact-width", "320", "--breakpoint", "3.5"],
+  ]) expect(() => parseArgs([...base, ...extra])).toThrow(UsageError);
 });

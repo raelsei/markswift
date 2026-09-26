@@ -9,6 +9,7 @@ export interface ConversionCommand {
   outDir: string;
   cssPath?: string;
   options: Pick<ConvertOptions, "name" | "root" | "theme" | "mode" | "viewport">;
+  responsive?: { compactWidth: number; breakpoint: number };
 }
 
 export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand;
@@ -32,6 +33,8 @@ Options:
   --root <selector> Capture only this CSS selector
   --width <px>      Viewport width (default: 390)
   --height <px>     Viewport height (default: 844)
+  --compact-width <px>  Also capture this smaller width for one responsive Swift view
+  --breakpoint <px>     Required with --compact-width; selects compact at widths ≤ this value
   --theme <value>   light or dark (default: light)
   --mode <value>    app or fidelity (default: app)
   -h, --help        Show this help
@@ -40,7 +43,7 @@ Options:
 Requires Bun or Node.js and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
-const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--mode"]);
+const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--compact-width", "--breakpoint", "--theme", "--mode"]);
 
 export function parseArgs(args: string[]): Command {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) return { kind: "help" };
@@ -77,6 +80,15 @@ export function parseArgs(args: string[]): Command {
   const source = url ? { url } : positional[0] === "-" ? { stdin: true as const } : { file: positional[0]! };
   const width = dimension(values.get("--width"), "--width", 390);
   const height = dimension(values.get("--height"), "--height", 844);
+  const hasCompact = values.has("--compact-width"), hasBreakpoint = values.has("--breakpoint");
+  if (hasCompact !== hasBreakpoint) throw new UsageError("--compact-width and --breakpoint must be used together");
+  const responsive = hasCompact ? {
+    compactWidth: dimension(values.get("--compact-width"), "--compact-width", 320),
+    breakpoint: dimension(values.get("--breakpoint"), "--breakpoint", 350),
+  } : undefined;
+  if (responsive && !(responsive.compactWidth <= responsive.breakpoint && responsive.breakpoint < width)) {
+    throw new UsageError("Responsive widths must satisfy --compact-width ≤ --breakpoint < --width");
+  }
   const theme = values.get("--theme") ?? "light";
   const mode = values.get("--mode") ?? "app";
   const name = values.get("--name");
@@ -89,6 +101,7 @@ export function parseArgs(args: string[]): Command {
   return {
     kind: "convert", source, outDir, cssPath: values.get("--css"),
     options: { name, root: values.get("--root"), theme, mode, viewport: { width, height } },
+    responsive,
   };
 }
 

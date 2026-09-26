@@ -41,13 +41,36 @@ browserTest("object-fit and object-position survive capture with honest image ma
   for (const id of ["default", "fill", "cover", "contain"]) expect(diagnostic(id)).toBeUndefined();
   expect(diagnostic("none")?.notes.join(" ")).toContain("object-fit: none");
   expect(diagnostic("scale-down")?.notes.join(" ")).toContain("object-fit: scale-down");
-  expect(diagnostic("positioned")?.notes.join(" ")).toContain("object-position: 0% 0%");
+  expect(images.get("#positioned")?.objectPosition).toEqual([0, 0]);
+  expect(images.get("#positioned")?.intrinsicSize).toEqual([80, 40]);
+  expect(diagnostic("positioned")).toBeUndefined();
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\.resizable\(\)\s*\.accessibilityLabel\("fill"\)/);
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\.resizable\(\)\s*\.accessibilityLabel\("default"\)/);
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\.resizable\(\)\.aspectRatio\(contentMode: \.fill\)\s*\.accessibilityLabel\("cover"\)/);
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\.resizable\(\)\.aspectRatio\(contentMode: \.fit\)\s*\.accessibilityLabel\("contain"\)/);
   expect(result.code).toMatch(/Image\.markswiftData\("[^"]+"\)\s*\.accessibilityLabel\("none"\)/);
-  expect(result.mapping.approximated).toBeGreaterThanOrEqual(3);
+  expect(result.code).toContain(".offset(x: (geometry.size.width - drawnWidth) * 0.0, y: (geometry.size.height - drawnHeight) * 0.0)");
+  expect(result.mapping.approximated).toBeGreaterThanOrEqual(2);
+}, 30_000);
+
+browserTest("EXIF-rotated JPEG position uses browser display dimensions", async () => {
+  const jpeg = await sharp({ create: { width: 80, height: 40, channels: 3, background: "#ff0000" } })
+    .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+  const src = `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+  const browser = await chromium.launch({ headless: true, channel: "chrome" });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<img src="${src}">`);
+    const natural = await page.locator("img").evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]);
+    expect(natural).toEqual([40, 80]);
+  } finally { await browser.close(); }
+
+  const result = await convertHtml(`<img data-markswift-root src="${src}" alt="Rotated photo" style="width:65px;height:65px;object-fit:cover;object-position:left top">`, { name: "RotatedPhoto" });
+  const nodes: ImageNode[] = [];
+  visit(inferScreen(result.layout, "RotatedPhoto").root, node => { if (node.kind === "image") nodes.push(node); });
+  expect(nodes[0]?.intrinsicSize).toEqual([40, 80]);
+  expect(result.code).toContain("geometry.size.width / 40.0, geometry.size.height / 80.0");
+  expect(result.diagnostics.find(item => item.id === nodes[0]?.id)).toBeUndefined();
 }, 30_000);
 
 browserTest("SVG data images centre cover and contain artwork in the measured image box", async () => {

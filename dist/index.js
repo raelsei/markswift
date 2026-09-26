@@ -10652,6 +10652,8 @@ function rasterDimensions(bytes) {
     return size(bytes.readUInt16LE(6), bytes.readUInt16LE(8));
   if (bytes.length >= 12 && bytes[0] === 255 && bytes[1] === 216) {
     let at = 2;
+    let orientation = 1;
+    let dimensions;
     while (at + 3 < bytes.length) {
       if (bytes[at++] !== 255)
         break;
@@ -10667,10 +10669,13 @@ function rasterDimensions(bytes) {
       const length = bytes.readUInt16BE(at);
       if (length < 2 || at + length > bytes.length)
         break;
+      if (marker === 225)
+        orientation = exifOrientation(bytes, at + 2, at + length) ?? orientation;
       if ((marker >= 192 && marker <= 195 || marker >= 197 && marker <= 199 || marker >= 201 && marker <= 203 || marker >= 205 && marker <= 207) && length >= 7)
-        return size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
+        dimensions = size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
       at += length;
     }
+    return dimensions && orientation >= 5 && orientation <= 8 ? { w: dimensions.h, h: dimensions.w } : dimensions;
   }
   if (bytes.length >= 30 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") {
     const chunk = bytes.toString("ascii", 12, 16);
@@ -10680,6 +10685,35 @@ function rasterDimensions(bytes) {
       return size(1 + bytes[21] + ((bytes[22] & 63) << 8), 1 + (bytes[22] >> 6) + (bytes[23] << 2) + ((bytes[24] & 15) << 10));
     if (chunk === "VP8X")
       return size(1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16), 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16));
+  }
+  return;
+}
+function exifOrientation(bytes, start, end) {
+  if (start + 14 > end || bytes.toString("ascii", start, start + 4) !== "Exif" || bytes[start + 4] !== 0 || bytes[start + 5] !== 0)
+    return;
+  const tiff = start + 6;
+  const order = bytes.toString("ascii", tiff, tiff + 2);
+  if (order !== "II" && order !== "MM")
+    return;
+  const read16 = (offset) => offset + 2 <= end ? order === "II" ? bytes.readUInt16LE(offset) : bytes.readUInt16BE(offset) : undefined;
+  const read32 = (offset) => offset + 4 <= end ? order === "II" ? bytes.readUInt32LE(offset) : bytes.readUInt32BE(offset) : undefined;
+  if (read16(tiff + 2) !== 42)
+    return;
+  const offset = read32(tiff + 4);
+  if (offset === undefined)
+    return;
+  const ifd = tiff + offset;
+  const count = read16(ifd);
+  if (count === undefined)
+    return;
+  for (let index = 0;index < count; index++) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end)
+      break;
+    if (read16(entry) !== 274 || read16(entry + 2) !== 3 || read32(entry + 4) !== 1)
+      continue;
+    const value = read16(entry + 8);
+    return value !== undefined && value >= 1 && value <= 8 ? value : undefined;
   }
   return;
 }
@@ -13575,18 +13609,25 @@ function build(n, ctx) {
   if (policy.route === "image") {
     const fit = n.styles["object-fit"] ?? "fill";
     const position = n.styles["object-position"] ?? "50% 50%";
+    const src = n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "";
+    const anchor = objectPosition(position);
+    const intrinsic = anchor && (anchor[0] !== 0.5 || anchor[1] !== 0.5) && (fit === "cover" || fit === "contain") ? imageSize(src) : undefined;
     const image = withBase(n, ctx, {
       kind: "image",
-      src: n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src,
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
+      ...intrinsic && intrinsic.w > 0 && intrinsic.h > 0 ? { intrinsicSize: [intrinsic.w, intrinsic.h] } : {},
       ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}
     });
     if (fit === "scale-down")
       image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
     if (fit === "none")
       image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");
-    if (fit !== "fill" && position !== "50% 50%" && position !== "center center" && position !== "center") {
-      image.notes.push(`approximated: object-position: ${position} → centered image content`);
+    if (fit !== "fill" && (anchor === undefined || anchor[0] !== 0.5 || anchor[1] !== 0.5)) {
+      if (anchor && intrinsic && intrinsic.w > 0 && intrinsic.h > 0 && (fit === "cover" || fit === "contain"))
+        image.objectPosition = anchor;
+      else
+        image.notes.push(`approximated: object-position: ${position} → centered image content; ${!anchor ? "position syntax unsupported" : fit !== "cover" && fit !== "contain" ? "object-fit mode unsupported" : "intrinsic image size unavailable"}`);
     }
     return finish(image);
   }
@@ -13647,6 +13688,28 @@ function build(n, ctx) {
   const stack = buildFlowStack(n, base, items, axis, display);
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   return finish(stack);
+}
+function objectPosition(value) {
+  const tokens = value.trim().toLowerCase().split(/\s+/);
+  if (!tokens.length || tokens.length > 2)
+    return;
+  const x = (token) => token === "left" ? 0 : token === "right" ? 1 : token === "center" ? 0.5 : percent(token);
+  const y = (token) => token === "top" ? 0 : token === "bottom" ? 1 : token === "center" ? 0.5 : percent(token);
+  if (tokens.length === 1) {
+    const token = tokens[0];
+    if (token === "top" || token === "bottom")
+      return [0.5, y(token)];
+    const horizontal = x(token);
+    return horizontal === undefined ? undefined : [horizontal, 0.5];
+  }
+  const [first, second] = tokens;
+  const verticalFirst = first === "top" || first === "bottom" || second === "left" || second === "right";
+  const horizontal = x(verticalFirst ? second : first);
+  const vertical = y(verticalFirst ? first : second);
+  return horizontal === undefined || vertical === undefined ? undefined : [horizontal, vertical];
+}
+function percent(value) {
+  return /^-?(?:\d+\.?\d*|\.\d+)%$/.test(value) ? Number.parseFloat(value) / 100 : undefined;
 }
 
 // src/analysis/infer.ts
@@ -14063,6 +14126,24 @@ function imageNodeExpr(n, ctx) {
     ];
   }
   if (src.kind === "raster") {
+    if (n.objectPosition && n.intrinsicSize && (n.contentMode === "fill" || n.contentMode === "fit")) {
+      const [iw, ih] = n.intrinsicSize;
+      const [x, y] = n.objectPosition;
+      return [
+        "Color.clear",
+        ".overlay {",
+        "    GeometryReader { geometry in",
+        `        let scale = ${n.contentMode === "fill" ? "max" : "min"}(geometry.size.width / ${num3(iw)}, geometry.size.height / ${num3(ih)})`,
+        `        let drawnWidth = ${num3(iw)} * scale`,
+        `        let drawnHeight = ${num3(ih)} * scale`,
+        `        ${src.expr(".resizable()")}`,
+        "            .frame(width: drawnWidth, height: drawnHeight)",
+        `            .offset(x: (geometry.size.width - drawnWidth) * ${num3(x)}, y: (geometry.size.height - drawnHeight) * ${num3(y)})`,
+        "    }",
+        "}",
+        ...a11y
+      ];
+    }
     const sizing = n.contentMode === "stretch" ? ".resizable()" : n.contentMode === "none" ? "" : `.resizable().aspectRatio(contentMode: .${n.contentMode})`;
     return [src.expr(sizing), ...a11y];
   }
@@ -14073,12 +14154,17 @@ function imageNodeExpr(n, ctx) {
   const liveBox = ctx.mode === "app" && (n.width.kind === "fill" || n.width.kind === "fraction" || n.height.kind === "fill");
   if (liveBox && n.contentMode !== "none") {
     const scale = n.contentMode === "fill" ? "max" : "min";
+    const [x, y] = n.objectPosition ?? [0.5, 0.5];
     return [
       "Color.clear",
       ".overlay {",
       "    GeometryReader { geometry in",
+      ...n.objectPosition ? [`        let scale = ${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)})`] : [],
       ...indent(src.view(vw, vh), 2),
-      `        .scaleEffect(${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)}))`,
+      `        .scaleEffect(${n.objectPosition ? "scale" : `${scale}(geometry.size.width / ${num3(vw)}, geometry.size.height / ${num3(vh)})`})`,
+      ...n.objectPosition ? [
+        `        .offset(x: (geometry.size.width - ${num3(vw)} * scale) * ${num3(x - 0.5)}, y: (geometry.size.height - ${num3(vh)} * scale) * ${num3(y - 0.5)})`
+      ] : [],
       "        .frame(width: geometry.size.width, height: geometry.size.height)",
       "    }",
       "}",
@@ -14086,7 +14172,11 @@ function imageNodeExpr(n, ctx) {
     ];
   }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
+  const drawn = src.view(vw * s, vh * s);
+  const [x, y] = n.objectPosition ?? [0.5, 0.5];
+  const offsetX = (n.frame.w - vw * s) * (x - 0.5);
+  const offsetY = (n.frame.h - vh * s) * (y - 0.5);
+  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(n.objectPosition ? [...drawn, `.offset(x: ${num3(offsetX)}, y: ${num3(offsetY)})`] : drawn, 1), "}", ...a11y];
 }
 
 // src/swift/paint.ts

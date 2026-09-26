@@ -28,6 +28,10 @@ __pycache__/
 /tools/verify/fixtures/*
 !/tools/verify/fixtures/rich-text.html
 !/tools/verify/fixtures/rich-text.css
+!/tools/verify/fixtures/full-page.html
+!/tools/verify/fixtures/full-page.css
+!/tools/verify/fixtures/image-position.html
+!/tools/verify/fixtures/image-position.css
 
 # Generated output and editor/agent state
 /generated/

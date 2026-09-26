@@ -1,6 +1,6 @@
 import type { LayoutNode } from "../model/layout.ts";
-import type { SemNode, Axis } from "../model/semantic.ts";
-import { parseColor, parseDeclared } from "../css/index.ts";
+import type { SemNode, Axis, ImageNode } from "../model/semantic.ts";
+import { imageSize, parseColor, parseDeclared } from "../css/index.ts";
 import { buildSvg } from "./svg.ts";
 import { controlOf, buildControl } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
@@ -22,16 +22,21 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (policy.route === "image") {
     const fit = n.styles["object-fit"] ?? "fill";
     const position = n.styles["object-position"] ?? "50% 50%";
+    const src = n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "";
+    const anchor = objectPosition(position);
+    const intrinsic = anchor && (anchor[0] !== 0.5 || anchor[1] !== 0.5) && (fit === "cover" || fit === "contain") ? imageSize(src) : undefined;
     const image = withBase(n, ctx, {
       kind: "image",
-      src: n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src,
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
+      ...(intrinsic && intrinsic.w > 0 && intrinsic.h > 0 ? { intrinsicSize: [intrinsic.w, intrinsic.h] as [number, number] } : {}),
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
-    });
+    }) as ImageNode;
     if (fit === "scale-down") image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
     if (fit === "none") image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");
-    if (fit !== "fill" && position !== "50% 50%" && position !== "center center" && position !== "center") {
-      image.notes.push(`approximated: object-position: ${position} → centered image content`);
+    if (fit !== "fill" && (anchor === undefined || anchor[0] !== 0.5 || anchor[1] !== 0.5)) {
+      if (anchor && intrinsic && intrinsic.w > 0 && intrinsic.h > 0 && (fit === "cover" || fit === "contain")) image.objectPosition = anchor;
+      else image.notes.push(`approximated: object-position: ${position} → centered image content; ${!anchor ? "position syntax unsupported" : fit !== "cover" && fit !== "contain" ? "object-fit mode unsupported" : "intrinsic image size unavailable"}`);
     }
     return finish(image);
   }
@@ -111,4 +116,27 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const stack = buildFlowStack(n, base, items, axis, display);
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   return finish(stack);
+}
+
+/** Browser-computed `object-position` percentages and side keywords; length offsets need a separate CSS length model. */
+function objectPosition(value: string): [number, number] | undefined {
+  const tokens = value.trim().toLowerCase().split(/\s+/);
+  if (!tokens.length || tokens.length > 2) return undefined;
+  const x = (token: string): number | undefined => token === "left" ? 0 : token === "right" ? 1 : token === "center" ? 0.5 : percent(token);
+  const y = (token: string): number | undefined => token === "top" ? 0 : token === "bottom" ? 1 : token === "center" ? 0.5 : percent(token);
+  if (tokens.length === 1) {
+    const token = tokens[0]!;
+    if (token === "top" || token === "bottom") return [0.5, y(token)!];
+    const horizontal = x(token);
+    return horizontal === undefined ? undefined : [horizontal, 0.5];
+  }
+  const [first, second] = tokens as [string, string];
+  const verticalFirst = first === "top" || first === "bottom" || second === "left" || second === "right";
+  const horizontal = x(verticalFirst ? second : first);
+  const vertical = y(verticalFirst ? first : second);
+  return horizontal === undefined || vertical === undefined ? undefined : [horizontal, vertical];
+}
+
+function percent(value: string): number | undefined {
+  return /^-?(?:\d+\.?\d*|\.\d+)%$/.test(value) ? Number.parseFloat(value) / 100 : undefined;
 }

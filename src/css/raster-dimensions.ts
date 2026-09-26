@@ -1,4 +1,4 @@
-/** Intrinsic pixel dimensions from common raster headers; no image decoder dependency. */
+/** Displayed dimensions from common raster headers; no image decoder dependency. */
 export function rasterDimensions(bytes: Buffer): { w: number; h: number } | undefined {
   const size = (w: number, h: number) => w > 0 && h > 0 ? { w, h } : undefined;
   if (bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
@@ -10,6 +10,8 @@ export function rasterDimensions(bytes: Buffer): { w: number; h: number } | unde
 
   if (bytes.length >= 12 && bytes[0] === 0xff && bytes[1] === 0xd8) {
     let at = 2;
+    let orientation = 1;
+    let dimensions: { w: number; h: number } | undefined;
     while (at + 3 < bytes.length) {
       if (bytes[at++] !== 0xff) break;
       while (bytes[at] === 0xff) at++;
@@ -19,11 +21,15 @@ export function rasterDimensions(bytes: Buffer): { w: number; h: number } | unde
       if (at + 2 > bytes.length) break;
       const length = bytes.readUInt16BE(at);
       if (length < 2 || at + length > bytes.length) break;
+      if (marker === 0xe1) orientation = exifOrientation(bytes, at + 2, at + length) ?? orientation;
       if ((marker >= 0xc0 && marker <= 0xc3 || marker >= 0xc5 && marker <= 0xc7
         || marker >= 0xc9 && marker <= 0xcb || marker >= 0xcd && marker <= 0xcf) && length >= 7)
-        return size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
+        dimensions = size(bytes.readUInt16BE(at + 5), bytes.readUInt16BE(at + 3));
       at += length;
     }
+    return dimensions && orientation >= 5 && orientation <= 8
+      ? { w: dimensions.h, h: dimensions.w }
+      : dimensions;
   }
 
   if (bytes.length >= 30 && bytes.toString("ascii", 0, 4) === "RIFF"
@@ -37,6 +43,30 @@ export function rasterDimensions(bytes: Buffer): { w: number; h: number } | unde
     if (chunk === "VP8X")
       return size(1 + bytes[24]! + (bytes[25]! << 8) + (bytes[26]! << 16),
         1 + bytes[27]! + (bytes[28]! << 8) + (bytes[29]! << 16));
+  }
+  return undefined;
+}
+
+/** The TIFF orientation in a JPEG APP1 Exif segment; rotations 5–8 exchange display axes. */
+function exifOrientation(bytes: Buffer, start: number, end: number): number | undefined {
+  if (start + 14 > end || bytes.toString("ascii", start, start + 4) !== "Exif" || bytes[start + 4] !== 0 || bytes[start + 5] !== 0) return undefined;
+  const tiff = start + 6;
+  const order = bytes.toString("ascii", tiff, tiff + 2);
+  if (order !== "II" && order !== "MM") return undefined;
+  const read16 = (offset: number) => offset + 2 <= end ? order === "II" ? bytes.readUInt16LE(offset) : bytes.readUInt16BE(offset) : undefined;
+  const read32 = (offset: number) => offset + 4 <= end ? order === "II" ? bytes.readUInt32LE(offset) : bytes.readUInt32BE(offset) : undefined;
+  if (read16(tiff + 2) !== 42) return undefined;
+  const offset = read32(tiff + 4);
+  if (offset === undefined) return undefined;
+  const ifd = tiff + offset;
+  const count = read16(ifd);
+  if (count === undefined) return undefined;
+  for (let index = 0; index < count; index++) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end) break;
+    if (read16(entry) !== 0x0112 || read16(entry + 2) !== 3 || read32(entry + 4) !== 1) continue;
+    const value = read16(entry + 8);
+    return value !== undefined && value >= 1 && value <= 8 ? value : undefined;
   }
   return undefined;
 }

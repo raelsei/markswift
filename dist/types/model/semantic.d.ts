@@ -368,6 +368,10 @@ export interface ImageNode extends SemBase {
     src: string;
     /** CSS object-fit: cover/contain/fill/none. `scale-down` is captured as fit with a diagnostic. */
     contentMode: "fill" | "fit" | "stretch" | "none";
+    /** CSS object-position percentages on the free space after cover/contain sizing (0 = near edge, 1 = far edge). */
+    objectPosition?: [number, number];
+    /** Encoded pixel size of a supported inline image; needed to position scaled artwork inside its box. */
+    intrinsicSize?: [number, number];
     /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
     alt?: string;
     /** Computed font of the element; used when the alt text stands in for a source that cannot render. */

@@ -1,0 +1,25 @@
+html, body { margin: 0; background: #fff; }
+* { box-sizing: border-box; }
+.page { width: 100%; height: 650px; padding: 24px; background: #f3efe8; color: #20202a; font: 15px/1.4 system-ui; }
+.page header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #aaa5a0; padding-bottom: 16px; }
+.page header strong { font-size: 22px; letter-spacing: 2px; }
+.page nav { font-size: 12px; }
+.hero { display: flex; gap: 20px; margin-top: 30px; }
+.copy { flex: 1; }
+.copy small { letter-spacing: 2px; color: #916b55; }
+.copy h1 { font: 700 36px/1.05 system-ui; margin: 15px 0; }
+.copy p { max-width: 300px; }
+.action { display: inline-block; background: #222235; color: #fff; border-radius: 18px; padding: 10px 14px; margin-top: 10px; }
+.hero aside { width: 96px; height: 190px; padding: 15px; background: #d9caab; border-radius: 12px; }
+.hero aside span { font: 700 40px system-ui; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 30px; }
+.cards article { padding: 16px; background: #fff; border: 1px solid #d9d3cc; border-radius: 12px; }
+.cards h3 { margin: 8px 0 2px; }
+.cards p { font-size: 12px; }
+@media (max-width: 350px) {
+  .page nav { display: none; }
+  .hero { flex-direction: column; gap: 5px; }
+  .hero aside { display: none; }
+  .cards { grid-template-columns: 1fr; }
+  .copy h1 { font-size: 31px; }
+}

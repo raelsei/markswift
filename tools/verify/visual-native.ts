@@ -82,8 +82,8 @@ final class PreviewTests: XCTestCase {
 `;
 }
 
-/** Render both viewport widths from one measured and compiled 390-point Swift bundle. */
-export async function renderVisualSnapshots(bundle: CompileResult, layout: LayoutDoc, outputs: Record<number, string>, work: string): Promise<void> {
+/** Render both viewport widths from one compiled Swift bundle. */
+export async function renderVisualSnapshots(bundle: Pick<CompileResult, "name" | "files">, layout: LayoutDoc, outputs: Record<number, string>, work: string): Promise<void> {
   const inventory = JSON.parse(await command(["xcrun", "simctl", "list", "devices", "available", "-j"], undefined, 15_000)) as SimulatorInventory;
   const device = selectSimulator(inventory);
   const generated = join(work, "Sources", "Generated");

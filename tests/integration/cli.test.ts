@@ -73,3 +73,30 @@ browserTest("CLI captures a running page URL and selected component", async () =
     await rm(directory, { recursive: true, force: true });
   }
 }, 45_000);
+
+browserTest("CLI writes both CSS breakpoint captures as one responsive Swift bundle", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-cli-responsive-"));
+  try {
+    const source = join(directory, "page.html");
+    const css = join(directory, "page.css");
+    const output = join(directory, "generated");
+    await Bun.write(source, '<main data-markswift-root><span class="desktop">Wide layout</span><span class="mobile">Compact layout</span></main>');
+    await Bun.write(css, 'body{margin:0}main{width:100%;height:80px;font:18px system-ui}.mobile{display:none}@media(max-width:350px){.desktop{display:none}.mobile{display:inline}}');
+    const child = Bun.spawn([
+      process.execPath, join(import.meta.dir, "../../src/cli.ts"), "convert", source,
+      "--css", css, "--name", "ResponsivePage", "--out", output,
+      "--compact-width", "320", "--breakpoint", "350", "--width", "390",
+    ], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(code, stderr).toBe(0);
+    expect(stdout).toContain("Node mapping (compact):");
+    expect(stdout).toContain("Node mapping (regular):");
+    expect(stderr).toContain("CSS @media sampled at compact 320px and regular 390px");
+    expect(await Bun.file(join(output, "ResponsivePage.swift")).text()).toContain("MarkswiftResponsiveLayout(breakpoint: 350)");
+    expect(await Bun.file(join(output, "ResponsivePageCompact.swift")).text()).toContain("Compact layout");
+    expect(await Bun.file(join(output, "ResponsivePageRegular.swift")).text()).toContain("Wide layout");
+    expect(await Bun.file(join(output, "MarkswiftResponsiveLayout.swift")).exists()).toBe(true);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 60_000);

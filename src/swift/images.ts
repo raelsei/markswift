@@ -143,6 +143,23 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     ];
   }
   if (src.kind === "raster") {
+    // SwiftUI's aspect-ratio image is centred. An inline raster exposes its natural dimensions,
+    // so cover/contain can instead size it against the live box and place its top-left corner
+    // on the CSS free-space percentage (which may be negative for cover).
+    if (n.objectPosition && n.intrinsicSize && (n.contentMode === "fill" || n.contentMode === "fit")) {
+      const [iw, ih] = n.intrinsicSize;
+      const [x, y] = n.objectPosition;
+      return [
+        "Color.clear", ".overlay {", "    GeometryReader { geometry in",
+        `        let scale = ${n.contentMode === "fill" ? "max" : "min"}(geometry.size.width / ${num(iw)}, geometry.size.height / ${num(ih)})`,
+        `        let drawnWidth = ${num(iw)} * scale`,
+        `        let drawnHeight = ${num(ih)} * scale`,
+        `        ${src.expr(".resizable()")}`,
+        "            .frame(width: drawnWidth, height: drawnHeight)",
+        `            .offset(x: (geometry.size.width - drawnWidth) * ${num(x)}, y: (geometry.size.height - drawnHeight) * ${num(y)})`,
+        "    }", "}", ...a11y,
+      ];
+    }
     const sizing = n.contentMode === "stretch" ? ".resizable()" : n.contentMode === "none" ? "" : `.resizable().aspectRatio(contentMode: .${n.contentMode})`;
     return [src.expr(sizing), ...a11y];
   }
@@ -163,14 +180,23 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   const liveBox = ctx.mode === "app" && (n.width.kind === "fill" || n.width.kind === "fraction" || n.height.kind === "fill");
   if (liveBox && n.contentMode !== "none") {
     const scale = n.contentMode === "fill" ? "max" : "min";
+    const [x, y] = n.objectPosition ?? [0.5, 0.5];
     return [
       "Color.clear", ".overlay {", "    GeometryReader { geometry in",
+      ...(n.objectPosition ? [`        let scale = ${scale}(geometry.size.width / ${num(vw)}, geometry.size.height / ${num(vh)})`] : []),
       ...indent(src.view(vw, vh), 2),
-      `        .scaleEffect(${scale}(geometry.size.width / ${num(vw)}, geometry.size.height / ${num(vh)}))`,
+      `        .scaleEffect(${n.objectPosition ? "scale" : `${scale}(geometry.size.width / ${num(vw)}, geometry.size.height / ${num(vh)})`})`,
+      ...(n.objectPosition ? [
+        `        .offset(x: (geometry.size.width - ${num(vw)} * scale) * ${num(x - 0.5)}, y: (geometry.size.height - ${num(vh)} * scale) * ${num(y - 0.5)})`,
+      ] : []),
       "        .frame(width: geometry.size.width, height: geometry.size.height)",
       "    }", "}", ...a11y,
     ];
   }
   const s = n.contentMode === "none" ? 1 : n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(src.view(vw * s, vh * s), 1), "}", ...a11y];
+  const drawn = src.view(vw * s, vh * s);
+  const [x, y] = n.objectPosition ?? [0.5, 0.5];
+  const offsetX = (n.frame.w - vw * s) * (x - 0.5);
+  const offsetY = (n.frame.h - vh * s) * (y - 0.5);
+  return ["Color.clear", ".overlay(alignment: .center) {", ...indent(n.objectPosition ? [...drawn, `.offset(x: ${num(offsetX)}, y: ${num(offsetY)})`] : drawn, 1), "}", ...a11y];
 }
