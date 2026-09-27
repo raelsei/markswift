@@ -2,6 +2,7 @@
 import type { LayoutNode } from "../model/layout.ts";
 import type { TextRunSource, TextProjectionUnit, SourceInterval } from "../model/text-source.ts";
 import type { Collapse } from "./text-runs.ts";
+import { DOCUMENT_WHITESPACE } from "./document-whitespace.ts";
 
 export function textSourceProjection(node: LayoutNode, text: string, indices: number[], mode: Collapse): TextRunSource | undefined {
   const source = node.textSource;
@@ -26,9 +27,9 @@ export function textSourceProjection(node: LayoutNode, text: string, indices: nu
     } else if (mismatch || at === undefined || at < 0 || at >= source.raw.length) {
       unit.reason = "source offset unavailable";
       projection.unavailable.push("source offset unavailable");
-    } else if (mode !== "preserve" && /\s/.test(source.raw[at]!)) {
+    } else if (mode !== "preserve" && DOCUMENT_WHITESPACE.test(source.raw[at]!)) {
       let end = at + 1;
-      while (end < source.raw.length && /\s/.test(source.raw[end]!)) end++;
+      while (end < source.raw.length && DOCUMENT_WHITESPACE.test(source.raw[end]!)) end++;
       if (mode === "preserve-breaks" && source.raw.slice(at, end).includes("\n")) {
         unit.reason = "preserve-breaks collapse group mapping unproved";
         projection.unavailable.push(unit.reason);

@@ -4,6 +4,7 @@ import { type Color, parseColor } from "../css/index.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
 import { classifyElement } from "../html/policy.ts";
+import { DOCUMENT_WHITESPACE } from "./document-whitespace.ts";
 
 // ---------- text ----------
 
@@ -83,7 +84,7 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
   let out = "";
   const src: number[] = [];
   for (let i = 0; i < text.length; ) {
-    if (!WS.test(text[i]!)) {
+    if (!DOCUMENT_WHITESPACE.test(text[i]!)) {
       out += text[i];
       src.push(i);
       i++;
@@ -91,7 +92,7 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
     }
     let j = i;
     let breaks = 0;
-    for (; j < text.length && WS.test(text[j]!); j++) if (text[j] === "\n") breaks++;
+    for (; j < text.length && DOCUMENT_WHITESPACE.test(text[j]!); j++) if (text[j] === "\n") breaks++;
     // `preserve-breaks` keeps every segment break and collapses the spaces around them.
     for (let k = 0; k < (mode === "preserve-breaks" && breaks > 0 ? breaks : 1); k++) {
       out += mode === "preserve-breaks" && breaks > 0 ? "\n" : " ";
@@ -101,8 +102,6 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
   }
   return { text: out, src };
 }
-
-const WS = /\s/;
 
 export function decorationOf(s: Record<string, string>, color: Color): TextDecoration | undefined {
   const raw = s["-webkit-text-decorations-in-effect"] ?? s["text-decoration-line"] ?? "none";

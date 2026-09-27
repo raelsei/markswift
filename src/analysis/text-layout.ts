@@ -137,7 +137,7 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
   for (const b of built) {
     // Boundary-only runs do not have glyph geometry. Keep an explicit newline across any
     // whitespace-only run; <wbr> supplies an opportunity, not a hard break of its own.
-    if (!/[^\s\u200b]/u.test(b.run.text)) {
+    if (!/[^ \t\r\n\u200b]/u.test(b.run.text)) {
       if (b.run.text.includes("\n")) explicitBreak = true;
       continue;
     }

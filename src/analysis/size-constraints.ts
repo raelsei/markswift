@@ -35,6 +35,11 @@ export function constraintsOf(n: LayoutNode, declared: Record<string, string>, c
       result[key] = round2(Math.max(insets, resolved + (n.styles["box-sizing"] === "border-box" ? 0 : insets)));
     }
   }
+  // Retain intrinsic intent and the maximum before captured minimum precedence. Admission
+  // happens only after exact source/content pairing; numeric fallback stays unchanged.
+  if ((n.styles["min-width"] ?? declared["min-width"]) === "min-content") {
+    result.intrinsicMinWidth = { kind: "min-content", ...(result.maxWidth === undefined ? {} : { authoredMaxWidth: result.maxWidth }) };
+  }
   // CSS minimum sizing wins when a declared maximum is smaller than the minimum.
   if (result.minWidth !== undefined && result.maxWidth !== undefined) result.maxWidth = Math.max(result.minWidth, result.maxWidth);
   if (result.minHeight !== undefined && result.maxHeight !== undefined) result.maxHeight = Math.max(result.minHeight, result.maxHeight);

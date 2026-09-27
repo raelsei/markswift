@@ -10,11 +10,12 @@ import { styleOf } from "./style.ts";
 import { inlinePresentation } from "./inline-effects.ts";
 import { type BuiltTextRuns } from "./text-run-builder.ts";
 import { measuredTextLineBox } from "./text-line-box.ts";
+import { DOCUMENT_WHITESPACE_LEADING, DOCUMENT_WHITESPACE_TRAILING } from "./document-whitespace.ts";
 
 export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: SemBase, leaf: boolean, constructed: BuiltTextRuns, note: (s: string) => void): TextNode {
   const { out, built, painted, union } = constructed;
-  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^\s+/);
-  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /\s+$/);
+  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, DOCUMENT_WHITESPACE_LEADING);
+  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, DOCUMENT_WHITESPACE_TRAILING);
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";

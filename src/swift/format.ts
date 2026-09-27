@@ -4,7 +4,9 @@
 import type { Color } from "../css/index.ts";
 import type { FontSpec } from "../model/semantic.ts";
 import type { ColorCtx } from "./context.ts";
+import { swiftStringLiteral as str } from "./string-literal.ts";
 export type { ColorCtx, ScreenTokens } from "./context.ts";
+export { str };
 
 /** Indentation-aware line buffer. */
 export class Writer {
@@ -49,11 +51,6 @@ export function num(v: number): string {
   if (!Number.isFinite(v)) return "0";
   const s = (Math.round(v * 1000) / 1000).toString();
   return s.includes(".") || s.includes("e") ? s : s + ".0";
-}
-
-/** Swift string literal (JSON escaping is a valid subset). */
-export function str(s: string): string {
-  return JSON.stringify(s);
 }
 
 export function indent(lines: string[], n: number): string[] {

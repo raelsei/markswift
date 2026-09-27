@@ -1,4 +1,5 @@
 import type { SemNode } from "../model/semantic.ts";
+import { str } from "./format.ts";
 
 export type GeometryRole = "border" | "scroll-content" | "scroll-viewport";
 export interface GeometryManifestNode {
@@ -56,5 +57,5 @@ export function geometryModifier(node: SemNode, state?: GeometryInstrumentation,
   const entry = key ? state.entries.get(key) : undefined;
   if (!entry) return [];
   entry.instrumented = true;
-  return [`.markswiftObserveGeometry(${JSON.stringify(entry.key)}, role: ${JSON.stringify(entry.role)})`];
+  return [`.markswiftObserveGeometry(${str(entry.key)}, role: ${str(entry.role)})`];
 }

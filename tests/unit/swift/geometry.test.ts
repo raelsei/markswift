@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { compileLayout, compileLayouts, compileResponsiveLayouts, type LayoutDoc } from "../../../src/compiler/index.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
-import { geometryInstrumentation } from "../../../src/swift/geometry-observation.ts";
+import { geometryInstrumentation, geometryModifier } from "../../../src/swift/geometry-observation.ts";
 import type { BoxNode, Screen, SemBase, StackNode } from "../../../src/model/semantic.ts";
 
 function base(id: string): SemBase {
@@ -17,6 +17,13 @@ function screen(root: Screen["root"]): Screen {
 }
 const layout: LayoutDoc = { version: 1, source: "geometry.html", combo: { screen: "test", theme: "light", demoState: "normal" },
   size: { w: 100, h: 40 }, dpr: 1, canvas: "white", root: { tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 100, h: 40 }, children: [] } };
+
+test("geometry keys use Swift scalar escaping while retaining the raw manifest key", () => {
+  const root = box("source"), namespace = "probe\f\u001b";
+  const state = geometryInstrumentation(root, namespace);
+  expect(state.manifest.nodes[0]!.key).toBe(namespace + "/root");
+  expect(geometryModifier(root, state)).toEqual(['.markswiftObserveGeometry("probe\\u{c}\\u{1b}/root", role: "border")']);
+});
 
 test("disabled geometry instrumentation preserves compiler output exactly and adds no helper", () => {
   for (const mode of ["app", "fidelity"] as const) {

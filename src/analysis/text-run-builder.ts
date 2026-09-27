@@ -12,6 +12,7 @@ import { applyInlineEffects, inlineBoxHasPaint } from "./inline-effects.ts";
 import { linkDestinationLoss, nativeExternalURL } from "./link-destination.ts";
 import { textSourceProjection, trimTextSource, prependInferredSource, omittedTextSource } from "./text-provenance.ts";
 import type { TextRunSource } from "../model/text-source.ts";
+import { DOCUMENT_WHITESPACE_ONLY, DOCUMENT_WHITESPACE_END } from "./document-whitespace.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -37,6 +38,10 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     const boundary = r.node.tag === "br" ? "\n" : r.node.tag === "wbr" ? "\u200b" : undefined;
     if (r.node.tag === "wbr") note("approximated: <wbr> → zero-width break opportunity; native line breaking may differ");
     const mode: Collapse = boundary === undefined ? collapseOf(s) : "preserve";
+    if (boundary === undefined && /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(r.node.text ?? ""))
+      note("approximated: control-character glyphs retain source literals; browser control-glyph synthesis is not reconstructed");
+    if (mode === "preserve" && (r.node.text ?? "").includes("\r"))
+      note("approximated: preserved DOM carriage-return layout is unproved; native control processing may differ");
     const normalized = normalizeWhitespace(boundary ?? (r.node.text ?? ""), mode);
     let text = normalized.text;
     let src = normalized.src;
@@ -45,8 +50,8 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
       // Collapsible whitespace merges across run boundaries; a whitespace-only run is just the
       // separator between its neighbours.
       const prev = out[out.length - 1];
-      if (!text.trim()) {
-        if (prev && !/\s$/.test(prev.text)) pendingSpace = true;
+      if (DOCUMENT_WHITESPACE_ONLY.test(text)) {
+        if (prev && !DOCUMENT_WHITESPACE_END.test(prev.text)) pendingSpace = true;
         const omitted = omittedTextSource(r.node);
         if (omitted) {
           sourceAccounting ??= { version: 1, units: [], excluded: [], unavailable: [] };
@@ -55,7 +60,7 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
         }
         continue;
       }
-      if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+      if (text.startsWith(" ") && (!prev || DOCUMENT_WHITESPACE_END.test(prev.text))) {
         if (source) source = trimTextSource(source, 1, text.length);
         text = text.slice(1);
         src = src.slice(1);
@@ -63,7 +68,7 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
       // Snapshots may omit a whitespace-only text node between two inline elements; the laid-out
       // boxes (the inline element's, so its padding does not count) still show it as a gap on the
       // line, or as a break opportunity that wrapped.
-      if (prev && prevRun && r.node.tag !== "br" && r.node.tag !== "wbr" && prevRun.node.tag !== "wbr" && !/\s$/.test(prev.text) && !text.startsWith(" ")) {
+      if (prev && prevRun && r.node.tag !== "br" && r.node.tag !== "wbr" && prevRun.node.tag !== "wbr" && !DOCUMENT_WHITESPACE_END.test(prev.text) && !text.startsWith(" ")) {
         const a = (prevRun.styleOf === host ? prevRun.node : prevRun.styleOf).bounds;
         const b = (r.styleOf === host ? r.node : r.styleOf).bounds;
         const sameLine = b.y < a.y + a.h - 1;

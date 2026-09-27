@@ -3,6 +3,7 @@ import type { EmitContext, EmitMode } from "./context.ts";
 import { num } from "./format.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 import { usesGreedyWords } from "../analysis/text-flow-admission.ts";
+import { intrinsicWidthExpr } from "./intrinsic-width.ts";
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
@@ -35,11 +36,17 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // would grow a smaller explicit size to the cap instead of keeping its measured dimension.
   const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
+  const intrinsic = app && n.width.kind === "fill" && n.intrinsicMinWidth?.program
+    ? `${intrinsicWidthExpr(n.intrinsicMinWidth.program)}.value` : undefined;
+  const minimum = intrinsic ?? num(n.minWidth ?? 0);
+  const maximum = intrinsic
+    ? n.intrinsicMinWidth!.authoredMaxWidth === undefined ? ".infinity" : `max(${intrinsic}, ${num(n.intrinsicMinWidth!.authoredMaxWidth!)})`
+    : n.maxWidth === undefined ? undefined : num(n.maxWidth);
   const flex = [
     // Both bounds make a fill frame accept its proposal even when glyphs are wider.
     // Allocated track minima remain owned by the parent layout; authored IR floors win.
-    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${num(n.minWidth ?? 0)}` : "",
-    !fixedW && !greedyHug && n.maxWidth !== undefined ? `maxWidth: ${num(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
+    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${minimum}` : "",
+    !fixedW && !greedyHug && maximum !== undefined ? `maxWidth: ${maximum}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
     !fixedH && minHeight !== undefined ? `minHeight: ${num(minHeight)}` : "",
     !fixedH && maxHeight !== undefined ? `maxHeight: ${num(maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : "",
   ].filter(Boolean);

@@ -13353,6 +13353,13 @@ function styleOf(n, notes) {
   return style;
 }
 
+// src/analysis/document-whitespace.ts
+var DOCUMENT_WHITESPACE = /[ \t\r\n]/;
+var DOCUMENT_WHITESPACE_ONLY = /^[ \t\r\n]*$/;
+var DOCUMENT_WHITESPACE_END = /[ \t\r\n]$/;
+var DOCUMENT_WHITESPACE_LEADING = /^[ \t\r\n]+/;
+var DOCUMENT_WHITESPACE_TRAILING = /[ \t\r\n]+$/;
+
 // src/analysis/text-runs.ts
 function isInlineText(c) {
   if (classifyElement(c.tag, c.attrs).atomic)
@@ -13422,7 +13429,7 @@ function normalizeWhitespace(text, mode) {
   let out = "";
   const src = [];
   for (let i = 0;i < text.length; ) {
-    if (!WS.test(text[i])) {
+    if (!DOCUMENT_WHITESPACE.test(text[i])) {
       out += text[i];
       src.push(i);
       i++;
@@ -13430,7 +13437,7 @@ function normalizeWhitespace(text, mode) {
     }
     let j = i;
     let breaks = 0;
-    for (;j < text.length && WS.test(text[j]); j++)
+    for (;j < text.length && DOCUMENT_WHITESPACE.test(text[j]); j++)
       if (text[j] === `
 `)
         breaks++;
@@ -13443,7 +13450,6 @@ function normalizeWhitespace(text, mode) {
   }
   return { text: out, src };
 }
-var WS = /\s/;
 function decorationOf(s, color) {
   const raw = s["-webkit-text-decorations-in-effect"] ?? s["text-decoration-line"] ?? "none";
   const lines = raw.split(/\s+/).filter((l) => l === "underline" || l === "line-through" || l === "overline");
@@ -13524,6 +13530,9 @@ function constraintsOf(n, declared, ctx, notes) {
     } else {
       result[key] = round2(Math.max(insets, resolved + (n.styles["box-sizing"] === "border-box" ? 0 : insets)));
     }
+  }
+  if ((n.styles["min-width"] ?? declared["min-width"]) === "min-content") {
+    result.intrinsicMinWidth = { kind: "min-content", ...result.maxWidth === undefined ? {} : { authoredMaxWidth: result.maxWidth } };
   }
   if (result.minWidth !== undefined && result.maxWidth !== undefined)
     result.maxWidth = Math.max(result.minWidth, result.maxWidth);
@@ -14762,9 +14771,9 @@ function textSourceProjection(node, text, indices, mode) {
     } else if (mismatch || at === undefined || at < 0 || at >= source.raw.length) {
       unit.reason = "source offset unavailable";
       projection.unavailable.push("source offset unavailable");
-    } else if (mode !== "preserve" && /\s/.test(source.raw[at])) {
+    } else if (mode !== "preserve" && DOCUMENT_WHITESPACE.test(source.raw[at])) {
       let end = at + 1;
-      while (end < source.raw.length && /\s/.test(source.raw[end]))
+      while (end < source.raw.length && DOCUMENT_WHITESPACE.test(source.raw[end]))
         end++;
       if (mode === "preserve-breaks" && source.raw.slice(at, end).includes(`
 `)) {
@@ -14928,7 +14937,7 @@ function markLineBreaks(built) {
   let previousMeasuredBaseline;
   let explicitBreak = false;
   for (const b of built) {
-    if (!/[^\s\u200b]/u.test(b.run.text)) {
+    if (!/[^ \t\r\n\u200b]/u.test(b.run.text)) {
       if (b.run.text.includes(`
 `))
         explicitBreak = true;
@@ -15087,14 +15096,18 @@ function buildTextRuns(host, runs, ctx, note) {
     if (r.node.tag === "wbr")
       note("approximated: <wbr> → zero-width break opportunity; native line breaking may differ");
     const mode = boundary === undefined ? collapseOf(s) : "preserve";
+    if (boundary === undefined && /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(r.node.text ?? ""))
+      note("approximated: control-character glyphs retain source literals; browser control-glyph synthesis is not reconstructed");
+    if (mode === "preserve" && (r.node.text ?? "").includes("\r"))
+      note("approximated: preserved DOM carriage-return layout is unproved; native control processing may differ");
     const normalized = normalizeWhitespace(boundary ?? (r.node.text ?? ""), mode);
     let text = normalized.text;
     let src = normalized.src;
     let source = textSourceProjection(r.node, text, src, mode);
     if (mode === "collapse") {
       const prev = out[out.length - 1];
-      if (!text.trim()) {
-        if (prev && !/\s$/.test(prev.text))
+      if (DOCUMENT_WHITESPACE_ONLY.test(text)) {
+        if (prev && !DOCUMENT_WHITESPACE_END.test(prev.text))
           pendingSpace = true;
         const omitted = omittedTextSource(r.node);
         if (omitted) {
@@ -15104,13 +15117,13 @@ function buildTextRuns(host, runs, ctx, note) {
         }
         continue;
       }
-      if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+      if (text.startsWith(" ") && (!prev || DOCUMENT_WHITESPACE_END.test(prev.text))) {
         if (source)
           source = trimTextSource(source, 1, text.length);
         text = text.slice(1);
         src = src.slice(1);
       }
-      if (prev && prevRun && r.node.tag !== "br" && r.node.tag !== "wbr" && prevRun.node.tag !== "wbr" && !/\s$/.test(prev.text) && !text.startsWith(" ")) {
+      if (prev && prevRun && r.node.tag !== "br" && r.node.tag !== "wbr" && prevRun.node.tag !== "wbr" && !DOCUMENT_WHITESPACE_END.test(prev.text) && !text.startsWith(" ")) {
         const a = (prevRun.styleOf === host ? prevRun.node : prevRun.styleOf).bounds;
         const b = (r.styleOf === host ? r.node : r.styleOf).bounds;
         const sameLine = b.y < a.y + a.h - 1;
@@ -15208,9 +15221,9 @@ function buildTextRuns(host, runs, ctx, note) {
 function finishTextNode(host, runs, base, leaf, constructed, note) {
   const { out, built, painted, union } = constructed;
   if (out[0] && collapseOf(runs[0].styleOf.styles) === "collapse")
-    trimRun(built[0], /^\s+/);
+    trimRun(built[0], DOCUMENT_WHITESPACE_LEADING);
   if (built.length && collapseOf(runs[runs.length - 1].styleOf.styles) === "collapse")
-    trimRun(built[built.length - 1], /\s+$/);
+    trimRun(built[built.length - 1], DOCUMENT_WHITESPACE_TRAILING);
   const frame = leaf ? host.bounds : union ?? host.bounds;
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
   const ta = host.styles["text-align"] ?? "start";
@@ -16615,7 +16628,179 @@ function analyzeNativeTable(table, parent, families = {}) {
   } };
 }
 
+// src/analysis/intrinsic-min-content-source.ts
+var sources = new WeakMap;
+function intrinsicSource(node) {
+  return sources.get(node);
+}
+function joinIntrinsicText(source, node, runs, leaf, context) {
+  sources.set(node, { kind: "text", source, runs: [...runs], leaf, context });
+}
+function joinIntrinsicContainer(source, node, items, context) {
+  sources.set(node, { kind: "container", source, items: [...items], context });
+}
+function joinIntrinsicControl(source, node, context) {
+  sources.set(node, { kind: "control", source, context });
+}
+
+// src/analysis/intrinsic-min-content-admission.ts
+var fixedPx = (value) => value !== undefined && /^(?:0|\d+(?:\.\d+)?px)$/.test(value);
+var zero = (value) => value === "0" || value === "0px";
+var unconstrained3 = (value, minimum = false) => value === "auto" || value === "none" || minimum && zero(value);
+function textIndentReason(source) {
+  if (source.styles.display === "none")
+    return;
+  if (source.tag !== "#text") {
+    const value = source.styles["text-indent"];
+    if (value === undefined)
+      return "text-indent metadata unavailable";
+    if (!zero(value))
+      return `unsupported text-indent:${value}`;
+  }
+  for (const child of source.children) {
+    const reason = textIndentReason(child);
+    if (reason)
+      return reason;
+  }
+}
+function ordinaryIntrinsicReason(source, sem, root = false) {
+  const { styles: s, preferredSize: preferred } = source;
+  if (!/^(block|flow-root)$/.test(s.display ?? ""))
+    return "not ordinary block/flow-root content";
+  if (preferred?.width !== "auto" || preferred.hasRelativePadding)
+    return "relative or unknown preferred width/padding";
+  if (!preferred.horizontalAutoMargins || preferred.horizontalAutoMargins.some(Boolean) || !zero(s["margin-left"]) || !zero(s["margin-right"]))
+    return "non-atomic horizontal margin or margin intent unavailable";
+  if (root && s["max-width"] !== "none" && !fixedPx(s["max-width"]))
+    return "relative or unsupported root maximum";
+  if (root && sem.width.kind !== "fill")
+    return "requires semantic fill; source auto-stretch behind captured hug is unproved";
+  if (s.direction !== "ltr" || s["writing-mode"] !== "horizontal-tb")
+    return "non-horizontal LTR content";
+  if (!unconstrained3(s["aspect-ratio"]) && s["aspect-ratio"] !== undefined)
+    return "aspect-ratio contribution is unproved";
+  if (source.tag.startsWith("::") || source.flattenedCustomElements?.length)
+    return "generated or flattened source topology";
+  if ((s.position ?? "static") !== "static" || (s.float ?? "none") !== "none")
+    return "out-of-flow, relative or floated contribution";
+  if (sem.overlays.length || sem.style.clip || sem.style.transform || sem.style.hidden || ["transform", "contain", "content-visibility"].some((key) => s[key] && !/^(none|visible)$/.test(s[key])))
+    return "complex/contained content";
+  if (["overflow-x", "overflow-y"].some((key) => s[key] && s[key] !== "visible"))
+    return "clipped or scrolling contribution";
+  if (!["left", "right"].every((edge) => fixedPx(s[`padding-${edge}`]) && fixedPx(s[`border-${edge}-width`])))
+    return "physical content insets unavailable";
+  if (!root && (!unconstrained3(s["min-width"], true) || !unconstrained3(s["max-width"])))
+    return "constrained descendant contribution is unproved";
+  if (!root && sem.intrinsicMinWidth)
+    return "constrained descendant contribution is unproved";
+  if (root && s["max-width"] === "none" && sem.maxWidth !== undefined)
+    return "synthesized captured width cap";
+  return textIndentReason(source) ?? intrinsicFontSettingsReason(source);
+}
+
+// src/analysis/intrinsic-min-content-program.ts
+var maximum = (children) => ({ kind: "maximum", children });
+var inset = (value, content) => value ? { kind: "inset", value, content } : content;
+var sourceInset = (source) => {
+  const p = insetsOf(source.source.styles);
+  return p[1] + p[3];
+};
+function textContribution(node, joined) {
+  if (!node.lineBox || !usesGreedyWords(node))
+    return { reason: "plain whole-word shared native font route unavailable" };
+  const [run] = joined.runs, literal = node.runs[0].text;
+  if (joined.runs.length !== 1 || !run || run.node.tag !== "#text" || run.styleOf !== joined.source || !joined.source.children.includes(run.node) || run.node.textSource && (run.node.textSource.origin !== "dom" || run.node.textSource.join !== "verified" || run.node.textSource.raw !== run.node.text))
+    return { reason: "single direct source text/run ownership unavailable" };
+  if (joined.source.styles["white-space"] !== "normal" || !/^ ?[A-Za-z0-9]+(?: [A-Za-z0-9]+)* ?$/.test(run.node.text ?? "") || (run.node.text ?? "").trim() !== literal)
+    return { reason: "source word normalization/break grouping unavailable" };
+  return { program: inset(joined.leaf ? sourceInset(joined) : 0, { kind: "words", text: literal, font: node.runs[0].font }) };
+}
+function widgetContribution(node, joined) {
+  const n = joined.source, margins = n.inlineControlMargins;
+  if (joined.kind !== "control" || n.tag !== "input" || !/^(checkbox|radio)$/.test(n.attrs.type ?? "") || node.kind !== "control" || !/^(toggle|radio)$/.test(node.control) || node.content.length || node.label || node.width.kind !== "fixed" || node.height.kind !== "fixed" || node.width.px !== node.height.px || ![13, 16].includes(node.width.px) || n.bounds.w !== node.width.px || n.bounds.h !== node.height.px || n.styles.appearance !== "auto" || node.padding.some(Boolean) || n.children.length || !margins || !margins.every((value) => Number.isFinite(value) && value >= 0) || !["left", "right"].every((edge) => fixedPx(n.styles[`margin-${edge}`])) || !n.preferredSize?.horizontalAutoMargins || n.preferredSize.horizontalAutoMargins.some(Boolean) || !/^(auto|13px|16px)$/.test(n.preferredSize.width) || (n.styles.position ?? "static") !== "static" || (n.styles.float ?? "none") !== "none" || n.styles.transform && n.styles.transform !== "none" || n.styles["aspect-ratio"] && n.styles["aspect-ratio"] !== "auto" || !/^(auto|0px)$/.test(n.styles["min-width"] ?? "") || n.styles["max-width"] !== "none")
+    return { reason: "fixed native checkbox/radio outer contribution unavailable" };
+  if (margins[1] !== parseFloat(n.styles["margin-right"]) || margins[3] !== parseFloat(n.styles["margin-left"]))
+    return { reason: "widget physical margin ownership mismatch" };
+  return { program: { kind: "fixed", value: node.width.px + margins[1] + margins[3] } };
+}
+function inlineContribution(node, joined) {
+  if (node.kind !== "stack" || joined.items.length !== 2 || node.children.length !== 2)
+    return { reason: "inline source topology unavailable" };
+  const widget = joined.items.find((item) => item.sem.kind === "control"), text = joined.items.find((item) => item.sem.kind === "text");
+  const textSource = text && intrinsicSource(text.sem);
+  if (!widget || !text || textSource?.kind !== "text" || textSource.leaf || textSource.source !== joined.source || joined.source.children.length !== 2 || joined.source.children[0] !== widget.node || joined.source.children[1] !== textSource.runs[0]?.node || !(textSource.runs[0]?.node.text ?? "").startsWith(" "))
+    return { reason: "widget source separator/break ownership unavailable" };
+  const a = intrinsicContribution(widget.sem), b = intrinsicContribution(text.sem, false, true);
+  return a.reason ? a : b.reason ? b : { program: inset(sourceInset(joined), maximum([a.program, b.program])) };
+}
+function blockContribution(node, joined) {
+  if (node.kind !== "stack" || node.axis !== "v" || node.children.length !== joined.items.length || node.measured || node.allocation || node.intrinsicFlex || node.wrap || node.scroll)
+    return { reason: "ordinary source block topology unavailable" };
+  const sources = joined.source.children;
+  if (sources.length !== joined.items.length || joined.items.some((item) => !sources.includes(item.node) || !node.children.includes(item.sem) || intrinsicSource(item.sem)?.source !== item.node))
+    return { reason: "direct block source/semantic ownership unavailable" };
+  if (joined.source.tag === "fieldset") {
+    const admitted = fieldsetAdmission(joined.source, node.style), legend = admitted.legend;
+    const pair = joined.items.find((item) => item.node === legend);
+    if (admitted.reason || !legend || !node.fieldsetPaint || !pair || pair.sem.fieldsetLegend?.key !== node.fieldsetPaint.key || sources.filter((source) => source.tag === "legend").length !== 1)
+      return { reason: "rendered legend/anonymous content ownership unavailable" };
+  }
+  const children = [];
+  for (const item of joined.items) {
+    const result = intrinsicContribution(item.sem);
+    if (result.reason)
+      return result;
+    children.push(result.program);
+  }
+  return { program: inset(sourceInset(joined), maximum(children)) };
+}
+function intrinsicContribution(node, root = false, grouped = false) {
+  const joined = intrinsicSource(node);
+  if (!joined)
+    return { reason: "source/semantic join unavailable" };
+  if (root && (!joined.context.parent || joined.context.parentAxis !== "v" || !/^(block|flow-root)$/.test(joined.context.parentDisplay ?? "") || !/^(block|flow-root)$/.test(joined.context.parent.styles.display ?? "")))
+    return { reason: "ordinary containing-block context unavailable; flex/grid/table or standalone root is unproved" };
+  if (root && ["min-width", "max-width"].some((key) => /^(?:min-content|max-content|fit-content)/.test(joined.context.parent.styles[key] ?? "")))
+    return { reason: "containing block has an unproved intrinsic width constraint" };
+  if (root && node.kind === "control")
+    return { reason: "atomic controls are only fixed descendant contributions" };
+  if (node.kind === "control")
+    return widgetContribution(node, joined);
+  if (!grouped) {
+    const reason = ordinaryIntrinsicReason(joined.source, node, root);
+    if (reason)
+      return { reason };
+  }
+  if (joined.kind === "text" && node.kind === "text")
+    return textContribution(node, joined);
+  if (joined.kind !== "container")
+    return { reason: "ordinary source content unavailable" };
+  if (node.kind === "stack" && node.axis === "h")
+    return inlineContribution(node, joined);
+  return blockContribution(node, joined);
+}
+
+// src/analysis/intrinsic-min-content.ts
+function attachIntrinsicMinimum(node) {
+  if (!node.intrinsicMinWidth)
+    return node;
+  const result = intrinsicContribution(node, true);
+  if (result.program) {
+    node.intrinsicMinWidth.program = result.program;
+    node.notes.push("approximated: app min-content uses supplied native font advances; browser/platform glyph advances may differ");
+  } else {
+    delete node.intrinsicMinWidth.program;
+    node.notes.push(`approximated: native min-content unavailable (${result.reason}); captured minimum retained`);
+  }
+  return finish(node);
+}
+
 // src/analysis/infer-node.ts
+function buildJoinedText(host, runs, ctx, leaf = false) {
+  const text = buildText(host, runs, ctx, leaf);
+  joinIntrinsicText(host, text, runs, leaf, ctx);
+  return text;
+}
 function build(n, ctx) {
   if (n.tag === "::marker") {
     const symbol = buildListSymbol(n, makeBase(n, ctx, parseDeclared(n.attrs.style)));
@@ -16668,18 +16853,19 @@ function build(n, ctx) {
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       children: spec.control === "picker" ? [] : flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
-      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
+      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildJoinedText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}
     });
     node.overlays = buildOverlays(n, abs, flow[0], ctx, build);
-    return finish(node);
+    joinIntrinsicControl(n, node, ctx);
+    return attachIntrinsicMinimum(finish(node));
   }
   if (flow.length === 0 && runs.length > 0) {
-    const t = buildText(n, runs, ctx, true);
+    const t = buildJoinedText(n, runs, ctx, true);
     if (t.runs.length > 0) {
       t.overlays.push(...buildOverlays(n, abs, undefined, ctx, build));
-      return t;
+      return attachIntrinsicMinimum(t);
     }
   }
   if (flow.length === 0) {
@@ -16697,7 +16883,7 @@ function build(n, ctx) {
   if (runs.length) {
     const groups = groupRuns(n, runs);
     for (const g of groups) {
-      const t = buildText(n, g, childCtx);
+      const t = buildJoinedText(n, g, childCtx);
       if (t.runs.length === 0)
         continue;
       items.push({ node: { ...n, bounds: t.frame, children: [] }, sem: t });
@@ -16717,7 +16903,8 @@ function build(n, ctx) {
       stack.notes.push(reason);
   }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
-  return finish(stack);
+  joinIntrinsicContainer(n, stack, items, ctx);
+  return attachIntrinsicMinimum(finish(stack));
 }
 function objectPosition(value) {
   const tokens = value.trim().toLowerCase().split(/\s+/);
@@ -16754,6 +16941,19 @@ function inferScreen(doc, name, options = {}) {
   return { version: 1, name, source: doc.source, ...doc.root.textSourceCapture ? { textSourceCapture: doc.root.textSourceCapture } : {}, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
+// src/swift/string-literal.ts
+var escapes = { '"': "\\\"", "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t" };
+function swiftStringLiteral(value) {
+  let literal = '"';
+  for (const scalar of value) {
+    const code = scalar.codePointAt(0);
+    if (code >= 55296 && code <= 57343)
+      throw new Error("Swift string cannot represent an unpaired UTF-16 surrogate");
+    literal += escapes[scalar] ?? (code < 32 || code >= 127 && code <= 159 || code === 8232 || code === 8233 ? `\\u{${code.toString(16)}}` : scalar);
+  }
+  return literal + '"';
+}
+
 // src/swift/format.ts
 class Writer {
   lines = [];
@@ -16787,9 +16987,6 @@ function num3(v) {
   const s = (Math.round(v * 1000) / 1000).toString();
   return s.includes(".") || s.includes("e") ? s : s + ".0";
 }
-function str(s) {
-  return JSON.stringify(s);
-}
 function indent(lines, n) {
   return lines.map((l) => l ? "    ".repeat(n) + l : l);
 }
@@ -16820,9 +17017,9 @@ function fontExpr(f, ctx) {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) => Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best)[1];
   if (f.family.kind === "custom") {
     if (ctx.mode === "fidelity")
-      return `.markswiftVariable(${str(f.family.name)}, size: ${num3(f.size)}, weight: ${num3(f.weight)}${f.opsz !== undefined ? `, opsz: ${num3(f.opsz)}` : ""})`;
+      return `.markswiftVariable(${swiftStringLiteral(f.family.name)}, size: ${num3(f.size)}, weight: ${num3(f.weight)}${f.opsz !== undefined ? `, opsz: ${num3(f.opsz)}` : ""})`;
     const style = TEXT_STYLE_SIZES.reduce((best, [s, name]) => Math.abs(s - f.size) < Math.abs(best[0] - f.size) ? [s, name] : best)[1];
-    return `.custom(${str(f.family.name)}, size: ${num3(f.size)}, relativeTo: .${style}).weight(.${weightName})`;
+    return `.custom(${swiftStringLiteral(f.family.name)}, size: ${num3(f.size)}, relativeTo: .${style}).weight(.${weightName})`;
   }
   return `.system(size: ${num3(f.size)}, weight: .${weightName}, design: .${f.family.design})`;
 }
@@ -16882,7 +17079,7 @@ function stateDecl(n) {
     case "textField":
     case "secureField":
     case "textEditor":
-      return { type: "String", value: str(n.value ?? "") };
+      return { type: "String", value: swiftStringLiteral(n.value ?? "") };
     case "picker":
       if (n.selectStatic)
         return;
@@ -16890,7 +17087,7 @@ function stateDecl(n) {
         return { type: "Set<Int>", value: `[${(n.selectedChoices ?? []).join(", ")}]` };
       if (n.choices !== undefined)
         return { type: "Int", value: String(n.selectedChoice ?? -1) };
-      return { type: "String", value: str(n.value ?? "") };
+      return { type: "String", value: swiftStringLiteral(n.value ?? "") };
     case "toggle":
       return { type: "Bool", value: n.checked ? "true" : "false" };
     case "disclosure":
@@ -16993,7 +17190,7 @@ function svgExpr(n, shapes, ctx, id) {
   if (Math.abs(cw - n.frame.w) > 0.01 || Math.abs(ch - n.frame.h) > 0.01)
     out.push(`.frame(width: ${num3(cw)}, height: ${num3(ch)})`);
   if (n.label)
-    out.push(`.accessibilityLabel(${str(n.label)})`);
+    out.push(`.accessibilityLabel(${swiftStringLiteral(n.label)})`);
   return out;
 }
 function layerLines(p, view) {
@@ -17055,7 +17252,7 @@ function gradientExpr(g, box, view) {
 function textLine(t, view) {
   const font = { ...t.font, size: t.font.size * view.scale };
   const cx = t.box.x + t.box.w / 2 - view.offset[0], cy = t.box.y + t.box.h / 2 - view.offset[1];
-  return `Text(verbatim: ${str(t.text)}).font(${fontExpr(font, view.ctx)}).foregroundStyle(${colorExpr(t.fill, view.ctx, view.id)}).fixedSize().position(x: ${num3(cx)}, y: ${num3(cy)})`;
+  return `Text(verbatim: ${swiftStringLiteral(t.text)}).font(${fontExpr(font, view.ctx)}).foregroundStyle(${colorExpr(t.fill, view.ctx, view.id)}).fixedSize().position(x: ${num3(cx)}, y: ${num3(cy)})`;
 }
 function shapeName(d, vb, shapes) {
   const key = `${vb.join(" ")}|${d}`;
@@ -17151,15 +17348,15 @@ function imageSource(url, n, prop, ctx, sizedBackground = false) {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url))
-      return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sampling}${sizing} } placeholder: { Color.clear }` };
+      return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${swiftStringLiteral(url)})) { $0${sampling}${sizing} } placeholder: { Color.clear }` };
     const name = url.replace(/[?#].*$/, "").replace(/^.*\//, "").replace(/\.[a-z0-9]+$/i, "");
-    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sampling}${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image(${swiftStringLiteral(name)})${sampling}${sizing}` };
   }
   const [, mime = "", params = "", payload = ""] = data;
   const base64 = params.split(";").includes("base64");
   if (mime !== "image/svg+xml") {
     const b64 = base64 ? payload : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))), "latin1").toString("base64");
-    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sampling}${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${swiftStringLiteral(b64)})${sampling}${sizing}` };
   }
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
@@ -17205,14 +17402,14 @@ function decodable(url) {
   return RASTER_MAGIC.some((magic) => magic.every((b, i) => bytes[i] === b));
 }
 function imageNodeExpr(n, ctx) {
-  const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${str(n.alt)})`];
+  const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${swiftStringLiteral(n.alt)})`];
   const src = decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
     if (!n.alt)
       return ["Color.clear", ...a11y];
     note(n, "approximated: broken image source → alt text in the measured box");
     return [
-      `Text(verbatim: ${str(n.alt)})`,
+      `Text(verbatim: ${swiftStringLiteral(n.alt)})`,
       ...n.font ? [`.font(${fontExpr(n.font, ctx)})`] : [],
       ...n.color ? [`.foregroundStyle(${colorExpr(n.color, ctx, n.id)})`] : [],
       ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)",
@@ -17644,8 +17841,8 @@ function textExpr(n, ctx) {
     const lineHeight = run.font.lineHeight ?? n.lineBox.baselineStep;
     const leading = lineHeight - natural;
     const limits = n.width.kind === "hug" ? `, fitContent: true${n.minWidth === undefined ? "" : `, minWidth: ${num3(Math.max(0, n.minWidth - n.padding[1] - n.padding[3]))}`}${n.maxWidth === undefined ? "" : `, maxWidth: ${num3(Math.max(0, n.maxWidth - n.padding[1] - n.padding[3]))}`}` : "";
-    const observation = ctx.text ? `, observationKey: ${str(registerGreedyText(n, ctx.text))}` : "";
-    const out = [`${ctx.text ? "MarkswiftObservedGreedyText" : "MarkswiftGreedyText"}(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits}${observation})`];
+    const observation = ctx.text ? `, observationKey: ${swiftStringLiteral(registerGreedyText(n, ctx.text))}` : "";
+    const out = [`${ctx.text ? "MarkswiftObservedGreedyText" : "MarkswiftGreedyText"}(${swiftStringLiteral(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits}${observation})`];
     if (n.lineBox)
       return textLineBoxExpr(n, ctx.mode, out, leading, true);
     if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
@@ -17664,7 +17861,7 @@ function textExpr(n, ctx) {
     `)},
 ])`];
   if (ctx.text)
-    out.push(`.markswiftObserveText(${str(ctx.text.keys.get(n))}${textDrawObservationUnavailable(n) ? ", recordDraws: false" : ""})`);
+    out.push(`.markswiftObserveText(${swiftStringLiteral(ctx.text.keys.get(n))}${textDrawObservationUnavailable(n) ? ", recordDraws: false" : ""})`);
   if (n.align !== "leading")
     out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined)
@@ -17728,7 +17925,7 @@ function runExpr(r, n, literalTransform, ctx, runIndex) {
     if (r.bound)
       note(n, "approximated: text-transform baked into a bound run's literal");
   }
-  let e = r.href ? `Text.markswiftLink(${str(text)}, ${str(r.href)})` : `Text(verbatim: ${str(text)})`;
+  let e = r.href ? `Text.markswiftLink(${swiftStringLiteral(text)}, ${swiftStringLiteral(r.href)})` : `Text(verbatim: ${swiftStringLiteral(text)})`;
   e += `.font(${fontExpr(r.font, ctx)})`;
   if (r.italic)
     e += ".italic()";
@@ -17759,7 +17956,7 @@ function runExpr(r, n, literalTransform, ctx, runIndex) {
     e += `.baselineOffset(${num3(r.baselineOffset)})`;
   if (ctx.text) {
     const emission = registerTextEmission(n, r, runIndex, ctx.mode, ctx.text, "text-run", "", undefined, text);
-    e += `.markswiftTextSource(${str(emission.key)}, ${str(text)}, fontBinding: ${str(emission.fontBinding)})`;
+    e += `.markswiftTextSource(${swiftStringLiteral(emission.key)}, ${swiftStringLiteral(text)}, fontBinding: ${swiftStringLiteral(emission.fontBinding)})`;
   }
   return e;
 }
@@ -17779,7 +17976,7 @@ function selectListActivation(node, state) {
 function selectListExpr(node, state, still) {
   if (still && node.selectRows !== undefined)
     return capturedRows(node);
-  const choices = (node.choices ?? []).map((choice) => `MarkswiftSelectChoice(id: ${choice.id}, value: ${str(choice.value)}, label: ${str(choice.label)}, disabled: ${!!choice.disabled}, hidden: ${!!choice.hidden}${choice.invisible ? ", invisible: true" : ""}${choice.group ? `, groupID: ${choice.group.id}, groupLabel: ${str(choice.group.label)}${choice.group.invisible ? ", groupInvisible: true" : ""}` : ""})`);
+  const choices = (node.choices ?? []).map((choice) => `MarkswiftSelectChoice(id: ${choice.id}, value: ${swiftStringLiteral(choice.value)}, label: ${swiftStringLiteral(choice.label)}, disabled: ${!!choice.disabled}, hidden: ${!!choice.hidden}${choice.invisible ? ", invisible: true" : ""}${choice.group ? `, groupID: ${choice.group.id}, groupLabel: ${swiftStringLiteral(choice.group.label)}${choice.group.invisible ? ", groupInvisible: true" : ""}` : ""})`);
   const seed = node.selectList === "multiple" ? `[${(node.selectedChoices ?? []).join(", ")}]` : (node.selectedChoice ?? -1) < 0 ? "[]" : `[${node.selectedChoice}]`;
   const selected = still || !state ? seed : node.selectList === "multiple" ? state : `${state} < 0 ? [] : [${state}]`;
   const initiallySelected = new Set(node.selectList === "multiple" ? node.selectedChoices ?? [] : [node.selectedChoice ?? -1]);
@@ -17788,7 +17985,7 @@ function selectListExpr(node, state, still) {
   const groupAppearance = [...groups].map(([id, row]) => `${id}: ${rowAppearance(row, false)}`);
   return [
     "MarkswiftSelectionList(",
-    `    identifier: ${str(node.id)},`,
+    `    identifier: ${swiftStringLiteral(node.id)},`,
     `    choices: [${choices.join(", ")}],`,
     `    selected: ${selected},`,
     ...appearance.length ? [`    appearance: [${appearance.join(", ")}],`] : [],
@@ -17802,7 +17999,7 @@ function rowAppearance(row, selected) {
   return `MarkswiftSelectRowAppearance(height: ${num3(row.height)}, padding: ${insets(row.padding)}, font: ${fontExpr(row.font, { mode: "app" })}, color: ${row.color ? `SwiftUI.Color.markswift(${colorArgs(row.color)})` : ".primary"}, background: ${row.background ? `SwiftUI.Color.markswift(${colorArgs(row.background)})` : ".clear"}, initiallySelected: ${selected})`;
 }
 function capturedRows(node) {
-  const rows = (node.selectRows ?? []).map((row) => `MarkswiftCapturedSelectRow(label: ${str(row.label)}, frame: CGRect(x: ${num3(row.frame.x)}, y: ${num3(row.frame.y)}, width: ${num3(row.frame.w)}, height: ${num3(row.frame.h)}), padding: ${insets(row.padding)}, font: ${fontExpr(row.font, { mode: "fidelity" })}, color: ${row.color ? `SwiftUI.Color.markswift(${colorArgs(row.color)})` : ".primary"}, background: ${row.background ? `SwiftUI.Color.markswift(${colorArgs(row.background)})` : ".clear"})`);
+  const rows = (node.selectRows ?? []).map((row) => `MarkswiftCapturedSelectRow(label: ${swiftStringLiteral(row.label)}, frame: CGRect(x: ${num3(row.frame.x)}, y: ${num3(row.frame.y)}, width: ${num3(row.frame.w)}, height: ${num3(row.frame.h)}), padding: ${insets(row.padding)}, font: ${fontExpr(row.font, { mode: "fidelity" })}, color: ${row.color ? `SwiftUI.Color.markswift(${colorArgs(row.color)})` : ".primary"}, background: ${row.background ? `SwiftUI.Color.markswift(${colorArgs(row.background)})` : ".clear"})`);
   return ["MarkswiftCapturedSelectRows(", `    rows: [${rows.join(", ")}],`, `    inset: ${insets(node.padding)}`, ")"];
 }
 function insets(padding) {
@@ -17818,7 +18015,7 @@ function selectExpr(node, state, still, label) {
     return node.selectStatic ? text : ["HStack(spacing: 4.0) {", ...indent(text, 1), '    Image(systemName: "chevron.down")', "}"];
   }
   if (node.choices !== undefined) {
-    const choices = node.choices.map((choice) => `(id: ${choice.id}, value: ${str(choice.value)}, label: ${str(choice.label)}, disabled: ${choice.disabled ? "true" : "false"}, hidden: ${choice.hidden ? "true" : "false"})`);
+    const choices = node.choices.map((choice) => `(id: ${choice.id}, value: ${swiftStringLiteral(choice.value)}, label: ${swiftStringLiteral(choice.label)}, disabled: ${choice.disabled ? "true" : "false"}, hidden: ${choice.hidden ? "true" : "false"})`);
     return [
       "Group {",
       `    let choices: [(id: Int, value: String, label: String, disabled: Bool, hidden: Bool)] = [${choices.join(", ")}]`,
@@ -17849,7 +18046,7 @@ function selectExpr(node, state, still, label) {
   const options = node.options?.length ? node.options : node.value !== undefined ? [node.value] : [];
   return [
     `Picker(selection: ${state ? `$${state}` : ""}) {`,
-    `    ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
+    `    ForEach(${options.length ? `[${options.map(swiftStringLiteral).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
     "        Text(option)",
     "    }",
     "} label: {",
@@ -17859,7 +18056,7 @@ function selectExpr(node, state, still, label) {
   ];
 }
 function painted(text, alignment) {
-  return [`Text(verbatim: ${str(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
+  return [`Text(verbatim: ${swiftStringLiteral(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
 }
 
 // src/swift/boolean-control.ts
@@ -18097,7 +18294,7 @@ function controlExpr(n, deps) {
   const out = core2(n, deps);
   if (n.selectList || n.disclosureLayout)
     out.push(".accessibilityElement(children: .contain)");
-  out.push(`.accessibilityIdentifier(${str(n.id)})`);
+  out.push(`.accessibilityIdentifier(${swiftStringLiteral(n.id)})`);
   if (n.control === "toggle") {
     const selected = deps.mode === "app" ? deps.stateOf.get(n) : undefined;
     out.push(`.accessibilityValue(${selected ?? (n.checked ? "true" : "false")} ? "selected" : "unselected")`);
@@ -18137,7 +18334,7 @@ function core2(n, deps) {
           "}",
           ".buttonStyle(.plain)",
           "// The design only says a file is chosen here; fill in what to do with it.",
-          `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`
+          `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${swiftStringLiteral(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`
         ];
       }
       return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
@@ -18148,16 +18345,16 @@ function core2(n, deps) {
         const action = n.action !== undefined ? deps.actionOf.get(n.action) ?? "{}" : "{}";
         return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
-      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, body(n, deps), ["}"]);
+      return wrap(`Link(destination: markswiftURL(${swiftStringLiteral(href)})) {`, body(n, deps), ["}"]);
     }
     case "textField":
       if (still)
         return painted2(n.value || n.placeholder || "", ".leading");
-      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`TextField(${swiftStringLiteral(n.placeholder ?? "")}, text: ${binding})`];
     case "secureField":
       if (still)
         return painted2(n.value ? "•".repeat(n.value.length) : n.placeholder ?? "", ".leading");
-      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`SecureField(${swiftStringLiteral(n.placeholder ?? "")}, text: ${binding})`];
     case "textEditor":
       if (still)
         return painted2(n.value || n.placeholder || "", ".topLeading");
@@ -18218,7 +18415,7 @@ function core2(n, deps) {
     case "disclosure":
       if (n.disclosureLayout)
         return [
-          `MarkswiftDisclosure(isExpanded: ${binding}, gap: ${num3(n.disclosureLayout.gap)}, labelInset: ${num3(n.disclosureLayout.labelInset)}, contentInset: ${num3(n.disclosureLayout.contentInset)}, contentAvailable: ${n.disclosureLayout.contentAvailable}, summaryIdentifier: ${str(n.label?.id ?? `${n.id}/summary`)}, contentIdentifier: ${str(`${n.id}/content`)}) {`,
+          `MarkswiftDisclosure(isExpanded: ${binding}, gap: ${num3(n.disclosureLayout.gap)}, labelInset: ${num3(n.disclosureLayout.labelInset)}, contentInset: ${num3(n.disclosureLayout.contentInset)}, contentAvailable: ${n.disclosureLayout.contentAvailable}, summaryIdentifier: ${swiftStringLiteral(n.label?.id ?? `${n.id}/summary`)}, contentIdentifier: ${swiftStringLiteral(`${n.id}/content`)}) {`,
           ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
           "} label: {",
           ...indent(n.label ? deps.child(n.label) : ["EmptyView()"], 1),
@@ -18239,7 +18436,7 @@ var LEVEL_TINT = {
   poor: "Color.markswift(0.847, 0.231, 0.004)"
 };
 function painted2(text, alignment) {
-  return [`Text(verbatim: ${str(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
+  return [`Text(verbatim: ${swiftStringLiteral(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
 }
 function fraction2(n) {
   const r = n.range ?? { min: 0, max: 1 };
@@ -18279,6 +18476,21 @@ function stackOfNodes(nodes, deps) {
   return [open, ...indent(nodes.flatMap((c) => deps.child(c)), 1), "}"];
 }
 
+// src/swift/intrinsic-width.ts
+function intrinsicWidthExpr(program) {
+  const prefix = "MarkswiftIntrinsicWidth";
+  switch (program.kind) {
+    case "fixed":
+      return `${prefix}.fixed(${num3(program.value)})`;
+    case "words":
+      return `${prefix}.words([${program.text.split(" ").map(swiftStringLiteral).join(", ")}], size: ${num3(program.font.size)}, weight: UIFont.Weight.${nativeTextWeight(program.font)}.rawValue)`;
+    case "maximum":
+      return `${prefix}.maximum([${program.children.map(intrinsicWidthExpr).join(", ")}])`;
+    case "inset":
+      return `${prefix}.inset(${num3(program.value)}, ${intrinsicWidthExpr(program.content)})`;
+  }
+}
+
 // src/swift/frames.ts
 function frameModifier(n, ctx) {
   const parts = [];
@@ -18300,9 +18512,12 @@ function frameModifier(n, ctx) {
     parts.push(`.modifier(MarkswiftRelativeWidth(fraction: ${num3(n.width.value)}, capturedWidth: ${num3(n.width.capturedPx)}))`);
   const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
+  const intrinsic = app && n.width.kind === "fill" && n.intrinsicMinWidth?.program ? `${intrinsicWidthExpr(n.intrinsicMinWidth.program)}.value` : undefined;
+  const minimum = intrinsic ?? num3(n.minWidth ?? 0);
+  const maximum = intrinsic ? n.intrinsicMinWidth.authoredMaxWidth === undefined ? ".infinity" : `max(${intrinsic}, ${num3(n.intrinsicMinWidth.authoredMaxWidth)})` : n.maxWidth === undefined ? undefined : num3(n.maxWidth);
   const flex = [
-    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${num3(n.minWidth ?? 0)}` : "",
-    !fixedW && !greedyHug && n.maxWidth !== undefined ? `maxWidth: ${num3(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
+    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${minimum}` : "",
+    !fixedW && !greedyHug && maximum !== undefined ? `maxWidth: ${maximum}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
     !fixedH && minHeight !== undefined ? `minHeight: ${num3(minHeight)}` : "",
     !fixedH && maxHeight !== undefined ? `maxHeight: ${num3(maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : ""
   ].filter(Boolean);
@@ -18620,7 +18835,7 @@ function geometryModifier(node, state, viewport = false) {
   if (!entry)
     return [];
   entry.instrumented = true;
-  return [`.markswiftObserveGeometry(${JSON.stringify(entry.key)}, role: ${JSON.stringify(entry.role)})`];
+  return [`.markswiftObserveGeometry(${swiftStringLiteral(entry.key)}, role: ${swiftStringLiteral(entry.role)})`];
 }
 
 // src/swift/fieldset-paint.ts
@@ -18629,16 +18844,16 @@ function fieldsetFillModifiers(node, shape, ctx) {
   if (!fieldset)
     return [];
   return [...node.style.fills].reverse().flatMap((fill) => fill.kind === "solid" ? [
-    `.modifier(MarkswiftFieldsetBackground(legendKey: ${str(fieldset.key)}, shape: ${shape}, fill: ${colorExpr(fill.color, ctx, node.id)}, borderWidth: ${num3(node.style.border?.width ?? 0)}))`
+    `.modifier(MarkswiftFieldsetBackground(legendKey: ${swiftStringLiteral(fieldset.key)}, shape: ${shape}, fill: ${colorExpr(fill.color, ctx, node.id)}, borderWidth: ${num3(node.style.border?.width ?? 0)}))`
   ] : []);
 }
 function fieldsetBorderModifiers(node, shape, ctx) {
   const border = node.style.border, fieldset = node.fieldsetPaint;
-  return border && fieldset ? [`.modifier(MarkswiftFieldsetBorder(legendKey: ${str(fieldset.key)}, shape: ${shape}, color: ${colorExpr(border.color, ctx, node.id)}, width: ${num3(border.width)}))`] : [];
+  return border && fieldset ? [`.modifier(MarkswiftFieldsetBorder(legendKey: ${swiftStringLiteral(fieldset.key)}, shape: ${shape}, color: ${colorExpr(border.color, ctx, node.id)}, width: ${num3(border.width)}))`] : [];
 }
 function fieldsetLegendModifier(node) {
   const legend = node.fieldsetLegend;
-  return legend ? [`.markswiftFieldsetLegend(${str(legend.key)}, relativeX: ${num3(legend.relativeOffset[0])}, relativeY: ${num3(legend.relativeOffset[1])})`] : [];
+  return legend ? [`.markswiftFieldsetLegend(${swiftStringLiteral(legend.key)}, relativeX: ${num3(legend.relativeOffset[0])}, relativeY: ${num3(legend.relativeOffset[1])})`] : [];
 }
 
 // src/swift/modifiers.ts
@@ -18795,7 +19010,7 @@ function tableIntrinsicExpr(cell) {
     throw new Error("Native automatic tables require system fonts");
   const index = weights2.reduce((best, _, i) => Math.abs((i + 1) * 100 - cell.font.weight) < Math.abs((best + 1) * 100 - cell.font.weight) ? i : best, 0);
   const font = `MarkswiftTableFont.system(size: ${num3(cell.font.size)}, weight: .${weights2[index]}, design: ${designs[cell.font.family.design]})`;
-  return `.init(column: ${cell.column}, text: ${str(cell.text)}, font: ${font}, horizontalInset: ${num3(cell.horizontalInset)})`;
+  return `.init(column: ${cell.column}, text: ${swiftStringLiteral(cell.text)}, font: ${font}, horizontalInset: ${num3(cell.horizontalInset)})`;
 }
 
 // src/swift/table-content.ts
@@ -18852,7 +19067,7 @@ function tableExpr(node, ctx) {
         lines.push(`.accessibilityElement(children: .${interactive(child) ? "contain" : "combine"})`);
         const section = placement.section === "thead" ? "Header section, " : placement.section === "tfoot" ? "Footer section, " : "";
         const span = placement.rowSpan > 1 || placement.columnSpan > 1 ? `, spans ${placement.rowSpan} rows and ${placement.columnSpan} columns` : "";
-        lines.push(`.accessibilityHint(${str(`${section}Row ${placement.row + 1}, column ${placement.column + 1}${span}`)})`);
+        lines.push(`.accessibilityHint(${swiftStringLiteral(`${section}Row ${placement.row + 1}, column ${placement.column + 1}${span}`)})`);
         if (placement.header)
           lines.push(".accessibilityAddTraits(.isHeader)");
       }
@@ -18871,7 +19086,7 @@ function tableExpr(node, ctx) {
   out.push("}");
   if (ctx.mode === "app") {
     out.push(".accessibilityElement(children: .contain)");
-    out.push(`.accessibilityLabel(${str(`Table, ${table.rowMinimums.length} rows, ${table.columns.length} columns`)})`);
+    out.push(`.accessibilityLabel(${swiftStringLiteral(`Table, ${table.rowMinimums.length} rows, ${table.columns.length} columns`)})`);
   }
   return out;
 }
@@ -18890,7 +19105,7 @@ function intrinsicFlexExpr(n, ctx) {
     const run = text.runs[0];
     const inset = child.padding[1] + child.padding[3];
     const font = `UIFont.systemFont(ofSize: ${num3(run.font.size)}, weight: .${nativeTextWeight(run.font)})`;
-    const words = [...new Set(run.text.split(" "))].map(str).join(", ");
+    const words = [...new Set(run.text.split(" "))].map(swiftStringLiteral).join(", ");
     const minimum = flow.automaticMinimum[index] ? `([${words}].map { MarkswiftTextAdvance.width($0, font: ${font}) }.max() ?? 0) + ${num3(inset)}` : num3(inset);
     out.push(...indent([
       ...ctx.renderNode(child).split(`
@@ -18909,7 +19124,7 @@ function inlineBaselineExpr(node, context) {
   const baseline = node.inlineBaseline;
   const spacing = Array.isArray(node.spacing) ? node.spacing : node.children.slice(1).map(() => node.spacing);
   const items = baseline.items.map((item) => `MarkswiftInlineBaselineItem(widget: ${item.kind === "widget"}, baseline: ${num3(item.baseline)}, height: ${num3(item.height)}, top: ${num3(item.top)}, bottom: ${num3(item.bottom)})`).join(", ");
-  const out = [`MarkswiftInlineBaselineRow(id: ${str(node.id)}, strutAscent: ${num3(baseline.strutAscent)}, strutDescent: ${num3(baseline.strutDescent)}, items: [${items}], spacing: [${spacing.map(num3).join(", ")}], leading: ${num3(node.leadInset)}) {`];
+  const out = [`MarkswiftInlineBaselineRow(id: ${swiftStringLiteral(node.id)}, strutAscent: ${num3(baseline.strutAscent)}, strutDescent: ${num3(baseline.strutDescent)}, items: [${items}], spacing: [${spacing.map(num3).join(", ")}], leading: ${num3(node.leadInset)}) {`];
   for (const child of node.children)
     out.push(...indent(context.renderNode(child).split(`
 `), 1));
@@ -20666,6 +20881,27 @@ struct MarkswiftInlineBaselineLayout: Layout {
 }
 `;
 
+// src/swift/intrinsic-width-runtime.ts
+var INTRINSIC_WIDTH_RUNTIME = `
+nonisolated indirect enum MarkswiftIntrinsicWidth {
+    case fixed(CGFloat)
+    case words([String], size: CGFloat, weight: CGFloat)
+    case maximum([MarkswiftIntrinsicWidth])
+    case inset(CGFloat, MarkswiftIntrinsicWidth)
+
+    var value: CGFloat {
+        switch self {
+        case let .fixed(width): return width
+        case let .words(words, size, weight):
+            let font = MarkswiftTextAdvance.NativeFont.systemFont(ofSize: size, weight: .init(rawValue: weight))
+            return words.map { MarkswiftTextAdvance.width($0, font: font) }.max() ?? 0
+        case let .maximum(children): return children.map(\\.value).max() ?? 0
+        case let .inset(inset, content): return inset + content.value
+        }
+    }
+}
+`;
+
 // src/swift/runtime.ts
 var SWIFT_RUNTIME = `// Generated by Markswift — runtime helpers shared by all generated views.
 import SwiftUI
@@ -20958,6 +21194,7 @@ ${CONTROL_RUNTIME}
 ${MEASURED_LAYOUT_RUNTIME}
 ${FLOW_RUNTIME}
 ${GREEDY_TEXT_RUNTIME}
+${INTRINSIC_WIDTH_RUNTIME}
 ${RELATIVE_WIDTH_RUNTIME}
 ${SELECT_LIST_RUNTIME}
 ${SELECT_PAINT_RUNTIME}

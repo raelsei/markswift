@@ -4,7 +4,9 @@
 import type { Color } from "../css/index.ts";
 import type { FontSpec } from "../model/semantic.ts";
 import type { ColorCtx } from "./context.ts";
+import { swiftStringLiteral as str } from "./string-literal.ts";
 export type { ColorCtx, ScreenTokens } from "./context.ts";
+export { str };
 /** Indentation-aware line buffer. */
 export declare class Writer {
     private lines;
@@ -27,8 +29,6 @@ export declare function colorArgs(c: Color): string;
 export declare function colorExpr(c: Color, ctx: ColorCtx, id?: string): string;
 /** Swift `Double` literal: 3 decimals, always with a fraction so type inference stays `Double`. */
 export declare function num(v: number): string;
-/** Swift string literal (JSON escaping is a valid subset). */
-export declare function str(s: string): string;
 export declare function indent(lines: string[], n: number): string[];
 /**
  * Default point size of each `Font.TextStyle` at the standard content size — the table

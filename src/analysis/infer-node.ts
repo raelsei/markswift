@@ -4,7 +4,7 @@ import { imageSize, parseColor, parseDeclared } from "../css/index.ts";
 import { buildSvg } from "./svg.ts";
 import { controlOf, buildControl } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
-import type { InferenceContext, AnalyzedChild } from "./context.ts";
+import type { InferenceContext, AnalyzedChild, SourceTextRun } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
 import { groupRuns } from "./text-runs.ts";
@@ -16,6 +16,14 @@ import { buildFlowStack } from "./infer-flow.ts";
 import { buildOverlays } from "./infer-overlays.ts";
 import { buildNativeTable, tableFallbackReason } from "./table-layout.ts";
 import { buildListSymbol, preserveSymbolLineLeading } from "./list-symbol.ts";
+import { joinIntrinsicText, joinIntrinsicContainer, joinIntrinsicControl } from "./intrinsic-min-content-source.ts";
+import { attachIntrinsicMinimum } from "./intrinsic-min-content.ts";
+
+function buildJoinedText(host: LayoutNode, runs: SourceTextRun[], ctx: InferenceContext, leaf = false) {
+  const text = buildText(host, runs, ctx, leaf);
+  joinIntrinsicText(host, text, runs, leaf, ctx);
+  return text;
+}
 
 export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (n.tag === "::marker") {
@@ -70,12 +78,13 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       // Select descendants supply choice metadata; their native rows are the rendered content.
       children: spec.control === "picker" ? [] : flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
-      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
+      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildJoinedText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
     });
     node.overlays = buildOverlays(n, abs, flow[0], ctx, build);
-    return finish(node);
+    joinIntrinsicControl(n, node, ctx);
+    return attachIntrinsicMinimum(finish(node));
   }
   // A run group can collapse to nothing at all: every run in it is collapsible whitespace that
   // the browser also collapsed away — the newline between two inline controls, a `<div> </div>`.
@@ -84,12 +93,12 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   // `buildText` knows the `white-space` mode that decides whether a space survives. Letting one
   // through emitted `Text.h2sRuns([\n    ,\n])`, which does not compile in either mode.
   if (flow.length === 0 && runs.length > 0) {
-    const t = buildText(n, runs, ctx, true);
+    const t = buildJoinedText(n, runs, ctx, true);
     if (t.runs.length > 0) {
       // `buildText` may already have added background layers for inline runs that paint their own
       // box (`mark`, `kbd`); absolutely positioned children come on top of those.
       t.overlays.push(...buildOverlays(n, abs, undefined, ctx, build));
-      return t;
+      return attachIntrinsicMinimum(t);
     }
   }
   if (flow.length === 0) {
@@ -110,7 +119,7 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     // Text interleaved with flow children (icon + label). Group consecutive runs into one text node.
     const groups = groupRuns(n, runs);
     for (const g of groups) {
-      const t = buildText(n, g, childCtx);
+      const t = buildJoinedText(n, g, childCtx);
       if (t.runs.length === 0) continue;
       items.push({ node: { ...n, bounds: t.frame, children: [] }, sem: t });
     }
@@ -131,7 +140,8 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     if (reason) stack.notes.push(reason);
   }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
-  return finish(stack);
+  joinIntrinsicContainer(n, stack, items, ctx);
+  return attachIntrinsicMinimum(finish(stack));
 }
 
 /** Browser-computed `object-position` percentages and side keywords; length offsets need a separate CSS length model. */

@@ -286,6 +286,7 @@ export interface Overlay {
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
 export interface SizeConstraints {
     minWidth?: number;
+    intrinsicMinWidth?: import("./intrinsic-width.ts").IntrinsicMinWidth;
     maxWidth?: number;
     minHeight?: number;
     maxHeight?: number;
