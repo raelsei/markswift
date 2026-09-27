@@ -4,9 +4,13 @@ import { indent, num } from "./format.ts";
 import { modifiers } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
+import { weightedLayoutExpr } from "./allocation-layout.ts";
+import { tableExpr } from "./table-layout.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
-  if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
+  if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks)) out.push(...weightedLayoutExpr(n, ctx));
+  else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
   else if (n.kind === "grid") {
     out.push(`Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`);

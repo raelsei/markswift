@@ -44,7 +44,7 @@ function snapshotsFor(fixture: VisualFixture, theme: Theme, captures: Map<number
     : compileLayout(regular.layout, { name, mode: "app" });
   const output = (mode: string, width: number) => join(out, `${fixture.id}-${theme}-${mode}-${width}-ios.png`);
   return [
-    { bundle: app, layout: regular.layout, hosted: fixture.id === "form", outputs: Object.fromEntries(widths.map(width => [width, output("app", width)])) },
+    { bundle: app, layout: regular.layout, hosted: fixture.hosted ?? fixture.id === "form", outputs: Object.fromEntries(widths.map(width => [width, output("app", width)])) },
     // Fidelity freezes measured geometry: each snapshot uses its own captured width.
     ...widths.map(width => ({
       bundle: compileLayout(captures.get(width)!.layout, { name: `${fixture.name}Fidelity${width}`, mode: "fidelity" }),

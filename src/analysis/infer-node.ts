@@ -14,9 +14,14 @@ import { buildText } from "./text.ts";
 import { partitionChildren } from "./infer-children.ts";
 import { buildFlowStack } from "./infer-flow.ts";
 import { buildOverlays } from "./infer-overlays.ts";
+import { buildNativeTable, tableFallbackReason } from "./table-layout.ts";
 
 export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
+  if (n.tag === "table") {
+    const table = buildNativeTable(n, makeBase(n, ctx, parseDeclared(n.attrs.style)), ctx, build);
+    if (table) return finish(table);
+  }
   if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
   if (policy.route === "image") {
@@ -58,8 +63,9 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n, childAxis) };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
-      children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
-      texts: runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
+      // Select descendants supply choice metadata; their native rows are the rendered content.
+      children: spec.control === "picker" ? [] : flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
+      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
     });
@@ -114,6 +120,10 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   const stack = buildFlowStack(n, base, items, axis, display);
+  if (n.tag === "table") {
+    const reason = tableFallbackReason(n);
+    if (reason) stack.notes.push(reason);
+  }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   return finish(stack);
 }

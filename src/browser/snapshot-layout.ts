@@ -9,16 +9,22 @@ const SKIP_TAGS: Record<string, true> = { script: true, style: true, link: true,
 /**
  * Nodes that never get a layout box but must survive: SVG paint servers, so fills/strokes can
  * resolve `url(#id)`, and `<option>`/`<optgroup>`, which Chrome lays out in the select popup
- * rather than in the page — their labels are read as text, never measured.
+ * rather than in the page. Listbox rows can be measured; popup choices retain their text.
+ * Boxless `<col>`/`<colgroup>` retain declared width intent and column paint.
  */
-const KEEP_WITHOUT_LAYOUT: Record<string, true> = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true };
+const KEEP_WITHOUT_LAYOUT: Record<string, true> = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true, col: true, colgroup: true };
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
 
 /** Join CSS size intent while wrappers still exist, before display:contents is flattened. */
 export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
   const walk = (raw: Raw, path: string) => {
-    if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
+    if (Object.hasOwn(sizes, path)) {
+      const { columnStyles, ...preferredSize } = sizes[path]!;
+      raw.preferredSize = preferredSize;
+      if (columnStyles && (raw.name === "col" || raw.name === "colgroup")) raw.styles = { ...raw.styles, ...columnStyles };
+    }
+    if (raw.children.some(child => child.shadowRootType === "closed" || child.shadowRootType === "user-agent")) return;
     let i = 0;
     for (const child of raw.children) {
       if (child.type !== 1 || child.pseudo !== undefined) continue;

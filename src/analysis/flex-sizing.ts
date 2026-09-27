@@ -7,7 +7,7 @@ function inFlow(node: LayoutNode): boolean {
   return node.tag !== "#text" && node.styles.display !== "none" && node.styles.position !== "absolute" && node.styles.position !== "fixed";
 }
 
-/** Native stacks can share equal leftover space, but cannot reproduce arbitrary CSS allocation. */
+/** Conservative child sizing until the parent proves its complete native flex allocation. */
 export function flexGrowthSize(n: LayoutNode, axis: Axis, ctx: InferenceContext, notes: string[]): Size | undefined {
   const parent = ctx.parent;
   if (!parent || ctx.parentAxis !== axis || !/flex/.test(ctx.parentDisplay ?? parent.styles.display ?? "")) return undefined;

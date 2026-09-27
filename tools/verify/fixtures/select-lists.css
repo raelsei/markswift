@@ -1,0 +1,15 @@
+html, body { margin:0; background:#fff; }
+* { box-sizing:border-box; }
+.selection-page { width:100%; height:440px; padding:20px; color:#243044; background:#fff; font:14px/20px system-ui; }
+h1 { font:700 24px/29px system-ui; margin:0 0 20px; }
+label { display:block; margin-bottom:8px; }
+select { display:block; width:100%; padding:0; border:1px solid #a6b2c3; border-radius:0; margin-bottom:22px; color:#243044; background:#f4f6fa; font:14px/20px system-ui; }
+option, optgroup { font:14px/20px system-ui; }
+option { padding:3px 8px; }
+option:checked { color:#243044; background:#dbeafe; }
+@media (prefers-color-scheme:dark) {
+  html, body, .selection-page { background:#171d27; }
+  .selection-page { color:#edf0f6; color-scheme:dark; }
+  select { color:#edf0f6; background:#293444; border-color:#617087; }
+  option:checked { color:#edf0f6; background:#243b59; }
+}

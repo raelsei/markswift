@@ -5,9 +5,10 @@ import { svgExpr } from "./svg.ts";
 import { imageNodeExpr } from "./images.ts";
 import { controlExpr } from "./controls.ts";
 import { modifiers } from "./modifiers.ts";
+import { containerExpr } from "./layout.ts";
 /** Expression for a node: container → property reference; leaf → inline expression (with modifiers). */
 export function refOf(n: SemNode, ctx: EmitContext): string {
-  if (n.kind === "stack" || n.kind === "grid") return ctx.nameOf.get(n)!;
+  if (n.kind === "stack" || n.kind === "grid") return ctx.nameOf.get(n) ?? containerExpr(n, ctx).join("\n");
   return leafExpr(n, ctx).join("\n");
 }
 

@@ -18,12 +18,30 @@ export interface VisualFixture {
   height: number;
   name: string;
   responsive: boolean;
+  /** UIHostingController is required for live controls and scrollable selection rows. */
+  hosted?: boolean;
   background: Record<Theme, Rgb>;
   samples?: Array<{ x: number; y: number; rgb: Rgb | Record<Theme, Rgb> }>;
   regions?: VisualRegion[];
 }
 
 export const visualFixtures: VisualFixture[] = [
+  { id: "allocation", height: 460, name: "VisualSmokeAllocation", responsive: false,
+    background: { light: [246, 248, 251], dark: [22, 30, 43] },
+    regions: [{ id: "grow-tracks", label: "unequal flex growth", maxError: 16 },
+      { id: "shrink-tracks", label: "scaled flex shrink", maxError: 16 },
+      { id: "fraction-grid", label: "fixed and fractional grid tracks", maxError: 16 }],
+  },
+  { id: "table-spans", height: 360, name: "VisualSmokeTableSpans", responsive: false,
+    background: { light: [246, 248, 251], dark: [22, 30, 43] },
+    regions: [{ id: "span-caption", label: "spanned table caption" },
+      { id: "span-table", label: "unequal columns and merged cells", maxError: 16 }],
+  },
+  { id: "select-lists", height: 440, name: "VisualSmokeSelectionLists", responsive: false, hosted: true,
+    background: { light: [255, 255, 255], dark: [23, 29, 39] },
+    regions: [{ id: "single-list", label: "single list rows", maxError: 32 },
+      { id: "multiple-list", label: "multiple selected rows", maxError: 32 }],
+  },
   { id: "rich-text", height: 480, name: "VisualSmokeRichText", responsive: false,
     background: { light: [255, 255, 255], dark: [23, 29, 39] } },
   { id: "full-page", height: 650, name: "VisualSmokeFullPage", responsive: true,

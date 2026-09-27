@@ -3,7 +3,8 @@
  * box, padding and paint still come from the generic inference pass, so a control looks exactly
  * like the box it replaced and only gains its interactive core.
  *
- * Nothing here reads geometry: `input[type=range]` is a slider however the design paints it.
+ * Tags and attributes determine control identity. Select metadata also retains measured row paint;
+ * `input[type=range]` remains a slider however the design paints it.
  */
 import type { LayoutNode } from "../model/layout.ts";
 import type { Color } from "../css/index.ts";
@@ -29,6 +30,9 @@ export interface ControlSpec {
     options?: string[];
     choices?: ControlNode["choices"];
     selectedChoice?: number;
+    selectList?: ControlNode["selectList"];
+    selectedChoices?: number[];
+    selectRows?: ControlNode["selectRows"];
     selectStatic?: boolean;
     href?: string;
     action?: string;
@@ -39,7 +43,7 @@ export interface ControlSpec {
 }
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
- * caller supplies the measured base and the built children.
+ * caller supplies the measured base and rendered children. Select choices carry their own rows.
  */
 export declare function controlOf(n: LayoutNode): ControlSpec | undefined;
 /** A control's laid-out surroundings, as the generic container path produced them. */

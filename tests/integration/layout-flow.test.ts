@@ -26,7 +26,7 @@ for (const width of [320, 390, 768]) {
         const n = measured(id), [top, right, bottom, left] = insetsOf(n.styles);
         return { x: n.bounds.x + left, y: n.bounds.y + top, w: n.bounds.w - left - right, h: n.bounds.h - top - bottom };
       };
-      const matchesCaptured = (id: string) => {
+      const matchesCaptured = (id: string, approximated = true) => {
         const n = node(id), source = measured(id), content = contentBox(id);
         expect(n.measured).toBeDefined();
         expect(n.measured!.width).toBeCloseTo(content.w, 2);
@@ -40,15 +40,19 @@ for (const width of [320, 390, 768]) {
           expect(box.w).toBeCloseTo(original.bounds.w, 2);
           expect(box.h).toBeCloseTo(original.bounds.h, 2);
         });
-        expect(result.diagnostics.find(item => item.id === `#${id}`)?.confidence).toBe("approximated");
+        if (approximated) expect(result.diagnostics.find(item => item.id === `#${id}`)?.confidence).toBe("approximated");
       };
       const unequal = node("unequal-grid") as GridNode;
       expect(unequal.kind).toBe("grid");
-      expect(unequal.measured).toBeUndefined();
-      expect(unequal.columns).toBe(2);
-      expect(unequal.children.map(child => child.width)).toEqual([
-        { kind: "fixed", px: 100 }, { kind: "fixed", px: contentBox("unequal-grid").w - 110 },
+      matchesCaptured("unequal-grid", false);
+      expect(unequal.tracks).toEqual([
+        { basis: 100, grow: 0, shrink: 0, min: 100, max: 100 },
+        { basis: 0, grow: 1, shrink: 0, min: 0 },
       ]);
+      expect(unequal.columns).toBe(2);
+      expect(unequal.children.map(child => child.width.kind)).toEqual(["fill", "fill"]);
+      expect(unequal.children.map(child => child.frame.w)).toEqual([100, contentBox("unequal-grid").w - 110]);
+      expect(unequal.children.map(child => child.height)).toEqual([{ kind: "fixed", px: 30 }, { kind: "fixed", px: 30 }]);
       for (const id of ["hole-grid", "aligned-grid", "span-grid", "empty-grid", "areas-grid", "overlap-grid"]) matchesCaptured(id);
       expect((node("hole-grid") as GridNode).columns).toBe(3);
       expect((node("aligned-grid") as GridNode).columns).toBe(2);

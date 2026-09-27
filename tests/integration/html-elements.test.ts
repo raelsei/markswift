@@ -10,7 +10,8 @@ const FAMILY_STYLES = {
   flex: "display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:8px",
   grid: "display:grid;grid-template-columns:40px 40px;grid-auto-rows:20px;align-content:start;gap:8px",
 } as const;
-const FAMILY_CONSTRUCTORS = { block: "VStack(", flex: "HStack(", grid: "Grid(" } as const;
+// Fidelity retains explicit flex/grid tracks, including their unused container space.
+const FAMILY_CONSTRUCTORS = { block: "VStack(", flex: "MarkswiftMeasuredLayout(", grid: "MarkswiftMeasuredLayout(" } as const;
 
 /** Compare a captured subtree without its position in the family document or capture IDs. */
 function rebase(node: LayoutNode, origin: Rect, id = "sample"): LayoutNode {
@@ -69,6 +70,9 @@ for (const family of Object.keys(FAMILY_STYLES) as Array<keyof typeof FAMILY_STY
       const layout: LayoutDoc = { ...result.layout, root, size: { w: root.bounds.w, h: root.bounds.h } };
       const output = compileLayout(layout, { name: "ElementFamily", mode: "fidelity" });
       expect(output.code).toContain(FAMILY_CONSTRUCTORS[family]);
+      if (family === "flex") {
+        expect(compileLayout(layout, { name: "ElementFamily", mode: "app" }).code).toContain("MarkswiftAllocatedLayout(");
+      }
       expect(output.diagnostics.some(diagnostic => diagnostic.confidence === "unmapped")).toBe(false);
       return output.code;
     });

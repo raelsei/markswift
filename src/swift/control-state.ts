@@ -21,6 +21,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
       return { type: "String", value: str(n.value ?? "") };
     case "picker":
       if (n.selectStatic) return undefined;
+      if (n.selectList === "multiple") return { type: "Set<Int>", value: `[${(n.selectedChoices ?? []).join(", ")}]` };
       if (n.choices !== undefined) return { type: "Int", value: String(n.selectedChoice ?? -1) };
       return { type: "String", value: str(n.value ?? "") };
     case "toggle":

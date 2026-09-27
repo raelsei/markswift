@@ -11,3 +11,47 @@ export function resolvedGridTracks(value: string | undefined): number[] | undefi
   }
   return tracks.length ? tracks : undefined;
 }
+
+export type FractionGridTrack = { fixed: number } | { fraction: number; minimum?: number };
+
+/** Preserve Typed OM track intent; never recover fractions from used pixel widths. */
+export function fractionGridTracks(value: string | undefined): FractionGridTrack[] | undefined {
+  if (!value) return undefined;
+  const tokens = trackTokens(value.replace(/\[[^\]]*\]/g, " "));
+  if (!tokens) return undefined;
+  const tracks: FractionGridTrack[] = [];
+  for (const token of tokens) {
+    const repeated = /^repeat\(\s*(\d+)\s*,\s*(.*)\)$/s.exec(token);
+    if (repeated) {
+      const count = Number(repeated[1]), inner = fractionGridTracks(repeated[2]);
+      if (count < 1 || count > 256 || !inner || inner.length * count + tracks.length > 256) return undefined;
+      for (let i = 0; i < count; i++) tracks.push(...inner);
+      continue;
+    }
+    const fixed = /^(\d+(?:\.\d*)?|\.\d+)(?:px)?$/.exec(token);
+    if (fixed && (token.endsWith("px") || Number(fixed[1]) === 0)) { tracks.push({ fixed: Number(fixed[1]) }); continue; }
+    const fraction = /^(\d+(?:\.\d*)?|\.\d+)fr$/.exec(token);
+    if (fraction && Number(fraction[1]) > 0) { tracks.push({ fraction: Number(fraction[1]) }); continue; }
+    const minmax = /^minmax\(\s*(\d+(?:\.\d*)?|\.\d+)(px)?\s*,\s*(\d+(?:\.\d*)?|\.\d+)fr\s*\)$/.exec(token);
+    if (minmax && (minmax[2] || Number(minmax[1]) === 0) && Number(minmax[3]) > 0) {
+      tracks.push({ fraction: Number(minmax[3]), minimum: Number(minmax[1]) }); continue;
+    }
+    return undefined;
+  }
+  return tracks.length ? tracks : undefined;
+}
+
+function trackTokens(value: string): string[] | undefined {
+  let depth = 0, token = "";
+  const tokens: string[] = [];
+  for (const ch of value.trim()) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (depth < 0) return undefined;
+    if (/\s/.test(ch) && depth === 0) { if (token) tokens.push(token); token = ""; }
+    else token += ch;
+  }
+  if (depth !== 0) return undefined;
+  if (token) tokens.push(token);
+  return tokens;
+}

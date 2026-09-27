@@ -4,8 +4,11 @@ import type { AnalyzedChild } from "./context.ts";
 import { linesOf, stackOf } from "./flow-layout.ts";
 import { buildWrapping } from "./wrapping.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
-import { unionRect } from "./geometry.ts";
+import { insetsOf, unionRect } from "./geometry.ts";
 import { finish } from "./node-base.ts";
+import { automaticHeight, equalCalculatedAllocation, flexAllocation, intrinsicFlexFlow, restoreAllocatedInsets } from "./flex-allocation.ts";
+import { measuredLayoutOf } from "./measured-layout.ts";
+import { px } from "../css/syntax.ts";
 
 /** Build a grid-free flow stack and decide whether measured overflow needs scrolling. */
 export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis: Axis, display: string): StackNode {
@@ -47,6 +50,37 @@ export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChil
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution);
+  }
+
+  if (/flex/.test(display) && !wraps && axis === "h") {
+    const ordered = [...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x);
+    const admitted = flexAllocation(n, ordered, align, distribution);
+    if (admitted.tracks) {
+      stack.padding = insetsOf(n.styles);
+      stack.allocation = { tracks: admitted.tracks };
+      stack.spacing = px(n.styles["column-gap"]);
+      stack.leadInset = 0;
+      if (automaticHeight(n)) stack.height = { kind: "hug" };
+      stack.children = ordered.map(item => {
+        item.sem.width = { kind: "fill" };
+        if (automaticHeight(item.node)) item.sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+        restoreAllocatedInsets(item.node, item.sem);
+        item.sem.notes = item.sem.notes.filter(note => !note.startsWith("approximated: unequal flex-grow")
+          && !(note.startsWith("approximated:") && note.endsWith("measured width pinned")));
+        finish(item.sem);
+        return item.sem;
+      });
+      stack.measured = measuredLayoutOf(stack, stack.children);
+    } else if (admitted.reason && !equalCalculatedAllocation(n, ordered, align, distribution)) {
+      if (intrinsicFlexFlow(n, ordered, align, distribution)) {
+        stack.notes.push("approximated: intrinsic flex text uses native content sizing; compression at another width may differ from CSS");
+      } else {
+        stack.padding = insetsOf(n.styles);
+        for (const child of stack.children) { child.width = { kind: "fixed", px: child.frame.w }; child.height = { kind: "fixed", px: child.frame.h }; }
+        stack.measured = measuredLayoutOf(stack, stack.children);
+        stack.notes.push(`approximated: flex captured allocation (${admitted.reason}); cannot recompute at another width`);
+      }
+    }
   }
 
   const items2 = stack.children;

@@ -1,8 +1,10 @@
 /** A single HTML select uses ordinal state: duplicate labels and values remain separate choices. */
 import type { ControlNode } from "../model/semantic.ts";
 import { indent, str } from "./format.ts";
+import { selectListExpr } from "./select-list-control.ts";
 
 export function selectExpr(node: ControlNode, state: string | undefined, still: boolean, label: string[]): string[] {
+  if (node.selectList && !node.selectStatic) return selectListExpr(node, state, still);
   if (node.selectStatic || still || (!state && node.choices !== undefined)) {
     const text = painted(node.value ?? "", node.selectStatic ? ".topLeading" : ".leading");
     return node.selectStatic ? text : ["HStack(spacing: 4.0) {", ...indent(text, 1), '    Image(systemName: "chevron.down")', "}"];

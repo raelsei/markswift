@@ -95,7 +95,7 @@ browserTest("modern select wrappers retain browser option ordinals and nested op
   expect(result.code).toContain("@State private var s_wrapped: Int = 1");
 }, 30000);
 
-browserTest("multiple and size selects keep selected labels and report static editing fallback", async () => {
+browserTest("multiple and size selects retain live selection and expose native editing rows", async () => {
   const result = await convertHtml(`<main data-markswift-root>
     <select id="many" multiple><option value="1" selected>First</option><option value="2">Second</option><option value="3" selected>Third</option></select>
     <select id="list" size="3"><option>One</option><option selected>Two</option></select>
@@ -108,13 +108,15 @@ browserTest("multiple and size selects keep selected labels and report static ed
   } });
   expect(controls(result).get("#many")?.value).toBe("Second\nThird");
   expect(controls(result).get("#list")?.value).toBe("Two");
-  expect(result.code).not.toContain("@State");
+  expect(controls(result).get("#many")?.selectedChoices).toEqual([1, 2]);
+  expect(result.code).toContain("@State private var s_many: Set<Int> = [1, 2]");
+  expect(result.code).toContain("@State private var s_list: Int = 1");
   expect(result.code).not.toContain("SwiftUI.Menu");
-  expect(result.code).toContain('Text(verbatim: "Second\\nThird")');
-  expect(result.diagnostics.flatMap(item => item.notes).filter(note => note.includes("static selected labels"))).toHaveLength(2);
+  expect(result.code).toContain("MarkswiftSelectionList(");
+  expect(result.diagnostics.flatMap(item => item.notes).filter(note => note.includes("browser list row paint"))).toHaveLength(2);
 }, 30000);
 
-nativeTest("select menus and static multi-select fallbacks compile in app and fidelity modes", async () => {
+nativeTest("select menus and multi-select rows compile in app and fidelity modes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-select-native-"));
   try {
     for (const mode of ["app", "fidelity"] as const) {

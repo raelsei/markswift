@@ -4,6 +4,10 @@ import type { GridNode, SemBase } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
 import { px, round2 } from "../css/index.ts";
 import { resolvedGridTracks } from "../css/grid.ts";
+import { fractionGridTracks } from "../css/grid.ts";
+import type { AllocationTrack } from "../model/allocation.ts";
+import { gridAllocatedWidths } from "./allocation.ts";
+import { automaticHeight, fixedLength, zeroAutomaticMinimum, restoreAllocatedInsets, hasAutoMargins } from "./flex-allocation.ts";
 import { renders, insetsOf } from "./geometry.ts";
 import { measuredLayoutOf } from "./measured-layout.ts";
 
@@ -41,7 +45,77 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     base.notes.push("approximated: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
     return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
   }
+  const intent = fractionGridTracks(n.preferredSize?.gridTemplateColumns);
+  const autoRows = n.preferredSize?.gridTemplateRows;
+  const automaticRows = autoRows === "auto" || /^repeat\(\s*\d+\s*,\s*auto\s*\)$/.test(autoRows ?? "")
+    || /^auto(?:\s+auto)*$/.test(autoRows ?? "")
+    || (autoRows === "none" && n.preferredSize?.gridAutoRows === "auto");
+  const rowCount = heights!.length;
+  const declaredRowCount = autoRows?.match(/^repeat\(\s*(\d+)\s*,\s*auto\s*\)$/)?.[1]
+    ?? (autoRows === "none" ? "0" : String(autoRows?.split(/\s+/).length ?? 0));
+  const rowsProven = automaticRows && (rowCount <= Number(declaredRowCount) || n.preferredSize?.gridAutoRows === "auto");
+  const explicitRows = autoRows === "none" ? [] : fractionGridTracks(autoRows);
+  const implicitRows = fractionGridTracks(n.preferredSize?.gridAutoRows);
+  const fixedRows = explicitRows?.every(track => "fixed" in track) && (implicitRows === undefined || implicitRows.every(track => "fixed" in track))
+    ? heights!.map((_, row) => {
+      const explicit = explicitRows[row];
+      const implicit = implicitRows?.[(row - explicitRows.length) % implicitRows.length];
+      const track = explicit ?? implicit;
+      return track && "fixed" in track ? track.fixed : undefined;
+    }) : undefined;
+  const fixedRowsProven = fixedRows?.every((height, row) => height !== undefined && near(height, heights![row]!));
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
+  const tracks: AllocationTrack[] | undefined = intent?.length === columns ? intent.map(track => "fixed" in track
+    ? { basis: track.fixed, grow: 0, shrink: 0, min: track.fixed, max: track.fixed }
+    : { basis: 0, grow: track.fraction, shrink: 0, min: track.minimum ?? 0 }) : undefined;
+  const minProven = intent?.every((track, column) => "fixed" in track || track.minimum !== undefined
+    || ordered.filter((_, i) => i % columns === column).every(item => zeroAutomaticMinimum(item.node)));
+  const simpleCells = ordered.every(item => {
+    const child = item.node;
+    const width = child.preferredSize?.width;
+    return n.children.includes(child) && !hasAutoMargins(child) && ["top", "right", "bottom", "left"].every(edge => px(child.styles[`margin-${edge}`]) === 0)
+      && (width === undefined || width === "auto")
+      && (fixedLength(child.styles["min-width"]) === 0 || (child.styles["min-width"] ?? "auto") === "auto")
+      && (child.styles["max-width"] ?? "none") === "none"
+      && /^(auto|normal|stretch)?$/.test(child.styles["justify-self"] ?? "")
+      && /^(auto|normal|stretch)?$/.test(child.styles["align-self"] ?? "")
+      && /^(auto)?$/.test(child.styles["aspect-ratio"] ?? "")
+      && (automaticHeight(child) || fixedLength(child.preferredSize?.height) !== undefined);
+  });
+  const allocated = tracks && gridAllocatedWidths(contentW - (columns - 1) * hSpacing, tracks);
+  const agrees = allocated && widths!.every((width, i) => near(width, allocated[i]!));
+  const itemAlignment = /^(normal|stretch)?$/.test(n.styles["align-items"] ?? "")
+    && /^(normal|stretch)?$/.test(n.styles["justify-items"] ?? "");
+  const spacingProven = [n.styles["column-gap"], n.styles["row-gap"]].every(value => value === undefined
+    || value === "normal" || fixedLength(value) !== undefined);
+  if (tracks && tracks.some(track => track.grow > 0) && minProven && simpleCells && (rowsProven || fixedRowsProven) && agrees
+    && itemAlignment && spacingProven
+    && /^(row)?$/.test(n.styles["grid-auto-flow"] ?? "") && automaticHeight(n)
+    && (n.styles["min-height"] === undefined || n.styles["min-height"] === "auto" || fixedLength(n.styles["min-height"]) === 0)
+    && (n.styles["max-height"] ?? "none") === "none"
+    && /^(normal|stretch|start)?$/.test(n.styles["align-content"] ?? "")) {
+    const children = ordered.map((item, i) => {
+      item.sem.width = { kind: "fill" };
+      if (fixedRowsProven) item.sem.height = { kind: "fixed", px: fixedRows![Math.floor(i / columns)]! };
+      else if (automaticHeight(item.node)) item.sem.height = { kind: "fill" };
+      restoreAllocatedInsets(item.node, item.sem);
+      return item.sem;
+    });
+    return { ...base, kind: "grid", columns, hSpacing, vSpacing, tracks, height: { kind: "hug" }, children, measured: measuredLayoutOf(base, children) };
+  }
+  if (n.preferredSize?.gridTemplateColumns !== undefined) {
+    const children = ordered.map(item => {
+      item.sem.width = { kind: "fixed", px: round2(item.sem.frame.w) };
+      item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
+      return item.sem;
+    });
+    base.notes.push(!spacingProven
+      ? "approximated: captured grid placement; relative or intrinsic grid gap is not reconstructed at another width"
+      : itemAlignment
+        ? "approximated: captured grid placement; track intent, automatic minimums, row sizing or flow do not establish native responsive allocation"
+        : "approximated: captured grid placement; item alignment requires intrinsic cell sizes and is not reconstructed at another width");
+    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
+  }
   const equalFill = widths.every(w => near(w, widths[0]!)) && near(widths.reduce((sum, w) => sum + w, 0) + (columns - 1) * hSpacing, contentW);
   const children = ordered.map(item => {
     item.sem.width = equalFill ? { kind: "fill" } : { kind: "fixed", px: round2(item.sem.frame.w) };

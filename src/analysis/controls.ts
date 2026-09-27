@@ -3,7 +3,8 @@
  * box, padding and paint still come from the generic inference pass, so a control looks exactly
  * like the box it replaced and only gains its interactive core.
  *
- * Nothing here reads geometry: `input[type=range]` is a slider however the design paints it.
+ * Tags and attributes determine control identity. Select metadata also retains measured row paint;
+ * `input[type=range]` remains a slider however the design paints it.
  */
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
@@ -31,6 +32,9 @@ export interface ControlSpec {
   options?: string[];
   choices?: ControlNode["choices"];
   selectedChoice?: number;
+  selectList?: ControlNode["selectList"];
+  selectedChoices?: number[];
+  selectRows?: ControlNode["selectRows"];
   selectStatic?: boolean;
   href?: string;
   action?: string;
@@ -42,7 +46,7 @@ export interface ControlSpec {
 
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
- * caller supplies the measured base and the built children.
+ * caller supplies the measured base and rendered children. Select choices carry their own rows.
  */
 export function controlOf(n: LayoutNode): ControlSpec | undefined {
   const a = n.attrs;
@@ -199,6 +203,9 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     if (base.width.kind !== "hug") only.width = { kind: "fill" };
   }
   const node: ControlNode = { ...base, kind: "control", control, content, ...state };
+  // HTML size/multiple provides an intrinsic viewport, not the flexible ideal height of a
+  // SwiftUI ScrollView/GeometryReader. Preserve that viewport while its option content scrolls.
+  if (node.selectList && node.height.kind === "hug") node.height = { kind: "fixed", px: node.frame.h };
   if (label) node.label = label;
   if (parts.font && (SELF_DRAWN_TEXT[control] || (control === "button" && state.value !== undefined && !state.files))) {
     node.font = parts.font;

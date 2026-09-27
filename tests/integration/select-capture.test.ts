@@ -42,8 +42,8 @@ browserTest("live select metadata retains nested labels, exact values, duplicate
   expect(controls.get("empty")!).toMatchObject({ value: "", selectedChoice: -1 });
   expect(controls.get("disabled-selected")!).toMatchObject({ value: "Still selected", selectedChoice: 0 });
   expect(controls.get("disabled-selected")!.choices![0]!.disabled).toBe(true);
-  expect(controls.get("multiple")!).toMatchObject({ value: "One\nTwo", selectStatic: true });
-  expect(result.code).not.toContain("@State private var s_multiple");
+  expect(controls.get("multiple")!).toMatchObject({ value: "One\nTwo", selectList: "multiple", selectedChoices: [0, 1] });
+  expect(result.code).toContain("@State private var s_multiple: Set<Int> = [0, 1]");
   expect(result.code).toContain("@State private var s_empty: Int = -1");
   expect(result.code).toContain('value: "second"');
 }, 30000);

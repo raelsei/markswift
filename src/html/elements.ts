@@ -22,7 +22,7 @@ export const HTML_ELEMENTS: Readonly<Record<string, ElementPolicy>> = Object.fre
   ...family("svg", "svg"),
   ...family("br", "line-break"),
   ...family("area base datalist head link meta script source style template title track", "metadata", "nonvisual"),
-  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; a subset of equal-column fixed tables resizes natively; spans, other column rules and table accessibility are not translated"),
+  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; proven fixed columns and cell spans resize natively; intrinsic allocation, complete border conflicts and browser table navigation remain approximated"),
   ...family("ruby rt", "flow", "approximated", "→ measured annotation boxes; ruby associations and paragraph reflow are not translated"),
   ...family("form", "flow", "approximated", "→ measured content; browser form submission and validation are not translated"),
   ...family("label", "text", "approximated", "→ styled text; label-to-control focus behavior is not translated"),

@@ -45,6 +45,12 @@ __pycache__/
 !/tools/verify/fixtures/form.css
 !/tools/verify/fixtures/effects.html
 !/tools/verify/fixtures/effects.css
+!/tools/verify/fixtures/allocation.html
+!/tools/verify/fixtures/allocation.css
+!/tools/verify/fixtures/table-spans.html
+!/tools/verify/fixtures/table-spans.css
+!/tools/verify/fixtures/select-lists.html
+!/tools/verify/fixtures/select-lists.css
 
 # Generated output and editor/agent state
 /generated/

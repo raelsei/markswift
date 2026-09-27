@@ -6894,7 +6894,15 @@ function superRefine(fn, params) {
 }
 // src/model/layout.ts
 var Rect = object({ x: number2(), y: number2(), w: number2(), h: number2() });
-var PreferredSize = object({ width: string2(), height: string2() });
+var PreferredSize = object({
+  width: string2(),
+  height: string2(),
+  flexBasis: string2().optional(),
+  hasAutoMargins: boolean2().optional(),
+  gridTemplateColumns: string2().optional(),
+  gridTemplateRows: string2().optional(),
+  gridAutoRows: string2().optional()
+});
 var LayoutNode = lazy(() => object({
   id: string2().optional(),
   tag: string2(),
@@ -10410,32 +10418,127 @@ function applyRadioInput(node, spec) {
   spec.radioGroup = JSON.stringify([node.formOwner, name]);
 }
 
+// src/analysis/geometry.ts
+function renders(n) {
+  return n.styles["display"] !== "none";
+}
+function hangsLeading(box, x) {
+  return box.w > 0 && box.x + box.w <= x + 0.5;
+}
+function fillsWidthInside(n) {
+  return (n.kind === "stack" || n.kind === "grid") && n.children.some((c) => c.width.kind === "fill" || fillsWidthInside(c));
+}
+function floating(n) {
+  return n.styles["float"] === "left" || n.styles["float"] === "right";
+}
+function lineTops(el) {
+  const boxes = [];
+  const collect = (n) => {
+    for (const l of n.lines ?? [])
+      boxes.push(l.bounds);
+    for (const c of n.children)
+      collect(c);
+  };
+  collect(el);
+  boxes.sort((a, b) => a.y - b.y);
+  const tops = [];
+  for (const b of boxes)
+    if (tops.length === 0 || b.y - tops[tops.length - 1] >= Math.max(1, b.h / 2))
+      tops.push(b.y);
+  return tops;
+}
+var EDGES = ["top", "right", "bottom", "left"];
+function edgeWidth(s, edge) {
+  const st = s[`border-${edge}-style`];
+  return st && st !== "none" && st !== "hidden" ? px(s[`border-${edge}-width`]) : 0;
+}
+function insetsOf(s) {
+  return EDGES.map((e) => px(s[`padding-${e}`]) + edgeWidth(s, e));
+}
+function unionRect(a, b) {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+}
+
+// src/analysis/select-paint.ts
+function selectRowAppearance(node, height = node.bounds.h) {
+  if (node.bounds.w <= 0 || height <= 0)
+    return;
+  const color = parseColor(node.styles.color), background = parseColor(node.styles["background-color"]);
+  return { height, padding: insetsOf(node.styles), font: fontOf(node.styles), ...color ? { color } : {}, ...background ? { background } : {} };
+}
+function selectGroupHeight(group, options) {
+  const first = options.find((option) => option.group === group && option.node.bounds.w > 0 && option.node.bounds.h > 0);
+  return Math.min(group.bounds.h, first ? first.node.bounds.y - group.bounds.y : group.bounds.h);
+}
+function selectPaintRows(select, options, choices) {
+  const measured = options.some(({ node, hidden }, index) => !(choices[index]?.hidden ?? hidden) && node.bounds.w > 0 && node.bounds.h > 0);
+  if (!measured)
+    return;
+  const rows = [];
+  const groups = new Set;
+  options.forEach(({ node, group }, choice) => {
+    if (choices[choice]?.hidden)
+      return;
+    if (group && !groups.has(group)) {
+      groups.add(group);
+      const heading = { ...group.bounds, h: selectGroupHeight(group, options) };
+      add(group, heading, { kind: "group", label: group.attrs.label ?? "" });
+    }
+    add(node, node.bounds, { kind: "option", choice, label: choices[choice].label });
+  });
+  return rows;
+  function add(node, bounds, identity) {
+    if (bounds.w <= 0 || bounds.h <= 0 || bounds.y + bounds.h <= select.bounds.y || bounds.y >= select.bounds.y + select.bounds.h || node.styles.visibility === "hidden")
+      return;
+    const { height: _, ...appearance } = selectRowAppearance(node, bounds.h);
+    rows.push({ ...identity, frame: { ...bounds, x: bounds.x - select.bounds.x, y: bounds.y - select.bounds.y }, ...appearance });
+  }
+}
+
 // src/analysis/select-input.ts
 function applySelectInput(node, spec) {
   const options = [];
   const grouped = collectOptions(node, false, options);
-  const choices = options.map(({ node: option, disabled, hidden }, id) => {
+  const multiple = node.attrs.multiple !== undefined;
+  const listbox = multiple || Number.parseInt(node.attrs.size ?? "0", 10) > 1;
+  const groups = [...new Set(options.flatMap((option) => option.group ? [option.group] : []))];
+  const groupRows = groups.map((group) => selectRowAppearance(group, selectGroupHeight(group, options)));
+  const choices = options.map(({ node: option, disabled, hidden, group }, id) => {
     const text = optionText(option).replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
+    const row = listbox ? selectRowAppearance(option) : undefined;
+    const groupRow = group ? groupRows[groups.indexOf(group)] : undefined;
     return {
       id,
       value: option.option?.value ?? option.attrs.value ?? text,
       label: option.option?.label ?? (option.attrs.label || text),
       disabled,
-      ...option.option?.hidden ?? hidden ? { hidden: true } : {}
+      ...option.option?.hidden ?? hidden ? { hidden: true } : {},
+      ...listbox && option.styles.visibility === "hidden" ? { invisible: true } : {},
+      ...row ? { row } : {},
+      ...listbox && group ? { group: { id: groups.indexOf(group), label: group.attrs.label ?? "", ...group.styles.visibility === "hidden" ? { invisible: true } : {}, ...groupRow ? { row: groupRow } : {} } } : {}
     };
   });
   spec.choices = choices;
   spec.options = choices.map((choice) => choice.label);
   const selected = options.flatMap(({ node: option }, index) => option.attrs.selected !== undefined ? [index] : []);
-  const multiple = node.attrs.multiple !== undefined;
-  const listbox = multiple || Number.parseInt(node.attrs.size ?? "0", 10) > 1;
   spec.selectedChoice = node.selectedIndex ?? (multiple ? selected[0] : selected.at(-1)) ?? (listbox ? -1 : choices.find((choice) => !choice.disabled)?.id ?? -1);
   if (listbox) {
-    spec.selectStatic = true;
+    spec.selectList = multiple ? "multiple" : "single";
+    if (multiple)
+      spec.selectedChoices = selected;
+    spec.selectRows = selectPaintRows(node, options, choices);
     const indices = multiple ? selected : [spec.selectedChoice];
     spec.value = indices.map((index) => choices[index]?.label ?? "").join(`
 `);
-    spec.notes.push("approximated: <select multiple/size> list box → static selected labels; option rows, scrolling and editing require a custom selection view");
+    spec.notes.push("approximated: <select multiple/size> → native scrollable selection rows; browser list row paint, keyboard range selection, validation and form submission require app integration");
+    spec.notes.push("approximated: native select list initial scroll position starts at the top; fidelity retains the captured browser scroll position when row measurements exist");
+    spec.notes.push("approximated: dynamic CSS option selection styling is not reconstructed; changed rows keep their own captured text paint and use a native highlight or the select background");
+    if (spec.selectRows === undefined)
+      spec.notes.push("approximated: select list row measurements unavailable; fidelity uses static native option rows and cannot retain the browser scroll position");
+    else
+      spec.notes.push("approximated: select fidelity retains measured visible row positions, labels and plain colors; browser glyph metrics and richer option styling may differ");
   } else {
     spec.value = choices[spec.selectedChoice]?.label ?? "";
     spec.notes.push("approximated: <select> → native menu; browser option appearance and form submission require app integration");
@@ -10444,22 +10547,22 @@ function applySelectInput(node, spec) {
     spec.selectStatic = true;
     spec.notes.push("approximated: <select> has no captured options → static empty selection");
   }
-  if (grouped) {
+  if (grouped && !listbox) {
     spec.notes.push("approximated: <select> optgroup headings are flattened; disabled groups keep their options disabled");
   }
 }
-function collectOptions(node, inheritedDisabled, options, inGroup = false, inheritedHidden = false) {
+function collectOptions(node, inheritedDisabled, options, inGroup = false, inheritedHidden = false, group) {
   let grouped = false;
   for (const child of node.children) {
     if (["select", "datalist", "hr"].includes(child.tag) || inGroup && child.tag === "optgroup")
       continue;
     const hidden = inheritedHidden || child.attrs.hidden !== undefined || child.styles.display === "none";
     if (child.tag === "option")
-      options.push({ node: child, disabled: inheritedDisabled || child.attrs.disabled !== undefined, hidden });
+      options.push({ node: child, disabled: inheritedDisabled || child.attrs.disabled !== undefined, hidden, ...group ? { group } : {} });
     else {
       const isGroup = child.tag === "optgroup";
       grouped = isGroup || grouped;
-      grouped = collectOptions(child, inheritedDisabled || isGroup && child.attrs.disabled !== undefined, options, inGroup || isGroup, hidden) || grouped;
+      grouped = collectOptions(child, inheritedDisabled || isGroup && child.attrs.disabled !== undefined, options, inGroup || isGroup, hidden, isGroup ? child : group) || grouped;
     }
   }
   return grouped;
@@ -10623,6 +10726,8 @@ function buildControl(spec, parts) {
       only.width = { kind: "fill" };
   }
   const node = { ...base, kind: "control", control, content, ...state };
+  if (node.selectList && node.height.kind === "hug")
+    node.height = { kind: "fixed", px: node.frame.h };
   if (label)
     node.label = label;
   if (parts.font && (SELF_DRAWN_TEXT[control] || control === "button" && state.value !== undefined && !state.files)) {
@@ -10681,7 +10786,7 @@ var HTML_ELEMENTS = Object.freeze({
   ...family("svg", "svg"),
   ...family("br", "line-break"),
   ...family("area base datalist head link meta script source style template title track", "metadata", "nonvisual"),
-  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; a subset of equal-column fixed tables resizes natively; spans, other column rules and table accessibility are not translated"),
+  ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; proven fixed columns and cell spans resize natively; intrinsic allocation, complete border conflicts and browser table navigation remain approximated"),
   ...family("ruby rt", "flow", "approximated", "→ measured annotation boxes; ruby associations and paragraph reflow are not translated"),
   ...family("form", "flow", "approximated", "→ measured content; browser form submission and validation are not translated"),
   ...family("label", "text", "approximated", "→ styled text; label-to-control focus behavior is not translated"),
@@ -10733,49 +10838,6 @@ function classifyElement(tag, attrs = {}) {
     known: false,
     note: `approximated: <${tag}> ${tag.includes("-") ? "custom element" : "unclassified element"} → measured content; custom semantics and behavior are not translated`
   };
-}
-
-// src/analysis/geometry.ts
-function renders(n) {
-  return n.styles["display"] !== "none";
-}
-function hangsLeading(box, x) {
-  return box.w > 0 && box.x + box.w <= x + 0.5;
-}
-function fillsWidthInside(n) {
-  return (n.kind === "stack" || n.kind === "grid") && n.children.some((c) => c.width.kind === "fill" || fillsWidthInside(c));
-}
-function floating(n) {
-  return n.styles["float"] === "left" || n.styles["float"] === "right";
-}
-function lineTops(el) {
-  const boxes = [];
-  const collect = (n) => {
-    for (const l of n.lines ?? [])
-      boxes.push(l.bounds);
-    for (const c of n.children)
-      collect(c);
-  };
-  collect(el);
-  boxes.sort((a, b) => a.y - b.y);
-  const tops = [];
-  for (const b of boxes)
-    if (tops.length === 0 || b.y - tops[tops.length - 1] >= Math.max(1, b.h / 2))
-      tops.push(b.y);
-  return tops;
-}
-var EDGES = ["top", "right", "bottom", "left"];
-function edgeWidth(s, edge) {
-  const st = s[`border-${edge}-style`];
-  return st && st !== "none" && st !== "hidden" ? px(s[`border-${edge}-width`]) : 0;
-}
-function insetsOf(s) {
-  return EDGES.map((e) => px(s[`padding-${e}`]) + edgeWidth(s, e));
-}
-function unionRect(a, b) {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
 }
 
 // src/analysis/style-background.ts
@@ -11718,6 +11780,254 @@ function resolvedGridTracks(value) {
   }
   return tracks.length ? tracks : undefined;
 }
+function fractionGridTracks(value) {
+  if (!value)
+    return;
+  const tokens = trackTokens(value.replace(/\[[^\]]*\]/g, " "));
+  if (!tokens)
+    return;
+  const tracks = [];
+  for (const token of tokens) {
+    const repeated = /^repeat\(\s*(\d+)\s*,\s*(.*)\)$/s.exec(token);
+    if (repeated) {
+      const count = Number(repeated[1]), inner = fractionGridTracks(repeated[2]);
+      if (count < 1 || count > 256 || !inner || inner.length * count + tracks.length > 256)
+        return;
+      for (let i = 0;i < count; i++)
+        tracks.push(...inner);
+      continue;
+    }
+    const fixed = /^(\d+(?:\.\d*)?|\.\d+)(?:px)?$/.exec(token);
+    if (fixed && (token.endsWith("px") || Number(fixed[1]) === 0)) {
+      tracks.push({ fixed: Number(fixed[1]) });
+      continue;
+    }
+    const fraction = /^(\d+(?:\.\d*)?|\.\d+)fr$/.exec(token);
+    if (fraction && Number(fraction[1]) > 0) {
+      tracks.push({ fraction: Number(fraction[1]) });
+      continue;
+    }
+    const minmax = /^minmax\(\s*(\d+(?:\.\d*)?|\.\d+)(px)?\s*,\s*(\d+(?:\.\d*)?|\.\d+)fr\s*\)$/.exec(token);
+    if (minmax && (minmax[2] || Number(minmax[1]) === 0) && Number(minmax[3]) > 0) {
+      tracks.push({ fraction: Number(minmax[3]), minimum: Number(minmax[1]) });
+      continue;
+    }
+    return;
+  }
+  return tracks.length ? tracks : undefined;
+}
+function trackTokens(value) {
+  let depth = 0, token = "";
+  const tokens = [];
+  for (const ch of value.trim()) {
+    if (ch === "(")
+      depth++;
+    else if (ch === ")")
+      depth--;
+    if (depth < 0)
+      return;
+    if (/\s/.test(ch) && depth === 0) {
+      if (token)
+        tokens.push(token);
+      token = "";
+    } else
+      token += ch;
+  }
+  if (depth !== 0)
+    return;
+  if (token)
+    tokens.push(token);
+  return tokens;
+}
+
+// src/analysis/allocation.ts
+var clamp = (value, track) => Math.max(track.min, Math.min(track.max ?? Infinity, value));
+function flexAllocatedWidths(available, tracks) {
+  const growing = tracks.reduce((sum, track) => sum + clamp(track.basis, track), 0) < available;
+  const target = tracks.map((track) => track.basis);
+  const frozen = tracks.map((track) => (growing ? track.grow : track.shrink) === 0 || (growing ? track.basis > clamp(track.basis, track) : track.basis < clamp(track.basis, track)));
+  frozen.forEach((freeze, i) => {
+    if (freeze)
+      target[i] = clamp(tracks[i].basis, tracks[i]);
+  });
+  const initialFree = available - tracks.reduce((sum, track, i) => sum + (frozen[i] ? target[i] : track.basis), 0);
+  for (let step = 0;step <= tracks.length && frozen.some((value) => !value); step++) {
+    let free = available - tracks.reduce((sum, track, i) => sum + (frozen[i] ? target[i] : track.basis), 0);
+    const factors = tracks.reduce((sum, track, i) => sum + (frozen[i] ? 0 : growing ? track.grow : track.shrink), 0);
+    if (factors < 1 && Math.abs(initialFree * factors) < Math.abs(free))
+      free = initialFree * factors;
+    const weight = tracks.reduce((sum, track, i) => sum + (frozen[i] ? 0 : growing ? track.grow : track.shrink * Math.max(0, track.basis - (track.inset ?? 0))), 0);
+    const violations = tracks.map((track, i) => {
+      if (frozen[i])
+        return 0;
+      const factor = growing ? track.grow : track.shrink * Math.max(0, track.basis - (track.inset ?? 0));
+      const allocated = track.basis + (weight > 0 ? free * factor / weight : 0);
+      target[i] = clamp(allocated, track);
+      return target[i] - allocated;
+    });
+    const violation = violations.reduce((sum, value) => sum + value, 0);
+    violations.forEach((value, i) => {
+      if (Math.abs(violation) < 0.000001 || (violation > 0 ? value > 0 : value < 0))
+        frozen[i] = true;
+    });
+  }
+  return target;
+}
+function gridAllocatedWidths(available, tracks) {
+  const sizes = tracks.map((track) => track.min);
+  const frozen = tracks.map((track) => track.grow === 0);
+  for (let step = 0;step <= tracks.length; step++) {
+    const free = available - sizes.reduce((sum, size, i) => sum + (frozen[i] ? size : 0), 0);
+    const factors = tracks.reduce((sum, track, i) => sum + (frozen[i] ? 0 : track.grow), 0);
+    const unit = Math.max(0, free) / Math.max(1, factors);
+    let changed = false;
+    tracks.forEach((track, i) => {
+      if (frozen[i])
+        return;
+      if (unit * track.grow < track.min) {
+        frozen[i] = true;
+        changed = true;
+        sizes[i] = track.min;
+      } else
+        sizes[i] = unit * track.grow;
+    });
+    if (!changed)
+      return sizes;
+  }
+  return sizes;
+}
+
+// src/analysis/flex-allocation.ts
+function fixedLength(value) {
+  return value !== undefined && /^(?:\d+(?:\.\d*)?|\.\d+)(?:px)?$/.test(value.trim()) && (value.trim().endsWith("px") || Number(value) === 0) ? Number.parseFloat(value) : undefined;
+}
+function zeroAutomaticMinimum(n) {
+  return fixedLength(n.styles["min-width"]) === 0 || (n.styles["min-width"] ?? "auto") === "auto" && (/^(hidden|auto|scroll)$/.test(n.styles["overflow-x"] ?? "") || n.children.length === 0 && /^(div|span|article|section|main|aside|nav|header|footer|p)$/.test(n.tag));
+}
+function automaticHeight(n) {
+  return (n.preferredSize?.height ?? parseDeclared(n.attrs.style).height ?? "auto") === "auto";
+}
+function hasAutoMargins(n) {
+  return n.preferredSize?.hasAutoMargins === true || Object.entries(parseDeclared(n.attrs.style)).some(([property, value]) => property.startsWith("margin") && /\bauto\b/.test(value));
+}
+function equalCalculatedAllocation(n, items, align, distribution) {
+  if (items.length < 2 || distribution !== "start" || align === "baseline" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
+    return false;
+  const rawGap = n.styles["column-gap"] ?? n.styles.gap;
+  if (rawGap !== undefined && rawGap !== "normal" && fixedLength(rawGap) === undefined)
+    return false;
+  const ctx = { root: n, parent: n, parentAxis: "h", parentDisplay: n.styles.display ?? "flex", bundledFamilies: {}, fixed: [] };
+  return items.every(({ node: child }) => !hasAutoMargins(child) && n.children.includes(child) && child.preferredSize?.width !== undefined && equalCalculatedFlexWidth(child, child.preferredSize.width, ctx));
+}
+function intrinsicFlexFlow(n, items, align, distribution) {
+  if (!items.length || !/^(start|center|end)$/.test(distribution) || align === "baseline" || (n.styles["flex-direction"] ?? "row") !== "row" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
+    return false;
+  const rawGap = n.styles["column-gap"] ?? n.styles.gap;
+  if (rawGap !== undefined && rawGap !== "normal" && fixedLength(rawGap) === undefined)
+    return false;
+  let intrinsicItems = 0;
+  return items.every(({ node: child, sem }) => {
+    if (!n.children.includes(child) || Number(child.styles["flex-grow"] ?? 0) !== 0 || hasAutoMargins(child) || ["left", "right", "top", "bottom"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0) || !/^(auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none")
+      return false;
+    if (!/^(static|relative)?$/.test(child.styles.position ?? "") || ["left", "right", "top", "bottom"].some((edge) => {
+      const value = child.styles[edge];
+      return value !== undefined && value !== "auto" && fixedLength(value) !== 0;
+    }))
+      return false;
+    const self = child.styles["align-self"];
+    if (self && !/^(auto|normal)$/.test(self) && self !== n.styles["align-items"])
+      return false;
+    const declared = parseDeclared(child.attrs.style);
+    const basis = child.preferredSize?.flexBasis ?? child.styles["flex-basis"] ?? declared["flex-basis"] ?? "auto";
+    const width = child.preferredSize?.width ?? declared.width ?? "auto";
+    const shrink = Number(child.styles["flex-shrink"] ?? 1);
+    if (sem.width.kind === "fixed" && shrink === 0 && fixedLength(width) !== undefined) {
+      return basis === "auto" || fixedLength(basis) !== undefined;
+    }
+    if (sem.kind !== "text" || sem.width.kind !== "hug" || sem.lines !== 1 || basis !== "auto" || width !== "auto" || shrink !== 0 && shrink !== 1)
+      return false;
+    return ++intrinsicItems <= 1;
+  });
+}
+function restoreAllocatedInsets(n, sem) {
+  if (!automaticHeight(n))
+    return;
+  const actual = insetsOf(n.styles);
+  if (sem.kind === "text")
+    sem.padding = actual;
+  else if (sem.kind === "stack" && sem.axis === "v") {
+    const flow = n.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none" && !/^(absolute|fixed)$/.test(child.styles.position ?? ""));
+    const end = flow.sort((a, b) => b.bounds.y + b.bounds.h - (a.bounds.y + a.bounds.h))[0];
+    sem.padding[2] = Math.min(sem.padding[2], actual[2] + Math.max(0, px(end?.styles["margin-bottom"])));
+  }
+}
+function flexAllocation(n, items, align, distribution) {
+  if (!items.some((item) => px(item.node.styles["flex-grow"]) > 0 || px(item.node.styles["flex-shrink"]) > 0))
+    return {};
+  if ((n.styles["flex-direction"] ?? "row") !== "row" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? ""))
+    return { reason: "reverse, vertical or RTL flow" };
+  if (n.styles.display === "inline-flex" && (n.preferredSize?.width ?? parseDeclared(n.attrs.style).width ?? "auto") === "auto") {
+    return { reason: "intrinsic inline-flex container width" };
+  }
+  if (align === "baseline" || distribution !== "start")
+    return { reason: "main-axis distribution or baseline alignment" };
+  const [pt, pr, pb, pl] = insetsOf(n.styles);
+  const rawGap = n.styles["column-gap"];
+  const gap = rawGap === undefined || rawGap === "normal" ? 0 : fixedLength(rawGap);
+  if (gap === undefined)
+    return { reason: "relative or intrinsic gap" };
+  const tracks = [];
+  for (const { node: child } of items) {
+    if (!n.children.includes(child) || child.tag === "#text")
+      return { reason: "anonymous flex item" };
+    if (hasAutoMargins(child))
+      return { reason: "auto item margins" };
+    if (["left", "right", "top", "bottom"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0))
+      return { reason: "item margins" };
+    if (!/^(auto|normal|stretch|flex-start|start|center|flex-end|end)?$/.test(child.styles["align-self"] ?? ""))
+      return { reason: "item alignment" };
+    const self = child.styles["align-self"];
+    if (self && !/^(auto|normal)$/.test(self) && self !== n.styles["align-items"] && !(self === "stretch" && align === "stretch"))
+      return { reason: "mixed cross-axis alignment" };
+    if (child.styles["aspect-ratio"] && child.styles["aspect-ratio"] !== "auto")
+      return { reason: "aspect-ratio sizing" };
+    const [, cpr, , cpl] = insetsOf(child.styles), inset = cpr + cpl;
+    const declared = parseDeclared(child.attrs.style);
+    let rawBasis = child.preferredSize?.flexBasis ?? child.styles["flex-basis"] ?? declared["flex-basis"];
+    if (rawBasis === "auto")
+      rawBasis = child.preferredSize?.width ?? declared.width;
+    const basis = /^(?:0%|0px|0)$/.test(rawBasis ?? "") ? 0 : fixedLength(rawBasis);
+    if (basis === undefined)
+      return { reason: `intrinsic or percentage flex-basis ${rawBasis ?? "auto"}` };
+    const borderBox = child.styles["box-sizing"] === "border-box";
+    const minRaw = child.styles["min-width"] ?? "auto", maxRaw = child.styles["max-width"] ?? "none";
+    const zeroMinimum = zeroAutomaticMinimum(child);
+    const min = zeroMinimum ? 0 : fixedLength(minRaw);
+    const max = maxRaw === "none" ? undefined : fixedLength(maxRaw);
+    if (min === undefined || maxRaw !== "none" && max === undefined)
+      return { reason: "automatic, intrinsic or percentage width constraint" };
+    const minimum = zeroMinimum ? inset : Math.max(inset, min + (borderBox ? 0 : inset));
+    const maximum = max === undefined ? undefined : Math.max(minimum, max + (borderBox ? 0 : inset));
+    const grow = fixedLength(child.styles["flex-grow"] ? `${child.styles["flex-grow"]}px` : "0px");
+    const shrink = fixedLength(child.styles["flex-shrink"] ? `${child.styles["flex-shrink"]}px` : "1px");
+    if (grow === undefined || shrink === undefined)
+      return { reason: "invalid flex factor" };
+    tracks.push({ basis: Math.max(inset, basis + (borderBox ? 0 : inset)), grow, shrink, min: minimum, ...maximum !== undefined ? { max: maximum } : {}, inset });
+  }
+  const available = n.bounds.w - pl - pr - Math.max(0, tracks.length - 1) * gap;
+  const widths = flexAllocatedWidths(available, tracks);
+  let x = n.bounds.x + pl;
+  const contentH = n.bounds.h - pt - pb;
+  const valid = items.every((item, i) => {
+    const frame = item.sem.frame;
+    const width = widths[i];
+    const y = n.bounds.y + pt + (align === "center" ? (contentH - frame.h) / 2 : align === "end" ? contentH - frame.h : 0);
+    const agrees = Math.abs(frame.x - x) <= 0.5 && Math.abs(frame.w - width) <= 0.5 && Math.abs(frame.y - y) <= 0.5;
+    x += width + gap;
+    return agrees;
+  });
+  return valid ? { tracks } : { reason: "captured sizes or placement disagree with explicit allocation" };
+}
 
 // src/analysis/measured-layout.ts
 function measuredLayoutOf(base, children) {
@@ -11768,7 +12078,54 @@ function buildGrid(n, base, all) {
     base.notes.push("approximated: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
     return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
   }
+  const intent = fractionGridTracks(n.preferredSize?.gridTemplateColumns);
+  const autoRows = n.preferredSize?.gridTemplateRows;
+  const automaticRows = autoRows === "auto" || /^repeat\(\s*\d+\s*,\s*auto\s*\)$/.test(autoRows ?? "") || /^auto(?:\s+auto)*$/.test(autoRows ?? "") || autoRows === "none" && n.preferredSize?.gridAutoRows === "auto";
+  const rowCount = heights.length;
+  const declaredRowCount = autoRows?.match(/^repeat\(\s*(\d+)\s*,\s*auto\s*\)$/)?.[1] ?? (autoRows === "none" ? "0" : String(autoRows?.split(/\s+/).length ?? 0));
+  const rowsProven = automaticRows && (rowCount <= Number(declaredRowCount) || n.preferredSize?.gridAutoRows === "auto");
+  const explicitRows = autoRows === "none" ? [] : fractionGridTracks(autoRows);
+  const implicitRows = fractionGridTracks(n.preferredSize?.gridAutoRows);
+  const fixedRows = explicitRows?.every((track) => ("fixed" in track)) && (implicitRows === undefined || implicitRows.every((track) => ("fixed" in track))) ? heights.map((_, row) => {
+    const explicit = explicitRows[row];
+    const implicit = implicitRows?.[(row - explicitRows.length) % implicitRows.length];
+    const track = explicit ?? implicit;
+    return track && "fixed" in track ? track.fixed : undefined;
+  }) : undefined;
+  const fixedRowsProven = fixedRows?.every((height, row) => height !== undefined && near(height, heights[row]));
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
+  const tracks = intent?.length === columns ? intent.map((track) => ("fixed" in track) ? { basis: track.fixed, grow: 0, shrink: 0, min: track.fixed, max: track.fixed } : { basis: 0, grow: track.fraction, shrink: 0, min: track.minimum ?? 0 }) : undefined;
+  const minProven = intent?.every((track, column) => ("fixed" in track) || track.minimum !== undefined || ordered.filter((_, i) => i % columns === column).every((item) => zeroAutomaticMinimum(item.node)));
+  const simpleCells = ordered.every((item) => {
+    const child = item.node;
+    const width = child.preferredSize?.width;
+    return n.children.includes(child) && !hasAutoMargins(child) && ["top", "right", "bottom", "left"].every((edge) => px(child.styles[`margin-${edge}`]) === 0) && (width === undefined || width === "auto") && (fixedLength(child.styles["min-width"]) === 0 || (child.styles["min-width"] ?? "auto") === "auto") && (child.styles["max-width"] ?? "none") === "none" && /^(auto|normal|stretch)?$/.test(child.styles["justify-self"] ?? "") && /^(auto|normal|stretch)?$/.test(child.styles["align-self"] ?? "") && /^(auto)?$/.test(child.styles["aspect-ratio"] ?? "") && (automaticHeight(child) || fixedLength(child.preferredSize?.height) !== undefined);
+  });
+  const allocated = tracks && gridAllocatedWidths(contentW - (columns - 1) * hSpacing, tracks);
+  const agrees = allocated && widths.every((width, i) => near(width, allocated[i]));
+  const itemAlignment = /^(normal|stretch)?$/.test(n.styles["align-items"] ?? "") && /^(normal|stretch)?$/.test(n.styles["justify-items"] ?? "");
+  const spacingProven = [n.styles["column-gap"], n.styles["row-gap"]].every((value) => value === undefined || value === "normal" || fixedLength(value) !== undefined);
+  if (tracks && tracks.some((track) => track.grow > 0) && minProven && simpleCells && (rowsProven || fixedRowsProven) && agrees && itemAlignment && spacingProven && /^(row)?$/.test(n.styles["grid-auto-flow"] ?? "") && automaticHeight(n) && (n.styles["min-height"] === undefined || n.styles["min-height"] === "auto" || fixedLength(n.styles["min-height"]) === 0) && (n.styles["max-height"] ?? "none") === "none" && /^(normal|stretch|start)?$/.test(n.styles["align-content"] ?? "")) {
+    const children = ordered.map((item, i) => {
+      item.sem.width = { kind: "fill" };
+      if (fixedRowsProven)
+        item.sem.height = { kind: "fixed", px: fixedRows[Math.floor(i / columns)] };
+      else if (automaticHeight(item.node))
+        item.sem.height = { kind: "fill" };
+      restoreAllocatedInsets(item.node, item.sem);
+      return item.sem;
+    });
+    return { ...base, kind: "grid", columns, hSpacing, vSpacing, tracks, height: { kind: "hug" }, children, measured: measuredLayoutOf(base, children) };
+  }
+  if (n.preferredSize?.gridTemplateColumns !== undefined) {
+    const children = ordered.map((item) => {
+      item.sem.width = { kind: "fixed", px: round2(item.sem.frame.w) };
+      item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
+      return item.sem;
+    });
+    base.notes.push(!spacingProven ? "approximated: captured grid placement; relative or intrinsic grid gap is not reconstructed at another width" : itemAlignment ? "approximated: captured grid placement; track intent, automatic minimums, row sizing or flow do not establish native responsive allocation" : "approximated: captured grid placement; item alignment requires intrinsic cell sizes and is not reconstructed at another width");
+    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
+  }
   const equalFill = widths.every((w) => near(w, widths[0])) && near(widths.reduce((sum, w) => sum + w, 0) + (columns - 1) * hSpacing, contentW);
   const children = ordered.map((item) => {
     item.sem.width = equalFill ? { kind: "fill" } : { kind: "fixed", px: round2(item.sem.frame.w) };
@@ -12609,6 +12966,40 @@ function buildFlowStack(n, base, items, axis, display) {
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution);
   }
+  if (/flex/.test(display) && !wraps && axis === "h") {
+    const ordered = [...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x);
+    const admitted = flexAllocation(n, ordered, align, distribution);
+    if (admitted.tracks) {
+      stack.padding = insetsOf(n.styles);
+      stack.allocation = { tracks: admitted.tracks };
+      stack.spacing = px(n.styles["column-gap"]);
+      stack.leadInset = 0;
+      if (automaticHeight(n))
+        stack.height = { kind: "hug" };
+      stack.children = ordered.map((item) => {
+        item.sem.width = { kind: "fill" };
+        if (automaticHeight(item.node))
+          item.sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+        restoreAllocatedInsets(item.node, item.sem);
+        item.sem.notes = item.sem.notes.filter((note) => !note.startsWith("approximated: unequal flex-grow") && !(note.startsWith("approximated:") && note.endsWith("measured width pinned")));
+        finish(item.sem);
+        return item.sem;
+      });
+      stack.measured = measuredLayoutOf(stack, stack.children);
+    } else if (admitted.reason && !equalCalculatedAllocation(n, ordered, align, distribution)) {
+      if (intrinsicFlexFlow(n, ordered, align, distribution)) {
+        stack.notes.push("approximated: intrinsic flex text uses native content sizing; compression at another width may differ from CSS");
+      } else {
+        stack.padding = insetsOf(n.styles);
+        for (const child of stack.children) {
+          child.width = { kind: "fixed", px: child.frame.w };
+          child.height = { kind: "fixed", px: child.frame.h };
+        }
+        stack.measured = measuredLayoutOf(stack, stack.children);
+        stack.notes.push(`approximated: flex captured allocation (${admitted.reason}); cannot recompute at another width`);
+      }
+    }
+  }
   const items2 = stack.children;
   const oy = n.styles["overflow-y"];
   const ox = n.styles["overflow-x"];
@@ -12663,9 +13054,432 @@ function buildOverlays(host, abs, firstFlow, ctx, build) {
   return out;
 }
 
+// src/analysis/table-allocation.ts
+function allocateTableColumns(columns, available) {
+  if (!(available > 0) || !Number.isFinite(available) || !columns.length)
+    return;
+  const widths = columns.map((column) => column.kind === "auto" ? 0 : (column.kind === "fraction" ? available * column.value : column.value) + (column.extra ?? 0));
+  if (widths.some((width) => !Number.isFinite(width) || width < 0))
+    return;
+  const automatic = columns.filter((column) => column.kind === "auto").length;
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  if (total > available + 0.1)
+    return;
+  if (automatic) {
+    const share = Math.max(0, available - total) / automatic;
+    return widths.map((width, i) => columns[i].kind === "auto" ? share : width);
+  }
+  const fixedTotal = widths.reduce((sum, width, i) => sum + (columns[i].kind === "fixed" ? width : 0), 0);
+  const fractionTotal = total - fixedTotal;
+  if (fixedTotal > 0 && fractionTotal > 0) {
+    return widths.map((width, i) => columns[i].kind === "fixed" ? width * (available - fractionTotal) / fixedTotal : width);
+  }
+  return total > 0 ? widths.map((width) => width * available / total) : undefined;
+}
+
+// src/analysis/table-columns.ts
+function declaredTableColumns(columns, count, placed, collapsed, gap, decline) {
+  const tracks = declaredTracks(columns, count);
+  if (!tracks)
+    return decline("column/colgroup width intent or span syntax is unsupported");
+  for (const member of placed.filter((member) => member.placement.row === 0)) {
+    const { node, placement: p } = member;
+    const width = intent(node);
+    if (width === "auto")
+      continue;
+    const explicit = track(width);
+    if (!explicit)
+      return decline("first-row widths must be resolved pixels or simple percentages");
+    const affected = tracks.slice(p.column, p.column + p.columnSpan);
+    if (affected.every((column) => column.kind !== "auto"))
+      continue;
+    if (affected.some((column) => column.kind !== "auto"))
+      return decline("a width-bearing spanning cell mixes specified and unspecified columns");
+    const boxInsets = insetsOf(node.styles);
+    const border = edgeWidth(node.styles, "left") + edgeWidth(node.styles, "right");
+    const extra = node.styles["box-sizing"] === "border-box" ? 0 : boxInsets[1] + boxInsets[3] - (collapsed ? border / 2 : 0);
+    for (let i = p.column;i < p.column + p.columnSpan; i++)
+      tracks[i] = {
+        ...explicit,
+        value: explicit.value / p.columnSpan,
+        extra: (extra - gap[0] * (p.columnSpan - 1)) / p.columnSpan
+      };
+  }
+  return tracks;
+}
+function declaredTracks(nodes, count) {
+  const result = [];
+  const add = (node, inherited = "auto") => {
+    const width = intent(node) === "auto" ? inherited : intent(node);
+    const value = track(width);
+    const repeat = span(node.attrs.span, 1000);
+    if (!value || !repeat)
+      return false;
+    for (let i = 0;i < repeat; i++)
+      result.push({ ...value });
+    return true;
+  };
+  for (const node of nodes) {
+    if (!ordinary2(node))
+      return;
+    if (node.tag === "colgroup" && node.children.length) {
+      for (const child of node.children)
+        if (child.tag !== "col" || !ordinary2(child) || !add(child, intent(node)))
+          return;
+    } else if (!add(node))
+      return;
+  }
+  if (result.length > count)
+    return;
+  while (result.length < count)
+    result.push({ kind: "auto" });
+  return result;
+}
+function intent(node, axis = "width") {
+  const preferred = node.preferredSize?.[axis] ?? parseDeclared(node.attrs.style)[axis];
+  if (preferred && preferred !== "auto")
+    return preferred;
+  const attribute = node.attrs[axis];
+  return attribute ? /^\d+(?:\.\d+)?$/.test(attribute) ? `${attribute}px` : attribute : preferred ?? "auto";
+}
+function track(value) {
+  if (value === "auto")
+    return { kind: "auto" };
+  const match = /^(\d+(?:\.\d+)?|\.\d+)(px|%)$/.exec(value);
+  if (!match)
+    return;
+  return { kind: match[2] === "%" ? "fraction" : "fixed", value: Number(match[1]) / (match[2] === "%" ? 100 : 1) };
+}
+function span(value, limit, zero = false) {
+  if (value === undefined)
+    return 1;
+  if (!/^\d+$/.test(value))
+    return;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= (zero ? 0 : 1) && count <= limit ? count : undefined;
+}
+function spacing(value) {
+  if (!value)
+    return;
+  const parts = value.split(/\s+/);
+  if (parts.length > 2 || parts.some((part) => !/^\d+(?:\.\d+)?px$/.test(part)))
+    return;
+  return [px(parts[0]), px(parts[1] ?? parts[0])];
+}
+function ordinary2(node) {
+  const styles = node.styles;
+  return (!styles.position || styles.position === "static") && (!styles.float || styles.float === "none") && (!styles.direction || styles.direction === "ltr") && (!styles["writing-mode"] || styles["writing-mode"] === "horizontal-tb") && (!styles.transform || styles.transform === "none") && styles.visibility !== "collapse";
+}
+function unconstrained2(node) {
+  const styles = node.styles;
+  return (!styles["min-width"] || /^(?:auto|0(?:px)?)$/.test(styles["min-width"])) && (!styles["max-width"] || styles["max-width"] === "none") && !px(styles["margin-left"]) && !px(styles["margin-right"]);
+}
+function close(a, b) {
+  return Math.abs(a - b) <= 0.8;
+}
+
+// src/analysis/table-group-effects.ts
+function tableGroupEffectReason(node) {
+  const styles = node.styles;
+  const opacity = styles.opacity;
+  if (opacity && Number(opacity) !== 1)
+    return reason(node, "opacity", opacity);
+  for (const property of ["filter", "backdrop-filter", "mask-image", "clip-path", "transform"]) {
+    const value = styles[property];
+    if (value && value !== "none")
+      return reason(node, property, value);
+  }
+  const blend = styles["mix-blend-mode"];
+  if (blend && blend !== "normal")
+    return reason(node, "mix-blend-mode", blend);
+  const clip = styles.clip;
+  if (clip && clip !== "auto")
+    return reason(node, "clip", clip);
+  for (const property of ["overflow-x", "overflow-y"]) {
+    const value = styles[property];
+    if (value && value !== "visible")
+      return reason(node, property, value);
+  }
+}
+function reason(node, property, value) {
+  return `<${node.tag}> ${property}: ${value} requires grouped descendants; native table layers cannot preserve the group effect`;
+}
+
+// src/analysis/table-structure.ts
+var groups2 = new Set(["thead", "tbody", "tfoot"]);
+var cells2 = new Set(["td", "th"]);
+function readTableStructure(table, decline) {
+  const rows = [];
+  const columns = [];
+  let caption;
+  for (const node of table.children) {
+    const effect = groups2.has(node.tag) ? tableGroupEffectReason(node) : undefined;
+    if (effect)
+      return decline(effect);
+    if (node.tag === "caption" && !caption)
+      caption = node;
+    else if (node.tag === "col" || node.tag === "colgroup") {
+      if (node.styles.display === "none")
+        continue;
+      if (node.tag === "colgroup" && node.children.length) {
+        const children = node.children.filter((child) => child.styles.display !== "none");
+        if (children.length)
+          columns.push({ ...node, children });
+      } else
+        columns.push(node);
+    } else if (node.tag === "tr")
+      rows.push({ node });
+    else if (groups2.has(node.tag) && ordinary2(node) && intent(node) === "auto" && node.children.every((row) => row.tag === "tr")) {
+      rows.push(...node.children.map((row) => ({ node: row, group: node })));
+    } else
+      return decline("anonymous or irregular table structure has no native track mapping");
+  }
+  if (!rows.length)
+    return decline("table has no rendered rows");
+  rows.sort((a, b) => a.node.bounds.y - b.node.bounds.y);
+  const occupancy = rows.map(() => []);
+  const placed = [];
+  let count = 0;
+  for (let r = 0;r < rows.length; r++) {
+    const { node: row, group } = rows[r];
+    const effect = tableGroupEffectReason(row);
+    if (effect)
+      return decline(effect);
+    let column = 0;
+    for (const cell of row.children) {
+      if (!cells2.has(cell.tag) || !ordinary2(cell) || !unconstrained2(cell) || cell.styles.display !== "table-cell" || !["top", "middle", "bottom"].includes(cell.styles["vertical-align"] ?? "middle")) {
+        return decline("cell constraints, positioning or baseline alignment require captured geometry");
+      }
+      while (occupancy[r][column])
+        column++;
+      const columnSpan = span(cell.attrs.colspan, 1000);
+      let rowSpan = span(cell.attrs.rowspan, 65534, true);
+      if (rowSpan === 0) {
+        rowSpan = 1;
+        while (r + rowSpan < rows.length && rows[r + rowSpan].group === group)
+          rowSpan++;
+      }
+      if (!columnSpan || rowSpan === undefined || r + rowSpan > rows.length || rows.slice(r, r + rowSpan).some((candidate) => candidate.group !== group))
+        return decline("invalid or cross-section cell spans require captured geometry");
+      for (let y = r;y < r + rowSpan; y++)
+        for (let x = column;x < column + columnSpan; x++) {
+          if (occupancy[y][x])
+            return decline("overlapping cell spans require captured geometry");
+          occupancy[y][x] = true;
+        }
+      placed.push({ node: cell, parent: row, placement: {
+        kind: "cell",
+        row: r,
+        column,
+        rowSpan,
+        columnSpan,
+        ...cell.tag === "th" ? { header: true } : {},
+        label: cellLabel(cell),
+        alignment: cell.styles["vertical-align"] === "top" ? "top" : cell.styles["vertical-align"] === "bottom" ? "bottom" : "center",
+        ...group ? { section: group.tag } : {}
+      } });
+      column += columnSpan;
+      count = Math.max(count, column);
+    }
+  }
+  if (!count || occupancy.some((row) => row.length !== count || Array.from({ length: count }, (_, i) => row[i]).some((value) => !value))) {
+    return decline("incomplete rows require anonymous cells or browser-only allocation");
+  }
+  return { rows, columns, caption, placed, count };
+}
+function cellLabel(node) {
+  return node.children.map((child) => child.tag === "#text" ? child.text ?? "" : cellLabel(child)).join(" ").replace(/\s+/g, " ").trim();
+}
+
+// src/analysis/table-layers.ts
+function tableLayers(table, structure, insets, widths, gap, bodyTop, bodyBottom) {
+  const { rows, columns, caption, placed, count } = structure;
+  const first = rows[0].node, last = rows.at(-1).node;
+  const full = (kind, row, rowSpan) => ({ kind, row, rowSpan, column: 0, columnSpan: count });
+  const members = [{ node: { ...table, id: `${table.id ?? "table"}#body`, bounds: { ...table.bounds, y: bodyTop, h: bodyBottom - bodyTop } }, placement: full("body", 0, rows.length) }];
+  let columnIndex = 0;
+  const addColumnPaint = (node, start, columnSpan) => {
+    const x = table.bounds.x + insets[3] + widths.slice(0, start).reduce((sum, width) => sum + width, 0) + start * gap[0];
+    const w = widths.slice(start, start + columnSpan).reduce((sum, width) => sum + width, 0) + (columnSpan - 1) * gap[0];
+    members.push({
+      node: { ...node, bounds: { x, y: first.bounds.y, w, h: last.bounds.y + last.bounds.h - first.bounds.y } },
+      placement: { kind: "section", row: 0, rowSpan: rows.length, column: start, columnSpan }
+    });
+  };
+  for (const node of columns) {
+    if (node.tag === "colgroup" && node.children.length) {
+      const extent = node.children.reduce((sum, child) => sum + span(child.attrs.span, 1000), 0);
+      addColumnPaint(node, columnIndex, extent);
+      for (const child of node.children) {
+        const extent = span(child.attrs.span, 1000);
+        addColumnPaint(child, columnIndex, extent);
+        columnIndex += extent;
+      }
+    } else {
+      const extent = span(node.attrs.span, 1000);
+      addColumnPaint(node, columnIndex, extent);
+      columnIndex += extent;
+    }
+  }
+  const seen = new Set;
+  rows.forEach(({ node, group }, index) => {
+    if (group && !seen.has(group)) {
+      seen.add(group);
+      members.push({ node: group, placement: { ...full("section", index, rows.filter((row) => row.group === group).length), section: group.tag } });
+    }
+    members.push({ node, placement: full("row", index, 1) });
+  });
+  members.push(...placed);
+  if (caption)
+    members.push({ node: caption, placement: full("caption", 0, 0) });
+  return members;
+}
+
+// src/analysis/table-layout.ts
+var reasons = new WeakMap;
+function buildNativeTable(table, base, ctx, build) {
+  const analysis = analyzeNativeTable(table, ctx.parent);
+  if (!analysis)
+    return;
+  const { fills, shadows, radius, ellipse, border, borderSides, outline, ...effects } = base.style;
+  const children = analysis.members.map(({ node, placement, parent }) => {
+    const childCtx = { ...ctx, parent: parent ?? table, parentAxis: "h", parentDisplay: "table-row", parentAlign: "start" };
+    if (placement.kind !== "cell" && placement.kind !== "caption") {
+      const paint = makeBase(node, childCtx, parseDeclared(node.attrs.style));
+      if (placement.kind === "body")
+        paint.style = { fills, shadows, radius, ellipse, border, borderSides, outline };
+      paint.notes = allocatedWidthNotes(paint.notes);
+      return finish({ ...paint, kind: "box", padding: [0, 0, 0, 0], width: { kind: "fill" }, height: { kind: "fill" } });
+    }
+    const child = build(node, childCtx);
+    child.width = { kind: "fill" };
+    child.notes = allocatedWidthNotes(child.notes);
+    if (placement.kind === "cell")
+      child.height = { kind: "fill" };
+    if (analysis.collapsed && placement.kind === "cell") {
+      const edges = ["top", "right", "bottom", "left"];
+      child.padding = insetsOf(node.styles).map((inset, i) => inset - edgeWidth(node.styles, edges[i]) / 2);
+    }
+    return child;
+  });
+  const notes = [
+    ...base.notes,
+    "approximated: native fixed table preserves declared columns and cell spans; row heights use captured minimums and native content growth",
+    "approximated: table accessibility retains cell coordinates, headers and section labels; platform table navigation and HTML headers associations are unavailable"
+  ];
+  if (analysis.collapsed)
+    notes.push("approximated: collapsed table borders keep resolved cell strokes; CSS border conflict painting is not reproduced");
+  if (analysis.layout.spacing.some((value) => value > 0))
+    notes.push("approximated: table row and column background layers cover their native track regions, including border spacing");
+  return finish({
+    ...base,
+    style: { fills: [], shadows: [], ...effects },
+    width: { kind: "fill" },
+    height: { kind: "hug" },
+    padding: [0, 0, 0, 0],
+    notes,
+    kind: "stack",
+    axis: "v",
+    spacing: 0,
+    align: "start",
+    distribution: "start",
+    leadInset: 0,
+    table: analysis.layout,
+    children
+  });
+}
+function allocatedWidthNotes(notes) {
+  return notes.filter((note) => !note.startsWith("approximated: width:") || !note.includes("may not resize proportionally"));
+}
+function tableFallbackReason(table) {
+  const reason = reasons.get(table);
+  return reason ? `approximated: table keeps captured geometry; ${reason}` : undefined;
+}
+function analyzeNativeTable(table, parent) {
+  const decline = (reason) => {
+    reasons.set(table, reason);
+    return;
+  };
+  if (table.styles["table-layout"] !== "fixed")
+    return decline("automatic/intrinsic column allocation cannot be inferred from one capture");
+  if (table.styles.display !== "table" || intent(table) !== "100%" || !ordinary2(table) || !unconstrained2(table) || intent(table, "height") !== "auto" || parent && parent.styles.display !== "block") {
+    return decline("native allocation requires an unconstrained full-width fixed table in ordinary block flow");
+  }
+  if (parent) {
+    const [, right, , left] = insetsOf(parent.styles);
+    if (!close(table.bounds.w, parent.bounds.w - left - right))
+      return decline("table overflows its containing block");
+  }
+  const collapsed = table.styles["border-collapse"] === "collapse";
+  if (!collapsed && table.styles["border-collapse"] !== "separate")
+    return decline("border model is absent from this legacy capture");
+  const gap = collapsed ? [0, 0] : spacing(table.styles["border-spacing"]);
+  if (!gap)
+    return decline("border-spacing requires resolved nonnegative pixel lengths");
+  const structure = readTableStructure(table, decline);
+  if (!structure)
+    return;
+  const { rows, caption, placed, count } = structure;
+  const captionSide = caption?.styles["caption-side"] ?? "top";
+  if (caption && (!ordinary2(caption) || !unconstrained2(caption) || intent(caption) !== "auto" || caption.styles.display !== "table-caption" || !close(caption.bounds.w, table.bounds.w) || !close(caption.bounds.x, table.bounds.x) || !["top", "bottom"].includes(captionSide))) {
+    return decline("constrained, positioned or side captions require captured geometry");
+  }
+  const captionMargins = caption ? [px(caption.styles["margin-top"]), px(caption.styles["margin-bottom"])] : [0, 0];
+  if (captionMargins.some((value) => value < 0))
+    return decline("negative caption margins require captured geometry");
+  const captionExtent = caption ? caption.bounds.h + captionMargins[0] + captionMargins[1] : 0;
+  const bodyTop = table.bounds.y + (caption && captionSide === "top" ? captionExtent : 0);
+  const bodyBottom = table.bounds.y + table.bounds.h - (caption && captionSide === "bottom" ? captionExtent : 0);
+  const first = rows[0].node, last = rows.at(-1).node;
+  const insets = [
+    first.bounds.y - bodyTop,
+    table.bounds.x + table.bounds.w - first.bounds.x - first.bounds.w,
+    bodyBottom - last.bounds.y - last.bounds.h,
+    first.bounds.x - table.bounds.x
+  ];
+  if (insets.some((value) => value < -0.1))
+    return decline("table body extends outside its captured box");
+  for (let i = 0;i < rows.length; i++) {
+    const row = rows[i].node;
+    if (!ordinary2(row) || intent(row) !== "auto" || row.styles.display !== "table-row" || !close(row.bounds.x, first.bounds.x) || !close(row.bounds.w, first.bounds.w) || i > 0 && !close(row.bounds.y, rows[i - 1].node.bounds.y + rows[i - 1].node.bounds.h + gap[1])) {
+      return decline("row geometry or positioning cannot be expressed by native table tracks");
+    }
+  }
+  const tracks = declaredTableColumns(structure.columns, count, placed, collapsed, gap, decline);
+  if (!tracks)
+    return;
+  const available = table.bounds.w - insets[1] - insets[3] - gap[0] * (count - 1);
+  const widths = allocateTableColumns(tracks, available);
+  if (!widths)
+    return decline("overcommitted declared widths require browser-specific shrinking or overflow");
+  for (const { node, placement: p } of placed) {
+    const x = table.bounds.x + insets[3] + widths.slice(0, p.column).reduce((sum, width) => sum + width, 0) + p.column * gap[0];
+    const w = widths.slice(p.column, p.column + p.columnSpan).reduce((sum, width) => sum + width, 0) + (p.columnSpan - 1) * gap[0];
+    const h = rows.slice(p.row, p.row + p.rowSpan).reduce((sum, row) => sum + row.node.bounds.h, 0) + (p.rowSpan - 1) * gap[1];
+    if (!close(node.bounds.x, x) || !close(node.bounds.w, w) || !close(node.bounds.y, rows[p.row].node.bounds.y) || !close(node.bounds.h, h)) {
+      return decline("declared column rules or cell spans do not reproduce the captured browser geometry");
+    }
+  }
+  const members = tableLayers(table, structure, insets, widths, gap, bodyTop, bodyBottom);
+  reasons.delete(table);
+  return { collapsed, members, layout: {
+    columns: tracks,
+    placements: members.map((member) => member.placement),
+    rowMinimums: rows.map((row) => row.node.bounds.h),
+    spacing: [gap[0], gap[1]],
+    insets,
+    ...caption ? { captionSide, captionMargins } : {}
+  } };
+}
+
 // src/analysis/infer-node.ts
 function build(n, ctx) {
   const policy = classifyElement(n.tag, n.attrs);
+  if (n.tag === "table") {
+    const table = buildNativeTable(n, makeBase(n, ctx, parseDeclared(n.attrs.style)), ctx, build);
+    if (table)
+      return finish(table);
+  }
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   if (policy.route === "image") {
@@ -12705,8 +13519,8 @@ function build(n, ctx) {
     const childCtx = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n, childAxis) };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
-      children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
-      texts: runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
+      children: spec.control === "picker" ? [] : flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
+      texts: spec.control !== "picker" && runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}
     });
@@ -12748,6 +13562,11 @@ function build(n, ctx) {
     return finish(grid);
   }
   const stack = buildFlowStack(n, base, items, axis, display);
+  if (n.tag === "table") {
+    const reason = tableFallbackReason(n);
+    if (reason)
+      stack.notes.push(reason);
+  }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   return finish(stack);
 }
@@ -12918,6 +13737,8 @@ function stateDecl(n) {
     case "picker":
       if (n.selectStatic)
         return;
+      if (n.selectList === "multiple")
+        return { type: "Set<Int>", value: `[${(n.selectedChoices ?? []).join(", ")}]` };
       if (n.choices !== undefined)
         return { type: "Int", value: String(n.selectedChoice ?? -1) };
       return { type: "String", value: str(n.value ?? "") };
@@ -13561,8 +14382,47 @@ function transformLiteral(text, t) {
   return text.replace(/(^|[^\p{L}\p{N}'’])(\p{L})/gu, (_, before, letter) => before + letter.toUpperCase());
 }
 
+// src/swift/select-list-control.ts
+function selectListActivation(node, state) {
+  const transition = node.selectList === "multiple" ? "markswiftToggleSelect" : "markswiftSelectOne";
+  return `${state} = ${transition}(${state}, choice: choice${node.disabled ? ", disabled: true" : ""})`;
+}
+function selectListExpr(node, state, still) {
+  if (still && node.selectRows !== undefined)
+    return capturedRows(node);
+  const choices = (node.choices ?? []).map((choice) => `MarkswiftSelectChoice(id: ${choice.id}, value: ${str(choice.value)}, label: ${str(choice.label)}, disabled: ${!!choice.disabled}, hidden: ${!!choice.hidden}${choice.invisible ? ", invisible: true" : ""}${choice.group ? `, groupID: ${choice.group.id}, groupLabel: ${str(choice.group.label)}${choice.group.invisible ? ", groupInvisible: true" : ""}` : ""})`);
+  const seed = node.selectList === "multiple" ? `[${(node.selectedChoices ?? []).join(", ")}]` : (node.selectedChoice ?? -1) < 0 ? "[]" : `[${node.selectedChoice}]`;
+  const selected = still || !state ? seed : node.selectList === "multiple" ? state : `${state} < 0 ? [] : [${state}]`;
+  const initiallySelected = new Set(node.selectList === "multiple" ? node.selectedChoices ?? [] : [node.selectedChoice ?? -1]);
+  const appearance = (node.choices ?? []).flatMap((choice) => choice.row ? [`${choice.id}: ${rowAppearance(choice.row, initiallySelected.has(choice.id))}`] : []);
+  const groups = new Map((node.choices ?? []).flatMap((choice) => choice.group?.row ? [[choice.group.id, choice.group.row]] : []));
+  const groupAppearance = [...groups].map(([id, row]) => `${id}: ${rowAppearance(row, false)}`);
+  return [
+    "MarkswiftSelectionList(",
+    `    choices: [${choices.join(", ")}],`,
+    `    selected: ${selected},`,
+    ...appearance.length ? [`    appearance: [${appearance.join(", ")}],`] : [],
+    ...groupAppearance.length ? [`    groupAppearance: [${groupAppearance.join(", ")}],`] : [],
+    `    disabled: ${!!node.disabled},`,
+    `    interactive: ${!still && !!state}`,
+    ...!still && state ? [") { choice in", `    ${selectListActivation(node, state)}`, "}"] : [")"]
+  ];
+}
+function rowAppearance(row, selected) {
+  return `MarkswiftSelectRowAppearance(height: ${num3(row.height)}, padding: ${insets(row.padding)}, font: ${fontExpr(row.font, { mode: "app" })}, color: ${row.color ? `SwiftUI.Color.markswift(${colorArgs(row.color)})` : ".primary"}, background: ${row.background ? `SwiftUI.Color.markswift(${colorArgs(row.background)})` : ".clear"}, initiallySelected: ${selected})`;
+}
+function capturedRows(node) {
+  const rows = (node.selectRows ?? []).map((row) => `MarkswiftCapturedSelectRow(label: ${str(row.label)}, frame: CGRect(x: ${num3(row.frame.x)}, y: ${num3(row.frame.y)}, width: ${num3(row.frame.w)}, height: ${num3(row.frame.h)}), padding: ${insets(row.padding)}, font: ${fontExpr(row.font, { mode: "fidelity" })}, color: ${row.color ? `SwiftUI.Color.markswift(${colorArgs(row.color)})` : ".primary"}, background: ${row.background ? `SwiftUI.Color.markswift(${colorArgs(row.background)})` : ".clear"})`);
+  return ["MarkswiftCapturedSelectRows(", `    rows: [${rows.join(", ")}],`, `    inset: ${insets(node.padding)}`, ")"];
+}
+function insets(padding) {
+  return `SwiftUI.EdgeInsets(top: ${num3(padding[0])}, leading: ${num3(padding[3])}, bottom: ${num3(padding[2])}, trailing: ${num3(padding[1])})`;
+}
+
 // src/swift/select-control.ts
 function selectExpr(node, state, still, label) {
+  if (node.selectList && !node.selectStatic)
+    return selectListExpr(node, state, still);
   if (node.selectStatic || still || !state && node.choices !== undefined) {
     const text = painted(node.value ?? "", node.selectStatic ? ".topLeading" : ".leading");
     return node.selectStatic ? text : ["HStack(spacing: 4.0) {", ...indent(text, 1), '    Image(systemName: "chevron.down")', "}"];
@@ -14308,38 +15168,6 @@ function overlayModifier(o, mode, ctx) {
   return [`.${mode}(alignment: .topLeading) {`, ...indent(body, 1), `}`];
 }
 
-// src/swift/nodes.ts
-function refOf(n, ctx) {
-  if (n.kind === "stack" || n.kind === "grid")
-    return ctx.nameOf.get(n);
-  return leafExpr(n, ctx).join(`
-`);
-}
-function leafExpr(n, ctx) {
-  let core;
-  switch (n.kind) {
-    case "text":
-      core = textExpr(n, ctx);
-      break;
-    case "svg":
-      core = svgExpr(n, ctx.shapes, ctx, n.id);
-      break;
-    case "image":
-      core = imageNodeExpr(n, ctx);
-      break;
-    case "control":
-      core = controlExpr(n, { child: (c) => ctx.renderNode(c).split(`
-`), stateOf: ctx.control.stateOf, radioBindingOf: ctx.control.radioBindingOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
-      break;
-    case "box":
-      core = ["Color.clear"];
-      break;
-    default:
-      core = ["EmptyView()"];
-  }
-  return [...core, ...modifiers(n, ctx)];
-}
-
 // src/swift/measured-layout.ts
 function measuredLayoutExpr(n, ctx) {
   const layout = n.measured;
@@ -14372,10 +15200,89 @@ function wrappingExpr(n, ctx) {
   return out;
 }
 
+// src/swift/allocation-layout.ts
+function weightedLayoutExpr(n, ctx) {
+  const grid = n.kind === "grid";
+  const tracks = grid ? n.tracks : n.allocation.tracks;
+  const rendered = tracks.map((track) => `MarkswiftAllocationTrack(basis: ${num3(track.basis)}, grow: ${num3(track.grow)}, shrink: ${num3(track.shrink)}, min: ${num3(track.min)}${track.max === undefined ? "" : `, max: ${num3(track.max)}`}${track.inset === undefined ? "" : `, inset: ${num3(track.inset)}`})`);
+  const contentWidth = n.frame.w - n.padding[1] - n.padding[3];
+  const vertical = !grid && n.align === "center" ? ".center" : !grid && n.align === "end" ? ".bottom" : ".top";
+  const out = [`MarkswiftAllocatedLayout(tracks: [${rendered.join(", ")}], columnGap: ${num3(grid ? n.hSpacing : n.spacing)}, rowGap: ${num3(grid ? n.vSpacing : 0)}, grid: ${grid}, vertical: ${vertical}, stretch: ${grid || n.align === "stretch"}, capturedWidth: ${num3(contentWidth)}) {`];
+  for (const child of n.children)
+    out.push(...indent(ctx.renderNode(child).split(`
+`), 1));
+  out.push("}");
+  return out;
+}
+
+// src/swift/table-layout.ts
+function tableExpr(node, ctx) {
+  const table = node.table;
+  const columns = table.columns.map((column) => `.init(kind: ${column.kind === "fixed" ? 0 : column.kind === "fraction" ? 1 : 2}, value: ${num3(column.value ?? 0)}, extra: ${num3(column.extra ?? 0)})`);
+  const placements = table.placements.map((p) => `.init(kind: ${p.kind === "cell" ? 0 : p.kind === "body" ? 2 : p.kind === "caption" ? 3 : 1}, cell: .init(row: ${p.row}, column: ${p.column}, rowSpan: ${p.rowSpan}, columnSpan: ${p.columnSpan}))`);
+  const [top, right, bottom, left] = table.insets;
+  const out = ctx.mode === "fidelity" ? [
+    `MarkswiftMeasuredLayout(width: ${num3(node.frame.w)}, height: ${num3(node.frame.h)}, frames: [`,
+    ...node.children.map((child) => `    CGRect(x: ${num3(child.frame.x - node.frame.x)}, y: ${num3(child.frame.y - node.frame.y)}, width: ${num3(child.frame.w)}, height: ${num3(child.frame.h)}),`),
+    "]) {"
+  ] : [
+    `MarkswiftTableLayout(columns: [${columns.join(", ")}], placements: [`,
+    ...placements.map((placement) => `    ${placement},`),
+    `], rowMinimums: [${table.rowMinimums.map(num3).join(", ")}], columnGap: ${num3(table.spacing[0])}, rowGap: ${num3(table.spacing[1])},`,
+    `    insets: EdgeInsets(top: ${num3(top)}, leading: ${num3(left)}, bottom: ${num3(bottom)}, trailing: ${num3(right)}), capturedWidth: ${num3(node.frame.w)},`,
+    `    captionBottom: ${table.captionSide === "bottom"}, captionMargins: [${(table.captionMargins ?? [0, 0]).map(num3).join(", ")}], fixedRows: false) {`
+  ];
+  node.children.forEach((child, index) => {
+    const placement = table.placements[index];
+    let lines;
+    if (placement.kind === "cell") {
+      const content = { ...child, height: { kind: "hug" }, style: { fills: [], shadows: [] }, overlays: [] };
+      lines = ctx.renderNode(content).split(`
+`);
+      const horizontal = child.kind === "text" ? child.align : "leading";
+      const vertical = placement.alignment ?? "center";
+      const alignment = vertical === "center" ? horizontal === "center" ? ".center" : horizontal === "trailing" ? ".trailing" : ".leading" : `.${vertical}${horizontal === "center" ? "" : horizontal === "trailing" ? "Trailing" : "Leading"}`;
+      lines.push(`.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`);
+      lines.push(...modifiers({ ...child, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0] }, ctx));
+      if (ctx.mode === "app") {
+        lines.push(`.accessibilityElement(children: .${interactive(child) ? "contain" : "combine"})`);
+        const section = placement.section === "thead" ? "Header section, " : placement.section === "tfoot" ? "Footer section, " : "";
+        const span = placement.rowSpan > 1 || placement.columnSpan > 1 ? `, spans ${placement.rowSpan} rows and ${placement.columnSpan} columns` : "";
+        lines.push(`.accessibilityHint(${str(`${section}Row ${placement.row + 1}, column ${placement.column + 1}${span}`)})`);
+        if (placement.header)
+          lines.push(".accessibilityAddTraits(.isHeader)");
+      }
+    } else {
+      lines = ctx.renderNode(child).split(`
+`);
+      if (placement.kind !== "caption")
+        lines.push(".accessibilityHidden(true)", ".allowsHitTesting(false)");
+      else if (ctx.mode === "fidelity")
+        lines.push(`.frame(height: ${num3(child.frame.h)}, alignment: .topLeading)`);
+      else
+        lines.push(`.accessibilitySortPriority(${table.captionSide === "bottom" ? -1 : 1})`);
+    }
+    out.push(...indent(lines, 1));
+  });
+  out.push("}");
+  if (ctx.mode === "app") {
+    out.push(".accessibilityElement(children: .contain)");
+    out.push(`.accessibilityLabel(${str(`Table, ${table.rowMinimums.length} rows, ${table.columns.length} columns`)})`);
+  }
+  return out;
+}
+function interactive(node) {
+  return node.kind === "control" || (node.kind === "stack" || node.kind === "grid") && node.children.some(interactive);
+}
+
 // src/swift/layout.ts
 function containerExpr(n, ctx) {
   const out = [];
-  if (n.measured)
+  if (n.kind === "stack" && n.table)
+    out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks))
+    out.push(...weightedLayoutExpr(n, ctx));
+  else if (n.measured)
     out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap)
     out.push(...wrappingExpr(n, ctx));
@@ -14435,6 +15342,39 @@ function vAlign(a) {
 }
 function hAlign(a) {
   return a === "center" ? ".center" : a === "end" ? ".bottom" : a === "baseline" ? ".firstTextBaseline" : ".top";
+}
+
+// src/swift/nodes.ts
+function refOf(n, ctx) {
+  if (n.kind === "stack" || n.kind === "grid")
+    return ctx.nameOf.get(n) ?? containerExpr(n, ctx).join(`
+`);
+  return leafExpr(n, ctx).join(`
+`);
+}
+function leafExpr(n, ctx) {
+  let core;
+  switch (n.kind) {
+    case "text":
+      core = textExpr(n, ctx);
+      break;
+    case "svg":
+      core = svgExpr(n, ctx.shapes, ctx, n.id);
+      break;
+    case "image":
+      core = imageNodeExpr(n, ctx);
+      break;
+    case "control":
+      core = controlExpr(n, { child: (c) => ctx.renderNode(c).split(`
+`), stateOf: ctx.control.stateOf, radioBindingOf: ctx.control.radioBindingOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
+      break;
+    case "box":
+      core = ["Color.clear"];
+      break;
+    default:
+      core = ["EmptyView()"];
+  }
+  return [...core, ...modifiers(n, ctx)];
 }
 
 // src/swift/traversal.ts
@@ -14621,6 +15561,490 @@ private struct MarkswiftRelativeWidthLayout: Layout {
         guard let child = subviews.first else { return }
         child.place(at: bounds.origin, anchor: .topLeading,
                     proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+`;
+
+// src/swift/select-list-runtime.ts
+var SELECT_LIST_RUNTIME = `
+struct MarkswiftSelectChoice: Identifiable, Sendable {
+    let id: Int
+    let value: String
+    let label: String
+    let disabled: Bool
+    let hidden: Bool
+    var invisible = false
+    var groupID: Int? = nil
+    var groupLabel: String? = nil
+    var groupInvisible = false
+}
+
+nonisolated func markswiftToggleSelect(_ current: Set<Int>, choice: MarkswiftSelectChoice, disabled: Bool = false) -> Set<Int> {
+    guard !disabled && !choice.disabled && !choice.hidden && !choice.invisible else { return current }
+    var next = current
+    if next.contains(choice.id) { next.remove(choice.id) }
+    else { next.insert(choice.id) }
+    return next
+}
+
+nonisolated func markswiftSelectOne(_ current: Int, choice: MarkswiftSelectChoice, disabled: Bool = false) -> Int {
+    guard !disabled && !choice.disabled && !choice.hidden && !choice.invisible else { return current }
+    return choice.id
+}
+
+struct MarkswiftSelectRowAppearance {
+    let height: CGFloat
+    let padding: SwiftUI.EdgeInsets
+    let font: SwiftUI.Font
+    let color: SwiftUI.Color
+    let background: SwiftUI.Color
+    var initiallySelected = false
+}
+
+struct MarkswiftSelectRowPaint {
+    let color: SwiftUI.Color
+    let background: SwiftUI.Color
+    var highlight: SwiftUI.Color = .clear
+}
+
+nonisolated func markswiftSelectRowPaint(_ paint: MarkswiftSelectRowAppearance, selected: Bool) -> MarkswiftSelectRowPaint {
+    if selected == paint.initiallySelected { return MarkswiftSelectRowPaint(color: paint.color, background: paint.background) }
+    return MarkswiftSelectRowPaint(color: paint.color, background: selected ? paint.background : .clear,
+                                  highlight: selected ? .accentColor.opacity(0.18) : .clear)
+}
+
+struct MarkswiftSelectionList: SwiftUI.View {
+    let choices: [MarkswiftSelectChoice]
+    let selected: Set<Int>
+    var appearance: [Int: MarkswiftSelectRowAppearance] = [:]
+    var groupAppearance: [Int: MarkswiftSelectRowAppearance] = [:]
+    var disabled = false
+    var interactive = true
+    var activate: (MarkswiftSelectChoice) -> Void = { _ in }
+    @SwiftUI.Environment(\\.isEnabled) private var isEnabled
+
+    private var visibleChoices: [MarkswiftSelectChoice] { choices.filter { !$0.hidden } }
+
+    var body: some SwiftUI.View {
+        SwiftUI.ScrollView(.vertical) {
+            SwiftUI.LazyVStack(alignment: .leading, spacing: 0) {
+                SwiftUI.ForEach(visibleChoices) { choice in
+                    if let groupID = choice.groupID,
+                       visibleChoices.first(where: { $0.groupID == groupID })?.id == choice.id {
+                        heading(choice.groupLabel ?? "", groupID: groupID)
+                            .opacity(choice.groupInvisible ? 0 : 1)
+                            .accessibilityHidden(choice.groupInvisible)
+                    }
+                    if interactive && isEnabled && !disabled && !choice.disabled && !choice.invisible {
+                        SwiftUI.Button {
+                            guard isEnabled && !disabled && !choice.disabled && !choice.hidden && !choice.invisible else { return }
+                            activate(choice)
+                        } label: {
+                            row(choice)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                    } else {
+                        row(choice)
+                            .opacity(choice.invisible ? 0 : 1)
+                            .accessibilityHidden(choice.invisible)
+                            .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                    }
+                }
+            }
+        }
+        .clipped()
+    }
+
+    @SwiftUI.ViewBuilder
+    private func row(_ choice: MarkswiftSelectChoice) -> some SwiftUI.View {
+        if let paint = appearance[choice.id] {
+            let resolved = markswiftSelectRowPaint(paint, selected: selected.contains(choice.id))
+            SwiftUI.Text(verbatim: choice.label)
+                .font(paint.font)
+                .foregroundStyle(resolved.color)
+                .lineLimit(1)
+                .frame(height: max(0, paint.height - paint.padding.top - paint.padding.bottom), alignment: .leading)
+                .padding(paint.padding)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(height: paint.height, alignment: .topLeading)
+                .background {
+                    SwiftUI.ZStack {
+                        resolved.background
+                        resolved.highlight
+                    }
+                }
+                .contentShape(SwiftUI.Rectangle())
+                .clipped()
+        } else {
+            SwiftUI.HStack(spacing: 6) {
+                SwiftUI.Text(verbatim: choice.label)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                SwiftUI.Image(systemName: "checkmark")
+                    .opacity(selected.contains(choice.id) ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .frame(minHeight: 28)
+            .contentShape(SwiftUI.Rectangle())
+            .background(selected.contains(choice.id) ? SwiftUI.Color.accentColor.opacity(0.18) : SwiftUI.Color.clear)
+        }
+    }
+
+    @SwiftUI.ViewBuilder
+    private func heading(_ label: String, groupID: Int) -> some SwiftUI.View {
+        if let paint = groupAppearance[groupID] {
+            SwiftUI.Text(verbatim: label)
+                .font(paint.font)
+                .foregroundStyle(paint.color)
+                .lineLimit(1)
+                .frame(height: max(0, paint.height - paint.padding.top - paint.padding.bottom), alignment: .leading)
+                .padding(paint.padding)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(height: paint.height, alignment: .topLeading)
+                .background(paint.background)
+                .clipped()
+        } else {
+            SwiftUI.Text(verbatim: label)
+                .fontWeight(.semibold)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+`;
+
+// src/swift/select-paint-runtime.ts
+var SELECT_PAINT_RUNTIME = `
+struct MarkswiftCapturedSelectRow {
+    let label: String
+    let frame: CGRect
+    let padding: SwiftUI.EdgeInsets
+    let font: SwiftUI.Font
+    let color: SwiftUI.Color
+    let background: SwiftUI.Color
+}
+
+struct MarkswiftCapturedSelectRows: SwiftUI.View {
+    let rows: [MarkswiftCapturedSelectRow]
+    let inset: SwiftUI.EdgeInsets
+
+    var body: some SwiftUI.View {
+        SwiftUI.GeometryReader { _ in
+            SwiftUI.ZStack(alignment: .topLeading) {
+                SwiftUI.Color.clear
+                SwiftUI.ForEach(rows.indices, id: \\.self) { index in
+                    let row = rows[index]
+                    SwiftUI.Text(verbatim: row.label)
+                        .font(row.font)
+                        .foregroundStyle(row.color)
+                        .lineLimit(1)
+                        .frame(height: max(0, row.frame.height - row.padding.top - row.padding.bottom), alignment: .leading)
+                        .padding(row.padding)
+                        .frame(width: row.frame.width, height: row.frame.height, alignment: .topLeading)
+                        .background(row.background)
+                        .clipped()
+                        .offset(x: row.frame.minX - inset.leading, y: row.frame.minY - inset.top)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+    }
+}
+`;
+
+// src/swift/allocation-runtime.ts
+var ALLOCATION_CORE = `
+nonisolated struct MarkswiftAllocationTrack {
+    var basis: CGFloat
+    var grow: CGFloat
+    var shrink: CGFloat
+    var min: CGFloat
+    var max: CGFloat? = nil
+    var inset: CGFloat = 0
+}
+
+nonisolated enum MarkswiftAllocation {
+    private static func clamp(_ value: CGFloat, _ track: MarkswiftAllocationTrack) -> CGFloat {
+        Swift.max(track.min, Swift.min(track.max ?? .infinity, value))
+    }
+
+    static func flex(_ available: CGFloat, _ tracks: [MarkswiftAllocationTrack]) -> [CGFloat] {
+        let growing = tracks.reduce(CGFloat(0)) { $0 + clamp($1.basis, $1) } < available
+        var target = tracks.map { $0.basis }
+        var frozen = tracks.map { track in
+            (growing ? track.grow : track.shrink) == 0 ||
+            (growing ? track.basis > clamp(track.basis, track) : track.basis < clamp(track.basis, track))
+        }
+        for i in tracks.indices where frozen[i] { target[i] = clamp(tracks[i].basis, tracks[i]) }
+        let initialFree = available - tracks.indices.reduce(CGFloat(0)) { $0 + (frozen[$1] ? target[$1] : tracks[$1].basis) }
+        for _ in 0...tracks.count {
+            if !frozen.contains(false) { break }
+            var free = available - tracks.indices.reduce(CGFloat(0)) { $0 + (frozen[$1] ? target[$1] : tracks[$1].basis) }
+            let factors = tracks.indices.reduce(CGFloat(0)) { sum, i in
+                sum + (frozen[i] ? 0 : growing ? tracks[i].grow : tracks[i].shrink)
+            }
+            if factors < 1 && abs(initialFree * factors) < abs(free) { free = initialFree * factors }
+            let weights = tracks.map { growing ? $0.grow : $0.shrink * Swift.max(0, $0.basis - $0.inset) }
+            let weight = tracks.indices.reduce(CGFloat(0)) { $0 + (frozen[$1] ? 0 : weights[$1]) }
+            var violations = Array(repeating: CGFloat(0), count: tracks.count)
+            for i in tracks.indices where !frozen[i] {
+                let allocated = tracks[i].basis + (weight > 0 ? free * weights[i] / weight : 0)
+                target[i] = clamp(allocated, tracks[i])
+                violations[i] = target[i] - allocated
+            }
+            let violation = violations.reduce(CGFloat(0), +)
+            for i in tracks.indices {
+                if abs(violation) < 0.000001 || (violation > 0 ? violations[i] > 0 : violations[i] < 0) { frozen[i] = true }
+            }
+        }
+        return target
+    }
+
+    static func grid(_ available: CGFloat, _ tracks: [MarkswiftAllocationTrack]) -> [CGFloat] {
+        var sizes = tracks.map { $0.min }
+        var frozen = tracks.map { $0.grow == 0 }
+        for _ in 0...tracks.count {
+            let free = available - tracks.indices.reduce(CGFloat(0)) { $0 + (frozen[$1] ? sizes[$1] : 0) }
+            let factors = tracks.indices.reduce(CGFloat(0)) { $0 + (frozen[$1] ? 0 : tracks[$1].grow) }
+            let unit = Swift.max(0, free) / Swift.max(1, factors)
+            var changed = false
+            for i in tracks.indices where !frozen[i] {
+                if unit * tracks[i].grow < tracks[i].min {
+                    frozen[i] = true
+                    sizes[i] = tracks[i].min
+                    changed = true
+                } else { sizes[i] = unit * tracks[i].grow }
+            }
+            if !changed { break }
+        }
+        return sizes
+    }
+}
+`;
+var ALLOCATION_RUNTIME = ALLOCATION_CORE + `
+/// Explicit flex bases/factors or fixed/fr grid tracks; row heights are measured at each proposal.
+struct MarkswiftAllocatedLayout: Layout {
+    var tracks: [MarkswiftAllocationTrack]
+    var columnGap: CGFloat
+    var rowGap: CGFloat = 0
+    var grid: Bool = false
+    var vertical: VerticalAlignment = .top
+    var stretch: Bool = false
+    var capturedWidth: CGFloat
+
+    private struct Item {
+        var index: Int
+        var width: CGFloat
+        var height: CGFloat
+    }
+    private struct Row {
+        var items: [Item] = []
+        var height: CGFloat = 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = finite(proposal.width) ?? capturedWidth
+        let measured = rows(width: width, subviews: subviews)
+        let naturalHeight = measured.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(Swift.max(0, measured.count - 1)) * rowGap
+        return CGSize(width: width, height: grid ? naturalHeight : finite(proposal.height) ?? naturalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let measured = rows(width: bounds.width, subviews: subviews)
+        var y = bounds.minY
+        for row in measured {
+            let rowHeight = grid ? row.height : bounds.height
+            var x = bounds.minX
+            for item in row.items {
+                let height = stretch ? rowHeight : item.height
+                let slack = rowHeight - height
+                let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
+                subviews[item.index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
+                                          proposal: ProposedViewSize(width: item.width, height: height))
+                x += item.width + columnGap
+            }
+            y += rowHeight + rowGap
+        }
+    }
+
+    private func finite(_ value: CGFloat?) -> CGFloat? {
+        guard let value, value.isFinite else { return nil }
+        return Swift.max(0, value)
+    }
+
+    private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
+        guard !tracks.isEmpty else { return [] }
+        let available = width - CGFloat(Swift.max(0, tracks.count - 1)) * columnGap
+        let widths = grid ? MarkswiftAllocation.grid(available, tracks) : MarkswiftAllocation.flex(available, tracks)
+        var result: [Row] = []
+        var row = Row()
+        for (index, subview) in subviews.enumerated() {
+            if grid && row.items.count == tracks.count { result.append(row); row = Row() }
+            let trackIndex = grid ? index % tracks.count : index
+            guard trackIndex < widths.count else { continue }
+            let childWidth = widths[trackIndex]
+            let size = subview.sizeThatFits(ProposedViewSize(width: childWidth, height: nil))
+            let height = finite(size.height) ?? 0
+            row.items.append(Item(index: index, width: childWidth, height: height))
+            row.height = Swift.max(row.height, height)
+        }
+        if !row.items.isEmpty { result.append(row) }
+        return result
+    }
+}
+`;
+
+// src/swift/table-runtime.ts
+var TABLE_ALLOCATION_RUNTIME = `
+nonisolated enum MarkswiftTableAllocation {
+    struct Column {
+        var kind: Int // 0 fixed, 1 fraction, 2 unassigned
+        var value: CGFloat = 0
+        var extra: CGFloat = 0
+    }
+
+    struct Cell {
+        var row: Int
+        var column: Int
+        var rowSpan: Int = 1
+        var columnSpan: Int = 1
+    }
+
+    static func minimum(_ tracks: [Column]) -> CGFloat {
+        let fixed = tracks.reduce(CGFloat(0)) { $0 + ($1.kind == 0 ? $1.value : 0) + $1.extra }
+        let fraction = tracks.reduce(CGFloat(0)) { $0 + ($1.kind == 1 ? $1.value : 0) }
+        return fraction < 1 ? max(0, fixed / (1 - fraction)) : 0
+    }
+
+    static func columns(_ tracks: [Column], available: CGFloat) -> [CGFloat] {
+        let width = max(minimum(tracks), max(0, available))
+        var result = tracks.map { $0.kind == 2 ? CGFloat(0) : max(0, ($0.kind == 1 ? width * $0.value : $0.value) + $0.extra) }
+        let automatic = tracks.filter { $0.kind == 2 }.count
+        let total = result.reduce(0, +)
+        if automatic > 0 {
+            let share = max(0, width - total) / CGFloat(automatic)
+            for i in tracks.indices where tracks[i].kind == 2 { result[i] = share }
+        } else {
+            let fixed = tracks.indices.reduce(CGFloat(0)) { $0 + (tracks[$1].kind == 0 ? result[$1] : 0) }
+            let fractions = total - fixed
+            if fixed > 0 && fractions > 0 {
+                for i in tracks.indices where tracks[i].kind == 0 { result[i] *= max(0, width - fractions) / fixed }
+            } else if total > 0 {
+                result = result.map { $0 * width / total }
+            }
+        }
+        return result
+    }
+
+    static func rows(minimums: [CGFloat], cells: [Cell], heights: [CGFloat], gap: CGFloat) -> [CGFloat] {
+        var result = minimums
+        // Ordinary cells set each row's minimum before spanning cells distribute a deficit.
+        for (index, cell) in cells.enumerated() where cell.rowSpan == 1 {
+            result[cell.row] = max(result[cell.row], heights[index])
+        }
+        for (index, cell) in cells.enumerated() where cell.rowSpan > 1 {
+            let range = cell.row..<(cell.row + cell.rowSpan)
+            let allocated = range.reduce(CGFloat(0)) { $0 + result[$1] } + CGFloat(cell.rowSpan - 1) * gap
+            let extra = max(0, heights[index] - allocated) / CGFloat(cell.rowSpan)
+            for row in range { result[row] += extra }
+        }
+        return result
+    }
+
+    static func rect(_ cell: Cell, widths: [CGFloat], heights: [CGFloat], columnGap: CGFloat, rowGap: CGFloat) -> CGRect {
+        let x = widths.prefix(cell.column).reduce(0, +) + CGFloat(cell.column) * columnGap
+        let y = heights.prefix(cell.row).reduce(0, +) + CGFloat(cell.row) * rowGap
+        let w = widths[cell.column..<(cell.column + cell.columnSpan)].reduce(0, +) + CGFloat(cell.columnSpan - 1) * columnGap
+        let h = heights[cell.row..<(cell.row + cell.rowSpan)].reduce(0, +) + CGFloat(cell.rowSpan - 1) * rowGap
+        return CGRect(x: x, y: y, width: w, height: h)
+    }
+}
+`;
+var TABLE_RUNTIME = `${TABLE_ALLOCATION_RUNTIME}
+/// Declared fixed columns, section paint and spanning cells share one native proposal.
+struct MarkswiftTableLayout: Layout {
+    struct Placement {
+        var kind: Int // 0 cell, 1 row/section paint, 2 body paint, 3 caption
+        var cell: MarkswiftTableAllocation.Cell
+    }
+    var columns: [MarkswiftTableAllocation.Column]
+    var placements: [Placement]
+    var rowMinimums: [CGFloat]
+    var columnGap: CGFloat
+    var rowGap: CGFloat
+    var insets: EdgeInsets
+    var capturedWidth: CGFloat
+    var captionBottom: Bool = false
+    var captionMargins: [CGFloat] = [0, 0]
+    var fixedRows: Bool = false
+
+    private struct Geometry {
+        var width: CGFloat
+        var bodyHeight: CGFloat
+        var captionHeight: CGFloat
+        var bodyY: CGFloat
+        var captionY: CGFloat
+        var widths: [CGFloat]
+        var heights: [CGFloat]
+        var height: CGFloat { bodyHeight + captionHeight + captionMarginsTotal }
+        var captionMarginsTotal: CGFloat
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? capturedWidth
+        let geometry = geometry(width: width, subviews: subviews)
+        return CGSize(width: geometry.width, height: geometry.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let geometry = geometry(width: bounds.width, subviews: subviews)
+        for (index, placement) in placements.enumerated() {
+            var frame: CGRect
+            if placement.kind == 2 {
+                frame = CGRect(x: 0, y: geometry.bodyY, width: geometry.width, height: geometry.bodyHeight)
+            } else if placement.kind == 3 {
+                frame = CGRect(x: 0, y: geometry.captionY, width: geometry.width, height: geometry.captionHeight)
+            } else {
+                frame = MarkswiftTableAllocation.rect(placement.cell, widths: geometry.widths, heights: geometry.heights, columnGap: columnGap, rowGap: rowGap)
+                frame.origin.x += insets.leading
+                frame.origin.y += geometry.bodyY + insets.top
+            }
+            subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), anchor: .topLeading,
+                                  proposal: ProposedViewSize(width: frame.width, height: frame.height))
+        }
+    }
+
+    private func geometry(width: CGFloat, subviews: Subviews) -> Geometry {
+        let overhead = insets.leading + insets.trailing + CGFloat(max(0, columns.count - 1)) * columnGap
+        let width = max(width, MarkswiftTableAllocation.minimum(columns) + overhead)
+        let available = max(0, width - overhead)
+        let widths = MarkswiftTableAllocation.columns(columns, available: available)
+        var captionHeight: CGFloat = 0
+        var cells: [MarkswiftTableAllocation.Cell] = []
+        var measured: [CGFloat] = []
+        for (index, placement) in placements.enumerated() {
+            if placement.kind == 3 {
+                captionHeight = max(0, subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil)).height)
+            } else if placement.kind == 0 && !fixedRows {
+                let cell = placement.cell
+                let cellWidth = widths[cell.column..<(cell.column + cell.columnSpan)].reduce(0, +) + CGFloat(cell.columnSpan - 1) * columnGap
+                let height = subviews[index].sizeThatFits(ProposedViewSize(width: cellWidth, height: nil)).height
+                cells.append(cell)
+                measured.append(height.isFinite ? max(0, height) : 0)
+            }
+        }
+        let heights = fixedRows ? rowMinimums : MarkswiftTableAllocation.rows(minimums: rowMinimums, cells: cells, heights: measured, gap: rowGap)
+        let bodyHeight = insets.top + insets.bottom + heights.reduce(0, +) + CGFloat(max(0, heights.count - 1)) * rowGap
+        let margins = placements.contains { $0.kind == 3 } ? captionMargins : [0, 0]
+        let extent = captionHeight + margins[0] + margins[1]
+        return Geometry(width: width, bodyHeight: bodyHeight, captionHeight: captionHeight,
+                        bodyY: captionBottom ? 0 : extent, captionY: (captionBottom ? bodyHeight : 0) + margins[0],
+                        widths: widths, heights: heights, captionMarginsTotal: margins[0] + margins[1])
     }
 }
 `;
@@ -14917,7 +16341,11 @@ ${CONTROL_RUNTIME}
 ${MEASURED_LAYOUT_RUNTIME}
 ${FLOW_RUNTIME}
 ${GREEDY_TEXT_RUNTIME}
-${RELATIVE_WIDTH_RUNTIME}`;
+${RELATIVE_WIDTH_RUNTIME}
+${SELECT_LIST_RUNTIME}
+${SELECT_PAINT_RUNTIME}
+${ALLOCATION_RUNTIME}
+${TABLE_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {

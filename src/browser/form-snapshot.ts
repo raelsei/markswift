@@ -38,7 +38,7 @@ export async function readFormSnapshot(page: Page): Promise<FormSnapshot> {
       if (element instanceof HTMLOptionElement) {
         let hidden = getComputedStyle(element).display === "none";
         for (let ancestor = element.parentElement; !hidden && ancestor && !(ancestor instanceof HTMLSelectElement); ancestor = ancestor.parentElement) {
-          if (ancestor instanceof HTMLOptGroupElement && getComputedStyle(ancestor).display === "none") hidden = true;
+          if (getComputedStyle(ancestor).display === "none") hidden = true;
         }
         hiddenOptions[path] = hidden;
       }

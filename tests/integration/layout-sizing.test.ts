@@ -3,7 +3,7 @@ import { convertHtml } from "../../src/index.ts";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { visit } from "../../src/swift/traversal.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
-import type { SemNode } from "../../src/model/semantic.ts";
+import type { SemNode, StackNode } from "../../src/model/semantic.ts";
 
 const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
 const HTML = '<main data-markswift-root id="sizing-root">' + [
@@ -127,10 +127,10 @@ for (const width of [320, 390, 768]) {
       const rowWidth = contentSize(measured("basis-row")).w;
       for (const [id, expected] of [["basis-a", (rowWidth + 100) / 2], ["basis-b", (rowWidth - 100) / 2]] as const) {
         expect(measured(id).bounds.w).toBe(expected);
-        expect(node(id).width).toEqual({ kind: "fixed", px: expected });
-        approximation(id, "unequal measured widths");
-        approximation(id, "basis");
+        expect(node(id).width).toEqual({ kind: "fill" });
+        expect(result.diagnostics.find(item => item.id === `#${id}`)).toBeUndefined();
       }
+      expect((node("basis-row") as StackNode).allocation?.tracks.map(track => [track.basis, track.grow])).toEqual([[100, 1], [0, 1]]);
       for (const [id, expected] of [["column-a", 40], ["column-b", 80]] as const) {
         expect(measured(id).bounds.h).toBe(expected);
         expect(node(id).height).toEqual({ kind: "fixed", px: expected });
@@ -140,9 +140,10 @@ for (const width of [320, 390, 768]) {
       for (const id of ["partial-a", "partial-b"]) {
         const expected = contentSize(measured("partial-row")).w * 0.25;
         expect(measured(id).bounds.w).toBe(expected);
-        expect(node(id).width).toEqual({ kind: "fixed", px: expected });
-        approximation(id, "flex-grow total 0.5 < 1");
+        expect(node(id).width).toEqual({ kind: "fill" });
+        expect(result.diagnostics.find(item => item.id === `#${id}`)).toBeUndefined();
       }
+      expect((node("partial-row") as StackNode).allocation?.tracks.map(track => [track.basis, track.grow])).toEqual([[0, 0.25], [0, 0.25]]);
       for (const id of ["equal-a", "equal-b"]) {
         expect(measured(id).bounds.w).toBe(rowWidth / 2);
         expect(node(id).width).toEqual({ kind: "fill" });
@@ -153,7 +154,7 @@ for (const width of [320, 390, 768]) {
       expect(node("equal-column").height).toEqual({ kind: "fixed", px: 120 });
       for (const id of ["equal-column-a", "equal-column-b"]) {
         expect(measured(id).bounds.h).toBe(60);
-        expect(measured(id).preferredSize).toEqual({ width: "auto", height: "auto" });
+        expect(measured(id).preferredSize).toMatchObject({ width: "auto", height: "auto", flexBasis: "0px" });
         expect(node(id).height).toEqual({ kind: "fill" });
         expect(result.diagnostics.find(item => item.id === `#${id}`)).toBeUndefined();
       }

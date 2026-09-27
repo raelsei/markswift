@@ -120,19 +120,20 @@ test("hidden choices retain ordinal values and selected text without creating me
   expect(compile(node, "fidelity").code).toContain('Text(verbatim: "Hidden selected")');
 });
 
-test("multiple and listbox selects retain selected labels as diagnosed static text without selection state", () => {
+test("multiple and listbox selects use native selection rows with honest fidelity diagnostics", () => {
   const multiple = select([option("One", { selected: "", value: "1" }), option("Two", { selected: "", value: "2" })], { multiple: "" });
   expect(controlOf(multiple)?.value).toBe("One\nTwo");
   for (const node of [multiple, select([option("One"), option("Two", { selected: "" })], { size: "3" })]) {
     const result = compile(node);
-    expect(controlOf(node)?.selectStatic).toBe(true);
-    expect(result.code).not.toContain("@State");
+    expect(controlOf(node)?.selectStatic).toBeUndefined();
+    expect(result.code).toContain("@State");
+    expect(result.code).toContain("MarkswiftSelectionList(");
     expect(result.code).not.toContain("SwiftUI.Menu");
     expect(result.code).not.toContain('Image(systemName: "chevron.down")');
-    expect(result.diagnostics.flatMap(item => item.notes).join(" ")).toContain("static selected labels");
+    expect(result.diagnostics.flatMap(item => item.notes).join(" ")).toContain("browser list row paint");
   }
   expect(controlOf(select([option("One")], { size: "1.5" }))?.selectStatic).toBeUndefined();
-  expect(controlOf(select([option("One")], { size: "3px" }))?.selectStatic).toBe(true);
+  expect(controlOf(select([option("One")], { size: "3px" }))?.selectList).toBe("single");
   expect(controlOf(select([option("One")], { size: "3" }))?.selectedChoice).toBe(-1);
   expect(compile(select([])).code).not.toContain("@State");
 });

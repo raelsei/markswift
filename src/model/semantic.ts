@@ -6,6 +6,10 @@
  */
 import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
 import type { Rect } from "./layout.ts";
+import type { AllocationTrack } from "./allocation.ts";
+import type { TableLayout } from "./table.ts";
+export type { AllocationTrack } from "./allocation.ts";
+export type { TableLayout } from "./table.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
 
@@ -265,6 +269,10 @@ export interface StackNode extends SemBase {
   wrap?: { columnGap: number; rowGap: number; columns?: number };
   /** Captured positions for wrapping combinations without a native layout mapping. */
   measured?: MeasuredLayout;
+  /** Proven CSS flex bases and growth/shrink factors for a responsive native row. */
+  allocation?: { tracks: AllocationTrack[] };
+  /** Proven column definitions and cell spans, independent of DOM wrapper boxes. */
+  table?: TableLayout;
   children: SemNode[];
 }
 
@@ -274,6 +282,8 @@ export interface GridNode extends SemBase {
   hSpacing: number;
   vSpacing: number;
   measured?: MeasuredLayout;
+  /** Authored fixed/fractional columns, retained before Chrome resolves them to pixels. */
+  tracks?: AllocationTrack[];
   children: SemNode[];
 }
 
@@ -357,6 +367,15 @@ export type ControlKind =
   | "gauge"
   | "disclosure";
 
+/** Captured plain row typography and paint, reusable across native option selection states. */
+export interface SelectRowAppearance {
+  height: number;
+  padding: [number, number, number, number];
+  font: FontSpec;
+  color?: Color;
+  background?: Color;
+}
+
 /**
  * A form control, link or media indicator. Its box (fill, border, radius, padding, frame) is the
  * measured one every other node carries — the emitter paints it exactly as it would a stack — and
@@ -397,10 +416,16 @@ export interface ControlNode extends SemBase {
   /** Picker choices in document order (`<option>` labels). */
   options?: string[];
   /** HTML options keyed by flattened ordinal, independently of duplicate values or labels. */
-  choices?: Array<{ id: number; value: string; label: string; disabled: boolean; hidden?: boolean }>;
+  choices?: Array<{ id: number; value: string; label: string; disabled: boolean; hidden?: boolean; invisible?: boolean; row?: SelectRowAppearance; group?: { id: number; label: string; invisible?: boolean; row?: SelectRowAppearance } }>;
   /** Captured selected option ordinal; -1 retains an intentionally empty selection. */
   selectedChoice?: number;
-  /** Multiple/listbox selects expose captured selected labels without inventing native editing. */
+  /** Native row selection for HTML multiple selects and size>1 single listboxes. */
+  selectList?: "single" | "multiple";
+  /** All live selected option ordinals for a multiple select, including disabled/hidden options. */
+  selectedChoices?: number[];
+  /** Captured visible rows, relative to the select border box, including its scroll position. */
+  selectRows?: Array<{ kind: "option" | "group"; choice?: number; label: string; frame: Rect; padding: [number, number, number, number]; font: FontSpec; color?: Color; background?: Color }>;
+  /** Empty selects or manual legacy callers can request a static fallback. */
   selectStatic?: boolean;
   /** Serialized external destination, or authored href when app-specific navigation is needed. */
   href?: string;

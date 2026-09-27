@@ -52,14 +52,12 @@ browserTest("equal fixed-table columns emit live widths from one 390px capture",
   expect(result.diagnostics.find((item) => item.id === "#table")?.confidence).toBe("approximated");
 }, 60000);
 
-browserTest("spans, explicit column widths and irregular rows keep captured widths", async () => {
+browserTest("irregular spans, irregular rows and automatic allocation keep captured widths", async () => {
   for (const [rule, cells] of [
     ["", rectangular.replace('<th id="a"', '<th colspan="2" id="a"')],
-    ["th:first-child { width: 80px; }", rectangular],
     ["", rectangular.replace('<td id="f">Three</td>', "")],
     ["table { table-layout: auto; }", rectangular],
     ["table { max-width: 300px; }", rectangular],
-    ["", rectangular.replace('<th id="a">', '<th width="80" id="a">')],
   ] as Array<[string, string]>) {
     const result = await convertHtml(page(rule, cells), { name: "GuardedTable", viewport: { width: 390, height: 600 } });
     const screen = inferScreen(result.layout, "guarded");
@@ -68,16 +66,19 @@ browserTest("spans, explicit column widths and irregular rows keep captured widt
   }
 }, 120000);
 
-browserTest("a colgroup keeps browser-measured column widths", async () => {
+browserTest("a colgroup retains explicit widths in a native table allocation", async () => {
   const html = page("", rectangular).replace('<tbody>', '<colgroup><col width="80"><col><col></colgroup><tbody>');
   const result = await convertHtml(html, { name: "ColgroupTable", viewport: { width: 390, height: 600 } });
   const screen = inferScreen(result.layout, "colgroup");
-  expect(find(screen.root, "a")?.width.kind).toBe("fixed");
+  expect(find(screen.root, "a")?.width.kind).toBe("fill");
+  const table = find(screen.root, "table");
+  expect(table?.kind === "stack" ? table.table?.columns : undefined).toEqual([{ kind: "fixed", value: 80 }, { kind: "auto" }, { kind: "auto" }]);
+  expect(result.code).toContain("MarkswiftTableLayout(columns:");
   expect(result.diagnostics.find((item) => item.id === "#table")?.confidence).toBe("approximated");
 }, 30000);
 
 browserTest("ordinary full-width top and bottom captions retain equal live table columns", async () => {
-  for (const side of ["top", "bottom"]) {
+  for (const side of ["top", "bottom"] as const) {
     const html = page(`caption { caption-side: ${side}; text-align: left; margin: 6px 0; }`, rectangular)
       .replace("<tbody>", '<caption id="caption">Release checklist</caption><tbody>');
     const result = await convertHtml(html, { name: "CaptionedTable", viewport: { width: 390, height: 600 } });
@@ -90,7 +91,8 @@ browserTest("ordinary full-width top and bottom captions retain equal live table
     expect(caption.bounds.w).toBeCloseTo(table.bounds.w, 1);
     const tableNode = find(screen.root, "table")!;
     if (tableNode.kind !== "stack") throw new Error("Expected captured table stack");
-    expect((side === "top" ? tableNode.children[0] : tableNode.children.at(-1))?.id).toBe("#caption");
+    expect(tableNode.table?.captionSide).toBe(side);
+    expect(tableNode.children.find(child => child.id === "#caption")?.id).toBe("#caption");
     expect(result.code).toContain("Release checklist");
     expect(result.code).not.toContain("width: 129.66");
     expect(result.diagnostics.find(item => item.id === "#table")?.confidence).toBe("approximated");

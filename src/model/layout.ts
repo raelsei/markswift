@@ -8,7 +8,14 @@ import { z } from "zod";
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
 /** CSS Typed OM preserves auto/percent/px intent before used values become measured pixels. */
-export const PreferredSize = z.object({ width: z.string(), height: z.string() });
+export const PreferredSize = z.object({
+  width: z.string(), height: z.string(),
+  flexBasis: z.string().optional(),
+  hasAutoMargins: z.boolean().optional(),
+  gridTemplateColumns: z.string().optional(),
+  gridTemplateRows: z.string().optional(),
+  gridAutoRows: z.string().optional(),
+});
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
 /**
@@ -167,12 +174,14 @@ export const STYLE_WHITELIST = [
   "border-bottom-right-radius",
   "border-bottom-style",
   "border-bottom-width",
+  "border-collapse",
   "border-left-color",
   "border-left-style",
   "border-left-width",
   "border-right-color",
   "border-right-style",
   "border-right-width",
+  "border-spacing",
   "border-top-color",
   "border-top-left-radius",
   "border-top-right-radius",
@@ -181,6 +190,7 @@ export const STYLE_WHITELIST = [
   "bottom",
   "box-shadow",
   "box-sizing",
+  "caption-side",
   "clear",
   "clip-path",
   "color",
@@ -207,6 +217,8 @@ export const STYLE_WHITELIST = [
   "grid-template-rows",
   "height",
   "justify-content",
+  "justify-items",
+  "justify-self",
   "left",
   "letter-spacing",
   "line-height",
