@@ -53,6 +53,13 @@ export function num(v: number): string {
   return s.includes(".") || s.includes("e") ? s : s + ".0";
 }
 
+/** Font axis coordinates retain source precision, including exact fvar 16.16 defaults. */
+function axisCoordinate(v: number): string {
+  if (!Number.isFinite(v)) return num(v);
+  const s = String(v);
+  return s.includes(".") || s.includes("e") ? s : s + ".0";
+}
+
 export function indent(lines: string[], n: number): string[] {
   return lines.map((l) => (l ? "    ".repeat(n) + l : l));
 }
@@ -96,14 +103,13 @@ export const TEXT_STYLE_SIZES: Array<[number, string]> = [
  *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a
  *   variable file's default instance is whatever its `fvar` says (Bricolage Grotesque defaults
  *   to 800, not 400).
- * - **fidelity** — `.markswiftVariable(family, size:, weight:, opsz:)`: the variable axes the browser
- *   actually rendered, so an SSIM against the reference measures the design and not a weight
- *   quantisation. Nothing in this mode is shipped.
+ * - **fidelity** — exact variable coordinates, or an admitted static public source face. This
+ *   identifies the requested font route; it does not prove native/browser glyph paint equality.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) => (Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best))[1];
   if (f.family.kind === "custom") {
-    if (ctx.mode === "fidelity") return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${num(f.opsz)}` : ""})`;
+    if (ctx.mode === "fidelity") return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${axisCoordinate(f.opsz)}` : ""}${f.staticFace ? `, staticFace: ${str(f.staticFace.postScriptName)}` : ""})`;
     const style = TEXT_STYLE_SIZES.reduce((best, [s, name]) => (Math.abs(s - f.size) < Math.abs(best[0] - f.size) ? [s, name] : best))[1];
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${style}).weight(.${weightName})`;
   }

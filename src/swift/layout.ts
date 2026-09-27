@@ -12,8 +12,14 @@ import { flowFrame } from "../analysis/relative-position.ts";
 import { intrinsicFlexExpr } from "./intrinsic-flex.ts";
 import { inlineBaselineExpr } from "./inline-baseline.ts";
 import { textObservationAlias } from "./text-observation.ts";
+import { inlineContentExpr } from "./inline-content-flow.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
-  if (n.kind === "stack" && n.inlineBaseline) {
+  if (ctx.mode === "app" && n.kind === "stack" && (n.inlineContentFlow || n.contentAutoHeight)) {
+    const original = n, height = n.contentAutoHeight;
+    n = { ...n, height: { kind: "hug" }, minHeight: undefined, maxHeight: undefined,
+      padding: n.inlineContentFlow?.sourceInsets ?? height!.sourceInsets };
+    geometryAlias(n, original, ctx.geometry); textObservationAlias(n, original, ctx.text);
+  } else if (n.kind === "stack" && n.inlineBaseline) {
     const original = n;
     // Fidelity freezes the complete captured inline extent, including parent strut and
     // widget margin descent that a native child-box union does not carry.
@@ -24,6 +30,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   }
   const out: string[] = [];
   if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineContentFlow) out.push(...inlineContentExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline) out.push(...inlineBaselineExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex) out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks)) out.push(...weightedLayoutExpr(n, ctx));
@@ -92,6 +99,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     geometryAlias(viewport, n, ctx.geometry, true);
     return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), "}", ...modifiers(viewport, ctx)];
   }
+  if (ctx.mode === "app" && n.kind === "stack" && n.contentAutoHeight?.trailingMargin) out.push(`.padding(.bottom, ${num(n.contentAutoHeight.trailingMargin)})`);
   out.push(...modifiers(n, ctx));
   if (n.kind === "stack" && n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped

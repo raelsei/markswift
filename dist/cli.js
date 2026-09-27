@@ -1025,7 +1025,7 @@ var require_svgpath = __commonJS(function(exports, module) {
 });
 
 // src/cli.ts
-import { readFile as readFile6 } from "node:fs/promises";
+import { readFile as readFile7 } from "node:fs/promises";
 
 // src/compiler/naming.ts
 function validateName(name) {
@@ -1160,43 +1160,90 @@ function dimension(value, flag, fallback) {
 }
 
 // src/cli/run.ts
-import { readFile as readFile5, stat as stat2 } from "node:fs/promises";
+import { readFile as readFile6, stat as stat2 } from "node:fs/promises";
 
 // src/input/root.ts
 var DEFAULT_ROOT = "[data-markswift-root], [data-h2s-root], body:not(:has([data-markswift-root], [data-h2s-root]))";
 
 // src/api/convert.ts
-import { mkdir as mkdir2, mkdtemp, readFile as readFile3, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
+import { mkdir as mkdir2, mkdtemp, readFile as readFile4, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join as join3 } from "node:path";
 
+// src/browser/settle-visibility.ts
+async function finishPageSettle() {
+  const forced = [];
+  for (const el of document.querySelectorAll("*")) {
+    const cv = getComputedStyle(el).contentVisibility;
+    if (cv === "auto") {
+      el.style.setProperty("content-visibility", "visible", "important");
+      forced[forced.length] = el;
+    } else if (cv === "hidden") {
+      for (const child of el.children)
+        child.style.setProperty("display", "none", "important");
+    }
+  }
+  for (const animation of document.getAnimations()) {
+    try {
+      animation.finish();
+    } catch {
+      animation.cancel();
+    }
+  }
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  return forced;
+}
+async function settleVisibility(page, cdp) {
+  if (!cdp) {
+    await page.evaluate(finishPageSettle);
+    return new Map;
+  }
+  const objectGroup = "markswift-settle-visibility";
+  try {
+    const evaluated = await cdp.send("Runtime.evaluate", {
+      expression: `(${finishPageSettle.toString()})()`,
+      awaitPromise: true,
+      returnByValue: false,
+      objectGroup
+    });
+    const objectId = evaluated.result.objectId;
+    if (evaluated.exceptionDetails || !objectId || evaluated.result.subtype !== "array")
+      throw new Error("Could not identify settled visibility overrides");
+    const properties = await cdp.send("Runtime.getProperties", { objectId, ownProperties: true });
+    if (properties.exceptionDetails)
+      throw new Error("Could not read settled visibility overrides");
+    const length = properties.result.find((property) => property.name === "length")?.value?.value;
+    const entries = properties.result.filter((property) => /^(0|[1-9]\d*)$/.test(property.name));
+    if (!Number.isSafeInteger(length) || length < 0 || entries.length !== length)
+      throw new Error("Incomplete settled visibility identities");
+    const result = new Map;
+    for (let index = 0;index < length; index++) {
+      const reference = entries.find((property) => property.name === String(index))?.value?.objectId;
+      if (!reference)
+        throw new Error("Missing settled DOM object reference");
+      const { node } = await cdp.send("DOM.describeNode", { objectId: reference });
+      const id = node.backendNodeId, name = node.nodeName.toLowerCase();
+      if (node.nodeType !== 1 || !name || !Number.isSafeInteger(id) || id <= 0 || result.has(id))
+        throw new Error("Ambiguous settled DOM object identity");
+      result.set(id, { name, value: "auto" });
+    }
+    return result;
+  } finally {
+    await cdp.send("Runtime.releaseObjectGroup", { objectGroup });
+  }
+}
+
 // src/browser/settle.ts
-async function settle(page, hide) {
+async function settle(page, hide, beforeVisibility, cdp) {
   await page.evaluate(async (hide) => {
     await document.fonts.ready;
     for (const sel of hide) {
       for (const el of document.querySelectorAll(sel))
         el.style.display = "none";
     }
-    for (const el of document.querySelectorAll("*")) {
-      const cv = getComputedStyle(el).contentVisibility;
-      if (cv === "auto")
-        el.style.setProperty("content-visibility", "visible", "important");
-      else if (cv === "hidden")
-        for (const c of el.children)
-          c.style.setProperty("display", "none", "important");
-    }
-    for (const a of document.getAnimations()) {
-      try {
-        a.finish();
-      } catch {
-        a.cancel();
-      }
-    }
-    const frame = Promise.withResolvers();
-    requestAnimationFrame(() => requestAnimationFrame(() => frame.resolve()));
-    await frame.promise;
   }, hide);
+  await beforeVisibility?.();
+  return await settleVisibility(page, cdp);
 }
 
 // src/browser/fonts.ts
@@ -1257,6 +1304,7 @@ async function collectFontFaces(page) {
             family,
             weight: weightRange(st.getPropertyValue("font-weight") || "normal"),
             style: styleDesc === "italic" || styleDesc === "oblique" ? styleDesc : "normal",
+            variationSettings: st.getPropertyValue("font-variation-settings").trim() || "normal",
             ...st.getPropertyValue("unicode-range") ? { unicodeRange: st.getPropertyValue("unicode-range") } : {},
             src,
             loaded: false
@@ -1286,7 +1334,7 @@ async function collectFontFaces(page) {
     for (const f of faces) {
       if (!f.src.length)
         continue;
-      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
+      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.variationSettings ?? ""}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
       if (seen.has(key))
         continue;
       seen.add(key);
@@ -7270,6 +7318,7 @@ var LayoutNode = lazy(() => object({
   tag: string2(),
   attrs: record(string2(), string2()),
   styles: record(string2(), string2()),
+  sourceContentVisibility: string2().optional(),
   flattenedCustomElements: array(object({ tag: string2(), id: string2().optional() })).optional(),
   preferredSize: PreferredSize.optional(),
   markerLayout: MarkerLayout.optional(),
@@ -7291,6 +7340,7 @@ var FontFace = object({
   family: string2(),
   weight: tuple([number2(), number2()]),
   style: _enum(["normal", "italic", "oblique"]),
+  variationSettings: string2().optional(),
   unicodeRange: string2().optional(),
   src: array(object({ url: string2(), format: string2().optional(), file: string2().optional() })),
   loaded: boolean2()
@@ -7312,6 +7362,11 @@ var LayoutDoc = object({
 });
 var STYLE_WHITELIST = [
   "appearance",
+  "contain",
+  "content-visibility",
+  "word-spacing",
+  "line-break",
+  "hyphens",
   "align-content",
   "align-items",
   "align-self",
@@ -7660,6 +7715,7 @@ function snapshotToTree(snap, boxes) {
       attrs[str(a[k]).toLowerCase()] = str(a[k + 1]);
     raws[i] = {
       idx: i,
+      ...doc.nodes.backendNodeId?.[i] !== undefined ? { backendNodeId: doc.nodes.backendNodeId[i] } : {},
       type: doc.nodes.nodeType[i],
       name: str(doc.nodes.nodeName[i]).toLowerCase(),
       value: str(doc.nodes.nodeValue[i]),
@@ -7859,6 +7915,7 @@ function element(raw, origin, identity, path) {
     tag: raw.name,
     attrs: raw.attrs,
     styles: raw.styles,
+    ...raw.sourceContentVisibility !== undefined ? { sourceContentVisibility: raw.sourceContentVisibility } : {},
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
     ...raw.preferredSize ? { preferredSize: raw.preferredSize } : {},
@@ -8574,6 +8631,77 @@ function attachMarkerLayouts(root, layouts) {
   walk(root, "");
 }
 
+// src/browser/content-visibility.ts
+function readSourceContentVisibility(snapshot) {
+  const result = new Map, seen = new Set, ambiguous = new Set;
+  for (const document2 of snapshot.documents) {
+    const nodes = document2.nodes, ids = nodes.backendNodeId;
+    if (!ids)
+      continue;
+    const pseudo = new Set(nodes.pseudoType?.index ?? []);
+    const laidOut = new Map(document2.layout.nodeIndex.map((node, index) => [node, index]));
+    for (let index = 0;index < nodes.nodeType.length; index++) {
+      const id = ids[index];
+      if (id === undefined || !Number.isInteger(id) || id <= 0)
+        continue;
+      if (seen.has(id)) {
+        ambiguous.add(id);
+        continue;
+      }
+      seen.add(id);
+      if (nodes.nodeType[index] !== 1 || pseudo.has(index))
+        continue;
+      const layout = laidOut.get(index), style = layout === undefined ? undefined : document2.layout.styles[layout]?.[0];
+      const value = style === undefined ? undefined : snapshot.strings[style];
+      const name = snapshot.strings[nodes.nodeName[index]]?.toLowerCase();
+      if (name && (value === "visible" || value === "auto" || value === "hidden"))
+        result.set(id, { name, value });
+    }
+  }
+  for (const id of ambiguous)
+    result.delete(id);
+  return result;
+}
+function attachSourceContentVisibility(tree, source, forced = new Map) {
+  const nodes = [], counts = new Map;
+  const visit = (node) => {
+    nodes.push(node);
+    if (node.backendNodeId !== undefined)
+      counts.set(node.backendNodeId, (counts.get(node.backendNodeId) ?? 0) + 1);
+    node.children.forEach(visit);
+  };
+  visit(tree);
+  for (const node of nodes) {
+    delete node.sourceContentVisibility;
+    delete node.visibilityWasForced;
+    if (node.type !== 1 || node.pseudo || node.backendNodeId === undefined || counts.get(node.backendNodeId) !== 1)
+      continue;
+    const override = forced.get(node.backendNodeId);
+    const original = override ?? source.get(node.backendNodeId);
+    if (original?.name === node.name)
+      node.sourceContentVisibility = original.value;
+    if (override?.name === node.name && override.value === "auto")
+      node.visibilityWasForced = true;
+  }
+}
+function contentVisibilityWarnings(root) {
+  let forced = false, observed = false;
+  const inspect = (node) => {
+    forced ||= node.visibilityWasForced === true;
+    observed ||= node.sourceContentVisibility === "auto";
+  };
+  const visit = (node) => {
+    inspect(node);
+    node.children.forEach(visit);
+  };
+  visit(root);
+  for (let ancestor = root.parent;ancestor; ancestor = ancestor.parent)
+    inspect(ancestor);
+  if (forced)
+    return ["Source content-visibility:auto was forced to visible for measurement; original containment and skipped-content rendering are not reproduced"];
+  return observed ? ["Source content-visibility:auto was observed before settling; original containment and skipped-content rendering are not reproduced"] : [];
+}
+
 // src/browser/capture.ts
 var ROOT_MARK = "data-h2s-root-capture";
 
@@ -8643,7 +8771,12 @@ class BrowserCapture {
       const transitionProperties = await readTransitionProperties(page, spec.root);
       const noTransition = await page.addStyleTag({ content: "*, *::before, *::after, *::marker { transition-property: none !important; }" });
       await noTransition.evaluate((s) => s.setAttribute("data-h2s-harness", ""));
-      await settle(page, spec.hide ?? []);
+      const cdp = await this.context.newCDPSession(page);
+      let sourceVisibility = new Map;
+      const forcedVisibility = await settle(page, spec.hide ?? [], async () => {
+        const original = await cdp.send("DOMSnapshot.captureSnapshot", { computedStyles: ["content-visibility"] });
+        sourceVisibility = readSourceContentVisibility(original);
+      }, cdp);
       for (const name of await readKeyframeNames(page))
         styleWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
       const media = mediaWarning(await readMediaConditions(page));
@@ -8672,7 +8805,6 @@ class BrowserCapture {
         }
         return { x: r.x + window.scrollX, y: r.y + window.scrollY, w: r.width, h: r.height, canvas };
       }, { sel: spec.root, mark: ROOT_MARK });
-      const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const textMetrics = await readTextMetrics(page, spec.root);
       const inlineStruts = await readInlineStruts(page, spec.root);
@@ -8692,10 +8824,12 @@ class BrowserCapture {
       await page.evaluate(() => document.getElementById("__h2s_notransform")?.remove());
       await cdp.detach();
       const tree = snapshotToTree(snapA, snapB);
+      attachSourceContentVisibility(tree, sourceVisibility, forcedVisibility);
       attachFormSnapshot(tree, formSnapshot);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw)
         throw new Error(`capture root ${spec.root} not in snapshot`);
+      styleWarnings.push(...contentVisibilityWarnings(rootRaw));
       restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
@@ -11762,7 +11896,7 @@ function fontWeight(s) {
     return 700;
   if (s === "normal")
     return 400;
-  const v = parseInt(s, 10);
+  const v = parseFloat(s);
   return Number.isFinite(v) ? v : 400;
 }
 function fontFamilies(s) {
@@ -11879,7 +12013,95 @@ function num(s, def = 0) {
   return Number.isFinite(v) ? v : def;
 }
 
+// src/analysis/static-font-selection.ts
+function selectStaticFontFace(weight, faces, style) {
+  const unavailable = (reason) => ({ kind: "unavailable", reason });
+  if (!Array.isArray(faces) || !faces.length)
+    return unavailable("packaged face catalog/public source names absent; CSS face identity unavailable");
+  if (faces.some((face) => !face || typeof face !== "object" || !face.axes || typeof face.axes !== "object" || Array.isArray(face.axes) || ![Object.prototype, null].includes(Object.getPrototypeOf(face.axes)) || Object.values(face.axes).some((bounds) => !Array.isArray(bounds) || bounds.length !== 2 || !bounds.every(Number.isFinite) || bounds[0] > bounds[1]))) {
+    return unavailable("packaged source axis state is unknown");
+  }
+  if (faces.some((face) => Object.keys(face.axes).length > 0))
+    return { kind: "variable" };
+  if (style["font-style"] !== "normal" || style["font-stretch"] !== "100%")
+    return unavailable("normal style and unmodified font-stretch are not proved");
+  if (style["font-synthesis"] !== "none")
+    return unavailable("font-synthesis:none is not captured; synthetic face behavior is unproved");
+  if (!Number.isFinite(weight) || weight < 1 || weight > 1000)
+    return unavailable("requested CSS weight is unavailable");
+  const byPublicName = new Map;
+  for (const face of faces) {
+    if (typeof face.postScriptName !== "string" || !face.postScriptName.trim() || typeof face.assetHash !== "string" || !/^[a-f\d]{64}$/i.test(face.assetHash))
+      return unavailable("public source names/packaged asset bindings incomplete");
+    const previous = byPublicName.get(face.postScriptName);
+    if (previous && previous !== face.assetHash)
+      return unavailable("public source name has ambiguous packaged assets");
+    byPublicName.set(face.postScriptName, face.assetHash);
+  }
+  const normal = faces.filter((face) => face.style === "normal");
+  if (!normal.length)
+    return unavailable("normal source face absent");
+  const byWeight = new Map;
+  for (const face of normal) {
+    if (!Array.isArray(face.weight) || face.weight.length !== 2 || face.weight[0] !== face.weight[1] || !Number.isFinite(face.weight[0]) || face.weight[0] < 1 || face.weight[0] > 1000) {
+      return unavailable("static CSS point weights/public source names/packaged asset bindings incomplete");
+    }
+    const previous = byWeight.get(face.weight[0]);
+    if (previous && (previous.postScriptName !== face.postScriptName || previous.assetHash !== face.assetHash))
+      return unavailable("same CSS weight has ambiguous packaged source faces");
+    byWeight.set(face.weight[0], face);
+  }
+  const ascending = [...byWeight.keys()].sort((a, b) => a - b);
+  const descending = [...ascending].reverse();
+  const search = weight >= 400 && weight <= 500 ? [...ascending.filter((w) => w >= weight && w <= 500), ...descending.filter((w) => w < weight), ...ascending.filter((w) => w > 500)] : weight < 400 ? [...descending.filter((w) => w <= weight), ...ascending.filter((w) => w > weight)] : [...ascending.filter((w) => w >= weight), ...descending.filter((w) => w < weight)];
+  const matchedWeight = search[0];
+  if (matchedWeight === undefined)
+    return unavailable("no static source face remains");
+  return { kind: "static", face: byWeight.get(matchedWeight), matchedWeight };
+}
+
+// src/analysis/optical-sizing.ts
+function selectOpticalSize(style, family) {
+  const unavailable = (reason) => ({ kind: "unavailable", reason });
+  if (!family.opsz)
+    return { kind: "absent" };
+  const mode = style["font-optical-sizing"];
+  if (mode !== "auto" && mode !== "none")
+    return unavailable("captured font-optical-sizing is unavailable");
+  if (style["font-variation-settings"] !== "normal")
+    return unavailable("element font-variation-settings:normal is not proved");
+  if (!Array.isArray(family.faces) || !family.faces.length)
+    return unavailable("packaged optical source catalog is unavailable");
+  for (const face of family.faces) {
+    if (!record2(face.axes) || !range(face.axes.opsz) || typeof face.postScriptName !== "string" || !face.postScriptName.trim() || typeof face.assetHash !== "string" || !/^[a-f\d]{64}$/i.test(face.assetHash)) {
+      return unavailable("packaged optical source identity/axis is unavailable or ambiguous");
+    }
+    if (!Array.isArray(face.sourceVariations) || !face.sourceVariations.length || face.sourceVariations.some((value) => typeof value !== "string" || value.trim().toLowerCase() !== "normal")) {
+      return unavailable("source variation descriptors are unknown, conflicting or non-normal");
+    }
+  }
+  if (mode === "auto")
+    return { kind: "auto" };
+  const defaults = [];
+  for (const face of family.faces) {
+    if (!record2(face.axisDefaults) || Object.entries(face.axes).some(([tag, bounds]) => !range(bounds) || !Number.isFinite(face.axisDefaults[tag]) || face.axisDefaults[tag] < bounds[0] || face.axisDefaults[tag] > bounds[1])) {
+      return unavailable("actual fvar defaults are missing, invalid or outside source ranges");
+    }
+    defaults.push(face.axisDefaults.opsz);
+  }
+  if (new Set(defaults).size !== 1)
+    return unavailable("packaged optical source defaults disagree");
+  return { kind: "none", value: defaults[0] };
+}
+function record2(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+}
+function range(value) {
+  return Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) && value[0] <= value[1];
+}
+
 // src/analysis/typography.ts
+var SYSTEM_KEYWORDS = new Set(["-apple-system", "blinkmacsystemfont", "cursive", "fantasy", "monospace", "sans-serif", "serif", "system-ui", "ui-monospace", "ui-rounded", "ui-sans-serif", "ui-serif"]);
 var SYSTEM_DESIGNS = {
   "-apple-system": "default",
   arial: "default",
@@ -11919,6 +12141,12 @@ function fontOf(s, families = {}) {
       spec.family = { kind: "custom", name: family };
       if (bundled.opsz)
         spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], size));
+      const optical = selectOpticalSize(s, bundled);
+      if (optical.kind === "none")
+        spec.opsz = optical.value;
+      const selection = selectStaticFontFace(capturedWeight(s), bundled.faces, s);
+      if (selection.kind === "static")
+        spec.staticFace = { postScriptName: selection.face.postScriptName, assetHash: selection.face.assetHash, matchedWeight: selection.matchedWeight };
       break;
     }
     const design = SYSTEM_DESIGNS[family.toLowerCase()];
@@ -11931,6 +12159,30 @@ function fontOf(s, families = {}) {
   if (lh && lh !== "normal")
     spec.lineHeight = round2(px(lh));
   return spec;
+}
+function fontSelectionDiagnostic(s, families = {}) {
+  for (const family of fontFamilies(s["font-family"])) {
+    const bundled = families[family];
+    if (bundled) {
+      const optical = selectOpticalSize(s, bundled);
+      if (optical.kind === "none")
+        return `approximated: font-family ${family} optical sizing uses its actual fvar default for fidelity; app Dynamic Type retains platform optical behavior, whose explicit source coordinate is unproved`;
+      if (optical.kind === "unavailable")
+        return `approximated: font-family ${family} optical sizing: ${optical.reason}; existing automatic coordinate route retained`;
+      const selection = selectStaticFontFace(capturedWeight(s), bundled.faces, s);
+      if (selection.kind === "variable")
+        return;
+      return selection.kind === "static" ? `approximated: font-family ${family} has a CSS-selected static source face for fidelity; app Dynamic Type still uses platform family/weight matching, whose CSS face identity is unproved` : `approximated: font-family ${family} static face matching: ${selection.reason}; existing platform family/weight route retained`;
+    }
+    const lower = family.toLowerCase(), design = SYSTEM_DESIGNS[lower];
+    if (design)
+      return SYSTEM_KEYWORDS.has(lower) ? undefined : `approximated: concrete font-family ${family} → SwiftUI .${design} design; the captured installed face identity is not preserved`;
+  }
+  return;
+}
+function capturedWeight(s) {
+  const raw = s["font-weight"];
+  return raw === "normal" ? 400 : raw === "bold" ? 700 : raw?.trim() ? Number(raw) : NaN;
 }
 
 // src/analysis/svg/text.ts
@@ -14230,6 +14482,9 @@ function withBase(n, ctx, extra) {
 }
 function makeBase(n, ctx, declared) {
   const notes = [];
+  const fontDiagnostic = fontSelectionDiagnostic(n.styles, ctx.bundledFamilies);
+  if (fontDiagnostic)
+    notes.push(fontDiagnostic);
   const relative = ctx.parent ? relativePosition(n) : {};
   if (relative.reason)
     notes.push(`approximated: relative position ${relative.reason}; captured placement cannot recompute at another width`);
@@ -15300,6 +15555,9 @@ function buildTextRuns(host, runs, ctx, note) {
     pendingSpace = false;
     prevRun = r;
     const run = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    const fontDiagnostic = fontSelectionDiagnostic(s, ctx.bundledFamilies);
+    if (fontDiagnostic)
+      note(fontDiagnostic);
     if (source)
       run.source = source;
     const families = fontFamilies(s["font-family"]);
@@ -16796,10 +17054,24 @@ function joinIntrinsicControl(source, node, context) {
 var fixedPx = (value) => value !== undefined && /^(?:0|\d+(?:\.\d+)?px)$/.test(value);
 var zero = (value) => value === "0" || value === "0px";
 var unconstrained3 = (value, minimum = false) => value === "auto" || value === "none" || minimum && zero(value);
-function textIndentReason(source) {
+function intrinsicContainmentReason(source) {
+  const contain = source.styles.contain, visibility = source.styles["content-visibility"];
+  if (contain === undefined || visibility === undefined)
+    return "containment metadata unavailable";
+  if (contain !== "none" || visibility !== "visible")
+    return `unsupported containment: contain:${contain}, content-visibility:${visibility}`;
+  if (source.sourceContentVisibility === undefined)
+    return "source content-visibility metadata unavailable";
+  if (source.sourceContentVisibility !== "visible")
+    return `unsupported source content-visibility:${source.sourceContentVisibility}`;
+}
+function sourceContributionReason(source) {
   if (source.styles.display === "none")
     return;
   if (source.tag !== "#text") {
+    const containment = intrinsicContainmentReason(source);
+    if (containment)
+      return containment;
     const value = source.styles["text-indent"];
     if (value === undefined)
       return "text-indent metadata unavailable";
@@ -16807,7 +17079,7 @@ function textIndentReason(source) {
       return `unsupported text-indent:${value}`;
   }
   for (const child of source.children) {
-    const reason = textIndentReason(child);
+    const reason = sourceContributionReason(child);
     if (reason)
       return reason;
   }
@@ -16832,7 +17104,7 @@ function ordinaryIntrinsicReason(source, sem, root = false) {
     return "generated or flattened source topology";
   if ((s.position ?? "static") !== "static" || (s.float ?? "none") !== "none")
     return "out-of-flow, relative or floated contribution";
-  if (sem.overlays.length || sem.style.clip || sem.style.transform || sem.style.hidden || ["transform", "contain", "content-visibility"].some((key) => s[key] && !/^(none|visible)$/.test(s[key])))
+  if (sem.overlays.length || sem.style.clip || sem.style.transform || sem.style.hidden || s.transform !== undefined && s.transform !== "none")
     return "complex/contained content";
   if (["overflow-x", "overflow-y"].some((key) => s[key] && s[key] !== "visible"))
     return "clipped or scrolling contribution";
@@ -16844,7 +17116,7 @@ function ordinaryIntrinsicReason(source, sem, root = false) {
     return "constrained descendant contribution is unproved";
   if (root && s["max-width"] === "none" && sem.maxWidth !== undefined)
     return "synthesized captured width cap";
-  return textIndentReason(source) ?? intrinsicFontSettingsReason(source);
+  return sourceContributionReason(source) ?? intrinsicFontSettingsReason(source);
 }
 
 // src/analysis/intrinsic-min-content-program.ts
@@ -16909,6 +17181,11 @@ function intrinsicContribution(node, root = false, grouped = false) {
     return { reason: "source/semantic join unavailable" };
   if (root && (!joined.context.parent || joined.context.parentAxis !== "v" || !/^(block|flow-root)$/.test(joined.context.parentDisplay ?? "") || !/^(block|flow-root)$/.test(joined.context.parent.styles.display ?? "")))
     return { reason: "ordinary containing-block context unavailable; flex/grid/table or standalone root is unproved" };
+  if (root) {
+    const reason = intrinsicContainmentReason(joined.context.parent);
+    if (reason)
+      return { reason: `containing block ${reason}` };
+  }
   if (root && ["min-width", "max-width"].some((key) => /^(?:min-content|max-content|fit-content)/.test(joined.context.parent.styles[key] ?? "")))
     return { reason: "containing block has an unproved intrinsic width constraint" };
   if (root && node.kind === "control")
@@ -16942,6 +17219,146 @@ function attachIntrinsicMinimum(node) {
     node.notes.push(`approximated: native min-content unavailable (${result.reason}); captured minimum retained`);
   }
   return finish(node);
+}
+
+// src/analysis/inline-content-flow-admission.ts
+function autoHeightReason(n, stack) {
+  if (n.preferredSize?.height !== "auto" || n.styles["min-height"] !== "0px" || n.styles["max-height"] !== "none")
+    return "authored unconstrained auto height unavailable";
+  if (!/^(block|flow-root)$/.test(n.styles.display ?? "") || n.preferredSize.hasRelativePadding || stack.measured || stack.allocation || stack.intrinsicFlex || stack.wrap || stack.scroll || stack.table || stack.distribution !== "start" || stack.overlays.length || stack.relativeOffset || stack.style.clip || stack.style.hidden)
+    return "ordinary unclipped source flow unavailable";
+  for (const current of [n, ...n.children]) {
+    if (current.tag !== "#text" && (current.styles.contain !== "none" || current.styles["content-visibility"] !== "visible" || current.sourceContentVisibility !== "visible"))
+      return "contained or skipped source contributions";
+    if ((current.styles.position ?? "static") !== "static" || (current.styles.float ?? "none") !== "none" || (current.styles.transform ?? "none") !== "none" || (current.styles["aspect-ratio"] ?? "auto") !== "auto")
+      return "positioned, transformed or aspect content";
+  }
+}
+function inlineRowReason(joined, stack) {
+  const { source: n, context } = joined;
+  const height = autoHeightReason(n, stack);
+  if (height)
+    return height;
+  if (!context.parent || context.parentAxis !== "v" || !/^(block|flow-root)$/.test(context.parentDisplay ?? "") || !/^(block|flow-root)$/.test(context.parent.styles.display ?? ""))
+    return "ordinary containing block unavailable";
+  if (context.parent.styles.contain !== "none" || context.parent.styles["content-visibility"] !== "visible" || context.parent.sourceContentVisibility !== "visible")
+    return "contained or skipped containing block";
+  if (stack.width.kind !== "fill" || n.preferredSize?.width !== "auto" || n.styles["max-width"] !== "none" || !/^(0px|auto)$/.test(n.styles["min-width"] ?? ""))
+    return "unconstrained ordinary fill width unavailable";
+  if (stack.maxWidth !== undefined || n.styles["margin-left"] !== "0px" || n.styles["margin-right"] !== "0px")
+    return "captured width cap or horizontal margins";
+  return inlineWordsReason(n);
+}
+function inlineWordsReason(n) {
+  if (n.styles.direction !== "ltr" || n.styles["writing-mode"] !== "horizontal-tb" || n.styles["text-indent"] !== "0px" || n.styles["white-space"] !== "normal" || n.styles["overflow-wrap"] && n.styles["overflow-wrap"] !== "normal" || n.styles["word-break"] && n.styles["word-break"] !== "normal" || !/^(0px|normal)$/.test(n.styles["word-spacing"] ?? "") || !/^(auto|normal)$/.test(n.styles["line-break"] ?? "") || !/^(manual|none)$/.test(n.styles.hyphens ?? ""))
+    return "plain horizontal whole-word flow unavailable";
+  return intrinsicFontSettingsReason(n);
+}
+
+// src/analysis/inline-content-flow-content.ts
+function inlineContentOf(stack) {
+  const joined = intrinsicSource(stack), baseline = stack.inlineBaseline;
+  if (joined?.kind !== "container" || !baseline || joined.items.length !== 2 || stack.children.length !== 2)
+    return;
+  const [widget, caption] = stack.children, source = caption && intrinsicSource(caption);
+  if (!widget || widget.kind !== "control" || !caption || caption.kind !== "text" || !caption.lineBox || !usesGreedyWords(caption) || source?.kind !== "text" || source.leaf || source.source !== joined.source || source.runs.length !== 1 || caption.runs.length !== 1 || caption.padding.some(Boolean))
+    return;
+  const rawNode = source.runs[0].node, raw = rawNode.text ?? "", widgetSource = intrinsicSource(widget)?.source;
+  if (rawNode.tag !== "#text" || source.runs[0].styleOf !== joined.source || joined.source.children.length !== 2 || joined.source.children[0] !== widgetSource || joined.source.children[1] !== rawNode || !/^ [A-Za-z0-9]+(?: [A-Za-z0-9]+)*$/.test(raw) || raw.slice(1) !== caption.runs[0].text)
+    return;
+  const claim = rawNode.textSource;
+  if (claim && (claim.origin !== "dom" || claim.join !== "verified" || claim.raw !== raw))
+    return;
+  const tokens = [...raw.matchAll(/ +|[^ ]+/g)].map((match) => {
+    const start = match.index, value = match[0], end = start + value.length;
+    return {
+      kind: value === " " ? "separator" : "word",
+      value,
+      rawRange: [start, end],
+      ...claim ? { source: { version: 1, units: [{ output: [0, value.length], sources: [{ occurrence: claim.key, start, end }], operation: "copy" }], excluded: [], unavailable: [] } } : {}
+    };
+  });
+  const margins = widgetSource?.inlineControlMargins;
+  if (!margins || !margins.every((value) => Number.isFinite(value) && value >= 0))
+    return;
+  return {
+    widget: 0,
+    caption: 1,
+    raw,
+    tokens,
+    lineBox: caption.lineBox,
+    strutAscent: baseline.strutAscent,
+    strutDescent: baseline.strutDescent,
+    sourceInsets: baseline.sourceInsets,
+    widgetMargins: margins
+  };
+}
+
+// src/analysis/inline-content-flow-height.ts
+var fixed = (value) => value && /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(value) ? Number.parseFloat(value) : undefined;
+function contentAutoHeightOf(stack) {
+  const joined = intrinsicSource(stack);
+  if (joined?.kind !== "container" || stack.axis !== "v" || autoHeightReason(joined.source, stack) || joined.items.length !== stack.children.length || joined.source.children.length !== joined.items.length)
+    return;
+  const n = joined.source, children = stack.children;
+  if (!joined.context.parent || joined.context.parentAxis !== "v" || !/^(block|flow-root)$/.test(joined.context.parentDisplay ?? ""))
+    return;
+  if (!EDGES.every((edge) => fixed(n.styles[`padding-${edge}`]) !== undefined && fixed(n.styles[`border-${edge}-width`]) !== undefined))
+    return;
+  const sourceInsets = insetsOf(n.styles);
+  if (!children.some((child) => child.kind === "stack" && child.inlineContentFlow))
+    return;
+  const legend = n.tag === "fieldset" ? fieldsetAdmission(n, stack.style).legend : undefined;
+  if (n.tag === "fieldset" && (!legend || !stack.fieldsetPaint || joined.items[0]?.node !== legend || children[0]?.fieldsetLegend?.key !== stack.fieldsetPaint.key))
+    return;
+  for (let i = 0;i < children.length; i++) {
+    const child = children[i], item = joined.items[i];
+    if (!item || item.sem !== child || n.children[i] !== item.node || intrinsicSource(child)?.source !== item.node)
+      return;
+    if (item.node === legend) {
+      const text = intrinsicSource(child);
+      if (child.kind !== "text" || !child.lineBox || !usesGreedyWords(child) || inlineWordsReason(item.node) || text?.kind !== "text" || text.runs.length !== 1 || item.node.children.length !== 1 || text.runs[0].node !== item.node.children[0] || text.runs[0].styleOf !== item.node || item.node.styles["text-indent"] !== "0px" || item.node.styles["white-space"] !== "normal" || item.node.preferredSize?.height !== "auto" || item.node.styles["min-height"] !== "0px" || item.node.styles["max-height"] !== "none")
+        return;
+    } else if (child.kind !== "stack" || !child.inlineContentFlow)
+      return;
+    if (["top", "left", "right"].some((edge) => item.node.styles[`margin-${edge}`] !== "0px"))
+      return;
+    if (fixed(item.node.styles["margin-bottom"]) === undefined)
+      return;
+  }
+  const margin = fixed(joined.items.at(-1).node.styles["margin-bottom"]);
+  if (margin && sourceInsets[2] <= 0)
+    return;
+  const gaps = typeof stack.spacing === "number" ? children.slice(1).map(() => stack.spacing) : stack.spacing;
+  if (gaps.length !== children.length - 1)
+    return;
+  for (let i = 1;i < children.length; i++) {
+    const owned = i === 1 && legend ? fixed(n.styles["padding-top"]) : fixed(joined.items[i - 1].node.styles["margin-bottom"]);
+    if (Math.abs(gaps[i - 1] - owned) > 0.001)
+      return;
+  }
+  const leading = legend ? -sourceInsets[0] : 0;
+  if (Math.abs(stack.leadInset - leading) > 0.001)
+    return;
+  return { sourceInsets, trailingMargin: margin };
+}
+
+// src/analysis/inline-content-flow.ts
+function attachInlineContentFlow(stack) {
+  delete stack.inlineContentFlow;
+  delete stack.contentAutoHeight;
+  const joined = intrinsicSource(stack);
+  if (joined?.kind !== "container")
+    return stack;
+  if (joined.items.some((item) => item.node.tag === "input" && /^(checkbox|radio)$/.test(item.node.attrs.type ?? ""))) {
+    const reason = inlineRowReason(joined, stack), content = reason ? undefined : inlineContentOf(stack);
+    if (content)
+      stack.inlineContentFlow = content;
+    else
+      stack.notes.push(`approximated: inline continuation unavailable (${reason ?? "single proved widget/direct plain source caption unavailable"}); captured baseline flow retained`);
+  }
+  stack.contentAutoHeight = contentAutoHeightOf(stack);
+  return stack;
 }
 
 // src/analysis/infer-node.ts
@@ -17053,7 +17470,7 @@ function build(n, ctx) {
   }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   joinIntrinsicContainer(n, stack, items, ctx);
-  return attachIntrinsicMinimum(finish(stack));
+  return attachIntrinsicMinimum(finish(attachInlineContentFlow(stack)));
 }
 function objectPosition(value) {
   const tokens = value.trim().toLowerCase().split(/\s+/);
@@ -17136,6 +17553,12 @@ function num3(v) {
   const s = (Math.round(v * 1000) / 1000).toString();
   return s.includes(".") || s.includes("e") ? s : s + ".0";
 }
+function axisCoordinate(v) {
+  if (!Number.isFinite(v))
+    return num3(v);
+  const s = String(v);
+  return s.includes(".") || s.includes("e") ? s : s + ".0";
+}
 function indent(lines, n) {
   return lines.map((l) => l ? "    ".repeat(n) + l : l);
 }
@@ -17166,7 +17589,7 @@ function fontExpr(f, ctx) {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) => Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best)[1];
   if (f.family.kind === "custom") {
     if (ctx.mode === "fidelity")
-      return `.markswiftVariable(${swiftStringLiteral(f.family.name)}, size: ${num3(f.size)}, weight: ${num3(f.weight)}${f.opsz !== undefined ? `, opsz: ${num3(f.opsz)}` : ""})`;
+      return `.markswiftVariable(${swiftStringLiteral(f.family.name)}, size: ${num3(f.size)}, weight: ${num3(f.weight)}${f.opsz !== undefined ? `, opsz: ${axisCoordinate(f.opsz)}` : ""}${f.staticFace ? `, staticFace: ${swiftStringLiteral(f.staticFace.postScriptName)}` : ""})`;
     const style = TEXT_STYLE_SIZES.reduce((best, [s, name]) => Math.abs(s - f.size) < Math.abs(best[0] - f.size) ? [s, name] : best)[1];
     return `.custom(${swiftStringLiteral(f.family.name)}, size: ${num3(f.size)}, relativeTo: .${style}).weight(.${weightName})`;
   }
@@ -17824,6 +18247,32 @@ function textLineBoxExpr(node, mode, content, spacing, greedy = false, width) {
 }
 
 // src/swift/text-observation.ts
+function registerInlineContentEmission(node, token, state) {
+  const nodeKey = state.keys.get(node);
+  if (!nodeKey)
+    throw new Error("Inline caption observation occurrence unavailable");
+  const key = `${nodeKey}/runs/0/inline-${token.kind}/${token.rawRange[0]}`;
+  if (state.manifest.emissions.some((entry) => entry.key === key))
+    throw new Error("Duplicate inline caption emission occurrence");
+  const entry = {
+    key,
+    node: nodeKey,
+    run: 0,
+    kind: token.kind === "word" ? "greedy-word" : "flow-separator",
+    value: token.value,
+    literalUTF16Length: token.value.length,
+    ...token.source ? { source: structuredClone(token.source) } : {},
+    fontBinding: "shared-supplied-ui-font; actual-font-name-recorded-natively",
+    unavailable: [
+      ...token.source ? [] : ["source lineage unavailable"],
+      ...token.kind === "separator" ? ["Layout-gap advance is not TextRenderer glyph geometry; native draw coverage unavailable"] : [],
+      "native final-draw and source cluster scope unavailable"
+    ],
+    hardLines: [{ key: `${key}/hard-line/0`, valueRange: [0, token.value.length] }]
+  };
+  state.manifest.emissions.push(entry);
+  return entry;
+}
 function textDrawObservationUnavailable(node) {
   return node.runs.some((run) => run.decoration?.lines.some((line) => line === "underline" || line === "line-through")) ? "native draw observation unavailable: decorated text retains the ordinary SwiftUI renderer" : undefined;
 }
@@ -19281,9 +19730,63 @@ function inlineBaselineExpr(node, context) {
   return out;
 }
 
+// src/swift/inline-content-flow-observation.ts
+function inlineCaptionKeys(node, tokens, state) {
+  if (!state)
+    return [];
+  const entry = state.manifest.nodes.find((entry) => entry.key === state.keys.get(node));
+  if (entry && tokens.every((token) => token.source))
+    entry.sourceAccounting = { version: 1, units: [], excluded: [], unavailable: [] };
+  return tokens.map((token) => registerInlineContentEmission(node, token, state).key);
+}
+
+// src/swift/inline-content-flow.ts
+function inlineContentExpr(node, ctx) {
+  const flow = node.inlineContentFlow, caption = node.children[flow.caption];
+  if (caption.kind !== "text")
+    throw new Error("Admitted inline caption ownership changed");
+  const run = caption.runs[0], box = flow.lineBox;
+  const font = `UIFont.systemFont(ofSize: ${num3(run.font.size)}, weight: .${nativeTextWeight(run.font)})`;
+  const keys = inlineCaptionKeys(caption, flow.tokens, ctx.text), words = flow.tokens.filter((token) => token.kind === "word");
+  const margins = flow.widgetMargins.map(num3).join(", ");
+  const tokenKeys = (kind) => flow.tokens.flatMap((token, index) => token.kind === kind && keys[index] ? [swiftStringLiteral(keys[index])] : []).join(", ");
+  const ranges = (kind) => flow.tokens.filter((token) => token.kind === kind).map((token) => `[${token.rawRange.join(", ")}]`).join(", ");
+  const observation = ctx.text ? `, wordKeys: [${tokenKeys("word")}], separatorKeys: [${tokenKeys("separator")}], wordRanges: [${ranges("word")}], separatorRanges: [${ranges("separator")}]` : "";
+  const out = [`MarkswiftInlineContentRow(id: ${swiftStringLiteral(node.id)}, strutAscent: ${num3(flow.strutAscent)}, strutDescent: ${num3(flow.strutDescent)}, wordCount: ${words.length}, space: MarkswiftTextAdvance.width(" ", font: ${font}), margins: [${margins}], textBaseline: ${num3(box.firstBaseline)}, textDescent: ${num3(box.baselineToBottom)}${observation}) {`];
+  out.push(...indent(ctx.renderNode(node.children[flow.widget]).split(`
+`), 1));
+  for (const [index, token] of flow.tokens.entries()) {
+    if (token.kind !== "word")
+      continue;
+    let text = `Text(verbatim: ${swiftStringLiteral(token.value)}).font(Font(${font})).foregroundStyle(${colorExpr(run.color, ctx, caption.id)})`;
+    if (ctx.text)
+      text += `.markswiftTextSource(${swiftStringLiteral(keys[index])}, ${swiftStringLiteral(token.value)}, fontBinding: "shared-supplied-ui-font:" + ${font}.fontName).markswiftObserveText(${swiftStringLiteral(keys[index])})`;
+    const wrapper = [
+      `MarkswiftTextLineBox(firstBaseline: ${num3(box.firstBaseline)}, baselineToBottom: ${num3(box.baselineToBottom)}, baselineStep: ${num3(box.baselineStep)}, fontSize: ${num3(run.font.size)}, fontWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue, lineSpacing: 0) {`,
+      `    ${text}.fixedSize(horizontal: true, vertical: true)`,
+      "}",
+      `.layoutValue(key: MarkswiftInlineContentAdvance.self, value: MarkswiftTextAdvance.width(${swiftStringLiteral(token.value)}, font: ${font}))`
+    ];
+    out.push(...indent(wrapper, 1));
+  }
+  out.push("}");
+  return out;
+}
+
 // src/swift/layout.ts
 function containerExpr(n, ctx) {
-  if (n.kind === "stack" && n.inlineBaseline) {
+  if (ctx.mode === "app" && n.kind === "stack" && (n.inlineContentFlow || n.contentAutoHeight)) {
+    const original = n, height = n.contentAutoHeight;
+    n = {
+      ...n,
+      height: { kind: "hug" },
+      minHeight: undefined,
+      maxHeight: undefined,
+      padding: n.inlineContentFlow?.sourceInsets ?? height.sourceInsets
+    };
+    geometryAlias(n, original, ctx.geometry);
+    textObservationAlias(n, original, ctx.text);
+  } else if (n.kind === "stack" && n.inlineBaseline) {
     const original = n;
     n = ctx.mode === "app" ? { ...n, padding: n.inlineBaseline.sourceInsets } : { ...n, height: { kind: "fixed", px: n.frame.h } };
     geometryAlias(n, original, ctx.geometry);
@@ -19292,6 +19795,8 @@ function containerExpr(n, ctx) {
   const out = [];
   if (n.kind === "stack" && n.table)
     out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineContentFlow)
+    out.push(...inlineContentExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline)
     out.push(...inlineBaselineExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex)
@@ -19365,6 +19870,8 @@ function containerExpr(n, ctx) {
     geometryAlias(viewport, n, ctx.geometry, true);
     return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), "}", ...modifiers(viewport, ctx)];
   }
+  if (ctx.mode === "app" && n.kind === "stack" && n.contentAutoHeight?.trailingMargin)
+    out.push(`.padding(.bottom, ${num3(n.contentAutoHeight.trailingMargin)})`);
   out.push(...modifiers(n, ctx));
   if (n.kind === "stack" && n.scroll) {
     return [...out, `.frame(width: ${num3(n.frame.w)}, height: ${num3(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
@@ -19426,6 +19933,11 @@ var visit = (n, fn) => {
   for (const o of n.overlays)
     visit(o.node, fn);
 };
+
+// src/swift/comment-text.ts
+function swiftCommentText(value) {
+  return value.replace(/[\r\n\u2028\u2029]/g, " ").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, (control) => `\\u{${control.charCodeAt(0).toString(16)}}`);
+}
 
 // src/swift/measured-runtime.ts
 var MEASURED_LAYOUT_RUNTIME = `
@@ -21051,6 +21563,236 @@ nonisolated indirect enum MarkswiftIntrinsicWidth {
 }
 `;
 
+// src/swift/font-runtime.ts
+var FONT_RUNTIME = `import UIKit
+
+enum MarkswiftBundledFont {
+    /// Public static face names come from the packaged source catalog, never nearest traits.
+    /// Source or live variable axes always retain the existing family/variation descriptor.
+    nonisolated static func resolve(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil, staticFace: String? = nil) -> UIFont {
+        var axes: [Int: CGFloat] = [0x7767_6874: weight] // 'wght'
+        if let opsz { axes[0x6F70_737A] = opsz }          // 'opsz'
+        let attrs: [UIFontDescriptor.AttributeName: Any] = [
+            .family: family,
+            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
+        ]
+        let descriptor = UIFontDescriptor(fontAttributes: attrs)
+        let original = UIFont(descriptor: descriptor, size: size)
+        if let liveAxes = CTFontCopyVariationAxes(original as CTFont), CFArrayGetCount(liveAxes) > 0 {
+            return original
+        }
+        guard let staticFace, let selected = UIFont(name: staticFace, size: size) else { return original }
+        // Defensive source/registration mismatch: never replace a variable instance with a name.
+        if let liveAxes = CTFontCopyVariationAxes(selected as CTFont), CFArrayGetCount(liveAxes) > 0 {
+            return original
+        }
+        return selected
+    }
+}
+
+extension SwiftUI.Font {
+    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil, staticFace: String? = nil) -> SwiftUI.Font {
+        SwiftUI.Font(MarkswiftBundledFont.resolve(family, size: size, weight: weight, opsz: opsz, staticFace: staticFace))
+    }
+}
+`;
+
+// src/swift/inline-content-flow-runtime.ts
+var INLINE_CONTENT_FLOW_RUNTIME = `
+nonisolated struct MarkswiftInlineContentAdvance: LayoutValueKey { static let defaultValue: CGFloat? = nil }
+nonisolated struct MarkswiftInlineContentObservation: Codable, Sendable {
+    struct Item: Codable, Sendable {
+        var index: Int
+        var line: Int
+        var x: Double
+        var y: Double
+        var width: Double
+        var height: Double
+        var firstBaseline: Double?
+        var lastBaseline: Double?
+        var advance: Double
+        var separatorAdvance: Double
+        var emission: String?
+        var sourceRange: [Int]?
+        var separatorEmission: String?
+        var separatorSourceRange: [Int]?
+    }
+    var id: String
+    var phase: String
+    var proposalWidth: Double?
+    var available: Bool
+    var reason: String?
+    var usedSourceStrut: Bool
+    var items: [Item]
+    var session = 0
+    var sequence = 0
+    var mountedView: String?
+}
+nonisolated final class MarkswiftInlineContentCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observations: [MarkswiftInlineContentObservation] = []
+    private var session = 0
+    private var sequence = 0
+    private var mountedView: String?
+    func startSession(view: String) { lock.lock(); defer { lock.unlock() }; session += 1; mountedView = view }
+    func record(_ value: MarkswiftInlineContentObservation) {
+        lock.lock(); defer { lock.unlock() }; sequence += 1
+        var value = value; value.session = session; value.sequence = sequence; value.mountedView = mountedView
+        observations.append(value)
+    }
+    func encoded() throws -> Data {
+        lock.lock(); defer { lock.unlock() }
+        struct Report: Encodable {
+            var observations: [MarkswiftInlineContentObservation]
+            let scope = "actual Layout word-wrapper guides, advances and local placement; not glyph ink or TextRenderer coordinates"
+            let finalDrawSelection = "unavailable: Layout calls do not certify final draws"
+        }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(Report(observations: observations))
+    }
+}
+private struct MarkswiftInlineContentObserverKey: EnvironmentKey {
+    static let defaultValue: MarkswiftInlineContentCollector? = nil
+}
+extension EnvironmentValues {
+    var markswiftInlineContentObserver: MarkswiftInlineContentCollector? {
+        get { self[MarkswiftInlineContentObserverKey.self] }
+        set { self[MarkswiftInlineContentObserverKey.self] = newValue }
+    }
+}
+extension View {
+    func markswiftObserveInlineContent(_ collector: MarkswiftInlineContentCollector) -> some View {
+        environment(\\.markswiftInlineContentObserver, collector)
+    }
+}
+struct MarkswiftInlineContentRow<Content: View>: View {
+    var id: String
+    var strutAscent: CGFloat
+    var strutDescent: CGFloat
+    var wordCount: Int
+    var space: CGFloat
+    var margins: [CGFloat]
+    var textBaseline: CGFloat
+    var textDescent: CGFloat
+    var wordKeys: [String] = []
+    var separatorKeys: [String] = []
+    var wordRanges: [[Int]] = []
+    var separatorRanges: [[Int]] = []
+    @ViewBuilder var content: () -> Content
+    @Environment(\\.markswiftInlineContentObserver) private var observer
+    var body: some View {
+        MarkswiftInlineContentLayout(id: id, strutAscent: strutAscent, strutDescent: strutDescent,
+            wordCount: wordCount, space: space, margins: margins, textBaseline: textBaseline,
+            textDescent: textDescent, wordKeys: wordKeys, separatorKeys: separatorKeys,
+            wordRanges: wordRanges, separatorRanges: separatorRanges, observer: observer) { content() }
+    }
+}
+struct MarkswiftInlineContentLayout: Layout {
+    var id: String
+    var strutAscent: CGFloat
+    var strutDescent: CGFloat
+    var wordCount: Int
+    var space: CGFloat
+    var margins: [CGFloat]
+    var textBaseline: CGFloat
+    var textDescent: CGFloat
+    var wordKeys: [String] = []
+    var separatorKeys: [String] = []
+    var wordRanges: [[Int]] = []
+    var separatorRanges: [[Int]] = []
+    var observer: MarkswiftInlineContentCollector?
+    private struct Measurement {
+        var dimensions: [ViewDimensions]
+        var positions: [CGPoint]
+        var size: CGSize
+        var first: CGFloat
+        var last: CGFloat
+    }
+    private func measure(_ proposal: ProposedViewSize, _ subviews: Subviews, phase: String) -> Measurement {
+        let dimensions = subviews.map { $0.dimensions(in: .unspecified) }
+        guard !dimensions.isEmpty else { return Measurement(dimensions: [], positions: [], size: .zero, first: 0, last: 0) }
+        var reason: String? = subviews.count == wordCount + 1 && margins.count == 4 ? nil : "native-inline-membership-mismatch"
+        if !space.isFinite || space < 0 || !strutAscent.isFinite || !strutDescent.isFinite
+            || strutAscent < 0 || strutDescent < 0 || margins.contains(where: { !$0.isFinite || $0 < 0 }) {
+            reason = reason ?? "native-inline-input-unavailable"
+        }
+        let m = margins.count == 4 && margins.allSatisfy({ $0.isFinite && $0 >= 0 }) ? margins : [0, 0, 0, 0]
+        let availableWidth = proposal.width.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        for (index, d) in dimensions.enumerated() {
+            let first = d[.firstTextBaseline], last = d[.lastTextBaseline]
+            if !first.isFinite || !last.isFinite || first < 0 || first > d.height || !d.width.isFinite || !d.height.isFinite {
+                reason = reason ?? "native-inline-guide-unavailable"
+            } else if index > 0 && (abs(first - textBaseline) > 0.5 || abs(d.height - first - textDescent) > 0.5 || abs(last - first) > 0.5) {
+                reason = reason ?? "native-inline-font-box-mismatch"
+            }
+        }
+        let valid = reason == nil
+        var lines: [[Int]] = [[0]], xs = [CGFloat](repeating: 0, count: dimensions.count)
+        var separators = [CGFloat](repeating: 0, count: dimensions.count)
+        var advances = dimensions.map { $0.width }
+        xs[0] = m[3]
+        var x = m[3] + dimensions[0].width + m[1]
+        for index in dimensions.indices.dropFirst() {
+            let supplied = subviews[index][MarkswiftInlineContentAdvance.self]
+            let advance = supplied.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } ?? dimensions[index].width
+            advances[index] = advance
+            var separator = space.isFinite && space >= 0 ? space : 0
+            if let width = availableWidth, x + separator + advance > width, !lines.last!.isEmpty {
+                lines.append([]); x = 0; separator = 0
+            }
+            xs[index] = x + separator; separators[index] = separator
+            lines[lines.count - 1].append(index); x += separator + advance
+        }
+        var positions = [CGPoint](repeating: .zero, count: dimensions.count), observations: [MarkswiftInlineContentObservation.Item] = []
+        var y: CGFloat = 0, naturalWidth: CGFloat = 0, firstBaseline: CGFloat = 0, lastBaseline: CGFloat = 0
+        for (line, indices) in lines.enumerated() {
+            var ascent = valid ? strutAscent : 0, descent = valid ? strutDescent : 0
+            for index in indices {
+                let d = dimensions[index], first = nativeGuide(d)
+                ascent = max(ascent, first + (index == 0 ? m[0] : 0))
+                descent = max(descent, d.height - first + (index == 0 ? m[2] : 0))
+            }
+            if line == 0 { firstBaseline = ascent }
+            lastBaseline = y + ascent
+            for index in indices {
+                let d = dimensions[index], first = d[.firstTextBaseline], last = d[.lastTextBaseline]
+                positions[index] = CGPoint(x: xs[index], y: y + ascent - nativeGuide(d))
+                naturalWidth = max(naturalWidth, xs[index] + advances[index] + (index == 0 ? m[1] : 0))
+                observations.append(.init(index: index, line: line, x: Double(positions[index].x), y: Double(positions[index].y),
+                    width: Double(d.width), height: Double(d.height), firstBaseline: first.isFinite ? Double(first) : nil,
+                    lastBaseline: last.isFinite ? Double(last) : nil, advance: Double(advances[index]), separatorAdvance: Double(separators[index]),
+                    emission: index > 0 && index <= wordKeys.count ? wordKeys[index - 1] : nil,
+                    sourceRange: index > 0 && index <= wordRanges.count ? wordRanges[index - 1] : nil,
+                    separatorEmission: index > 0 && index <= separatorKeys.count ? separatorKeys[index - 1] : nil,
+                    separatorSourceRange: index > 0 && index <= separatorRanges.count ? separatorRanges[index - 1] : nil))
+            }
+            y += ascent + descent
+        }
+        observer?.record(.init(id: id, phase: phase, proposalWidth: availableWidth.map(Double.init), available: valid, reason: reason, usedSourceStrut: valid, items: observations))
+        return Measurement(dimensions: dimensions, positions: positions, size: CGSize(width: availableWidth ?? naturalWidth, height: y), first: firstBaseline, last: lastBaseline)
+    }
+    private func nativeGuide(_ d: ViewDimensions) -> CGFloat {
+        let value = d[.firstTextBaseline]
+        return value.isFinite && value >= 0 && value <= d.height ? value : d.height
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize { measure(proposal, subviews, phase: "sizeThatFits").size }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let measured = measure(ProposedViewSize(width: bounds.width, height: nil), subviews, phase: "placeSubviews")
+        for index in measured.dimensions.indices {
+            let d = measured.dimensions[index], p = measured.positions[index]
+            subviews[index].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), anchor: .topLeading,
+                proposal: ProposedViewSize(width: d.width, height: d.height))
+        }
+    }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        let measured = measure(proposal, subviews, phase: "explicitAlignment")
+        if guide == .firstTextBaseline { return measured.first }
+        if guide == .lastTextBaseline { return measured.last }
+        return nil
+    }
+}
+`;
+
 // src/swift/runtime.ts
 var SWIFT_RUNTIME = `// Generated by Markswift — runtime helpers shared by all generated views.
 import SwiftUI
@@ -21063,20 +21805,7 @@ extension Color {
     }
 }
 
-extension Font {
-    /// A bundled variable font at an exact \`wght\` (and optional \`opsz\`) axis value — the same
-    /// instance the browser rendered, instead of the nearest named weight.
-    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil) -> Font {
-        var axes: [Int: CGFloat] = [0x7767_6874: weight] // 'wght'
-        if let opsz { axes[0x6F70_737A] = opsz }          // 'opsz'
-        let attrs: [UIFontDescriptor.AttributeName: Any] = [
-            .family: family,
-            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
-        ]
-        let descriptor = UIFontDescriptor(fontAttributes: attrs)
-        return Font(UIFont(descriptor: descriptor, size: size))
-    }
-}
+${FONT_RUNTIME}
 
 extension Text {
     /// A URL-bearing span inside a styled paragraph. AttributedString keeps the link
@@ -21357,7 +22086,8 @@ ${PAINT_GRADIENT_RUNTIME}
 ${PAINT_RADIAL_RUNTIME}
 ${PAINT_CLIP_RUNTIME}
 ${FIELDSET_RUNTIME}
-${INLINE_BASELINE_RUNTIME}`;
+${INLINE_BASELINE_RUNTIME}
+${INLINE_CONTENT_FLOW_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {
@@ -21381,8 +22111,7 @@ function emitSwift(screen, viewName, opts) {
   const text = opts.textInstrumentation ? textInstrumentation(screen.root, viewName, screen.textSourceCapture) : undefined;
   const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, geometry, text, renderNode: (node) => refOf(node, ctx) };
   const w = new Writer;
-  const comment = (value) => value.replace(/[\r\n\u2028\u2029]/g, " ");
-  w.line("// Generated by Markswift — do not edit. Source: " + comment(screen.source) + " (" + comment(screen.name) + ", " + screen.theme + ")");
+  w.line("// Generated by Markswift — do not edit. Source: " + swiftCommentText(screen.source) + " (" + swiftCommentText(screen.name) + ", " + screen.theme + ")");
   w.line("import SwiftUI");
   w.line();
   w.block(`struct ${viewName}: View {`, () => {
@@ -21398,7 +22127,7 @@ function emitSwift(screen, viewName, opts) {
     });
     for (const p of props) {
       w.line();
-      w.line(`// ${comment(p.node.id)}`);
+      w.line(`// ${swiftCommentText(p.node.id)}`);
       w.block(`private var ${p.name}: some View {`, () => {
         for (const l of containerExpr(p.node, ctx))
           w.line(l);
@@ -22455,7 +23184,8 @@ import SwiftUI
 }
 
 // src/fonts/package.ts
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile as readFile3, rm, writeFile } from "node:fs/promises";
+import { createHash as createHash2 } from "node:crypto";
 import { join as join2 } from "node:path";
 
 // src/fonts/source.ts
@@ -22548,9 +23278,9 @@ function plistFragment(files) {
 `);
 }
 function registrationSwift(faces) {
-  const entries = faces.map((f) => f.file).sort().map((f) => `        ${JSON.stringify(f)},`).join(`
+  const entries = faces.map((f) => f.file).sort().map((f) => `        ${swiftStringLiteral(f)},`).join(`
 `);
-  const doc = faces.map((f) => `/// - ${f.family} (${f.file}): weight ${f.weight[0]}–${f.weight[1]}${f.axes["wght"] ? ", variable wght" : ""}${f.converted ? ", converted from WOFF2" : ""}${f.renamed ? ", name table rewritten so the CSS family name resolves" : ""}`).join(`
+  const doc = faces.map((f) => `/// - ${swiftCommentText(f.family)} (${swiftCommentText(f.file)}): weight ${f.weight[0]}–${f.weight[1]}${f.axes["wght"] ? ", variable wght" : ""}${f.converted ? ", converted from WOFF2" : ""}${f.renamed ? ", name table rewritten so the CSS family name resolves" : ""}`).join(`
 `);
   return `// Generated by Markswift — bundled webfaces of the design.
 import CoreText
@@ -22594,6 +23324,8 @@ async function packageFonts(faces, swiftDir, outDir) {
   await rm(fontsDir, { recursive: true, force: true });
   const notes = [];
   const packaged = [];
+  const filenames = new Map;
+  const publicNames = new Map;
   if (!faces.length)
     return { faces: [], plist: "", swift: "", notes };
   const groups = {};
@@ -22604,10 +23336,11 @@ async function packageFonts(faces, swiftDir, outDir) {
   await mkdir(fontsDir, { recursive: true });
   for (const k of Object.keys(groups).sort()) {
     const group = groups[k];
+    const sourceVariations = [...new Set(group.map((face) => face.variationSettings ?? null))];
     const latin = group.filter((f) => coversLatin(f.unicodeRange));
     const chosen = (latin.length ? latin : group).find((f) => f.loaded) ?? (latin.length ? latin[0] : group[0]);
     if (group.length > 1) {
-      notes.push(`approximated: font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`);
+      notes.push(`approximated: font-family ${chosen.family} ships ${group.length} ${sourceVariations.length > 1 ? "source declarations/subsets with differing variation descriptors" : "unicode-range subsets"} at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`);
     }
     if (!latin.length)
       notes.push(`unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`);
@@ -22630,6 +23363,12 @@ async function packageFonts(faces, swiftDir, outDir) {
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
     const stem = sanitize(chosen.family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
+    const filenameKey = file.toLowerCase(), existingFamily = filenames.get(filenameKey);
+    if (existingFamily !== undefined) {
+      notes.push(`unmapped: font-family ${chosen.family} has a packaged filename collision (${file}) with ${existingFamily}; skipped this face instead of overwriting its source asset`);
+      continue;
+    }
+    filenames.set(filenameKey, chosen.family);
     const dst = join2(fontsDir, file);
     const tmp = join2(fontsDir, `.${stem}.src`);
     await writeFile(tmp, bytes);
@@ -22645,7 +23384,31 @@ async function packageFonts(faces, swiftDir, outDir) {
       await writeFile(dst, bytes);
     await rm(tmp, { force: true });
     const metrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
-    packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
+    const assetHash = createHash2("sha256").update(await readFile3(dst)).digest("hex");
+    const publicAsset = tool.postScriptName ? publicNames.get(tool.postScriptName) : undefined;
+    if (publicAsset !== undefined && publicAsset !== assetHash) {
+      await rm(dst, { force: true });
+      notes.push(`unmapped: font-family ${chosen.family} has a public-name collision (${tool.postScriptName}) with a different packaged asset; skipped this face instead of registering an ambiguous source`);
+      continue;
+    }
+    if (tool.postScriptName)
+      publicNames.set(tool.postScriptName, assetHash);
+    if (tool.axes.opsz && sourceVariations.length > 1)
+      notes.push(`approximated: font-family ${chosen.family} has conflicting or unknown source variation descriptors; retained the ambiguity for optical sizing`);
+    packaged.push({
+      family: chosen.family,
+      file,
+      style: chosen.style,
+      weight: chosen.weight,
+      axes: tool.axes,
+      metrics,
+      converted: tool.converted,
+      renamed: tool.renamed,
+      ...tool.axisDefaults && Object.keys(tool.axisDefaults).length ? { axisDefaults: tool.axisDefaults } : {},
+      ...tool.axes.opsz ? { sourceVariations } : {},
+      ...tool.postScriptName ? { postScriptName: tool.postScriptName } : {},
+      assetHash
+    });
     if (!chosen.loaded)
       notes.push(`approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`);
   }
@@ -22673,13 +23436,24 @@ function bundledFamilies(pkg) {
       ...f.axes["opsz"] ? { opsz: f.axes["opsz"] } : prev?.opsz ? { opsz: prev.opsz } : {}
     };
   }
+  for (const [family, metadata] of Object.entries(out)) {
+    metadata.faces = pkg.faces.filter((face) => face.family === family).map((face) => ({
+      style: face.style,
+      weight: face.weight,
+      axes: face.axes,
+      ...face.axisDefaults ? { axisDefaults: face.axisDefaults } : {},
+      ...face.sourceVariations ? { sourceVariations: face.sourceVariations } : {},
+      ...face.postScriptName ? { postScriptName: face.postScriptName } : {},
+      ...face.assetHash ? { assetHash: face.assetHash } : {}
+    }));
+  }
   return out;
 }
 function unionFaces(docs) {
   const byKey = {};
   for (const doc of docs) {
     for (const f of doc.fonts ?? []) {
-      const key = `${f.family}|${f.style}|${f.weight.join("-")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.file ?? s.url).join(",")}`;
+      const key = `${f.family}|${f.style}|${f.weight.join("-")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.file ?? s.url).join(",")}|${JSON.stringify(f.variationSettings ?? null)}`;
       const prev = byKey[key];
       if (!prev)
         byKey[key] = f;
@@ -22749,7 +23523,7 @@ async function convert(source, options = {}) {
     });
     const assets = {};
     for (const face of fonts.faces)
-      assets[`Fonts/${face.file}`] = new Uint8Array(await readFile3(join3(fontDir, "Fonts", face.file)));
+      assets[`Fonts/${face.file}`] = new Uint8Array(await readFile4(join3(fontDir, "Fonts", face.file)));
     if (fonts.faces.length) {
       compiled.files["Font+Markswift.swift"] = fonts.swift;
       compiled.files["UIAppFonts.plist.fragment"] = fonts.plist;
@@ -22766,7 +23540,7 @@ async function convert(source, options = {}) {
 }
 
 // src/api/responsive.ts
-import { mkdir as mkdir3, mkdtemp as mkdtemp2, readFile as readFile4, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
+import { mkdir as mkdir3, mkdtemp as mkdtemp2, readFile as readFile5, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
 import { tmpdir as tmpdir2 } from "node:os";
 import { join as join4 } from "node:path";
 async function convertResponsive(source, options) {
@@ -22822,7 +23596,7 @@ async function convertResponsive(source, options) {
     const fonts = await packageFonts(unionFaces([compact.layout, regular.layout]), fontDir, work);
     const assets = {};
     for (const face of fonts.faces)
-      assets[`Fonts/${face.file}`] = new Uint8Array(await readFile4(join4(fontDir, "Fonts", face.file)));
+      assets[`Fonts/${face.file}`] = new Uint8Array(await readFile5(join4(fontDir, "Fonts", face.file)));
     const supportFiles = fonts.faces.length ? {
       "Font+Markswift.swift": fonts.swift,
       "UIAppFonts.plist.fragment": fonts.plist
@@ -22948,7 +23722,7 @@ async function runConversion(command) {
   let css;
   if (command.cssPath) {
     try {
-      css = await readFile5(command.cssPath, "utf8");
+      css = await readFile6(command.cssPath, "utf8");
     } catch (error) {
       if (error.code === "ENOENT")
         throw new Error(`CSS file not found: ${command.cssPath} (--css is optional)`);
@@ -23021,7 +23795,7 @@ async function main() {
       return 0;
     }
     if (command.kind === "version") {
-      const manifest = JSON.parse(await readFile6(new URL("../package.json", import.meta.url), "utf8"));
+      const manifest = JSON.parse(await readFile7(new URL("../package.json", import.meta.url), "utf8"));
       process.stdout.write(`${manifest.version}
 `);
       return 0;

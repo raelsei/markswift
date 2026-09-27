@@ -66,6 +66,7 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
             family,
             weight: weightRange(st.getPropertyValue("font-weight") || "normal"),
             style: styleDesc === "italic" || styleDesc === "oblique" ? styleDesc : "normal",
+            variationSettings: st.getPropertyValue("font-variation-settings").trim() || "normal",
             ...(st.getPropertyValue("unicode-range") ? { unicodeRange: st.getPropertyValue("unicode-range") } : {}),
             src,
             loaded: false,
@@ -92,7 +93,7 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
     const out: FontFaceRecord[] = [];
     for (const f of faces) {
       if (!f.src.length) continue;
-      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
+      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.variationSettings ?? ""}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const w = f.weight[0] === f.weight[1] ? String(f.weight[0]) : `${f.weight[0]} ${f.weight[1]}`;

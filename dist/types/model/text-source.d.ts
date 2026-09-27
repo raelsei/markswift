@@ -9,8 +9,8 @@ export type SourceInterval = z.infer<typeof SourceInterval>;
 export declare const SourceBoundary: z.ZodObject<{
     kind: z.ZodEnum<{
         br: "br";
-        wbr: "wbr";
         "source-newline": "source-newline";
+        wbr: "wbr";
         "fidelity-inserted": "fidelity-inserted";
     }>;
     owner: z.ZodNullable<z.ZodString>;
@@ -104,8 +104,8 @@ export declare const TextProjectionUnit: z.ZodObject<{
     boundary: z.ZodOptional<z.ZodObject<{
         kind: z.ZodEnum<{
             br: "br";
-            wbr: "wbr";
             "source-newline": "source-newline";
+            wbr: "wbr";
             "fidelity-inserted": "fidelity-inserted";
         }>;
         owner: z.ZodNullable<z.ZodString>;
@@ -139,8 +139,8 @@ export declare const TextRunSource: z.ZodObject<{
         boundary: z.ZodOptional<z.ZodObject<{
             kind: z.ZodEnum<{
                 br: "br";
-                wbr: "wbr";
                 "source-newline": "source-newline";
+                wbr: "wbr";
                 "fidelity-inserted": "fidelity-inserted";
             }>;
             owner: z.ZodNullable<z.ZodString>;

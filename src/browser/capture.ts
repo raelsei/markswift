@@ -22,6 +22,7 @@ import { readInlineStruts, attachInlineStruts } from "./inline-strut.ts";
 import { readTextSources, attachTextSources } from "./text-source.ts";
 import { unlaidOutControlTextWarnings } from "./unlaidout-control-text.ts";
 import { readMarkerLayouts, attachMarkerLayouts } from "./list-markers.ts";
+import { readSourceContentVisibility, attachSourceContentVisibility, contentVisibilityWarnings, type SourceContentVisibility } from "./content-visibility.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-h2s-root-capture";
@@ -110,7 +111,12 @@ export class BrowserCapture {
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await page.addStyleTag({ content: "*, *::before, *::after, *::marker { transition-property: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-h2s-harness", ""));
-      await settle(page, spec.hide ?? []);
+      const cdp = await this.context.newCDPSession(page);
+      let sourceVisibility: SourceContentVisibility = new Map();
+      const forcedVisibility = await settle(page, spec.hide ?? [], async () => {
+        const original = await cdp.send("DOMSnapshot.captureSnapshot", { computedStyles: ["content-visibility"] });
+        sourceVisibility = readSourceContentVisibility(original as unknown as DomSnapshot);
+      }, cdp);
       for (const name of await readKeyframeNames(page)) styleWarnings.push(`CSS @keyframes ${name} declaration is not translated; generated Swift captures only the static state`);
       const media = mediaWarning(await readMediaConditions(page));
       if (media) styleWarnings.push(media);
@@ -142,7 +148,6 @@ export class BrowserCapture {
         },
         { sel: spec.root, mark: ROOT_MARK },
       );
-      const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const textMetrics = await readTextMetrics(page, spec.root);
       const inlineStruts = await readInlineStruts(page, spec.root);
@@ -165,9 +170,11 @@ export class BrowserCapture {
       await page.evaluate(() => document.getElementById("__h2s_notransform")?.remove());
       await cdp.detach();
       const tree = snapshotToTree(snapA, snapB);
+      attachSourceContentVisibility(tree, sourceVisibility, forcedVisibility);
       attachFormSnapshot(tree, formSnapshot);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
+      styleWarnings.push(...contentVisibilityWarnings(rootRaw));
       restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);

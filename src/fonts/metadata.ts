@@ -21,6 +21,16 @@ export function bundledFamilies(pkg: FontPackage): BundledFamilies {
       ...(f.axes["opsz"] ? { opsz: f.axes["opsz"] } : prev?.opsz ? { opsz: prev.opsz } : {}),
     };
   }
+  // Keep every face for axis/ambiguity checks, while preserving normal-only legacy resolution.
+  for (const [family, metadata] of Object.entries(out)) {
+    metadata.faces = pkg.faces.filter(face => face.family === family).map(face => ({
+      style: face.style, weight: face.weight, axes: face.axes,
+      ...(face.axisDefaults ? { axisDefaults: face.axisDefaults } : {}),
+      ...(face.sourceVariations ? { sourceVariations: face.sourceVariations } : {}),
+      ...(face.postScriptName ? { postScriptName: face.postScriptName } : {}),
+      ...(face.assetHash ? { assetHash: face.assetHash } : {}),
+    }));
+  }
   return out;
 }
 
@@ -30,7 +40,7 @@ export function unionFaces(docs: Array<{ fonts?: FontFace[] }>): FontFace[] {
   const byKey: Record<string, FontFace> = {};
   for (const doc of docs) {
     for (const f of doc.fonts ?? []) {
-      const key = `${f.family}|${f.style}|${f.weight.join("-")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.file ?? s.url).join(",")}`;
+      const key = `${f.family}|${f.style}|${f.weight.join("-")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.file ?? s.url).join(",")}|${JSON.stringify(f.variationSettings ?? null)}`;
       // A face that loaded somewhere loaded: the same family is a fallback on a screen that
       // happens not to use it.
       const prev = byKey[key];

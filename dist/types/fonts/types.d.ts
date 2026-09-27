@@ -10,11 +10,19 @@ export interface PackagedFace {
     weight: [number, number];
     /** Variation axis ranges, by tag (`wght`, `opsz`, `wdth`); empty for a static face. */
     axes: Record<string, [number, number]>;
+    /** Actual fvar defaults, preserved independently of axis ranges. */
+    axisDefaults?: Record<string, number>;
+    /** All grouped source variation descriptors; unknown remains null rather than normal. */
+    sourceVariations?: Array<string | null>;
     metrics: FaceMetrics;
     /** Source format was WOFF/WOFF2 and the file was decompressed to sfnt. */
     converted: boolean;
     /** The name table was rewritten so the CSS family name resolves. */
     renamed: boolean;
+    /** Public name-table ID 6 in the final packaged asset. */
+    postScriptName?: string;
+    /** SHA-256 of the final packaged file. Missing on legacy caller-supplied metadata. */
+    assetHash?: string;
 }
 export interface FontPackage {
     faces: PackagedFace[];

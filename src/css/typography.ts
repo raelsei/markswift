@@ -7,7 +7,7 @@ export function fontWeight(s: string | undefined): number {
   if (!s) return 400;
   if (s === "bold") return 700;
   if (s === "normal") return 400;
-  const v = parseInt(s, 10);
+  const v = parseFloat(s);
   return Number.isFinite(v) ? v : 400;
 }
 

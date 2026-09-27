@@ -6,7 +6,6 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import type { CompileLayoutInput } from "../../src/compiler/batch.ts";
 import type { CorpusFixture } from "./corpus-model.ts";
-import { settle } from "../../src/browser/settle.ts";
 import { readChromeGeometry } from "./geometry-chrome.ts";
 import type { ChromeGeometry } from "./geometry.ts";
 
@@ -27,7 +26,8 @@ export class CorpusCapture {
       url: `http://markswift.local/corpus/${fixture.id}/${theme}/${width}`, html: fixture.html,
       prepare: async page => {
         await page.addStyleTag({ content: fixture.css });
-        await settle(page, []);
+      },
+      observeSnapshot: async page => {
         // Live border observations do not use the converter's DOMSnapshot or inferred IR.
         geometry = await readChromeGeometry(page, fixture.rootSelector, htmlIdentity);
       },

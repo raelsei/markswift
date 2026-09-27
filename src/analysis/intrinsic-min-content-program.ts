@@ -3,7 +3,7 @@ import type { SemNode, TextNode } from "../model/semantic.ts";
 import { insetsOf } from "./geometry.ts";
 import { usesGreedyWords } from "./text-flow-admission.ts";
 import { fieldsetAdmission } from "./fieldset-paint.ts";
-import { ordinaryIntrinsicReason, fixedPx } from "./intrinsic-min-content-admission.ts";
+import { ordinaryIntrinsicReason, fixedPx, intrinsicContainmentReason } from "./intrinsic-min-content-admission.ts";
 import { intrinsicSource, type IntrinsicSource } from "./intrinsic-min-content-source.ts";
 
 export type WidthResult = { program: IntrinsicWidth; reason?: undefined } | { reason: string; program?: undefined };
@@ -81,6 +81,10 @@ export function intrinsicContribution(node: SemNode, root = false, grouped = fal
     || !/^(block|flow-root)$/.test(joined.context.parentDisplay ?? "")
     || !/^(block|flow-root)$/.test(joined.context.parent.styles.display ?? "")))
     return { reason: "ordinary containing-block context unavailable; flex/grid/table or standalone root is unproved" };
+  if (root) {
+    const reason = intrinsicContainmentReason(joined.context.parent!);
+    if (reason) return { reason: `containing block ${reason}` };
+  }
   if (root && ["min-width", "max-width"].some(key => /^(?:min-content|max-content|fit-content)/.test(joined.context.parent!.styles[key] ?? "")))
     return { reason: "containing block has an unproved intrinsic width constraint" };
   if (root && node.kind === "control") return { reason: "atomic controls are only fixed descendant contributions" };

@@ -2,6 +2,7 @@
 import type { SemNode, TextNode, TextRun } from "../model/semantic.ts";
 import type { TextRunSource, TextSourceCapture, SourceBoundary } from "../model/text-source.ts";
 import type { EmitMode } from "./context.ts";
+import type { InlineContentToken } from "../model/inline-content-flow.ts";
 export interface TextEmission {
     key: string;
     node: string;
@@ -34,6 +35,8 @@ export interface TextInstrumentation {
     manifest: TextObservationManifest;
     keys: Map<SemNode, string>;
 }
+/** Guarded direct ASCII caption tokens; the caller proves original object/run ownership. */
+export declare function registerInlineContentEmission(node: TextNode, token: InlineContentToken, state: TextInstrumentation): TextEmission;
 /** Native custom drawing can shift decoration ink. Keep the ordinary paint path. */
 export declare function textDrawObservationUnavailable(node: TextNode): string | undefined;
 export declare function textInstrumentation(root: SemNode, namespace: string, capture?: TextSourceCapture): TextInstrumentation;

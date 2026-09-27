@@ -17,3 +17,5 @@ export declare const SYSTEM_DESIGNS: Record<string, "default" | "rounded" | "mon
  * reports by name.
  */
 export declare function fontOf(s: Record<string, string>, families?: BundledFamilies): FontSpec;
+/** Mode-independent provenance note: app keeps its existing Dynamic Type font matching. */
+export declare function fontSelectionDiagnostic(s: Record<string, string>, families?: BundledFamilies): string | undefined;

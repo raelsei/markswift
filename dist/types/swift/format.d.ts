@@ -45,9 +45,8 @@ export declare const TEXT_STYLE_SIZES: Array<[number, string]>;
  *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a
  *   variable file's default instance is whatever its `fvar` says (Bricolage Grotesque defaults
  *   to 800, not 400).
- * - **fidelity** — `.markswiftVariable(family, size:, weight:, opsz:)`: the variable axes the browser
- *   actually rendered, so an SSIM against the reference measures the design and not a weight
- *   quantisation. Nothing in this mode is shipped.
+ * - **fidelity** — exact variable coordinates, or an admitted static public source face. This
+ *   identifies the requested font route; it does not prove native/browser glyph paint equality.
  */
 export declare function fontExpr(f: FontSpec, ctx: ColorCtx): string;
 /** FNV-1a 32-bit, hex — stable names for generated shapes. */

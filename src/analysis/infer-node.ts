@@ -18,6 +18,7 @@ import { buildNativeTable, tableFallbackReason } from "./table-layout.ts";
 import { buildListSymbol, preserveSymbolLineLeading } from "./list-symbol.ts";
 import { joinIntrinsicText, joinIntrinsicContainer, joinIntrinsicControl } from "./intrinsic-min-content-source.ts";
 import { attachIntrinsicMinimum } from "./intrinsic-min-content.ts";
+import { attachInlineContentFlow } from "./inline-content-flow.ts";
 
 function buildJoinedText(host: LayoutNode, runs: SourceTextRun[], ctx: InferenceContext, leaf = false) {
   const text = buildText(host, runs, ctx, leaf);
@@ -141,7 +142,7 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
   stack.overlays = buildOverlays(n, abs, flow[0], ctx, build);
   joinIntrinsicContainer(n, stack, items, ctx);
-  return attachIntrinsicMinimum(finish(stack));
+  return attachIntrinsicMinimum(finish(attachInlineContentFlow(stack)));
 }
 
 /** Browser-computed `object-position` percentages and side keywords; length offsets need a separate CSS length model. */

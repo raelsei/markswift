@@ -148,6 +148,12 @@ export interface FontSpec {
     weight: number;
     /** Optical size axis value when the family has one (Chrome uses font-size). */
     opsz?: number;
+    /** CSS-selected static source face; fidelity only until app matching is independently proved. */
+    staticFace?: {
+        postScriptName: string;
+        matchedWeight: number;
+        assetHash: string;
+    };
     /** CSS line-height in px when explicitly set; undefined = normal. */
     lineHeight?: number;
 }
@@ -329,6 +335,9 @@ export interface SemBase extends SizeConstraints {
 }
 export interface StackNode extends SemBase {
     kind: "stack";
+    /** Guarded app-only ordinary inline continuation; captured sizes remain fallback/fidelity. */
+    inlineContentFlow?: import("./inline-content-flow.ts").InlineContentFlow;
+    contentAutoHeight?: import("./inline-content-flow.ts").ContentAutoHeight;
     axis: Axis;
     /** Uniform spacing, or one gap per adjacent pair when they differ. */
     spacing: number | number[];

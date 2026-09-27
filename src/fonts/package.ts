@@ -1,4 +1,5 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
@@ -22,6 +23,8 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
   await rm(fontsDir, { recursive: true, force: true });
   const notes: string[] = [];
   const packaged: PackagedFace[] = [];
+  const filenames = new Map<string, string>();
+  const publicNames = new Map<string, string>();
   if (!faces.length) return { faces: [], plist: "", swift: "", notes };
 
   // (family, style, weight range) is one bundled face; several `unicode-range` subsets of the
@@ -34,11 +37,12 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
   await mkdir(fontsDir, { recursive: true });
   for (const k of Object.keys(groups).sort()) {
     const group = groups[k]!;
+    const sourceVariations = [...new Set(group.map(face => face.variationSettings ?? null))];
     const latin = group.filter((f) => coversLatin(f.unicodeRange));
     const chosen = (latin.length ? latin : group).find((f) => f.loaded) ?? (latin.length ? latin[0]! : group[0]!);
     if (group.length > 1) {
       notes.push(
-        `approximated: font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
+        `approximated: font-family ${chosen.family} ships ${group.length} ${sourceVariations.length > 1 ? "source declarations/subsets with differing variation descriptors" : "unicode-range subsets"} at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
       );
     }
     if (!latin.length) notes.push(`unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`);
@@ -66,6 +70,13 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
     const stem = sanitize(chosen.family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
+    // Case-fold because common macOS filesystems cannot distinguish differently cased names.
+    const filenameKey = file.toLowerCase(), existingFamily = filenames.get(filenameKey);
+    if (existingFamily !== undefined) {
+      notes.push(`unmapped: font-family ${chosen.family} has a packaged filename collision (${file}) with ${existingFamily}; skipped this face instead of overwriting its source asset`);
+      continue;
+    }
+    filenames.set(filenameKey, chosen.family);
     const dst = join(fontsDir, file);
     const tmp = join(fontsDir, `.${stem}.src`);
     await writeFile(tmp, bytes);
@@ -85,7 +96,20 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     if (!tool.wrote) await writeFile(dst, bytes); // Already an sfnt with a matching name: copy verbatim.
     await rm(tmp, { force: true });
     const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
-    packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
+    const assetHash = createHash("sha256").update(await readFile(dst)).digest("hex");
+    const publicAsset = tool.postScriptName ? publicNames.get(tool.postScriptName) : undefined;
+    if (publicAsset !== undefined && publicAsset !== assetHash) {
+      await rm(dst, { force: true });
+      notes.push(`unmapped: font-family ${chosen.family} has a public-name collision (${tool.postScriptName}) with a different packaged asset; skipped this face instead of registering an ambiguous source`);
+      continue;
+    }
+    if (tool.postScriptName) publicNames.set(tool.postScriptName, assetHash);
+    // Grouping/subset choice cannot prove that a discarded source descriptor was normal.
+    if (tool.axes.opsz && sourceVariations.length > 1) notes.push(`approximated: font-family ${chosen.family} has conflicting or unknown source variation descriptors; retained the ambiguity for optical sizing`);
+    packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed,
+      ...(tool.axisDefaults && Object.keys(tool.axisDefaults).length ? { axisDefaults: tool.axisDefaults } : {}),
+      ...(tool.axes.opsz ? { sourceVariations } : {}),
+      ...(tool.postScriptName ? { postScriptName: tool.postScriptName } : {}), assetHash });
     if (!chosen.loaded) notes.push(`approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`);
   }
 

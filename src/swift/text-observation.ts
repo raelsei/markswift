@@ -2,6 +2,7 @@
 import type { SemNode, TextNode, TextRun } from "../model/semantic.ts";
 import type { TextRunSource, TextSourceCapture, SourceBoundary } from "../model/text-source.ts";
 import type { EmitMode } from "./context.ts";
+import type { InlineContentToken } from "../model/inline-content-flow.ts";
 
 export interface TextEmission {
   key: string; node: string; run: number; kind: "text-run" | "greedy-word" | "flow-separator" | "inline-gap";
@@ -15,6 +16,22 @@ export interface TextObservationManifest {
   emissions: TextEmission[];
 }
 export interface TextInstrumentation { manifest: TextObservationManifest; keys: Map<SemNode, string> }
+
+/** Guarded direct ASCII caption tokens; the caller proves original object/run ownership. */
+export function registerInlineContentEmission(node: TextNode, token: InlineContentToken, state: TextInstrumentation): TextEmission {
+  const nodeKey = state.keys.get(node);
+  if (!nodeKey) throw new Error("Inline caption observation occurrence unavailable");
+  const key = `${nodeKey}/runs/0/inline-${token.kind}/${token.rawRange[0]}`;
+  if (state.manifest.emissions.some(entry => entry.key === key)) throw new Error("Duplicate inline caption emission occurrence");
+  const entry: TextEmission = { key, node: nodeKey, run: 0, kind: token.kind === "word" ? "greedy-word" : "flow-separator",
+    value: token.value, literalUTF16Length: token.value.length, ...(token.source ? { source: structuredClone(token.source) } : {}),
+    fontBinding: "shared-supplied-ui-font; actual-font-name-recorded-natively",
+    unavailable: [...(token.source ? [] : ["source lineage unavailable"]),
+      ...(token.kind === "separator" ? ["Layout-gap advance is not TextRenderer glyph geometry; native draw coverage unavailable"] : []),
+      "native final-draw and source cluster scope unavailable"],
+    hardLines: [{ key: `${key}/hard-line/0`, valueRange: [0, token.value.length] }] };
+  state.manifest.emissions.push(entry); return entry;
+}
 
 /** Native custom drawing can shift decoration ink. Keep the ordinary paint path. */
 export function textDrawObservationUnavailable(node: TextNode): string | undefined {

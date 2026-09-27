@@ -60,6 +60,8 @@ export interface LayoutNode {
   attrs: Record<string, string>;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
+  /** Original measured content-visibility before capture forces auto subtrees visible; absent is unknown. */
+  sourceContentVisibility?: string;
   /** Boxless custom ancestors flattened by `display: contents`; their semantics need a diagnostic. */
   flattenedCustomElements?: Array<{ tag: string; id?: string }>;
   /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
@@ -103,6 +105,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
     styles: z.record(z.string(), z.string()),
+    sourceContentVisibility: z.string().optional(),
     flattenedCustomElements: z.array(z.object({ tag: z.string(), id: z.string().optional() })).optional(),
     preferredSize: PreferredSize.optional(),
     markerLayout: MarkerLayout.optional(),
@@ -134,6 +137,8 @@ export const FontFace = z.object({
   /** Resolved `font-weight` range; a single weight is `[w, w]`, a variable range `[100, 900]`. */
   weight: z.tuple([z.number(), z.number()]),
   style: z.enum(["normal", "italic", "oblique"]),
+  /** Source @font-face axis overrides; absent legacy metadata means unknown. */
+  variationSettings: z.string().optional(),
   /** `unicode-range`, verbatim, when the face declares one — a subsetted face covers only part of the text. */
   unicodeRange: z.string().optional(),
   /**
@@ -192,6 +197,11 @@ export type LayoutDoc = z.infer<typeof LayoutDoc>;
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
 export const STYLE_WHITELIST = [
   "appearance",
+  "contain",
+  "content-visibility",
+  "word-spacing",
+  "line-break",
+  "hyphens",
   "align-content",
   "align-items",
   "align-self",

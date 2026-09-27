@@ -12,6 +12,28 @@ function subject(doc = intrinsicMinContentFixture()) {
   return root.children[0]! as typeof root.children[number] & { intrinsicMinWidth?: { program?: unknown; authoredMaxWidth?: number } };
 }
 
+for (const location of ["root", "descendant"] as const) {
+  test.each([undefined, "auto", "hidden"])(`post-settle visible cannot authorize ${location} source visibility:%s`, original => {
+    const doc = location === "root" ? intrinsicMinContentFixture() : nestedMinContentFixture();
+    const source = location === "root" ? doc.root.children[0]! : doc.root.children[0]!.children[0]!;
+    if (original === undefined) delete source.sourceContentVisibility; else source.sourceContentVisibility = original;
+    const node = subject(doc);
+    expect(source.styles["content-visibility"]).toBe("visible");
+    expect(node.intrinsicMinWidth?.program).toBeUndefined();
+    expect(node.notes.join(" ")).toContain("source content-visibility");
+  });
+}
+
+test.each(["containment", "rewritten-auto", "missing-origin"])("containing block %s cannot authorize a supplied-font minimum", kind => {
+  const doc = intrinsicMinContentFixture();
+  if (kind === "containment") doc.root.styles.contain = "size";
+  if (kind === "rewritten-auto") doc.root.sourceContentVisibility = "auto";
+  if (kind === "missing-origin") delete doc.root.sourceContentVisibility;
+  const node = subject(doc);
+  expect(node.intrinsicMinWidth?.program).toBeUndefined();
+  expect(node.notes.join(" ")).toContain("containing block");
+});
+
 test("ordinary fill min-content replaces only the app captured floor with supplied-font words", () => {
   const doc = intrinsicMinContentFixture(), node = subject(doc);
   expect(node.width).toEqual({ kind: "fill" }); expect(node.minWidth).toBe(358);
@@ -104,6 +126,22 @@ test.each(["flex", "grid"])("parent %s cannot authorize a replacement through ch
   expect(node.intrinsicMinWidth?.program).toBeUndefined();
   expect(node.notes.join(" ")).toContain("containing-block context unavailable");
 });
+
+for (const location of ["root", "descendant"] as const) {
+  test.each([
+    ["contain", undefined], ["content-visibility", undefined],
+    ["contain", "size"], ["contain", "inline-size"], ["contain", "layout"],
+    ["content-visibility", "auto"], ["content-visibility", "hidden"],
+  ] as const)(`${location} %s:%s cannot authorize intrinsic content without known containment`, (property, value) => {
+    const doc = location === "root" ? intrinsicMinContentFixture() : nestedMinContentFixture();
+    const source = doc.root.children[0]!;
+    const candidate = location === "root" ? source : source.children[0]!;
+    if (value === undefined) delete candidate.styles[property]; else candidate.styles[property] = value;
+    const node = subject(doc);
+    expect(node.intrinsicMinWidth?.program).toBeUndefined();
+    expect(node.notes.join(" ")).toContain("containment");
+  });
+}
 
 test("standalone capture root does not establish an external containing block", () => {
   const doc = intrinsicMinContentFixture(); doc.root = doc.root.children[0]!;

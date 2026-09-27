@@ -10,9 +10,11 @@ export interface FontToolResult {
   lineGap: number;
   useTypoMetrics: boolean;
   axes: Record<string, [number, number]>;
+  axisDefaults?: Record<string, number>;
   converted: boolean;
   renamed: boolean;
   wrote: boolean;
+  postScriptName?: string;
 }
 
 

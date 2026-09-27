@@ -22,6 +22,8 @@ const result = await convertHtml('<main data-markswift-root style="width:120px;h
 if (!result.code.includes("struct NodeView: View") || !result.code.includes("Node works") || result.layout.size.w !== 120) process.exit(1);
 const font = await convertHtml('<main data-markswift-root style="width:120px;height:40px">Node font</main>', { name: "NodeFont", css: '@font-face{font-family:Broken;src:url(data:font/woff2;base64,d09GMmludmFsaWQtZm9udA==) format("woff2")}main{font-family:Broken}' });
 if (!font.warnings.some(note => note.includes("Broken could not be packaged"))) process.exit(1);
+const visibility = await convertHtml('<main data-markswift-root style="width:120px;height:40px;content-visibility:auto">Settled safely</main>', { name: "NodeVisibility", untrustedInput: true });
+if (visibility.layout.root.sourceContentVisibility !== "auto" || visibility.layout.root.styles["content-visibility"] !== "visible" || !visibility.warnings.some(note => note.includes("was forced"))) throw new Error("Bundled CSP capture lost actual visibility overrides");
 `);
     const node = Bun.spawn(["node", consumer], { cwd: repo, stdout: "pipe", stderr: "pipe" });
     const [error, code] = await Promise.all([new Response(node.stderr).text(), node.exited]);

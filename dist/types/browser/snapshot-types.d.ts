@@ -14,6 +14,7 @@ export interface DomSnapshot {
         documentURL: number;
         nodes: {
             nodeType: number[];
+            backendNodeId?: number[];
             nodeName: number[];
             nodeValue: number[];
             parentIndex: number[];
@@ -50,11 +51,14 @@ export interface DomSnapshot {
 }
 export interface Raw {
     idx: number;
+    backendNodeId?: number;
     type: number;
     name: string;
     value: string;
     attrs: Record<string, string>;
     styles: Record<string, string>;
+    sourceContentVisibility?: LayoutNode["sourceContentVisibility"];
+    visibilityWasForced?: true;
     preferredSize?: LayoutNode["preferredSize"];
     markerLayout?: LayoutNode["markerLayout"];
     inlineStrut?: LayoutNode["inlineStrut"];

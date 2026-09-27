@@ -10,6 +10,7 @@ import { classifyElement } from "../html/policy.ts";
 import { markerPaintRect } from "./list-symbol.ts";
 import { relativePosition } from "./relative-position.ts";
 import { fieldsetMetadata } from "./fieldset-paint.ts";
+import { fontSelectionDiagnostic } from "./typography.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = worst(node.notes);
@@ -29,6 +30,8 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
   const notes: string[] = [];
+  const fontDiagnostic = fontSelectionDiagnostic(n.styles, ctx.bundledFamilies);
+  if (fontDiagnostic) notes.push(fontDiagnostic);
   // The root capture rebases its painted border to the viewport; its external flow slot is
   // outside the converted subtree. Descendants retain separate flow and paint positions.
   const relative = ctx.parent ? relativePosition(n) : {};

@@ -5,7 +5,7 @@ import { parseColor, fontFamilies, round2, px, parseShadows } from "../css/index
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf } from "./text-runs.ts";
 import { hostSpace, inlineChain } from "./text-layout.ts";
-import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
+import { fontOf, fontSelectionDiagnostic, SYSTEM_DESIGNS } from "./typography.ts";
 import { textPaintOf } from "./style.ts";
 import { unionRect } from "./geometry.ts";
 import { applyInlineEffects, inlineBoxHasPaint } from "./inline-effects.ts";
@@ -96,6 +96,8 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     pendingSpace = false;
     prevRun = r;
     const run: TextRun = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    const fontDiagnostic = fontSelectionDiagnostic(s, ctx.bundledFamilies);
+    if (fontDiagnostic) note(fontDiagnostic);
     if (source) run.source = source;
     // The family the run ends up with: a design that ships a web font we do not bundle, or names
     // `cursive`/`fantasy`, silently gets SF Pro instead — the report has to say which family went.

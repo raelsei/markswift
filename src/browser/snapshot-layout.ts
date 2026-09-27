@@ -84,6 +84,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
     tag: raw.name,
     attrs: raw.attrs,
     styles: raw.styles,
+    ...(raw.sourceContentVisibility !== undefined ? { sourceContentVisibility: raw.sourceContentVisibility } : {}),
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
     ...(raw.preferredSize ? { preferredSize: raw.preferredSize } : {}),

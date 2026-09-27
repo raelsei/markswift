@@ -22,6 +22,7 @@ export function snapshotToTree(snap: DomSnapshot, boxes?: DomSnapshot): Raw {
     for (let k = 0; k + 1 < a.length; k += 2) attrs[str(a[k]!).toLowerCase()] = str(a[k + 1]!);
     raws[i] = {
       idx: i,
+      ...(doc.nodes.backendNodeId?.[i] !== undefined ? { backendNodeId: doc.nodes.backendNodeId[i] } : {}),
       type: doc.nodes.nodeType[i]!,
       name: str(doc.nodes.nodeName[i]!).toLowerCase(),
       value: str(doc.nodes.nodeValue[i]!),

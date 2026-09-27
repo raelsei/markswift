@@ -10,6 +10,7 @@ export function intrinsicMinContentFixture(): LayoutDoc {
     "font-variant-position": "normal", "font-variant-alternates": "normal", "font-variant-numeric": "normal",
     "font-optical-sizing": "auto", "font-size-adjust": "none", "font-stretch": "100%",
     "font-synthesis": "weight style small-caps", "unicode-bidi": "normal", position: "static", float: "none",
+    contain: "none", "content-visibility": "visible",
     "min-width": "auto", "max-width": "none", "min-height": "auto", "max-height": "none",
   };
   for (const edge of ["top", "right", "bottom", "left"]) Object.assign(styles, {
@@ -17,7 +18,7 @@ export function intrinsicMinContentFixture(): LayoutDoc {
   });
   const text = "Alpha Supercalifragilisticexpialidocious Beta";
   const subject: LayoutNode = {
-    id: "subject", tag: "div", attrs: {}, styles: { ...styles, "min-width": "min-content" },
+    id: "subject", tag: "div", attrs: {}, sourceContentVisibility: "visible", styles: { ...styles, "min-width": "min-content" },
     preferredSize: { width: "auto", height: "auto", horizontalAutoMargins: [false, false] },
     bounds: { x: 16, y: 16, w: 358, h: 46 }, children: [{
       tag: "#text", attrs: {}, styles: {}, text, firstBaseline: 43,
@@ -30,7 +31,7 @@ export function intrinsicMinContentFixture(): LayoutDoc {
   });
   return { version: 1, source: "intrinsic-min-content.html", combo: { screen: "minimum", theme: "light", demoState: "normal" },
     size: { w: 390, h: 380 }, dpr: 2, canvas: "white", fonts: [], root: {
-      id: "root", tag: "main", attrs: {}, styles: { ...styles, "padding-left": "16px", "padding-right": "16px" },
+      id: "root", tag: "main", attrs: {}, sourceContentVisibility: "visible", styles: { ...styles, "padding-left": "16px", "padding-right": "16px" },
       preferredSize: { width: "100%", height: "380px" }, bounds: { x: 0, y: 0, w: 390, h: 380 }, children: [subject],
     } };
 }
@@ -59,12 +60,12 @@ export function fieldsetMinContentFixture(): LayoutDoc {
   const text = (raw: string, x: number, y: number, w: number): LayoutNode => ({ tag: "#text", attrs: {}, styles: {}, text: raw,
     firstBaseline: y + 13, bounds: { x, y, w, h: 17 }, lines: [{ bounds: { x, y, w, h: 17 }, start: 0, length: raw.length, baseline: y + 13 }], children: [] });
   const preferredSize = { width: "auto", height: "auto", horizontalAutoMargins: [false, false] as [boolean, boolean] };
-  const legend: LayoutNode = { id: "legend", tag: "legend", attrs: {}, styles: { ...styles, "padding-left": "5px", "padding-right": "5px" },
+  const legend: LayoutNode = { id: "legend", tag: "legend", attrs: {}, sourceContentVisibility: "visible", styles: { ...styles, "padding-left": "5px", "padding-right": "5px" },
     preferredSize, bounds: { x: 29, y: 16, w: 133, h: 20 }, children: [text("Export preferences", 34, 17, 123)] };
-  const widget: LayoutNode = { id: "widget", tag: "input", attrs: { type: "checkbox", checked: "" },
+  const widget: LayoutNode = { id: "widget", tag: "input", attrs: { type: "checkbox", checked: "" }, sourceContentVisibility: "visible",
     styles: { ...styles, appearance: "auto", "margin-left": "4px", "margin-right": "3px", "margin-top": "3px", "margin-bottom": "3px" },
     preferredSize, inlineControlMargins: [3, 3, 3, 4], bounds: { x: 33, y: 45, w: 13, h: 13 }, children: [] };
-  const row: LayoutNode = { id: "row", tag: "label", attrs: {}, styles, preferredSize,
+  const row: LayoutNode = { id: "row", tag: "label", attrs: {}, sourceContentVisibility: "visible", styles, preferredSize,
     bounds: { x: 29, y: 42, w: 332, h: 20 }, children: [widget, text(" Include diagnostics", 49, 43, 129)] };
   fieldset.children = [legend, row];
   return doc;

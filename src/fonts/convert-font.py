@@ -40,7 +40,9 @@ print(json.dumps({
     "lineGap": os2.sTypoLineGap if typo else hhea.lineGap,
     "useTypoMetrics": typo,
     "axes": {a.axisTag: [a.minValue, a.maxValue] for a in font["fvar"].axes} if "fvar" in font else {},
+    "axisDefaults": {a.axisTag: a.defaultValue for a in font["fvar"].axes} if "fvar" in font else {},
     "converted": flavor is not None,
     "renamed": renamed,
     "wrote": renamed or flavor is not None,
+    "postScriptName": name.getDebugName(6),
 }))

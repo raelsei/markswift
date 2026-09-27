@@ -6,16 +6,26 @@ export const fixedPx = (value: string | undefined): boolean => value !== undefin
 const zero = (value: string | undefined) => value === "0" || value === "0px";
 const unconstrained = (value: string | undefined, minimum = false) => value === "auto" || value === "none" || (minimum && zero(value));
 
-/** Indentation alters the first-line intrinsic contribution; ordinary word advances omit it. */
-function textIndentReason(source: LayoutNode): string | undefined {
+export function intrinsicContainmentReason(source: LayoutNode): string | undefined {
+  const contain = source.styles.contain, visibility = source.styles["content-visibility"];
+  if (contain === undefined || visibility === undefined) return "containment metadata unavailable";
+  if (contain !== "none" || visibility !== "visible") return `unsupported containment: contain:${contain}, content-visibility:${visibility}`;
+  if (source.sourceContentVisibility === undefined) return "source content-visibility metadata unavailable";
+  if (source.sourceContentVisibility !== "visible") return `unsupported source content-visibility:${source.sourceContentVisibility}`;
+}
+
+/** Indentation and containment can change contributions independently of word advances. */
+function sourceContributionReason(source: LayoutNode): string | undefined {
   if (source.styles.display === "none") return;
   if (source.tag !== "#text") {
+    const containment = intrinsicContainmentReason(source);
+    if (containment) return containment;
     const value = source.styles["text-indent"];
     if (value === undefined) return "text-indent metadata unavailable";
     if (!zero(value)) return `unsupported text-indent:${value}`;
   }
   for (const child of source.children) {
-    const reason = textIndentReason(child);
+    const reason = sourceContributionReason(child);
     if (reason) return reason;
   }
 }
@@ -34,11 +44,11 @@ export function ordinaryIntrinsicReason(source: LayoutNode, sem: SemNode, root =
   if (source.tag.startsWith("::") || source.flattenedCustomElements?.length) return "generated or flattened source topology";
   if ((s.position ?? "static") !== "static" || (s.float ?? "none") !== "none") return "out-of-flow, relative or floated contribution";
   if (sem.overlays.length || sem.style.clip || sem.style.transform || sem.style.hidden
-    || ["transform", "contain", "content-visibility"].some(key => s[key] && !/^(none|visible)$/.test(s[key]!))) return "complex/contained content";
+    || (s.transform !== undefined && s.transform !== "none")) return "complex/contained content";
   if (["overflow-x", "overflow-y"].some(key => s[key] && s[key] !== "visible")) return "clipped or scrolling contribution";
   if (!["left", "right"].every(edge => fixedPx(s[`padding-${edge}`]) && fixedPx(s[`border-${edge}-width`]))) return "physical content insets unavailable";
   if (!root && (!unconstrained(s["min-width"], true) || !unconstrained(s["max-width"]))) return "constrained descendant contribution is unproved";
   if (!root && sem.intrinsicMinWidth) return "constrained descendant contribution is unproved";
   if (root && s["max-width"] === "none" && sem.maxWidth !== undefined) return "synthesized captured width cap";
-  return textIndentReason(source) ?? intrinsicFontSettingsReason(source);
+  return sourceContributionReason(source) ?? intrinsicFontSettingsReason(source);
 }
