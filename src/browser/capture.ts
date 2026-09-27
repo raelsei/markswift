@@ -20,6 +20,7 @@ import { mediaWarning, readMediaConditions } from "./media.ts";
 import { readTextMetrics, attachTextMetrics } from "./text-metrics.ts";
 import { readInlineStruts, attachInlineStruts } from "./inline-strut.ts";
 import { readTextSources, attachTextSources } from "./text-source.ts";
+import { unlaidOutControlTextWarnings } from "./unlaidout-control-text.ts";
 import { readMarkerLayouts, attachMarkerLayouts } from "./list-markers.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
@@ -173,6 +174,7 @@ export class BrowserCapture {
       attachTextMetrics(rootRaw, textMetrics);
       attachInlineStruts(rootRaw, inlineStruts);
       attachTextSources(rootRaw, textSources);
+      styleWarnings.push(...unlaidOutControlTextWarnings(rootRaw.textSourceCapture));
       attachMarkerLayouts(rootRaw, markerLayouts);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);

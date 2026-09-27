@@ -8356,6 +8356,25 @@ function attachTextSources(root, input) {
   root.textSourceCapture = capture;
 }
 
+// src/browser/unlaidout-control-text.ts
+function unlaidOutControlTextWarnings(capture) {
+  if (!capture)
+    return [];
+  const warnings = [];
+  for (const source of capture.occurrences) {
+    if (source.kind !== "text" || source.origin !== "dom" || source.join !== "verified" || source.layoutPresent)
+      continue;
+    if (source.ancestors.some((ancestor) => ancestor.display === "none" || /^(script|style|template|noscript)$/.test(ancestor.tag)))
+      continue;
+    const controls = [...new Set(source.raw.match(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g) ?? [])];
+    if (!controls.length)
+      continue;
+    const names = controls.map((control) => `U+${control.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`).join(", ");
+    warnings.push(`Source text ${source.key} contains ${names} without a measured text layout; its raw source is retained, native control-glyph rendering remains unproved`);
+  }
+  return warnings;
+}
+
 // src/browser/list-markers.ts
 async function readMarkerLayouts(page, selector, cdp) {
   const captured = await page.evaluate((selector) => {
@@ -8554,6 +8573,7 @@ class BrowserCapture {
       attachTextMetrics(rootRaw, textMetrics);
       attachInlineStruts(rootRaw, inlineStruts);
       attachTextSources(rootRaw, textSources);
+      styleWarnings.push(...unlaidOutControlTextWarnings(rootRaw.textSourceCapture));
       attachMarkerLayouts(rootRaw, markerLayouts);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
