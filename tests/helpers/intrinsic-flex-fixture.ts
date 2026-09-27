@@ -7,7 +7,8 @@ export function intrinsicFlexFixture(wrapping = true, link = false): LayoutDoc {
     "font-kerning": "auto", "font-feature-settings": "normal", "font-variation-settings": "normal",
     "font-variant-ligatures": "normal", "font-variant-caps": "normal", "font-variant-east-asian": "normal",
     "font-variant-position": "normal", "font-variant-alternates": "normal", "font-variant-numeric": "normal",
-    "font-optical-sizing": "auto", "font-size-adjust": "none", "font-synthesis": "weight style small-caps", "unicode-bidi": "normal" };
+    "font-optical-sizing": "auto", "font-size-adjust": "none", "font-stretch": "100%", "font-width": "",
+    "font-synthesis": "weight style small-caps", "unicode-bidi": "normal" };
   const definitions = wrapping ? [["Alpha Beta", 90, 0, 0], ["Gamma", 75, 98, 0], ["Delta Echo", 95, 0, 38]] as const
     : [["Two labels", 90, 0, 0], ["Open link", 75, 125, 0]] as const;
   const children: LayoutNode[] = definitions.map(([text, width, x, y], index): LayoutNode => ({

@@ -23,6 +23,8 @@ export interface CaptureRequest {
     waitFor?: string;
     /** Hook after load, before settle (class toggles etc.). */
     prepare?(page: Page): Promise<void>;
+    /** Verification-only read hook after static settle, immediately before source/snapshot reads. */
+    observeSnapshot?(page: Page): Promise<void>;
 }
 /** Stable node identity for re-sync. `path` = element-index path from the capture root ("0/2/1"); `tag` lower-case; `attrs` raw. */
 export type NodeIdentity = (tag: string, attrs: Record<string, string>, path: string) => string | undefined;

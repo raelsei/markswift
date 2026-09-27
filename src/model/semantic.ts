@@ -117,6 +117,8 @@ export interface TextDecoration {
 
 export interface TextRun {
   text: string;
+  /** Optional ordered raw UTF16 source projection; independently validated when observing text. */
+  source?: import("./text-source.ts").TextRunSource;
   /** Navigable absolute URL for an inline link; relative targets require an app route. */
   href?: string;
   font: FontSpec;
@@ -283,6 +285,13 @@ export interface StackNode extends SemBase {
   allocation?: { tracks: AllocationTrack[] };
   /** Plain auto-basis items measured natively before line collection and shrink allocation. */
   intrinsicFlex?: { wrapping: boolean; columnGap: number; rowGap: number; shrink: number[]; automaticMinimum: boolean[] };
+  /** Guarded single ordinary inline line; native guide failures are reported by the runtime. */
+  inlineBaseline?: {
+    strutAscent: number; strutDescent: number;
+    /** Captured physical CSS padding + painted border; excludes inferred inline line-tail slack. */
+    sourceInsets: [number, number, number, number];
+    items: Array<{ kind: "widget" | "text"; baseline: number; height: number; top: number; bottom: number }>;
+  };
   /** Proven column definitions and cell spans, independent of DOM wrapper boxes. */
   table?: TableLayout;
   children: SemNode[];
@@ -317,6 +326,8 @@ export interface TextNode extends SemBase {
   /** Source element, retained so emitters can scope text-layout strategies safely. */
   sourceTag?: string;
   runs: TextRun[];
+  /** Omitted source runs stay explicit; suppression is not inferred from a missing glyph box. */
+  sourceAccounting?: import("./text-source.ts").TextRunSource;
   align: "leading" | "center" | "trailing";
   lineLimit?: number;
   truncate?: boolean;
@@ -490,6 +501,8 @@ export interface Screen {
   version: 1;
   name: string;
   source: string;
+  /** Converter-side raw occurrence claims; only opt-in text observation serializes them. */
+  textSourceCapture?: import("./text-source.ts").TextSourceCapture;
   theme: "light" | "dark";
   size: { w: number; h: number };
   /** Backdrop behind the root, from the design. */

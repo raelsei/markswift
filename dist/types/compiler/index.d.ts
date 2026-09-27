@@ -10,6 +10,8 @@ export interface CompileOptions {
     fontMetrics?: Record<string, FaceMetrics>;
     /** Verification-only passive SwiftUI frame observations. Omitted by default. */
     geometryInstrumentation?: boolean;
+    /** Verification-only source claims and passive TextRenderer observation; opt-in. */
+    textInstrumentation?: boolean;
 }
 export interface CompileResult {
     name: string;
@@ -20,6 +22,7 @@ export interface CompileResult {
     /** Emitted semantic nodes by mapping confidence; does not measure visual fidelity. */
     mapping: SwiftOutput["mapping"];
     geometry?: SwiftOutput["geometry"];
+    text?: SwiftOutput["text"];
 }
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
 export declare function compileLayout(layout: LayoutDoc, options?: CompileOptions): CompileResult;

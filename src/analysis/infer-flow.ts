@@ -11,6 +11,7 @@ import { measuredLayoutOf } from "./measured-layout.ts";
 import { px } from "../css/syntax.ts";
 import { flowFrame, relativeFallback } from "./relative-position.ts";
 import { buildIntrinsicFlex } from "./intrinsic-flex.ts";
+import { inlineBaselineOf } from "./inline-baseline.ts";
 
 /** Build a grid-free flow stack and decide whether measured overflow needs scrolling. */
 export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis: Axis, display: string, ctx?: InferenceContext): StackNode {
@@ -29,6 +30,7 @@ export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChil
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
     if (lines[0]!.some((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""))) notes.push("approximated: float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0]!, "start", "start");
+    stack.inlineBaseline = inlineBaselineOf(n, lines[0]!, stack, ctx);
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""));
     if (floats.length) notes.push("approximated: float → side-by-side row; text does not wrap around it");

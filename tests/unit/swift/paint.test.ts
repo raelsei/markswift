@@ -80,11 +80,30 @@ test("blended radial paint and masks use the same live geometry contract", () =>
   expect(result.code).toContain("extent: .closestSide");
 });
 
-test("radial text and captured pixel stop limitations remain visible in diagnostics", () => {
+test("live pixel stops are emitted while captured text and excluded fields retain diagnostics", () => {
   const text = compileLayout(gradientFixture(`radial-gradient(${ramp})`, { "background-clip": "text", color: "rgba(0,0,0,0)" }), { name: "RadialText" });
   expect(text.diagnostics.flatMap(row => row.notes).join(" ")).toContain("elliptical radial text fill");
   const pixels = compileLayout(gradientFixture("radial-gradient(ellipse, rgb(0,0,0) 0px, rgb(255,255,255) 60px)"), { name: "PixelGradient" });
-  expect(pixels.diagnostics.flatMap(row => row.notes).join(" ")).toContain("absolute gradient stop positions");
+  expect(pixels.code).toContain("stopPositions: [.points(0.0), .points(60.0)]");
+  expect(pixels.diagnostics.flatMap(row => row.notes).join(" ")).not.toContain("absolute gradient stop positions");
+  for (const [background, styles] of [
+    ["radial-gradient(ellipse, rgb(0,0,0) 0px, rgb(255,255,255) 60px)", { "background-clip": "text", color: "rgba(0,0,0,0)" }],
+    ["repeating-linear-gradient(90deg, rgb(0,0,0) 0px, rgb(255,255,255) 60px)", {}],
+    ["radial-gradient(ellipse, rgb(0,0,0) -20px, rgb(255,255,255) 60px)", {}],
+  ] as const) {
+    const result = compileLayout(gradientFixture(background, styles), { name: "CapturedGradient" });
+    expect(result.diagnostics.flatMap(row => row.notes).join(" ")).toContain("absolute gradient stop positions");
+    expect(result.code).not.toContain("stopPositions:");
+  }
+});
+
+test("circular radial text styles preserve stops beyond the ending radius", () => {
+  const result = compileLayout(gradientFixture("radial-gradient(circle 50px, rgb(255,0,0) 0%, rgb(0,0,255) 150%)", {
+    "background-clip": "text", color: "rgba(0,0,0,0)",
+  }), { name: "ExtendedRadialText" });
+  expect(result.code).toContain("endRadius: 75.0");
+  expect(result.code).toContain("location: 1.0");
+  expect(result.code).not.toContain("location: 1.5");
 });
 
 test.each(["linear-gradient(90deg", "radial-gradient(circle 80px at 20% 50%", "conic-gradient(from 0deg"])("%s content clipping masks a full paint field", prefix => {

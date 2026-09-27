@@ -2,6 +2,7 @@ import type { Color } from "../css/index.ts";
 import type { Screen, SemNode } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 import type { GeometryInstrumentation, GeometryManifest } from "./geometry-observation.ts";
+import type { TextInstrumentation, TextObservationManifest } from "./text-observation.ts";
 /** Counts of emitted semantic nodes by mapping confidence. This is not visual fidelity. */
 export interface NodeMapping {
   total: number;
@@ -20,6 +21,7 @@ export interface SwiftOutput {
   mapping: NodeMapping;
   /** Verification-only observation identities; actual geometry comes from SwiftUI at runtime. */
   geometry?: GeometryManifest;
+  text?: TextObservationManifest;
 }
 
 /**
@@ -35,6 +37,8 @@ export interface EmitOptions {
   mode: EmitMode;
   /** Opt-in passive native frame observations. Default output is unchanged. */
   geometryInstrumentation?: boolean;
+  /** Verification-only source attributes and passive text layout observations. */
+  textInstrumentation?: boolean;
   /** Design tokens of the run, bound to this screen; absent = every colour stays a literal. */
   tokens?: ScreenTokens;
 }
@@ -51,6 +55,7 @@ export interface EmitContext {
   screen: Screen;
   mode: EmitMode;
   geometry?: GeometryInstrumentation;
+  text?: TextInstrumentation;
   /** `@State` names and action callbacks of this screen's controls. */
   control: ControlMembers;
   /** This screen's colour → token lookup; see `colorExpr`. */

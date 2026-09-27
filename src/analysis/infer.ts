@@ -14,7 +14,7 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
   if (ctx.fixed.length) root.overlays.push(...buildOverlays(doc.root, ctx.fixed, undefined, ctx, build));
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
-  return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
+  return { version: 1, name, source: doc.source, ...(doc.root.textSourceCapture ? { textSourceCapture: doc.root.textSourceCapture } : {}), theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
 export { fontOf } from "./typography.ts";

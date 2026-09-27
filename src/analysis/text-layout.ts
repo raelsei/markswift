@@ -7,6 +7,7 @@ import { type MeasuredTextRun } from "./context.ts";
 import { fontOf } from "./typography.ts";
 import { decorationOf, contains, collapseOf } from "./text-runs.ts";
 import { edgeWidth, unionRect, insetsOf } from "./geometry.ts";
+import { trimTextSource } from "./text-provenance.ts";
 
 /**
  * Fraction of a glyph box that sits above the baseline. DOMSnapshot text bounds are em boxes
@@ -58,7 +59,8 @@ function inlineInset(el: LayoutNode, side: "left" | "right"): number {
 
 /** A run that paints no glyphs; `font` and `color` follow its neighbour so the line metrics hold. */
 function gapRun(neighbour: TextRun, gap: number): TextRun {
-  return { text: "", font: neighbour.font, color: neighbour.color, gap };
+  return { text: "", font: neighbour.font, color: neighbour.color, gap,
+    ...(neighbour.source ? { source: { version: 1 as const, units: [{ output: [0, 0] as [number, number], operation: "synthetic" as const, sources: [], reason: "inline box advance without source characters" }], excluded: [], unavailable: ["native inline-gap geometry unavailable"] } } : {}) };
 }
 
 /** The inline elements from `host` (exclusive) down to `el` (inclusive), outermost first. */
@@ -113,6 +115,7 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
   const text = b.run.text.replace(edge, "");
   const cut = b.run.text.length - text.length;
   if (!cut) return;
+  if (b.run.source) b.run.source = trimTextSource(b.run.source, edge.source.startsWith("^") ? cut : 0, edge.source.startsWith("^") ? b.run.text.length : text.length);
   b.run.text = text;
   if (edge.source.startsWith("^")) b.src.splice(0, cut);
   else b.src.length = b.src.length - cut;

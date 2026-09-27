@@ -10,9 +10,21 @@ import { geometryAlias } from "./geometry-observation.ts";
 import { note } from "./diagnostics.ts";
 import { flowFrame } from "../analysis/relative-position.ts";
 import { intrinsicFlexExpr } from "./intrinsic-flex.ts";
+import { inlineBaselineExpr } from "./inline-baseline.ts";
+import { textObservationAlias } from "./text-observation.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
+  if (n.kind === "stack" && n.inlineBaseline) {
+    const original = n;
+    // Fidelity freezes the complete captured inline extent, including parent strut and
+    // widget margin descent that a native child-box union does not carry.
+    n = ctx.mode === "app" ? { ...n, padding: n.inlineBaseline.sourceInsets }
+      : { ...n, height: { kind: "fixed", px: n.frame.h } };
+    geometryAlias(n, original, ctx.geometry);
+    textObservationAlias(n, original, ctx.text);
+  }
   const out: string[] = [];
   if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline) out.push(...inlineBaselineExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex) out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks)) out.push(...weightedLayoutExpr(n, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));

@@ -1,15 +1,5 @@
 /** A circular field transformed into CSS's independently sized elliptical field. */
 export const PAINT_RADIAL_RUNTIME = `
-nonisolated enum MarkswiftCSSGradientLength {
-    case points(CGFloat), fraction(CGFloat)
-    func resolve(_ dimension: CGFloat) -> CGFloat {
-        switch self {
-        case .points(let value): return value
-        case .fraction(let value): return value * dimension
-        }
-    }
-}
-
 nonisolated enum MarkswiftCSSRadialExtent {
     case closestSide, farthestSide, closestCorner, farthestCorner
     case explicit(MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)
@@ -40,6 +30,7 @@ nonisolated enum MarkswiftCSSRadialExtent {
 
 struct MarkswiftCSSRadialGradient: View {
     let stops: [Gradient.Stop]
+    var stopPositions: [MarkswiftCSSGradientLength?]? = nil
     var center: UnitPoint = .center
     var ellipse: Bool = true
     var position: (MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)? = nil
@@ -53,11 +44,14 @@ struct MarkswiftCSSRadialGradient: View {
                                 y: position?.1.resolve(size.height) ?? center.y * size.height)
             let radii = extent.radii(center: point, size: size, ellipse: ellipse)
             if size.width > 0, size.height > 0, radii.width > 0, radii.height > 0 {
+                let resolved = MarkswiftCSSGradientStops.resolve(stops, positions: stopPositions, length: radii.width)
+                let upper = max(1, resolved.last?.location ?? 1)
+                let fieldStops = MarkswiftCSSGradientStops.remap(resolved, lower: 0, upper: upper)
                 let scale = radii.height / radii.width
                 Rectangle().fill(RadialGradient.radialGradient(
-                    Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
+                    Gradient(stops: fieldStops).colorSpace(perceptual ? .perceptual : .device),
                     center: UnitPoint(x: point.x / size.width, y: point.y / size.height),
-                    startRadius: 0, endRadius: radii.width))
+                    startRadius: 0, endRadius: radii.width * upper))
                     .frame(width: size.width, height: size.height / scale)
                     .scaleEffect(x: 1, y: scale, anchor: .topLeading)
                     .frame(width: size.width, height: size.height, alignment: .topLeading)

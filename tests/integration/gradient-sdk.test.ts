@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { compileLayouts } from "../../src/compiler/index.ts";
 import { PAINT_GRADIENT_RUNTIME } from "../../src/swift/paint-gradient-runtime.ts";
 import { PAINT_RADIAL_RUNTIME } from "../../src/swift/paint-radial-runtime.ts";
+import { PAINT_STOP_RUNTIME } from "../../src/swift/paint-stop-runtime.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { gradientFixture } from "../helpers/gradient-fixture.ts";
 
@@ -13,7 +14,7 @@ const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 nativeTest("the actual Swift gradient math keeps authored angles and corners across aspect changes", async () => {
   const dir = await mkdtemp(join(tmpdir(), "markswift-gradient-math-"));
   try {
-    await writeFile(join(dir, "proof.swift"), `import SwiftUI\n${PAINT_GRADIENT_RUNTIME}\n${PAINT_RADIAL_RUNTIME}\n
+    await writeFile(join(dir, "proof.swift"), `import SwiftUI\n${PAINT_STOP_RUNTIME}\n${PAINT_GRADIENT_RUNTIME}\n${PAINT_RADIAL_RUNTIME}\n
 func close(_ actual: CGFloat, _ expected: CGFloat) { precondition(abs(actual - expected) < 1e-9) }
 let wide = MarkswiftCSSGradientLine.endpoints(angle: 135, size: CGSize(width: 240, height: 80))
 close(wide.start.x, 1.0 / 6); close(wide.start.y, -0.5); close(wide.end.x, 5.0 / 6); close(wide.end.y, 1.5)
@@ -33,6 +34,17 @@ let radialCircle = MarkswiftCSSRadialExtent.farthestCorner.radii(center: CGPoint
 close(radialCircle.width, hypot(120, 40)); close(radialCircle.height, hypot(120, 40))
 let radialExplicit = MarkswiftCSSRadialExtent.explicit(.fraction(0.25), .points(30)).radii(center: .zero, size: CGSize(width: 400, height: 160), ellipse: true)
 close(radialExplicit.width, 100); close(radialExplicit.height, 30)
+let authored: [MarkswiftCSSGradientLength?] = [.points(100), nil, .fraction(0.5)]
+let unresolved: [Gradient.Stop] = [.init(color: .black, location: 0), .init(color: .gray, location: 0.5), .init(color: .white, location: 1)]
+let smallStops = MarkswiftCSSGradientStops.resolve(unresolved, positions: authored, length: 100)
+precondition(smallStops.map { $0.location } == [1, 1, 1])
+let largeStops = MarkswiftCSSGradientStops.resolve(unresolved, positions: authored, length: 400)
+precondition(largeStops.map { $0.location } == [0.25, 0.375, 0.5])
+let outside = MarkswiftCSSGradientStops.resolve(unresolved, positions: [.points(-50), .points(150), .fraction(0.9)], length: 100)
+precondition(outside.map { $0.location } == [-0.5, 1.5, 1.5])
+let outsideSpan = MarkswiftCSSGradientStops.span(outside)
+precondition(outsideSpan.lower == -0.5 && outsideSpan.upper == 1.5)
+precondition(MarkswiftCSSGradientStops.remap(outside, lower: outsideSpan.lower, upper: outsideSpan.upper).map { $0.location } == [0, 1, 1])
 print("gradient physical geometry passed")
 `);
     const compiler = Bun.spawn(["xcrun", "swiftc", "-swift-version", "6", "-strict-concurrency=complete", join(dir, "proof.swift"), "-o", join(dir, "proof")], { stdout: "pipe", stderr: "pipe" });
@@ -66,6 +78,13 @@ nativeTest("complete numeric, corner, blended, masked, and text-gradient bundles
       gradientFixture(`radial-gradient(ellipse 25% 30px at 40px 75%, ${ramp})`),
       gradientFixture(`radial-gradient(40px circle at top left, ${ramp})`),
       gradientFixture(`radial-gradient(ellipse farthest-side, ${ramp})`, { "background-color": "rgb(128,128,128)", "background-blend-mode": "multiply", "mask-image": "radial-gradient(ellipse closest-side, rgb(0,0,0), rgba(0,0,0,0))" }),
+      gradientFixture("linear-gradient(90deg, rgb(0,0,0) 100px, rgb(128,128,128), rgb(255,255,255) 50%)"),
+      gradientFixture("linear-gradient(45deg, rgb(0,0,0) -50px, rgb(255,255,255) 400px)"),
+      gradientFixture("linear-gradient(to bottom right, rgb(0,0,0) 0px 40px, rgb(255,255,255) 40px 100%)"),
+      gradientFixture("radial-gradient(ellipse at center, rgb(0,0,0) 0px, rgb(255,255,255) 300px)"),
+      gradientFixture("radial-gradient(circle closest-side, rgb(0,0,0) 10px, rgb(128,128,128), rgb(255,255,255) 60%)"),
+      gradientFixture("radial-gradient(circle 50px, rgb(255,0,0) 0%, rgb(0,0,255) 150%)", { "background-clip": "text", color: "rgba(0,0,0,0)" }),
+      gradientFixture("radial-gradient(circle 50px, rgb(255,0,0) 0px, rgb(0,0,255) 75px)", { "background-clip": "text", color: "rgba(0,0,0,0)" }),
     ];
     const bundle = compileLayouts(captures.flatMap((layout, index) => (["app", "fidelity"] as const).map(mode => ({
       layout, mode, name: `Gradient${index}${mode === "app" ? "App" : "Fidelity"}`,

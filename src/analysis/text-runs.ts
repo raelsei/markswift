@@ -79,7 +79,7 @@ export function noWrap(s: Record<string, string>): boolean {
  * into the laid-out run text.
  */
 export function normalizeWhitespace(text: string, mode: Collapse): { text: string; src: number[] } {
-  if (mode === "preserve") return { text, src: Array.from(text, (_, i) => i) };
+  if (mode === "preserve") return { text, src: Array.from({ length: text.length }, (_, i) => i) };
   let out = "";
   const src: number[] = [];
   for (let i = 0; i < text.length; ) {

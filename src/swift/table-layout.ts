@@ -4,6 +4,7 @@ import { indent, num, str } from "./format.ts";
 import { modifiers } from "./modifiers.ts";
 import { tableIntrinsicExpr } from "./table-intrinsic.ts";
 import { geometryAlias } from "./geometry-observation.ts";
+import { textObservationAlias } from "./text-observation.ts";
 import { tableTextContent } from "./table-content.ts";
 
 export function tableExpr(node: StackNode, ctx: EmitContext): string[] {
@@ -28,6 +29,7 @@ export function tableExpr(node: StackNode, ctx: EmitContext): string[] {
       const content: SemNode = { ...child, height: { kind: "hug" }, style: { fills: [], shadows: [] }, overlays: [] };
       if (content.kind === "text" && placement.contentFrame) tableTextContent(content, placement.contentFrame);
       ctx.geometry?.suppressed.add(content);
+      textObservationAlias(content, child, ctx.text);
       lines = ctx.renderNode(content).split("\n");
       const horizontal = child.kind === "text" ? child.align : "leading";
       const vertical = placement.alignment ?? "center";

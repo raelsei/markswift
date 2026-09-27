@@ -22,6 +22,7 @@ export interface CompileResponsiveOptions {
   bundledFamilies?: Record<string, BundledFamily>;
   fontMetrics?: Record<string, FaceMetrics>;
   geometryInstrumentation?: boolean;
+  textInstrumentation?: boolean;
   supportFiles?: Record<string, string>;
   assets?: Record<string, Uint8Array>;
 }
@@ -60,12 +61,14 @@ export function compileResponsiveLayouts(options: CompileResponsiveInput): Compi
       layout: compactDoc, name: compactName, componentId: `${options.name}-compact`,
       mode: options.mode, bundledFamilies: options.bundledFamilies, fontMetrics: options.fontMetrics,
       geometryInstrumentation: options.geometryInstrumentation,
+      textInstrumentation: options.textInstrumentation,
       supportFiles: options.supportFiles, assets: options.assets,
     },
     {
       layout: regularDoc, name: regularName, componentId: `${options.name}-regular`,
       mode: options.mode, bundledFamilies: options.bundledFamilies, fontMetrics: options.fontMetrics,
       geometryInstrumentation: options.geometryInstrumentation,
+      textInstrumentation: options.textInstrumentation,
     },
   ]);
   const wrapperName = `${options.name}.swift`;

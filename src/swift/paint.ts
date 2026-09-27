@@ -7,6 +7,7 @@ import { linearGradientLine } from "../css/gradient-line.ts";
 import { radialGeometry } from "../css/radial-gradient.ts";
 import { radialGradientArguments } from "./paint-radial.ts";
 import { backgroundClip } from "./paint-clip.ts";
+import { gradientStopArguments, radialStyleStops } from "./paint-stops.ts";
 export function shapeExpr(st: Style, w: number, h: number): string {
   if (st.ellipse) return "Ellipse()";
   const r = st.radius;
@@ -31,7 +32,8 @@ export function paintExpr(p: Paint, w: number, h: number, ctx: ColorCtx, id?: st
     case "radial": {
       const geometry = radialGeometry(p, w, h);
       const [cx, cy] = geometry.center;
-      return `RadialGradient.radialGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num(w ? cx / w : 0.5)}, y: ${num(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num(geometry.radii[0])})`;
+      const extended = radialStyleStops(p);
+      return `RadialGradient.radialGradient(Gradient(stops: ${stops({ ...p, stops: extended.stops }, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num(w ? cx / w : 0.5)}, y: ${num(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num(geometry.radii[0] * extended.scale)})`;
     }
     case "conic":
       return `AngularGradient.angularGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num(p.center[0])}, y: ${num(p.center[1])}), startAngle: .degrees(${num(p.from - 90)}), endAngle: .degrees(${num(p.from + 270)}))`;
@@ -44,12 +46,12 @@ export function paintExpr(p: Paint, w: number, h: number, ctx: ColorCtx, id?: st
 export function linearGradientViewExpr(p: Extract<Paint, { kind: "linear" }>, ctx: ColorCtx, id?: string): string {
   const corner = p.corner ? `, corner: UnitPoint(x: ${num((p.corner[0] + 1) / 2)}, y: ${num((p.corner[1] + 1) / 2)})` : "";
   const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
-  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}, angle: ${num(p.angle)}${corner}${interpolation})`;
+  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}${gradientStopArguments(p)}, angle: ${num(p.angle)}${corner}${interpolation})`;
 }
 
 export function radialGradientViewExpr(p: Extract<Paint, { kind: "radial" }>, ctx: ColorCtx, id?: string): string {
   const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
-  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}, ${radialGradientArguments(p)}${interpolation})`;
+  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}${gradientStopArguments(p)}, ${radialGradientArguments(p)}${interpolation})`;
 }
 
 function gradientSpace(p: Gradient): string { return p.interpolation === "oklab" ? ".perceptual" : ".device"; }

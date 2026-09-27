@@ -89,6 +89,7 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
     kind: "text",
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
+    ...(constructed.sourceAccounting ? { sourceAccounting: constructed.sourceAccounting } : {}),
     align:
       ta === "center" || (/flex/.test(host.styles["display"] ?? "") && host.styles["justify-content"] === "center")
         ? "center"

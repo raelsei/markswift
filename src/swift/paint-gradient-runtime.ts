@@ -22,6 +22,7 @@ nonisolated enum MarkswiftCSSGradientLine {
 
 struct MarkswiftCSSLinearGradient: View {
     let stops: [Gradient.Stop]
+    var stopPositions: [MarkswiftCSSGradientLength?]? = nil
     let angle: Double
     var corner: UnitPoint? = nil
     var perceptual: Bool = false
@@ -29,13 +30,18 @@ struct MarkswiftCSSLinearGradient: View {
     var body: some View {
         GeometryReader { geometry in
             let line = MarkswiftCSSGradientLine.endpoints(angle: angle, corner: corner, size: geometry.size)
-            // Stops are already resolved fractions. Absolute CSS stops retain their
-            // captured normalization; changing bounds here only corrects line geometry.
+            let delta = CGPoint(x: line.end.x - line.start.x, y: line.end.y - line.start.y)
+            let length = hypot(delta.x * geometry.size.width, delta.y * geometry.size.height)
+            let resolved = MarkswiftCSSGradientStops.resolve(stops, positions: stopPositions, length: length)
+            let span = MarkswiftCSSGradientStops.span(resolved)
+            let fieldStops = MarkswiftCSSGradientStops.remap(resolved, lower: span.lower, upper: span.upper)
+            let start = UnitPoint(x: line.start.x + delta.x * span.lower, y: line.start.y + delta.y * span.lower)
+            let end = UnitPoint(x: line.start.x + delta.x * span.upper, y: line.start.y + delta.y * span.upper)
             // Legacy CSS gradients interpolate encoded sRGB components. SwiftUI's
             // default is perceptual; the explicit device space preserves these stops.
             Rectangle().fill(LinearGradient.linearGradient(
-                Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
-                startPoint: line.start, endPoint: line.end))
+                Gradient(stops: fieldStops).colorSpace(perceptual ? .perceptual : .device),
+                startPoint: start, endPoint: end))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

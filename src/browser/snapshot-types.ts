@@ -55,6 +55,8 @@ export interface Raw {
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
   markerLayout?: LayoutNode["markerLayout"];
+  inlineStrut?: LayoutNode["inlineStrut"];
+  inlineControlMargins?: LayoutNode["inlineControlMargins"];
   formOwner?: LayoutNode["formOwner"];
   selectedIndex?: LayoutNode["selectedIndex"];
   option?: LayoutNode["option"];
@@ -71,6 +73,8 @@ export interface Raw {
   /** Text nodes: measured line boxes (`textBoxes`), in layout order; `start`/`length` index `text`. */
   lines?: Array<{ bounds: Rect; start: number; length: number; baseline?: number }>;
   text?: string;
+  textSource?: LayoutNode["textSource"];
+  textSourceCapture?: LayoutNode["textSourceCapture"];
   firstBaseline?: number;
   paint?: number;
   parent?: Raw;

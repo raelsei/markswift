@@ -2,6 +2,7 @@
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes, parseRadiusXY } from "../css/index.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
+import { liveGradientStopPositions } from "../css/gradient-stops.ts";
 
 /**
  * `background-clip: text` — the box's first gradient layer becomes the glyph fill of `run`
@@ -60,7 +61,9 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
     else {
       if (p.kind !== "solid" && p.interpolation === "oklab") notes.push("approximated: CSS Oklab gradient uses SwiftUI perceptual interpolation with stops converted to sRGB; wide-gamut colors and exact interpolation are not proved");
       if (p.kind === "radial" && p.ellipse && /\btext\b/.test(s["background-clip"] ?? "")) notes.push("approximated: elliptical radial text fill uses a circular native text gradient");
-      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some(stop => stop.px !== undefined)) notes.push("approximated: absolute gradient stop positions retain normalization to the captured box");
+      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some(stop => stop.px !== undefined)
+        && (/\btext\b/.test(s["background-clip"] ?? "") || liveGradientStopPositions(p) === undefined))
+        notes.push("approximated: absolute gradient stop positions retain normalization to the captured box in text, repeating or negative radial fields");
       if (p.kind !== "solid") {
         const origin = layerValue(s["background-origin"], top) ?? "padding-box";
         const originInsets = EDGES.map(edge => edgeWidth(s, edge) + (origin === "content-box" ? px(s[`padding-${edge}`]) : 0));

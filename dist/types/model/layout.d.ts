@@ -4,6 +4,7 @@
  * by the semantic inference pass. Nothing here knows about SwiftUI.
  */
 import { z } from "zod";
+import { TextSourceOccurrence, TextSourceCapture } from "./text-source.ts";
 export declare const Rect: z.ZodObject<{
     x: z.ZodNumber;
     y: z.ZodNumber;
@@ -80,6 +81,14 @@ export interface LayoutNode {
     /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
     preferredSize?: PreferredSize;
     markerLayout?: MarkerLayout;
+    /** Parent CSS strut font-box facts, independently measured without changing DOM layout. */
+    inlineStrut?: {
+        ascent: number;
+        descent: number;
+        lineHeight: number;
+    };
+    /** Nonnegative fixed physical widget margins (top/right/bottom/left); absence is unknown. */
+    inlineControlMargins?: [number, number, number, number];
     /** Capture-local form/tree identity, resolved before boxless ancestors are flattened. */
     formOwner?: string;
     /** Live selection ordinal; -1 means explicitly unselected, absent means a legacy capture. */
@@ -94,6 +103,10 @@ export interface LayoutNode {
     bounds: Rect;
     /** Laid-out text for `#text` nodes. */
     text?: string;
+    /** Optional raw text/break occurrence before layout pruning; not a verification oracle. */
+    textSource?: TextSourceOccurrence;
+    /** Capture-root source claims, including empty and unlaid-out occurrences. */
+    textSourceCapture?: TextSourceCapture;
     /** Measured first text baseline, in capture-root CSS pixels; absent in legacy captures. */
     firstBaseline?: number;
     /**
@@ -182,4 +195,4 @@ export declare const LayoutDoc: z.ZodObject<{
 }, z.core.$strip>;
 export type LayoutDoc = z.infer<typeof LayoutDoc>;
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
-export declare const STYLE_WHITELIST: readonly ["align-content", "align-items", "align-self", "animation-duration", "animation-name", "aspect-ratio", "backdrop-filter", "background-blend-mode", "background-clip", "background-color", "background-image", "background-origin", "background-position", "background-repeat", "background-size", "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius", "border-bottom-style", "border-bottom-width", "border-collapse", "border-left-color", "border-left-style", "border-left-width", "border-right-color", "border-right-style", "border-right-width", "border-spacing", "border-top-color", "border-top-left-radius", "border-top-right-radius", "border-top-style", "border-top-width", "bottom", "box-shadow", "box-sizing", "caption-side", "clear", "clip-path", "color", "color-scheme", "column-gap", "content", "direction", "display", "fill", "fill-opacity", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-optical-sizing", "font-size", "font-size-adjust", "font-style", "font-synthesis", "font-variant-alternates", "font-variant-caps", "font-variant-east-asian", "font-variant-ligatures", "font-variant-numeric", "font-variant-position", "font-variation-settings", "font-weight", "grid-auto-flow", "grid-column-start", "grid-column-end", "grid-row-start", "grid-row-end", "grid-template-columns", "grid-template-rows", "height", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-height", "list-style-image", "list-style-position", "list-style-type", "margin-bottom", "margin-left", "margin-right", "margin-top", "mask-image", "mask-position", "mask-repeat", "mask-size", "max-height", "max-width", "min-height", "min-width", "mix-blend-mode", "object-fit", "object-position", "image-rendering", "opacity", "order", "outline-color", "outline-offset", "outline-style", "outline-width", "overflow-wrap", "overflow-x", "overflow-y", "padding-bottom", "padding-left", "padding-right", "padding-top", "position", "right", "row-gap", "stroke", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "stroke-opacity", "stroke-width", "tab-size", "table-layout", "text-align", "text-decoration-color", "text-decoration-line", "text-decoration-style", "text-indent", "text-overflow", "text-shadow", "text-transform", "text-wrap-mode", "top", "transform", "transform-origin", "transition-duration", "transition-property", "unicode-bidi", "vertical-align", "visibility", "-webkit-line-clamp", "-webkit-text-decorations-in-effect", "-webkit-text-fill-color", "white-space", "white-space-collapse", "width", "word-break", "writing-mode"];
+export declare const STYLE_WHITELIST: readonly ["appearance", "align-content", "align-items", "align-self", "animation-duration", "animation-name", "aspect-ratio", "backdrop-filter", "background-blend-mode", "background-clip", "background-color", "background-image", "background-origin", "background-position", "background-repeat", "background-size", "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius", "border-bottom-style", "border-bottom-width", "border-collapse", "border-left-color", "border-left-style", "border-left-width", "border-right-color", "border-right-style", "border-right-width", "border-spacing", "border-top-color", "border-top-left-radius", "border-top-right-radius", "border-top-style", "border-top-width", "bottom", "box-shadow", "box-sizing", "caption-side", "clear", "clip-path", "color", "color-scheme", "column-gap", "content", "direction", "display", "fill", "fill-opacity", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-optical-sizing", "font-size", "font-size-adjust", "font-stretch", "font-style", "font-synthesis", "font-variant-alternates", "font-variant-caps", "font-variant-east-asian", "font-variant-ligatures", "font-variant-numeric", "font-variant-position", "font-variation-settings", "font-weight", "grid-auto-flow", "grid-column-start", "grid-column-end", "grid-row-start", "grid-row-end", "grid-template-columns", "grid-template-rows", "height", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-height", "list-style-image", "list-style-position", "list-style-type", "margin-bottom", "margin-left", "margin-right", "margin-top", "mask-image", "mask-position", "mask-repeat", "mask-size", "max-height", "max-width", "min-height", "min-width", "mix-blend-mode", "object-fit", "object-position", "image-rendering", "opacity", "order", "outline-color", "outline-offset", "outline-style", "outline-width", "overflow-wrap", "overflow-x", "overflow-y", "padding-bottom", "padding-left", "padding-right", "padding-top", "position", "right", "row-gap", "stroke", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "stroke-opacity", "stroke-width", "tab-size", "table-layout", "text-align", "text-decoration-color", "text-decoration-line", "text-decoration-style", "text-indent", "text-overflow", "text-shadow", "text-transform", "text-wrap-mode", "top", "transform", "transform-origin", "transition-duration", "transition-property", "unicode-bidi", "vertical-align", "visibility", "-webkit-line-clamp", "-webkit-text-decorations-in-effect", "-webkit-text-fill-color", "white-space", "white-space-collapse", "width", "word-break", "writing-mode"];

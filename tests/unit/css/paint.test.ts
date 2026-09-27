@@ -74,10 +74,10 @@ describe("resolvePaint", () => {
     expect(r.repeating).toBe(true);
     expect(r.stops.every((s) => s.px === undefined)).toBe(true);
   });
-  test("non-repeating px stops clamp to the line and mix with percentages", () => {
+  test("non-repeating px stops retain the infinite gradient line and fix decreasing percentages", () => {
     const [p] = parseBackgroundImage("linear-gradient(rgb(0, 0, 255) 50px, rgb(255, 0, 0) 150px, rgb(0, 0, 255) 90%)");
     const r = resolvePaint(p!, 100, 100) as Extract<Paint, { kind: "linear" }>;
-    expect(r.stops.map((s) => s.pos)).toEqual([0.5, 1, 0.9]);
+    expect(r.stops.map((s) => s.pos)).toEqual([0.5, 1.5, 1.5]);
     expect(r.stops[0]!.color).toEqual(navy);
   });
   test("radial px stops resolve against the farthest corner", () => {

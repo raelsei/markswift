@@ -87,9 +87,13 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
     ...(raw.preferredSize ? { preferredSize: raw.preferredSize } : {}),
+    ...(raw.inlineStrut ? { inlineStrut: raw.inlineStrut } : {}),
+    ...(raw.inlineControlMargins ? { inlineControlMargins: raw.inlineControlMargins } : {}),
     ...(raw.formOwner !== undefined ? { formOwner: raw.formOwner } : {}),
     ...(raw.selectedIndex !== undefined ? { selectedIndex: raw.selectedIndex } : {}),
     ...(raw.option !== undefined ? { option: raw.option } : {}),
+    ...(raw.textSource ? { textSource: raw.textSource } : {}),
+    ...(raw.textSourceCapture ? { textSourceCapture: raw.textSourceCapture } : {}),
   };
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined) node.id = id;
@@ -110,14 +114,14 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
       // laid-out text of the snapshot never covers it, so its DOM value is the text, kept with
       // a zero rect because nothing measures it.
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
-        const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
+        const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [], ...(c.textSource ? { textSource: c.textSource } : {}) };
         // Only a broken text node needs its division recorded; one box is the bounds already.
         if (c.firstBaseline !== undefined) text.firstBaseline = Math.round((c.firstBaseline - origin.y) * 100) / 100;
         if (c.lines && c.lines.length > 1) text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length,
           ...(l.baseline !== undefined ? { baseline: Math.round((l.baseline - origin.y) * 100) / 100 } : {}) }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
-        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
+        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [], ...(c.textSource ? { textSource: c.textSource } : {}) });
       }
       continue;
     }

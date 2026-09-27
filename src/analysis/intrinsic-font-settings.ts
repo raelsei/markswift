@@ -8,6 +8,8 @@ const ordinarySettings: ReadonlyArray<readonly [string, RegExp]> = [
   ["font-variant-east-asian", /^normal$/], ["font-variant-position", /^normal$/],
   ["font-variant-alternates", /^normal$/], ["font-variant-numeric", /^normal$/],
   ["font-optical-sizing", /^auto$/], ["font-size-adjust", /^none$/],
+  // Chromium currently exposes the width axis through this canonical percentage.
+  ["font-stretch", /^100%$/],
   ["font-synthesis", /^weight style small-caps$/],
   // HTML block/list UA isolation is width-neutral for the admitted LTR ASCII words.
   ["unicode-bidi", /^(normal|isolate)$/],
@@ -21,6 +23,10 @@ export function intrinsicFontSettingsReason(node: LayoutNode): string | undefine
     if (value === undefined) return `font setting metadata unavailable (${property})`;
     if (!allowed.test(value)) return `unsupported ${property}:${value}`;
   }
+  // Older Chromium leaves the not-yet-supported alias empty. A nonempty unknown
+  // value is not evidence that our unmodified system face reproduces the width.
+  const width = node.styles["font-width"];
+  if (node.tag !== "#text" && width && width !== "100%") return `unsupported font-width:${width}`;
   // A single semantic run can merge spans whose unrepresented font settings differ.
   for (const child of node.children) {
     const reason = intrinsicFontSettingsReason(child);

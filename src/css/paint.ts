@@ -1,5 +1,5 @@
 /** Pure paint interpretation of browser-resolved CSS values. */
-import { type Color, hue, parseColor } from "./color.ts";
+import { type Color, hue } from "./color.ts";
 import { type BlendMode } from "./blend.ts";
 import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
 import { splitTop } from "./syntax.ts";
@@ -8,13 +8,8 @@ import { gradientInterpolation } from "./gradient-interpolation.ts";
 import { parseRadialPrelude, radialGeometry, type RadialGeometrySpec } from "./radial-gradient.ts";
 
 
-export interface GradientStop {
-  color: Color;
-  /** 0..1 along the gradient line, undefined = evenly distributed. */
-  pos?: number;
-  /** Absolute px along the gradient line; `resolvePaint` turns it into `pos` once the box is known. */
-  px?: number;
-}
+import { authoredStopPositions, parseGradientStops, resolveStopPositions, type GradientStop, type GradientStopPosition } from "./gradient-stops.ts";
+export { COLOR_TOKEN, type GradientStop, type GradientStopPosition } from "./gradient-stops.ts";
 
 
 /** Px from the node's border-box edge to a fill's painting area (top, right, bottom, left). */
@@ -25,7 +20,7 @@ export type PaintInset = {
 };
 
 /** Absence preserves legacy encoded-sRGB interpolation. */
-type GradientInterpolation = { interpolation?: "oklab" };
+type GradientInterpolation = { interpolation?: "oklab"; stopPositions?: GradientStopPosition[] };
 
 
 /**
@@ -91,10 +86,11 @@ export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h
     return stops[stops.length - 1]!.color;
   };
   const cut: GradientStop[] = [{ color: at(0), pos: 0 }, ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })), { color: at(1), pos: 1 }];
-  if (!p.corner) return { ...p, stops: cut };
+  const { stopPositions: _positions, ...cropped } = p;
+  if (!p.corner) return { ...cropped, stops: cut };
   // The sub-paint keeps the host's physical direction; its different aspect must not
   // reinterpret the host's corner keyword as a new direction.
-  const { corner: _, ...numeric } = p;
+  const { corner: _, ...numeric } = cropped;
   return { ...numeric, angle: Math.atan2(dx, -dy) * 180 / Math.PI, stops: cut };
 }
 
@@ -138,7 +134,7 @@ export function parseGradient(s: string): Paint {
       }
       else return { kind: "unsupported", raw: s };
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "linear");
     if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "linear", angle, stops };
     if (corner) paint.corner = corner;
@@ -149,7 +145,7 @@ export function parseGradient(s: string): Paint {
       if (!parsed) return { kind: "unsupported", raw: s };
       geometry = parsed;
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "radial");
     if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "radial", stops, ...geometry };
   } else {
@@ -161,11 +157,12 @@ export function parseGradient(s: string): Paint {
       if (f) from = hue(f[1]!) ?? 0;
       center = atPosition(a) ?? center;
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "conic");
     if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "conic", stops, from, center };
   }
   if (m[1]) paint.repeating = true;
+  if (paint.stops.some(stop => stop.px !== undefined)) paint.stopPositions = authoredStopPositions(paint.stops);
   if (interpolation.oklab) paint.interpolation = "oklab";
   return paint;
 }
@@ -195,11 +192,8 @@ export function fraction(t: string): number | undefined {
 }
 
 
-export const COLOR_TOKEN = String.raw`(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[0-9a-f]+|transparent`;
-
-
 function looksLikeColor(s: string): boolean {
-  return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent$)/.test(s.trim());
+  return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent(?:\s|$))/i.test(s.trim());
 }
 
 
@@ -210,68 +204,24 @@ function sideAngle(a: string): number {
 }
 
 
-function parseStops(args: string[]): GradientStop[] | undefined {
-  const stops: GradientStop[] = [];
-  for (const a of args) {
-    const m = new RegExp(String.raw`^(${COLOR_TOKEN})\s*(?:([-+\d.]+)(%|px|deg))?\s*$`, "i").exec(a);
-    if (!m) return undefined;
-    const color = parseColor(m[1]!);
-    if (!color) return undefined;
-    const stop: GradientStop = { color };
-    if (m[2] !== undefined && m[3] === "%") stop.pos = +m[2] / 100;
-    else if (m[2] !== undefined && m[3] === "deg") stop.pos = +m[2] / 360;
-    else if (m[2] !== undefined && m[3] === "px") stop.px = +m[2];
-    stops.push(stop);
-  }
-  if (stops.length < 2) return undefined;
-  // px stops need the box; `resolvePaint` finishes them.
-  if (!stops.some((s) => s.px !== undefined)) fillEvenly(stops);
-  return stops;
-}
-
-
-/** Fill in undefined positions evenly (CSS rule, simplified: first 0, last 1, linear between). */
-function fillEvenly(stops: GradientStop[]): void {
-  if (!stops.length) return;
-  if (stops[0]!.pos === undefined) stops[0]!.pos = 0;
-  if (stops[stops.length - 1]!.pos === undefined) stops[stops.length - 1]!.pos = 1;
-  let i = 0;
-  while (i < stops.length) {
-    if (stops[i]!.pos !== undefined) {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (stops[j]!.pos === undefined) j++;
-    const p0 = stops[i - 1]!.pos!;
-    const p1 = stops[j]!.pos!;
-    for (let k = i; k < j; k++) stops[k]!.pos = p0 + ((p1 - p0) * (k - i + 1)) / (j - i + 1);
-    i = j;
-  }
-}
-
-
 /**
  * Resolve a gradient's px stops against the box it paints: linear stops divide by the
- * gradient-line length (`|w·sin θ| + |h·cos θ|`), radial stops by the farthest-corner
- * distance from the center. Non-repeating stops clamp to 0..1; repeating ones keep their
- * period so the consumer can tile. Paints without px stops are returned as-is.
+ * gradient-line length, radial stops by the ending shape's horizontal radius.
+ * Positions outside 0..1 remain on the infinite gradient line. Authored units and
+ * omissions remain available for a subsequent resolution against another box.
  */
 export function resolvePaint(p: Paint, w: number, h: number): Paint {
   if (p.kind !== "linear" && p.kind !== "radial") return p;
-  if (!p.stops.some((s) => s.px !== undefined)) return p;
+  if (!p.stopPositions && !p.stops.some((s) => s.px !== undefined)) return p;
   let length: number;
   if (p.kind === "linear") {
     length = linearGradientLine(p.angle, w, h, p.corner).length;
   } else {
     length = radialGeometry(p, w, h).radii[0];
   }
-  const stops = p.stops.map(({ color, pos, px }) => {
-    const stop: GradientStop = { color };
-    if (px !== undefined && length > 0) pos = px / length;
-    if (pos !== undefined) stop.pos = Math.round((p.repeating ? pos : Math.min(1, Math.max(0, pos))) * 1e4) / 1e4;
-    return stop;
-  });
-  fillEvenly(stops);
-  return { ...p, stops };
+  const stopPositions = p.stopPositions ?? authoredStopPositions(p.stops);
+  const positions = resolveStopPositions(stopPositions, length);
+  if (!positions || positions.length !== p.stops.length) return { kind: "unsupported", raw: "gradient", reason: "unresolved gradient stop positions" };
+  const stops = p.stops.map(({ color }, index) => ({ color, pos: Math.round(positions[index]! * 1e4) / 1e4 }));
+  return { ...p, stops, stopPositions };
 }

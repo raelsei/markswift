@@ -4,13 +4,8 @@ import { type BlendMode } from "./blend.ts";
 import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
 import { type GradientCorner } from "./gradient-line.ts";
 import { type RadialGeometrySpec } from "./radial-gradient.ts";
-export interface GradientStop {
-    color: Color;
-    /** 0..1 along the gradient line, undefined = evenly distributed. */
-    pos?: number;
-    /** Absolute px along the gradient line; `resolvePaint` turns it into `pos` once the box is known. */
-    px?: number;
-}
+import { type GradientStop, type GradientStopPosition } from "./gradient-stops.ts";
+export { COLOR_TOKEN, type GradientStop, type GradientStopPosition } from "./gradient-stops.ts";
 /** Px from the node's border-box edge to a fill's painting area (top, right, bottom, left). */
 export type PaintInset = {
     inset?: [number, number, number, number];
@@ -20,6 +15,7 @@ export type PaintInset = {
 /** Absence preserves legacy encoded-sRGB interpolation. */
 type GradientInterpolation = {
     interpolation?: "oklab";
+    stopPositions?: GradientStopPosition[];
 };
 /**
  * One `background-image` layer (or a solid `background-color`). Gradient variants carry
@@ -84,12 +80,10 @@ export declare function parseBackgroundImage(s: string | undefined): Paint[];
  */
 export declare function parseGradient(s: string): Paint;
 export declare function fraction(t: string): number | undefined;
-export declare const COLOR_TOKEN: string;
 /**
  * Resolve a gradient's px stops against the box it paints: linear stops divide by the
- * gradient-line length (`|w·sin θ| + |h·cos θ|`), radial stops by the farthest-corner
- * distance from the center. Non-repeating stops clamp to 0..1; repeating ones keep their
- * period so the consumer can tile. Paints without px stops are returned as-is.
+ * gradient-line length, radial stops by the ending shape's horizontal radius.
+ * Positions outside 0..1 remain on the infinite gradient line. Authored units and
+ * omissions remain available for a subsequent resolution against another box.
  */
 export declare function resolvePaint(p: Paint, w: number, h: number): Paint;
-export {};

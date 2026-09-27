@@ -7,8 +7,9 @@ import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 import { textLineBoxExpr, nativeTextWeight } from "./text-line-box.ts";
 import { naturalLineHeight, usesGreedyWords } from "../analysis/text-flow-admission.ts";
+import { registerTextEmission, registerGreedyText, textDrawObservationUnavailable, type TextInstrumentation } from "./text-observation.ts";
 
-export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
+export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics; text?: TextInstrumentation }): string[] {
   const runs = n.runs;
   if (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length)) note(n, "approximated: line division forced from the browser (native wraps differently)");
   if (ctx.mode === "app" && usesGreedyWords(n)) {
@@ -17,7 +18,8 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     const lineHeight = run.font.lineHeight ?? n.lineBox!.baselineStep;
     const leading = lineHeight - natural;
     const limits = n.width.kind === "hug" ? `, fitContent: true${n.minWidth === undefined ? "" : `, minWidth: ${num(Math.max(0, n.minWidth - n.padding[1] - n.padding[3]))}`}${n.maxWidth === undefined ? "" : `, maxWidth: ${num(Math.max(0, n.maxWidth - n.padding[1] - n.padding[3]))}`}` : "";
-    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num(run.font.size)}, lineGap: ${num(leading)}${n.lineBox ? `, baselineStep: ${num(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits})`];
+    const observation = ctx.text ? `, observationKey: ${str(registerGreedyText(n, ctx.text))}` : "";
+    const out = [`${ctx.text ? "MarkswiftObservedGreedyText" : "MarkswiftGreedyText"}(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num(run.font.size)}, lineGap: ${num(leading)}${n.lineBox ? `, baselineStep: ${num(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits}${observation})`];
     if (n.lineBox) return textLineBoxExpr(n, ctx.mode, out, leading, true);
     if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
       out.push(`.padding(.vertical, ${num(leading / 2)})`);
@@ -38,7 +40,7 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   // which moves the trailing neutral to the left exactly as the browser does. (An RLE/PDF or
   // RLI/PDI pair measures the same and costs two runs instead of one.) Container order is
   // already measured, so the direction must not reach the node's frames.
-  const parts = runs.map((r) => runExpr(r, n, viewCase === undefined, ctx));
+  const parts = runs.map((r, i) => runExpr(r, n, viewCase === undefined, ctx, i));
   if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
   // A paragraph's runs go into an array, not a `Text + Text + …` chain. The chain is one
   // expression for the Swift type checker and its cost is superlinear in the number of terms:
@@ -47,6 +49,7 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   // ten-run paragraphs takes 35.7 s. The same runs handed to `Text.markswiftRuns` are 0.2 s at any
   // size, because each element is checked on its own against a known element type.
   const out: string[] = parts.length === 1 ? [parts[0]!] : [`Text.markswiftRuns([\n    ${parts.join(",\n    ")},\n])`];
+  if (ctx.text) out.push(`.markswiftObserveText(${str(ctx.text.keys.get(n)!)}${textDrawObservationUnavailable(n) ? ", recordDraws: false" : ""})`);
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
@@ -129,12 +132,15 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */
-function runExpr(r: TextRun, n: TextNode, literalTransform: boolean, ctx: ColorCtx & { mode: EmitMode }): string {
+function runExpr(r: TextRun, n: TextNode, literalTransform: boolean, ctx: ColorCtx & { mode: EmitMode; text?: TextInstrumentation }, runIndex: number): string {
   // A gap run is pure advance; `Text.markswiftGap` in the support file explains the idiom. It is a
   // named call rather than the three chained calls inline because a `Text + Text + …` run
   // concatenation is one expression for the Swift type checker, and overload resolution for
   // `.font(.system(size:))` in every gap is enough to push a long paragraph over its budget.
-  if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
+  if (r.gap !== undefined) {
+    if (ctx.text) registerTextEmission(n, r, runIndex, ctx.mode, ctx.text, "inline-gap");
+    return `Text.markswiftGap(${num(r.gap)})`;
+  }
   let text = r.text;
   // Fidelity reproduces the browser's line division as hard breaks; the break consumed the
   // collapsible space at the boundary, so that space becomes the newline rather than preceding it.
@@ -173,6 +179,10 @@ function runExpr(r: TextRun, n: TextNode, literalTransform: boolean, ctx: ColorC
   if (r.kerning !== undefined && r.kerning !== 0) e += `.kerning(${num(r.kerning)})`;
   if (r.tabularNums) e += ".monospacedDigit()";
   if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
+  if (ctx.text) {
+    const emission = registerTextEmission(n, r, runIndex, ctx.mode, ctx.text, "text-run", "", undefined, text);
+    e += `.markswiftTextSource(${str(emission.key)}, ${str(text)}, fontBinding: ${str(emission.fontBinding)})`;
+  }
   return e;
 }
 

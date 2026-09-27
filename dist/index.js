@@ -7062,6 +7062,56 @@ function refine(fn, _params = {}) {
 function superRefine(fn, params) {
   return _superRefine(fn, params);
 }
+// src/model/text-source.ts
+var Offset = number2().int().nonnegative();
+var SourceInterval = object({ occurrence: string2(), start: Offset, end: Offset }).refine((value) => value.end >= value.start, "inverted UTF16 source interval");
+var SourceBoundary = object({
+  kind: _enum(["br", "source-newline", "wbr", "fidelity-inserted"]),
+  owner: string2().nullable(),
+  source: SourceInterval.optional(),
+  ordinal: Offset
+});
+var TextSourceOccurrence = object({
+  key: string2(),
+  kind: _enum(["text", "br", "wbr"]),
+  raw: string2(),
+  ancestors: array(object({ key: string2(), tag: string2(), display: string2() })),
+  origin: _enum(["dom", "generated", "unavailable"]),
+  join: _enum(["verified", "unavailable"]),
+  layoutPresent: boolean2()
+});
+var TextSourceCapture = object({
+  version: literal(1),
+  trust: literal("converter-capture-claim"),
+  root: object({
+    key: literal("dom:/"),
+    type: literal(1),
+    tag: string2(),
+    externalAncestors: array(object({ tag: string2(), styles: record(string2(), string2()) }))
+  }),
+  occurrences: array(TextSourceOccurrence),
+  unavailable: array(string2())
+});
+var TextProjectionUnit = object({
+  output: tuple([Offset, Offset]).refine((value) => value[1] >= value[0], "inverted UTF16 output interval"),
+  sources: array(SourceInterval),
+  operation: _enum(["copy", "collapse", "source-break", "synthetic", "unknown"]),
+  group: string2().optional(),
+  boundary: SourceBoundary.optional(),
+  reason: string2().optional()
+});
+var TextRunSource = object({
+  version: literal(1),
+  units: array(TextProjectionUnit),
+  excluded: array(object({
+    sources: array(SourceInterval),
+    operation: _enum(["trim", "collapse-join", "suppressed", "unknown"]),
+    group: string2().optional(),
+    reason: string2().optional()
+  })),
+  unavailable: array(string2())
+});
+
 // src/model/layout.ts
 var Rect = object({ x: number2(), y: number2(), w: number2(), h: number2() });
 var PreferredSize = object({
@@ -7094,11 +7144,15 @@ var LayoutNode = lazy(() => object({
   flattenedCustomElements: array(object({ tag: string2(), id: string2().optional() })).optional(),
   preferredSize: PreferredSize.optional(),
   markerLayout: MarkerLayout.optional(),
+  inlineStrut: object({ ascent: number2().positive(), descent: number2().nonnegative(), lineHeight: number2().positive() }).optional(),
+  inlineControlMargins: tuple([number2().nonnegative(), number2().nonnegative(), number2().nonnegative(), number2().nonnegative()]).optional(),
   formOwner: string2().optional(),
   selectedIndex: number2().int().min(-1).optional(),
   option: object({ label: string2(), value: string2(), hidden: boolean2().optional() }).optional(),
   bounds: Rect,
   text: string2().optional(),
+  textSource: TextSourceOccurrence.optional(),
+  textSourceCapture: TextSourceCapture.optional(),
   firstBaseline: number2().finite().optional(),
   lines: array(object({ bounds: Rect, start: number2(), length: number2(), baseline: number2().finite().optional() })).optional(),
   paint: number2().optional(),
@@ -7128,6 +7182,7 @@ var LayoutDoc = object({
   root: LayoutNode
 });
 var STYLE_WHITELIST = [
+  "appearance",
   "align-content",
   "align-items",
   "align-self",
@@ -7188,6 +7243,7 @@ var STYLE_WHITELIST = [
   "font-optical-sizing",
   "font-size",
   "font-size-adjust",
+  "font-stretch",
   "font-style",
   "font-synthesis",
   "font-variant-alternates",
@@ -7677,9 +7733,13 @@ function element(raw, origin, identity, path) {
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
     ...raw.preferredSize ? { preferredSize: raw.preferredSize } : {},
+    ...raw.inlineStrut ? { inlineStrut: raw.inlineStrut } : {},
+    ...raw.inlineControlMargins ? { inlineControlMargins: raw.inlineControlMargins } : {},
     ...raw.formOwner !== undefined ? { formOwner: raw.formOwner } : {},
     ...raw.selectedIndex !== undefined ? { selectedIndex: raw.selectedIndex } : {},
-    ...raw.option !== undefined ? { option: raw.option } : {}
+    ...raw.option !== undefined ? { option: raw.option } : {},
+    ...raw.textSource ? { textSource: raw.textSource } : {},
+    ...raw.textSourceCapture ? { textSourceCapture: raw.textSourceCapture } : {}
   };
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined)
@@ -7695,7 +7755,7 @@ function appendChildren(raw, origin, identity, path, out, host) {
   for (const c of raw.children) {
     if (c.type === 3) {
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
-        const text = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
+        const text = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [], ...c.textSource ? { textSource: c.textSource } : {} };
         if (c.firstBaseline !== undefined)
           text.firstBaseline = Math.round((c.firstBaseline - origin.y) * 100) / 100;
         if (c.lines && c.lines.length > 1)
@@ -7707,7 +7767,7 @@ function appendChildren(raw, origin, identity, path, out, host) {
           }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
-        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
+        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [], ...c.textSource ? { textSource: c.textSource } : {} });
       }
       continue;
     }
@@ -8161,6 +8221,141 @@ function attachTextMetrics(root, metrics) {
   walk(root, "");
 }
 
+// src/browser/inline-strut.ts
+async function readInlineStruts(page, selector) {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root)
+      throw new Error(`capture root ${selector} not found`);
+    const out = {};
+    const canvas = document.createElement("canvas").getContext("2d");
+    const mark = (el) => el instanceof HTMLInputElement && /^(checkbox|radio)$/.test(el.type);
+    const walk = (el, path) => {
+      if (el.shadowRoot || el instanceof HTMLSlotElement)
+        return;
+      if (Array.from(el.children).some(mark)) {
+        const style = getComputedStyle(el);
+        if (style.writingMode === "horizontal-tb" && style.direction === "ltr") {
+          canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+          const metrics = canvas.measureText("Hg"), { fontBoundingBoxAscent: ascent, fontBoundingBoxDescent: descent } = metrics;
+          const lineHeight = style.lineHeight === "normal" ? ascent + descent : parseFloat(style.lineHeight);
+          if ([ascent, descent, lineHeight].every(Number.isFinite) && ascent > 0 && descent >= 0 && lineHeight > 0)
+            out[path] = { strut: { ascent, descent, lineHeight } };
+        }
+      }
+      if (mark(el)) {
+        const typed = el;
+        const map = typed.computedStyleMap?.(), values = ["top", "right", "bottom", "left"].map((edge) => map?.get(`margin-${edge}`)?.toString());
+        if (values.every((value) => value !== undefined && /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(value)))
+          out[path] = { ...out[path], margins: values.map((value) => parseFloat(value)) };
+      }
+      Array.from(el.children).forEach((child, index) => walk(child, path ? `${path}/${index}` : String(index)));
+    };
+    walk(root, "");
+    return out;
+  }, selector);
+}
+function attachInlineStruts(root, metrics) {
+  const walk = (node, path) => {
+    const metric = metrics[path];
+    if (metric?.strut)
+      node.inlineStrut = metric.strut;
+    if (metric?.margins)
+      node.inlineControlMargins = metric.margins;
+    let index = 0;
+    for (const child of node.children)
+      if (child.type === 1 && child.pseudo === undefined)
+        walk(child, path ? `${path}/${index++}` : String(index++));
+  };
+  walk(root, "");
+}
+
+// src/browser/text-source.ts
+async function readTextSources(page, selector) {
+  return page.evaluate((selector) => {
+    const element = document.querySelector(selector);
+    if (!element)
+      throw new Error(`capture root ${selector} not found`);
+    const nodes = [];
+    const walk = (node, key, ancestors) => {
+      nodes.push({ key, type: node.nodeType, name: node.nodeName.toLowerCase(), value: node.nodeValue ?? "", ancestors });
+      const next = node instanceof Element ? [...ancestors, { key, tag: node.tagName.toLowerCase(), display: getComputedStyle(node).display }] : ancestors;
+      [...node.childNodes].forEach((child, index) => walk(child, key === "dom:/" ? `${key}${index}` : `${key}/${index}`, next));
+    };
+    walk(element, "dom:/", []);
+    const externalAncestors = [];
+    for (let ancestor = element.parentElement;ancestor; ancestor = ancestor.parentElement) {
+      const computed = getComputedStyle(ancestor), styles = {};
+      for (const property of computed)
+        styles[property] = computed.getPropertyValue(property);
+      externalAncestors.push({ tag: ancestor.tagName.toLowerCase(), styles });
+    }
+    return { nodes, root: { key: "dom:/", type: 1, tag: element.tagName.toLowerCase(), externalAncestors } };
+  }, selector);
+}
+function attachTextSources(root, input) {
+  const nodes = Array.isArray(input) ? input : input.nodes;
+  const live = new Map, seen = new Set;
+  const capture = {
+    version: 1,
+    trust: "converter-capture-claim",
+    root: Array.isArray(input) ? { key: "dom:/", type: 1, tag: root.name, externalAncestors: [] } : input.root,
+    occurrences: [],
+    unavailable: []
+  };
+  for (const entry of nodes) {
+    if (live.has(entry.key))
+      capture.unavailable.push(`duplicate live source key ${entry.key}`);
+    live.set(entry.key, entry);
+  }
+  const walk = (raw, key, origin, parentMatched = true) => {
+    const entry = live.get(key);
+    const equality = parentMatched && origin === "dom" && entry?.type === raw.type && entry.name === raw.name && entry.value === raw.value;
+    if (origin === "dom") {
+      seen.add(key);
+      if (!equality)
+        capture.unavailable.push(`source join unavailable ${key}: ${entry ? entry.value !== raw.value ? "value mismatch" : "type/name mismatch" : "live occurrence missing"}`);
+    }
+    const kind = raw.type === 3 ? "text" : raw.name === "br" ? "br" : raw.name === "wbr" ? "wbr" : undefined;
+    if (kind) {
+      const source = {
+        key,
+        kind,
+        raw: raw.type === 3 ? raw.value : "",
+        ancestors: entry?.ancestors ?? [],
+        origin,
+        join: equality ? "verified" : "unavailable",
+        layoutPresent: raw.bounds !== undefined
+      };
+      raw.textSource = source;
+      capture.occurrences.push(source);
+    }
+    let index = 0;
+    raw.children.forEach((child, ordinal) => {
+      if (child.pseudo !== undefined) {
+        walk(child, `${key}/::${child.pseudo}:${ordinal}`, "generated", false);
+      } else if (child.shadowRootType !== undefined) {
+        capture.unavailable.push(`shadow composition unavailable ${key}/${ordinal}`);
+        walk(child, `${key}/shadow-unavailable:${ordinal}`, "unavailable", false);
+      } else {
+        const childKey = key === "dom:/" ? `${key}${index++}` : `${key}/${index++}`;
+        walk(child, childKey, origin, equality);
+      }
+    });
+  };
+  walk(root, "dom:/", "dom");
+  for (const [key, entry] of live)
+    if (!seen.has(key)) {
+      capture.unavailable.push(`raw source occurrence missing ${key}`);
+      const kind = entry.type === 3 ? "text" : entry.name === "br" ? "br" : entry.name === "wbr" ? "wbr" : undefined;
+      if (kind)
+        capture.occurrences.push({ key, kind, raw: entry.type === 3 ? entry.value : "", ancestors: entry.ancestors, origin: "dom", join: "unavailable", layoutPresent: false });
+    }
+  const liveOrder = new Map(nodes.map((entry, index) => [entry.key, index]));
+  capture.occurrences.sort((a, b) => (liveOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (liveOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER));
+  root.textSourceCapture = capture;
+}
+
 // src/browser/list-markers.ts
 async function readMarkerLayouts(page, selector, cdp) {
   const captured = await page.evaluate((selector) => {
@@ -8332,6 +8527,9 @@ class BrowserCapture {
       const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const textMetrics = await readTextMetrics(page, spec.root);
+      const inlineStruts = await readInlineStruts(page, spec.root);
+      await spec.observeSnapshot?.(page);
+      const textSources = await readTextSources(page, spec.root);
       const markerLayouts = await readMarkerLayouts(page, spec.root, cdp);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       const formSnapshot = await readFormSnapshot(page);
@@ -8354,6 +8552,8 @@ class BrowserCapture {
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
       attachTextMetrics(rootRaw, textMetrics);
+      attachInlineStruts(rootRaw, inlineStruts);
+      attachTextSources(rootRaw, textSources);
       attachMarkerLayouts(rootRaw, markerLayouts);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
@@ -9014,6 +9214,91 @@ function radialGeometry(paint, width, height) {
   return { center, radii: [radius, radius] };
 }
 
+// src/css/gradient-stops.ts
+var COLOR_TOKEN = String.raw`(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[0-9a-f]+|transparent`;
+function liveGradientStopPositions(paint) {
+  const positions = paint.stopPositions;
+  if (paint.kind !== "linear" && paint.kind !== "radial" || paint.repeating || !positions || positions.length !== paint.stops.length)
+    return;
+  return positions.every((position) => position === null || (position.unit === "px" || position.unit === "fraction") && Number.isFinite(position.value) && (paint.kind !== "radial" || position.value >= 0)) ? positions : undefined;
+}
+function authoredStopPositions(stops) {
+  return stops.map((stop) => stop.px !== undefined ? { unit: "px", value: stop.px } : stop.pos !== undefined ? { unit: "fraction", value: stop.pos } : null);
+}
+function resolveStopPositions(source, length) {
+  if (source.length < 2 || !Number.isFinite(length) || length < 0)
+    return;
+  const values = source.map((position) => position === null ? undefined : position.unit === "px" ? length > 0 ? position.value / length : 0 : position.value);
+  if (values.some((value) => value !== undefined && !Number.isFinite(value)))
+    return;
+  values[0] ??= 0;
+  values[values.length - 1] ??= 1;
+  let greatest = -Infinity;
+  for (let index = 0;index < values.length; index++)
+    if (values[index] !== undefined) {
+      greatest = Math.max(greatest, values[index]);
+      values[index] = greatest;
+    }
+  for (let index = 1;index < values.length - 1; index++)
+    if (values[index] === undefined) {
+      const first = index - 1;
+      let end = index;
+      while (values[end] === undefined)
+        end++;
+      const left = values[first], right = values[end];
+      for (let at = index;at < end; at++)
+        values[at] = left + (right - left) * (at - first) / (end - first);
+      index = end;
+    }
+  return values;
+}
+function positionOf(token, kind) {
+  const match = /^([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)(%|px|deg|rad|grad|turn)?$/i.exec(token);
+  if (!match)
+    return;
+  const value = Number(match[1]), unit = match[2]?.toLowerCase();
+  if (!Number.isFinite(value) || !unit && value !== 0)
+    return;
+  if (unit === "%")
+    return { pos: value / 100 };
+  if (kind !== "conic")
+    return unit === "px" || !unit ? { px: value } : undefined;
+  if (!unit)
+    return { pos: 0 };
+  const divisors = { deg: 360, rad: 2 * Math.PI, grad: 400, turn: 1 };
+  return divisors[unit] === undefined ? undefined : { pos: value / divisors[unit] };
+}
+function parseGradientStops(args, kind) {
+  const stops = [];
+  for (const argument of args) {
+    const match = new RegExp(String.raw`^(${COLOR_TOKEN})(.*)$`, "i").exec(argument.trim());
+    if (!match)
+      return;
+    const color = parseColor(match[1]);
+    if (!color)
+      return;
+    const tokens = match[2].trim().split(/\s+/).filter(Boolean);
+    if (tokens.length > 2)
+      return;
+    if (!tokens.length)
+      stops.push({ color });
+    else
+      for (const token of tokens) {
+        const position = positionOf(token, kind);
+        if (!position)
+          return;
+        stops.push({ color, ...position });
+      }
+  }
+  if (stops.length < 2)
+    return;
+  if (!stops.some((stop) => stop.px !== undefined)) {
+    const positions = resolveStopPositions(authoredStopPositions(stops), 1);
+    stops.forEach((stop, index) => stop.pos = positions[index]);
+  }
+  return stops;
+}
+
 // src/css/paint.ts
 function paintWithin(p, host, sub) {
   if (p.kind === "radial") {
@@ -9059,9 +9344,10 @@ function paintWithin(p, host, sub) {
     return stops[stops.length - 1].color;
   };
   const cut = [{ color: at(0), pos: 0 }, ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })), { color: at(1), pos: 1 }];
+  const { stopPositions: _positions, ...cropped } = p;
   if (!p.corner)
-    return { ...p, stops: cut };
-  const { corner: _, ...numeric } = p;
+    return { ...cropped, stops: cut };
+  const { corner: _, ...numeric } = cropped;
   return { ...numeric, angle: Math.atan2(dx, -dy) * 180 / Math.PI, stops: cut };
 }
 function parseBackgroundImage(s) {
@@ -9100,7 +9386,7 @@ function parseGradient(s) {
       } else
         return { kind: "unsupported", raw: s };
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "linear");
     if (!stops)
       return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "linear", angle, stops };
@@ -9114,7 +9400,7 @@ function parseGradient(s) {
         return { kind: "unsupported", raw: s };
       geometry = parsed;
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "radial");
     if (!stops)
       return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "radial", stops, ...geometry };
@@ -9128,13 +9414,15 @@ function parseGradient(s) {
         from = hue(f[1]) ?? 0;
       center = atPosition(a) ?? center;
     }
-    const stops = parseStops(args);
+    const stops = parseGradientStops(args, "conic");
     if (!stops)
       return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
     paint = { kind: "conic", stops, from, center };
   }
   if (m[1])
     paint.repeating = true;
+  if (paint.stops.some((stop) => stop.px !== undefined))
+    paint.stopPositions = authoredStopPositions(paint.stops);
   if (interpolation.oklab)
     paint.interpolation = "oklab";
   return paint;
@@ -9160,66 +9448,18 @@ function fraction(t) {
   const m = /^([-+\d.]+)%$/.exec(t);
   return m ? +m[1] / 100 : undefined;
 }
-var COLOR_TOKEN = String.raw`(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[0-9a-f]+|transparent`;
 function looksLikeColor(s) {
-  return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent$)/.test(s.trim());
+  return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent(?:\s|$))/i.test(s.trim());
 }
 function sideAngle(a) {
   const t = a.replace(/^to\s+/, "").trim();
   const map = { top: 0, right: 90, bottom: 180, left: 270, "top right": 45, "right top": 45, "bottom right": 135, "right bottom": 135, "bottom left": 225, "left bottom": 225, "top left": 315, "left top": 315 };
   return map[t] ?? 180;
 }
-function parseStops(args) {
-  const stops = [];
-  for (const a of args) {
-    const m = new RegExp(String.raw`^(${COLOR_TOKEN})\s*(?:([-+\d.]+)(%|px|deg))?\s*$`, "i").exec(a);
-    if (!m)
-      return;
-    const color = parseColor(m[1]);
-    if (!color)
-      return;
-    const stop = { color };
-    if (m[2] !== undefined && m[3] === "%")
-      stop.pos = +m[2] / 100;
-    else if (m[2] !== undefined && m[3] === "deg")
-      stop.pos = +m[2] / 360;
-    else if (m[2] !== undefined && m[3] === "px")
-      stop.px = +m[2];
-    stops.push(stop);
-  }
-  if (stops.length < 2)
-    return;
-  if (!stops.some((s) => s.px !== undefined))
-    fillEvenly(stops);
-  return stops;
-}
-function fillEvenly(stops) {
-  if (!stops.length)
-    return;
-  if (stops[0].pos === undefined)
-    stops[0].pos = 0;
-  if (stops[stops.length - 1].pos === undefined)
-    stops[stops.length - 1].pos = 1;
-  let i = 0;
-  while (i < stops.length) {
-    if (stops[i].pos !== undefined) {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (stops[j].pos === undefined)
-      j++;
-    const p0 = stops[i - 1].pos;
-    const p1 = stops[j].pos;
-    for (let k = i;k < j; k++)
-      stops[k].pos = p0 + (p1 - p0) * (k - i + 1) / (j - i + 1);
-    i = j;
-  }
-}
 function resolvePaint(p, w, h) {
   if (p.kind !== "linear" && p.kind !== "radial")
     return p;
-  if (!p.stops.some((s) => s.px !== undefined))
+  if (!p.stopPositions && !p.stops.some((s) => s.px !== undefined))
     return p;
   let length;
   if (p.kind === "linear") {
@@ -9227,16 +9467,12 @@ function resolvePaint(p, w, h) {
   } else {
     length = radialGeometry(p, w, h).radii[0];
   }
-  const stops = p.stops.map(({ color, pos, px }) => {
-    const stop = { color };
-    if (px !== undefined && length > 0)
-      pos = px / length;
-    if (pos !== undefined)
-      stop.pos = Math.round((p.repeating ? pos : Math.min(1, Math.max(0, pos))) * 1e4) / 1e4;
-    return stop;
-  });
-  fillEvenly(stops);
-  return { ...p, stops };
+  const stopPositions = p.stopPositions ?? authoredStopPositions(p.stops);
+  const positions = resolveStopPositions(stopPositions, length);
+  if (!positions || positions.length !== p.stops.length)
+    return { kind: "unsupported", raw: "gradient", reason: "unresolved gradient stop positions" };
+  const stops = p.stops.map(({ color }, index) => ({ color, pos: Math.round(positions[index] * 1e4) / 1e4 }));
+  return { ...p, stops, stopPositions };
 }
 // src/css/shadows.ts
 function parseShadows(s) {
@@ -10963,7 +11199,7 @@ class Document extends NodeWithChildren {
   }
 }
 
-class Element extends NodeWithChildren {
+class Element2 extends NodeWithChildren {
   constructor(name, attribs, children = [], type = name === "script" ? ElementType.Script : name === "style" ? ElementType.Style : ElementType.Tag) {
     super(children);
     this.name = name;
@@ -11017,7 +11253,7 @@ function cloneNode(node, recursive = false) {
     result = new Comment2(node.data);
   } else if (isTag2(node)) {
     const children = recursive ? cloneChildren(node.children) : [];
-    const clone = new Element(node.name, { ...node.attribs }, children);
+    const clone = new Element2(node.name, { ...node.attribs }, children);
     children.forEach((child) => child.parent = clone);
     if (node.namespace != null) {
       clone.namespace = node.namespace;
@@ -11128,7 +11364,7 @@ class DomHandler {
   }
   onopentag(name, attribs) {
     const type = this.options.xmlMode ? ElementType.Tag : undefined;
-    const element = new Element(name, attribs, undefined, type);
+    const element = new Element2(name, attribs, undefined, type);
     this.addNode(element);
     this.tagStack.push(element);
   }
@@ -12767,8 +13003,8 @@ function backgroundFills(s, w, h, notes) {
         notes.push("approximated: CSS Oklab gradient uses SwiftUI perceptual interpolation with stops converted to sRGB; wide-gamut colors and exact interpolation are not proved");
       if (p.kind === "radial" && p.ellipse && /\btext\b/.test(s["background-clip"] ?? ""))
         notes.push("approximated: elliptical radial text fill uses a circular native text gradient");
-      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some((stop) => stop.px !== undefined))
-        notes.push("approximated: absolute gradient stop positions retain normalization to the captured box");
+      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some((stop) => stop.px !== undefined) && (/\btext\b/.test(s["background-clip"] ?? "") || liveGradientStopPositions(p) === undefined))
+        notes.push("approximated: absolute gradient stop positions retain normalization to the captured box in text, repeating or negative radial fields");
       if (p.kind !== "solid") {
         const origin = layerValue(s["background-origin"], top) ?? "padding-box";
         const originInsets = EDGES.map((edge) => edgeWidth(s, edge) + (origin === "content-box" ? px(s[`padding-${edge}`]) : 0));
@@ -13182,7 +13418,7 @@ function noWrap(s) {
 }
 function normalizeWhitespace(text, mode) {
   if (mode === "preserve")
-    return { text, src: Array.from(text, (_, i) => i) };
+    return { text, src: Array.from({ length: text.length }, (_, i) => i) };
   let out = "";
   const src = [];
   for (let i = 0;i < text.length; ) {
@@ -14496,6 +14732,98 @@ function buildGrid(n, base, all) {
   return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
 }
 
+// src/analysis/text-provenance.ts
+function textSourceProjection(node, text, indices, mode) {
+  const source = node.textSource;
+  if (!source)
+    return;
+  const projection = { version: 1, units: [], excluded: [], unavailable: [] };
+  if (source.join !== "verified" || source.origin !== "dom")
+    projection.unavailable.push("source occurrence join/origin unavailable");
+  const mismatch = source.kind === "text" && source.raw !== node.text;
+  if (mismatch)
+    projection.unavailable.push("raw/layout text differ");
+  if (!/^[\x09-\x0d\x20-\x7e]*$/.test(source.raw))
+    projection.unavailable.push("non-ASCII cluster mapping unavailable");
+  let breakOrdinal = 0;
+  for (let output = 0;output < text.length; output++) {
+    const at = indices[output], interval = (start, end) => ({ occurrence: source.key, start, end });
+    const unit = { output: [output, output + 1], sources: [], operation: "unknown" };
+    if (source.kind !== "text") {
+      unit.operation = "source-break";
+      unit.sources = [interval(0, 0)];
+      unit.boundary = { kind: source.kind, owner: source.key, ordinal: breakOrdinal++ };
+      if (source.kind === "wbr")
+        projection.unavailable.push("wbr native cluster scope unavailable");
+    } else if (at === -1) {
+      unit.operation = "synthetic";
+      unit.reason = "inferred separator without source ownership";
+      projection.unavailable.push("inferred separator source unavailable");
+    } else if (mismatch || at === undefined || at < 0 || at >= source.raw.length) {
+      unit.reason = "source offset unavailable";
+      projection.unavailable.push("source offset unavailable");
+    } else if (mode !== "preserve" && /\s/.test(source.raw[at])) {
+      let end = at + 1;
+      while (end < source.raw.length && /\s/.test(source.raw[end]))
+        end++;
+      if (mode === "preserve-breaks" && source.raw.slice(at, end).includes(`
+`)) {
+        unit.reason = "preserve-breaks collapse group mapping unproved";
+        projection.unavailable.push(unit.reason);
+      } else {
+        unit.operation = "collapse";
+        unit.sources = [interval(at, end)];
+        unit.group = `collapse:${source.key}:${at}:${end}`;
+      }
+    } else {
+      unit.operation = "copy";
+      unit.sources = [interval(at, at + 1)];
+      if (source.raw[at] === `
+`) {
+        unit.operation = "source-break";
+        unit.boundary = { kind: "source-newline", owner: source.key, source: interval(at, at + 1), ordinal: breakOrdinal++ };
+      }
+    }
+    projection.units.push(unit);
+  }
+  projection.unavailable = [...new Set(projection.unavailable)];
+  return projection;
+}
+function trimTextSource(source, start, end) {
+  const units = [], excluded = [...source.excluded];
+  for (const unit of source.units) {
+    if (unit.output[0] >= start && unit.output[1] <= end)
+      units.push({ ...unit, output: [unit.output[0] - start, unit.output[1] - start] });
+    else
+      excluded.push({ sources: unit.sources, operation: "trim", ...unit.group ? { group: unit.group } : {}, reason: unit.reason ?? "run edge trim" });
+  }
+  return { ...source, units, excluded };
+}
+function prependInferredSource(source) {
+  return {
+    ...source,
+    units: [
+      { output: [0, 1], sources: [], operation: "synthetic", reason: "inferred separator without source ownership" },
+      ...source.units.map((unit) => ({ ...unit, output: [unit.output[0] + 1, unit.output[1] + 1] }))
+    ],
+    unavailable: [...new Set([...source.unavailable, "inferred separator source unavailable"])]
+  };
+}
+function omittedTextSource(node) {
+  if (!node.textSource)
+    return;
+  return {
+    version: 1,
+    units: [],
+    excluded: [{
+      operation: "unknown",
+      sources: [{ occurrence: node.textSource.key, start: 0, end: node.textSource.raw.length }],
+      reason: "whitespace-only or empty run omitted before cross-occurrence collapse is independently proved"
+    }],
+    unavailable: ["cross-occurrence whitespace/empty occurrence accounting requires independent validation"]
+  };
+}
+
 // src/analysis/text-layout.ts
 var ASCENT_RATIO = 0.8;
 function withInlineGaps(built, host) {
@@ -14528,7 +14856,13 @@ function inlineInset(el, side) {
   return round2(px(el.styles[`padding-${side}`]) + edgeWidth(el.styles, side));
 }
 function gapRun(neighbour, gap) {
-  return { text: "", font: neighbour.font, color: neighbour.color, gap };
+  return {
+    text: "",
+    font: neighbour.font,
+    color: neighbour.color,
+    gap,
+    ...neighbour.source ? { source: { version: 1, units: [{ output: [0, 0], operation: "synthetic", sources: [], reason: "inline box advance without source characters" }], excluded: [], unavailable: ["native inline-gap geometry unavailable"] } } : {}
+  };
 }
 function inlineChain(host, el) {
   const path = [];
@@ -14580,6 +14914,8 @@ function trimRun(b, edge) {
   const cut = b.run.text.length - text.length;
   if (!cut)
     return;
+  if (b.run.source)
+    b.run.source = trimTextSource(b.run.source, edge.source.startsWith("^") ? cut : 0, edge.source.startsWith("^") ? b.run.text.length : text.length);
   b.run.text = text;
   if (edge.source.startsWith("^"))
     b.src.splice(0, cut);
@@ -14743,6 +15079,7 @@ function buildTextRuns(host, runs, ctx, note) {
   let union;
   let pendingSpace = false;
   let prevRun;
+  let sourceAccounting;
   for (const r of runs) {
     const s = r.styleOf.styles;
     const boundary = r.node.tag === "br" ? `
@@ -14753,14 +15090,23 @@ function buildTextRuns(host, runs, ctx, note) {
     const normalized = normalizeWhitespace(boundary ?? (r.node.text ?? ""), mode);
     let text = normalized.text;
     let src = normalized.src;
+    let source = textSourceProjection(r.node, text, src, mode);
     if (mode === "collapse") {
       const prev = out[out.length - 1];
       if (!text.trim()) {
         if (prev && !/\s$/.test(prev.text))
           pendingSpace = true;
+        const omitted = omittedTextSource(r.node);
+        if (omitted) {
+          sourceAccounting ??= { version: 1, units: [], excluded: [], unavailable: [] };
+          sourceAccounting.excluded.push(...omitted.excluded);
+          sourceAccounting.unavailable.push(...omitted.unavailable);
+        }
         continue;
       }
       if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+        if (source)
+          source = trimTextSource(source, 1, text.length);
         text = text.slice(1);
         src = src.slice(1);
       }
@@ -14778,16 +15124,22 @@ function buildTextRuns(host, runs, ctx, note) {
     if (pendingSpace && !text.startsWith(" ")) {
       if (deco && r.styleOf !== host) {
         const spaceRun = hostSpace(host, ctx.bundledFamilies);
+        if (ctx.root.textSourceCapture)
+          spaceRun.run.source = { version: 1, units: [{ output: [0, 1], sources: [], operation: "synthetic", reason: "inferred host separator without source ownership" }], excluded: [], unavailable: ["inferred separator source unavailable"] };
         out.push(spaceRun.run);
         built.push(spaceRun);
       } else {
         text = " " + text;
         src = [-1, ...src];
+        if (source)
+          source = prependInferredSource(source);
       }
     }
     pendingSpace = false;
     prevRun = r;
     const run = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    if (source)
+      run.source = source;
     const families = fontFamilies(s["font-family"]);
     const resolved = families.find((f) => ctx.bundledFamilies[f] ?? SYSTEM_DESIGNS[f.toLowerCase()]);
     const first = families[0];
@@ -14849,7 +15201,7 @@ function buildTextRuns(host, runs, ctx, note) {
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
   }
-  return { out, built, painted, union };
+  return { out, built, painted, union, ...sourceAccounting ? { sourceAccounting } : {} };
 }
 
 // src/analysis/text-node.ts
@@ -14919,6 +15271,7 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
     kind: "text",
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
+    ...constructed.sourceAccounting ? { sourceAccounting: constructed.sourceAccounting } : {},
     align: ta === "center" || /flex/.test(host.styles["display"] ?? "") && host.styles["justify-content"] === "center" ? "center" : side === "right" ? "trailing" : "leading",
     lines
   };
@@ -15237,6 +15590,7 @@ var ordinarySettings = [
   ["font-variant-numeric", /^normal$/],
   ["font-optical-sizing", /^auto$/],
   ["font-size-adjust", /^none$/],
+  ["font-stretch", /^100%$/],
   ["font-synthesis", /^weight style small-caps$/],
   ["unicode-bidi", /^(normal|isolate)$/]
 ];
@@ -15251,6 +15605,9 @@ function intrinsicFontSettingsReason(node) {
       if (!allowed.test(value))
         return `unsupported ${property}:${value}`;
     }
+  const width = node.styles["font-width"];
+  if (node.tag !== "#text" && width && width !== "100%")
+    return `unsupported font-width:${width}`;
   for (const child of node.children) {
     const reason = intrinsicFontSettingsReason(child);
     if (reason)
@@ -15473,6 +15830,76 @@ function buildWrapping(n, base, all, axis, align, distribution) {
   return stack;
 }
 
+// src/analysis/inline-baseline.ts
+function inlineBaselineOf(node, items, stack, context) {
+  const widgets = items.filter((item) => item.node.tag === "input" && /^(checkbox|radio)$/.test(item.node.attrs.type ?? ""));
+  if (!widgets.length || !items.some((item) => item.sem.kind === "text"))
+    return;
+  const decline = (reason) => {
+    stack.notes.push(`approximated: inline widget baseline unavailable (${reason}); native row alignment retained`);
+    return;
+  };
+  if (items.length !== 2 || widgets.length !== 1 || stack.children.length !== 2)
+    return decline("requires one widget and one plain text box");
+  if (!/^(block|flow-root)$/.test(node.styles.display ?? "") || node.preferredSize?.height !== "auto" || node.preferredSize.hasRelativePadding || stack.distribution !== "start")
+    return decline("parent is not ordinary auto-height inline flow");
+  const strut = node.inlineStrut;
+  if (!strut)
+    return decline("parent CSS strut metrics missing");
+  if (![strut.ascent, strut.descent, strut.lineHeight].every(Number.isInteger) || strut.lineHeight < strut.ascent + strut.descent)
+    return decline("fractional or tight parent font-box leading");
+  const fontReason = intrinsicFontSettingsReason(node);
+  if (fontReason)
+    return decline(fontReason);
+  const walk = (n) => {
+    const s = n.styles;
+    return (s.direction === undefined || s.direction === "ltr") && (s["writing-mode"] === undefined || s["writing-mode"] === "horizontal-tb") && (s.position === undefined || s.position === "static") && (s.float === undefined || s.float === "none") && (s.transform === undefined || s.transform === "none") && !n.children.some((child) => !walk(child));
+  };
+  if (!walk(node))
+    return decline("relative, transformed, floated or non-horizontal flow");
+  const ancestors = (current, parents = []) => {
+    if (current === node)
+      return parents;
+    for (const child of current.children) {
+      const found = ancestors(child, [...parents, current]);
+      if (found)
+        return found;
+    }
+  };
+  if (context && (ancestors(context.root) ?? [context.parent].filter((value) => !!value)).some((parent) => parent.styles.position && parent.styles.position !== "static" || parent.styles.transform && parent.styles.transform !== "none"))
+    return decline("relative or transformed ancestor");
+  const parentFont = fontOf(node.styles, {}), widget = widgets[0], text = items.find((item) => item.sem.kind === "text");
+  if (text.sem.kind !== "text" || text.sem.lines !== 1 || !text.sem.lineBox || text.sem.lineLimit !== undefined || text.sem.truncate || text.sem.runs.some((run) => JSON.stringify(run.font) !== JSON.stringify(parentFont) || run.italic || run.bound || run.baselineOffset !== undefined || run.gap !== undefined) || text.sem.padding.some(Boolean) || text.sem.overlays.length || text.sem.style.fills.length)
+    return decline("unproved plain single-line font box");
+  if (widget.node.styles.appearance !== "auto" || widget.node.styles["vertical-align"] !== "baseline" || text.node.styles["vertical-align"] && text.node.styles["vertical-align"] !== "baseline")
+    return decline("unproved native appearance or authored vertical alignment");
+  const margins = widget.node.inlineControlMargins;
+  if (!margins || !margins.every((value) => Number.isFinite(value) && value >= 0))
+    return decline("fixed nonnegative widget margins missing");
+  const control = widget.sem, frame = flowFrame(control);
+  if (control.kind !== "control" || !/^(toggle|radio)$/.test(control.control) || control.content.length || control.padding.some(Boolean) || control.width.kind !== "fixed" || control.height.kind !== "fixed" || frame.w !== frame.h || ![13, 16].includes(frame.h))
+    return decline("native widget dimensions have no bounded guide proof");
+  if (!EDGES.every((edge) => /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(node.styles[`padding-${edge}`] ?? "") && /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(node.styles[`border-${edge}-width`] ?? "") && node.styles[`border-${edge}-style`] !== undefined))
+    return decline("parent CSS content insets unavailable");
+  const sourceInsets = insetsOf(node.styles);
+  const strutAscent = strut.ascent + Math.floor((strut.lineHeight - strut.ascent - strut.descent) / 2), strutDescent = strut.lineHeight - strutAscent;
+  const contentTop = stack.frame.y + sourceInsets[0], textFrame = flowFrame(text.sem), baseline = textFrame.y + text.sem.lineBox.firstBaseline;
+  if (Math.abs(frame.y + frame.h - baseline) > 0.5)
+    return decline("observed widget border does not share the measured text baseline");
+  const contractItems = stack.children.map((child) => {
+    if (child === control)
+      return { kind: "widget", baseline: frame.h, height: frame.h, top: margins[0], bottom: margins[2] };
+    return { kind: "text", baseline: text.sem.kind === "text" ? text.sem.lineBox.firstBaseline : 0, height: textFrame.h, top: 0, bottom: 0 };
+  });
+  const predictedBaseline = Math.max(strutAscent, ...contractItems.map((item) => item.baseline + item.top));
+  const predictedDescent = Math.max(strutDescent, ...contractItems.map((item) => item.height - item.baseline + item.bottom));
+  const contentHeight = stack.frame.h - sourceInsets[0] - sourceInsets[2];
+  if (Math.abs(baseline - contentTop - predictedBaseline) > 0.5 || Math.abs(contentHeight - predictedBaseline - predictedDescent) > 0.5)
+    return decline("captured source line does not satisfy the parent strut and fixed margins");
+  stack.notes.push("approximated: newly multiline inline text or a native baseline-guide mismatch is reported at runtime and uses native baseline flow; CSS inline reconstruction then unavailable");
+  return { strutAscent, strutDescent, sourceInsets, items: contractItems };
+}
+
 // src/analysis/infer-flow.ts
 function buildFlowStack(n, base, items, axis, display, ctx) {
   const notes = base.notes;
@@ -15488,6 +15915,7 @@ function buildFlowStack(n, base, items, axis, display, ctx) {
     if (lines[0].some((i) => /^(left|right)$/.test(i.node.styles["float"] ?? "")))
       notes.push("approximated: float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0], "start", "start");
+    stack.inlineBaseline = inlineBaselineOf(n, lines[0], stack, ctx);
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""));
     if (floats.length)
@@ -16323,7 +16751,7 @@ function inferScreen(doc, name, options = {}) {
   if (ctx.fixed.length)
     root.overlays.push(...buildOverlays(doc.root, ctx.fixed, undefined, ctx, build));
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
-  return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
+  return { version: 1, name, source: doc.source, ...doc.root.textSourceCapture ? { textSourceCapture: doc.root.textSourceCapture } : {}, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
 // src/swift/format.ts
@@ -16870,6 +17298,19 @@ function backgroundClip(p, n, shape, inset) {
   return inset ? `.mask { ${shape}${inset} }` : `.clipShape(${shape})`;
 }
 
+// src/swift/paint-stops.ts
+function radialStyleStops(paint) {
+  const scale = paint.repeating ? 1 : Math.max(1, paint.stops.at(-1)?.pos ?? 1);
+  return { scale, stops: scale === 1 ? paint.stops : paint.stops.map((stop) => ({ ...stop, pos: (stop.pos ?? 0) / scale })) };
+}
+function gradientStopArguments(paint) {
+  const positions = liveGradientStopPositions(paint);
+  if (!positions)
+    return "";
+  const values = positions.map((position) => position === null ? "nil" : `.${position.unit === "px" ? "points" : "fraction"}(${num3(position.value)})`);
+  return `, stopPositions: [${values.join(", ")}]`;
+}
+
 // src/swift/paint.ts
 function shapeExpr(st, w, h) {
   if (st.ellipse)
@@ -16896,7 +17337,8 @@ function paintExpr(p, w, h, ctx, id) {
     case "radial": {
       const geometry = radialGeometry(p, w, h);
       const [cx, cy] = geometry.center;
-      return `RadialGradient.radialGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num3(w ? cx / w : 0.5)}, y: ${num3(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num3(geometry.radii[0])})`;
+      const extended = radialStyleStops(p);
+      return `RadialGradient.radialGradient(Gradient(stops: ${stops({ ...p, stops: extended.stops }, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num3(w ? cx / w : 0.5)}, y: ${num3(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num3(geometry.radii[0] * extended.scale)})`;
     }
     case "conic":
       return `AngularGradient.angularGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num3(p.center[0])}, y: ${num3(p.center[1])}), startAngle: .degrees(${num3(p.from - 90)}), endAngle: .degrees(${num3(p.from + 270)}))`;
@@ -16907,11 +17349,11 @@ function paintExpr(p, w, h, ctx, id) {
 function linearGradientViewExpr(p, ctx, id) {
   const corner = p.corner ? `, corner: UnitPoint(x: ${num3((p.corner[0] + 1) / 2)}, y: ${num3((p.corner[1] + 1) / 2)})` : "";
   const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
-  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}, angle: ${num3(p.angle)}${corner}${interpolation})`;
+  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}${gradientStopArguments(p)}, angle: ${num3(p.angle)}${corner}${interpolation})`;
 }
 function radialGradientViewExpr(p, ctx, id) {
   const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
-  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}, ${radialGradientArguments(p)}${interpolation})`;
+  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}${gradientStopArguments(p)}, ${radialGradientArguments(p)}${interpolation})`;
 }
 function gradientSpace(p) {
   return p.interpolation === "oklab" ? ".perceptual" : ".device";
@@ -17035,6 +17477,162 @@ function textLineBoxExpr(node, mode, content, spacing, greedy = false, width) {
   return [`MarkswiftTextLineBox(${args.join(", ")}) {`, ...content.map((line) => `    ${line}`), "}"];
 }
 
+// src/swift/text-observation.ts
+function textDrawObservationUnavailable(node) {
+  return node.runs.some((run) => run.decoration?.lines.some((line) => line === "underline" || line === "line-through")) ? "native draw observation unavailable: decorated text retains the ordinary SwiftUI renderer" : undefined;
+}
+function textInstrumentation(root, namespace, capture) {
+  const state = { manifest: { version: 1, namespace, trust: "converter-emission-claim", ...capture ? { capture } : {}, nodes: [], emissions: [] }, keys: new Map };
+  const walk = (node, path) => {
+    if (state.keys.has(node))
+      throw new Error("Text observation requires distinct semantic occurrences");
+    const key = `${namespace}/${path}`;
+    state.keys.set(node, key);
+    if (node.kind === "text")
+      state.manifest.nodes.push({ key, semanticId: node.id, ...node.sourceAccounting ? { sourceAccounting: node.sourceAccounting } : {} });
+    if (node.kind === "stack" || node.kind === "grid")
+      node.children.forEach((child, i) => walk(child, `${path}/children/${i}`));
+    if (node.kind === "control") {
+      if (node.label)
+        walk(node.label, `${path}/label`);
+      node.content.forEach((child, i) => walk(child, `${path}/content/${i}`));
+    }
+    node.overlays.forEach((overlay, i) => walk(overlay.node, `${path}/overlays/${i}`));
+  };
+  walk(root, "root");
+  return state;
+}
+function textObservationAlias(replacement, original, state) {
+  if (!state)
+    return;
+  const key = state.keys.get(original);
+  if (!key)
+    throw new Error("Original text observation occurrence unavailable");
+  const previous = state.keys.get(replacement);
+  if (previous && previous !== key)
+    throw new Error("Conflicting text observation clone ownership");
+  if (replacement.kind !== original.kind || replacement.kind === "text" && original.kind === "text" && replacement.runs !== original.runs)
+    throw new Error("Text observation alias requires unchanged original run ownership");
+  state.keys.set(replacement, key);
+}
+function emittedRunProjection(run, mode) {
+  let value = run.text;
+  let source = run.source ? structuredClone(run.source) : undefined;
+  const unavailable = [...source?.unavailable ?? ["source lineage unavailable"]];
+  if (mode === "fidelity" && run.breaks?.length) {
+    const original = source;
+    if (source)
+      source = { ...source, units: [], excluded: [...source.excluded] };
+    let at = 0, broken = "", ordinal = 0;
+    const append = (start, end) => {
+      const offset = broken.length - start;
+      for (const unit of original?.units ?? [])
+        if (unit.output[0] >= start && unit.output[1] <= end)
+          source.units.push({ ...unit, output: [unit.output[0] + offset, unit.output[1] + offset] });
+      broken += value.slice(start, end);
+    };
+    for (const boundary of run.breaks) {
+      const end = value[boundary - 1] === " " ? boundary - 1 : boundary;
+      append(at, end);
+      if (end < boundary) {
+        for (const unit of original?.units ?? [])
+          if (unit.output[0] >= end && unit.output[1] <= boundary)
+            source.excluded.push({ sources: unit.sources, operation: "trim", reason: "source separator consumed by fidelity layout break" });
+      }
+      if (source)
+        source.units.push({
+          output: [broken.length, broken.length + 1],
+          sources: [],
+          operation: "synthetic",
+          boundary: { kind: "fidelity-inserted", owner: null, ordinal: ordinal++ },
+          reason: "captured soft division inserted as layout-only newline"
+        });
+      broken += `
+`;
+      at = boundary;
+    }
+    append(at, value.length);
+    value = broken;
+    unavailable.push("hard-line native index scope requires an actual probe");
+  }
+  if (run.bound)
+    unavailable.push("dynamic source value unavailable");
+  if (run.transform)
+    unavailable.push("text-transform source-to-native mapping unavailable");
+  if (value.includes(`
+`))
+    unavailable.push("hard-line native index scope requires an actual probe");
+  if (run.gap !== undefined)
+    unavailable.push("native inline-gap geometry unavailable");
+  return { value, ...source ? { source } : {}, unavailable: [...new Set(unavailable)] };
+}
+function registerTextEmission(node, run, runIndex, mode, state, kind = "text-run", suffix = "", range, emittedValue) {
+  const nodeKey = state.keys.get(node);
+  if (!nodeKey)
+    throw new Error("Observed text is absent from its semantic occurrence manifest");
+  const projected = emittedRunProjection(run, mode), key = `${nodeKey}/runs/${runIndex}${suffix}`;
+  let { value, source } = projected;
+  if (emittedValue !== undefined && emittedValue !== value) {
+    value = emittedValue;
+    projected.unavailable.push("literal transform source projection unavailable");
+    if (source)
+      source = { ...source, units: [], excluded: [...source.excluded, ...source.units.map((unit) => ({ sources: unit.sources, operation: "unknown", reason: "transformed literal source mapping unavailable" }))] };
+  }
+  if (range) {
+    value = value.slice(range[0], range[1]);
+    if (source)
+      source = { ...source, excluded: [], units: source.units.filter((unit) => unit.output[0] >= range[0] && unit.output[1] <= range[1]).map((unit) => ({ ...unit, output: [unit.output[0] - range[0], unit.output[1] - range[0]] })) };
+  }
+  const unavailable = [...projected.unavailable];
+  const drawUnavailable = textDrawObservationUnavailable(node);
+  if (drawUnavailable)
+    unavailable.push(drawUnavailable);
+  if (kind === "flow-separator")
+    unavailable.push("actual Flow-gap geometry unavailable");
+  const hardLines = [];
+  let start = 0;
+  for (let i = 0;i <= value.length; i++)
+    if (i === value.length || value[i] === `
+`) {
+      const precedingBoundary = source?.units.find((unit) => unit.output[0] === start - 1)?.boundary;
+      hardLines.push({ key: `${key}/hard-line/${hardLines.length}`, valueRange: [start, i], ...precedingBoundary ? { precedingBoundary } : {} });
+      start = i + 1;
+    }
+  const emission = {
+    key,
+    node: nodeKey,
+    run: runIndex,
+    kind,
+    value,
+    literalUTF16Length: value.length,
+    ...source ? { source } : {},
+    fontBinding: kind === "greedy-word" ? "shared-supplied-ui-font; actual-font-name-recorded-natively" : "emission-specified-swiftui-font; resolved-font-unavailable",
+    unavailable: [...new Set(unavailable)],
+    hardLines
+  };
+  if (state.manifest.emissions.some((existing) => existing.key === key))
+    throw new Error(`Duplicate text emission occurrence ${key}`);
+  state.manifest.emissions.push(emission);
+  return emission;
+}
+function registerGreedyText(node, state) {
+  const run = node.runs[0], value = run.text;
+  const entry = state.manifest.nodes.find((entry) => entry.key === state.keys.get(node));
+  if (entry && run.source?.excluded.length) {
+    entry.sourceAccounting ??= { version: 1, units: [], excluded: [], unavailable: [] };
+    entry.sourceAccounting.excluded.push(...run.source.excluded);
+  }
+  let ordinal = 0;
+  for (const match of value.matchAll(/[^ ]+| +/g)) {
+    const start = match.index, end = start + match[0].length;
+    if (match[0].startsWith(" "))
+      registerTextEmission(node, run, 0, "app", state, "flow-separator", `/separator/${start}`, [start, end]);
+    else
+      registerTextEmission(node, run, 0, "app", state, "greedy-word", `/word/${ordinal++}`, [start, end]);
+  }
+  return `${state.keys.get(node)}/runs/0`;
+}
+
 // src/swift/text.ts
 function textExpr(n, ctx) {
   const runs = n.runs;
@@ -17046,7 +17644,8 @@ function textExpr(n, ctx) {
     const lineHeight = run.font.lineHeight ?? n.lineBox.baselineStep;
     const leading = lineHeight - natural;
     const limits = n.width.kind === "hug" ? `, fitContent: true${n.minWidth === undefined ? "" : `, minWidth: ${num3(Math.max(0, n.minWidth - n.padding[1] - n.padding[3]))}`}${n.maxWidth === undefined ? "" : `, maxWidth: ${num3(Math.max(0, n.maxWidth - n.padding[1] - n.padding[3]))}`}` : "";
-    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits})`];
+    const observation = ctx.text ? `, observationKey: ${str(registerGreedyText(n, ctx.text))}` : "";
+    const out = [`${ctx.text ? "MarkswiftObservedGreedyText" : "MarkswiftGreedyText"}(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits}${observation})`];
     if (n.lineBox)
       return textLineBoxExpr(n, ctx.mode, out, leading, true);
     if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
@@ -17057,13 +17656,15 @@ function textExpr(n, ctx) {
   const glyphs = runs.filter((r) => r.gap === undefined);
   const shared = glyphs.every((r) => r.transform === glyphs[0]?.transform) ? glyphs[0]?.transform : undefined;
   const viewCase = shared === "uppercase" || shared === "lowercase" ? shared : undefined;
-  const parts = runs.map((r) => runExpr(r, n, viewCase === undefined, ctx));
+  const parts = runs.map((r, i) => runExpr(r, n, viewCase === undefined, ctx, i));
   if (n.layoutDirection === "rtl")
     parts.unshift("Text.markswiftRTL");
   const out = parts.length === 1 ? [parts[0]] : [`Text.markswiftRuns([
     ${parts.join(`,
     `)},
 ])`];
+  if (ctx.text)
+    out.push(`.markswiftObserveText(${str(ctx.text.keys.get(n))}${textDrawObservationUnavailable(n) ? ", recordDraws: false" : ""})`);
   if (n.align !== "leading")
     out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined)
@@ -17103,9 +17704,12 @@ function textExpr(n, ctx) {
   }
   return out;
 }
-function runExpr(r, n, literalTransform, ctx) {
-  if (r.gap !== undefined)
+function runExpr(r, n, literalTransform, ctx, runIndex) {
+  if (r.gap !== undefined) {
+    if (ctx.text)
+      registerTextEmission(n, r, runIndex, ctx.mode, ctx.text, "inline-gap");
     return `Text.markswiftGap(${num3(r.gap)})`;
+  }
   let text = r.text;
   if (ctx.mode === "fidelity" && r.breaks?.length) {
     let at = 0;
@@ -17153,6 +17757,10 @@ function runExpr(r, n, literalTransform, ctx) {
     e += ".monospacedDigit()";
   if (r.baselineOffset !== undefined)
     e += `.baselineOffset(${num3(r.baselineOffset)})`;
+  if (ctx.text) {
+    const emission = registerTextEmission(n, r, runIndex, ctx.mode, ctx.text, "text-run", "", undefined, text);
+    e += `.markswiftTextSource(${str(emission.key)}, ${str(text)}, fontBinding: ${str(emission.fontBinding)})`;
+  }
   return e;
 }
 function transformLiteral(text, t) {
@@ -18230,6 +18838,7 @@ function tableExpr(node, ctx) {
       if (content.kind === "text" && placement.contentFrame)
         tableTextContent(content, placement.contentFrame);
       ctx.geometry?.suppressed.add(content);
+      textObservationAlias(content, child, ctx.text);
       lines = ctx.renderNode(content).split(`
 `);
       const horizontal = child.kind === "text" ? child.align : "leading";
@@ -18295,11 +18904,32 @@ function intrinsicFlexExpr(n, ctx) {
   return out;
 }
 
+// src/swift/inline-baseline.ts
+function inlineBaselineExpr(node, context) {
+  const baseline = node.inlineBaseline;
+  const spacing = Array.isArray(node.spacing) ? node.spacing : node.children.slice(1).map(() => node.spacing);
+  const items = baseline.items.map((item) => `MarkswiftInlineBaselineItem(widget: ${item.kind === "widget"}, baseline: ${num3(item.baseline)}, height: ${num3(item.height)}, top: ${num3(item.top)}, bottom: ${num3(item.bottom)})`).join(", ");
+  const out = [`MarkswiftInlineBaselineRow(id: ${str(node.id)}, strutAscent: ${num3(baseline.strutAscent)}, strutDescent: ${num3(baseline.strutDescent)}, items: [${items}], spacing: [${spacing.map(num3).join(", ")}], leading: ${num3(node.leadInset)}) {`];
+  for (const child of node.children)
+    out.push(...indent(context.renderNode(child).split(`
+`), 1));
+  out.push("}");
+  return out;
+}
+
 // src/swift/layout.ts
 function containerExpr(n, ctx) {
+  if (n.kind === "stack" && n.inlineBaseline) {
+    const original = n;
+    n = ctx.mode === "app" ? { ...n, padding: n.inlineBaseline.sourceInsets } : { ...n, height: { kind: "fixed", px: n.frame.h } };
+    geometryAlias(n, original, ctx.geometry);
+    textObservationAlias(n, original, ctx.text);
+  }
   const out = [];
   if (n.kind === "stack" && n.table)
     out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline)
+    out.push(...inlineBaselineExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex)
     out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks))
@@ -19470,6 +20100,7 @@ nonisolated enum MarkswiftCSSGradientLine {
 
 struct MarkswiftCSSLinearGradient: View {
     let stops: [Gradient.Stop]
+    var stopPositions: [MarkswiftCSSGradientLength?]? = nil
     let angle: Double
     var corner: UnitPoint? = nil
     var perceptual: Bool = false
@@ -19477,13 +20108,18 @@ struct MarkswiftCSSLinearGradient: View {
     var body: some View {
         GeometryReader { geometry in
             let line = MarkswiftCSSGradientLine.endpoints(angle: angle, corner: corner, size: geometry.size)
-            // Stops are already resolved fractions. Absolute CSS stops retain their
-            // captured normalization; changing bounds here only corrects line geometry.
+            let delta = CGPoint(x: line.end.x - line.start.x, y: line.end.y - line.start.y)
+            let length = hypot(delta.x * geometry.size.width, delta.y * geometry.size.height)
+            let resolved = MarkswiftCSSGradientStops.resolve(stops, positions: stopPositions, length: length)
+            let span = MarkswiftCSSGradientStops.span(resolved)
+            let fieldStops = MarkswiftCSSGradientStops.remap(resolved, lower: span.lower, upper: span.upper)
+            let start = UnitPoint(x: line.start.x + delta.x * span.lower, y: line.start.y + delta.y * span.lower)
+            let end = UnitPoint(x: line.start.x + delta.x * span.upper, y: line.start.y + delta.y * span.upper)
             // Legacy CSS gradients interpolate encoded sRGB components. SwiftUI's
             // default is perceptual; the explicit device space preserves these stops.
             Rectangle().fill(LinearGradient.linearGradient(
-                Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
-                startPoint: line.start, endPoint: line.end))
+                Gradient(stops: fieldStops).colorSpace(perceptual ? .perceptual : .device),
+                startPoint: start, endPoint: end))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -19493,16 +20129,6 @@ struct MarkswiftCSSLinearGradient: View {
 
 // src/swift/paint-radial-runtime.ts
 var PAINT_RADIAL_RUNTIME = `
-nonisolated enum MarkswiftCSSGradientLength {
-    case points(CGFloat), fraction(CGFloat)
-    func resolve(_ dimension: CGFloat) -> CGFloat {
-        switch self {
-        case .points(let value): return value
-        case .fraction(let value): return value * dimension
-        }
-    }
-}
-
 nonisolated enum MarkswiftCSSRadialExtent {
     case closestSide, farthestSide, closestCorner, farthestCorner
     case explicit(MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)
@@ -19533,6 +20159,7 @@ nonisolated enum MarkswiftCSSRadialExtent {
 
 struct MarkswiftCSSRadialGradient: View {
     let stops: [Gradient.Stop]
+    var stopPositions: [MarkswiftCSSGradientLength?]? = nil
     var center: UnitPoint = .center
     var ellipse: Bool = true
     var position: (MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)? = nil
@@ -19546,11 +20173,14 @@ struct MarkswiftCSSRadialGradient: View {
                                 y: position?.1.resolve(size.height) ?? center.y * size.height)
             let radii = extent.radii(center: point, size: size, ellipse: ellipse)
             if size.width > 0, size.height > 0, radii.width > 0, radii.height > 0 {
+                let resolved = MarkswiftCSSGradientStops.resolve(stops, positions: stopPositions, length: radii.width)
+                let upper = max(1, resolved.last?.location ?? 1)
+                let fieldStops = MarkswiftCSSGradientStops.remap(resolved, lower: 0, upper: upper)
                 let scale = radii.height / radii.width
                 Rectangle().fill(RadialGradient.radialGradient(
-                    Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
+                    Gradient(stops: fieldStops).colorSpace(perceptual ? .perceptual : .device),
                     center: UnitPoint(x: point.x / size.width, y: point.y / size.height),
-                    startRadius: 0, endRadius: radii.width))
+                    startRadius: 0, endRadius: radii.width * upper))
                     .frame(width: size.width, height: size.height / scale)
                     .scaleEffect(x: 1, y: scale, anchor: .topLeading)
                     .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -19560,6 +20190,52 @@ struct MarkswiftCSSRadialGradient: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+`;
+
+// src/swift/paint-stop-runtime.ts
+var PAINT_STOP_RUNTIME = `
+nonisolated enum MarkswiftCSSGradientLength {
+    case points(CGFloat), fraction(CGFloat)
+    func resolve(_ dimension: CGFloat) -> CGFloat {
+        switch self {
+        case .points(let value): return value
+        case .fraction(let value): return value * dimension
+        }
+    }
+}
+
+nonisolated enum MarkswiftCSSGradientStops {
+    static func resolve(_ stops: [Gradient.Stop], positions: [MarkswiftCSSGradientLength?]?, length: CGFloat) -> [Gradient.Stop] {
+        guard let positions, positions.count == stops.count, stops.count >= 2, length.isFinite, length > 0 else { return stops }
+        var values: [CGFloat?] = positions.map { $0.map { $0.resolve(length) / length } }
+        guard values.allSatisfy({ $0?.isFinite ?? true }) else { return stops }
+        if values[0] == nil { values[0] = 0 }
+        if values[values.count - 1] == nil { values[values.count - 1] = 1 }
+        var greatest = -CGFloat.infinity
+        for index in values.indices {
+            if let value = values[index] { greatest = max(greatest, value); values[index] = greatest }
+        }
+        var index = 1
+        while index < values.count - 1 {
+            if values[index] != nil { index += 1; continue }
+            let first = index - 1
+            var end = index
+            while values[end] == nil { end += 1 }
+            let left = values[first]!, right = values[end]!
+            for at in index..<end { values[at] = left + (right - left) * CGFloat(at - first) / CGFloat(end - first) }
+            index = end
+        }
+        return zip(stops, values).map { Gradient.Stop(color: $0.0.color, location: $0.1!) }
+    }
+    static func span(_ stops: [Gradient.Stop]) -> (lower: CGFloat, upper: CGFloat) {
+        (min(0, stops.first?.location ?? 0), max(1, stops.last?.location ?? 1))
+    }
+    static func remap(_ stops: [Gradient.Stop], lower: CGFloat, upper: CGFloat) -> [Gradient.Stop] {
+        let length = upper - lower
+        guard length > 0 else { return stops }
+        return stops.map { Gradient.Stop(color: $0.color, location: ($0.location - lower) / length) }
     }
 }
 `;
@@ -19804,6 +20480,188 @@ struct MarkswiftIntrinsicFlex: Layout {
             return Row(items: items, width: allocated.widths.reduce(0, +) + CGFloat(Swift.max(0, items.count - 1)) * columnGap,
                 height: items.map { $0.height }.max() ?? 0)
         }
+    }
+}
+`;
+
+// src/swift/inline-baseline-runtime.ts
+var INLINE_BASELINE_RUNTIME = `
+nonisolated struct MarkswiftInlineBaselineItem: Sendable {
+    var widget: Bool
+    var baseline: CGFloat
+    var height: CGFloat
+    var top: CGFloat
+    var bottom: CGFloat
+}
+
+nonisolated struct MarkswiftInlineBaselineObservation: Codable, Sendable {
+    struct Child: Codable, Sendable {
+        var guideKind: String
+        var width: Double
+        var height: Double
+        var firstBaseline: Double?
+        var lastBaseline: Double?
+    }
+    var id: String
+    var available: Bool
+    var reason: String?
+    var usedSourceStrut: Bool
+    var children: [Child]
+    var phase: String
+    var proposalWidth: Double?
+    var proposalHeight: Double?
+    var session: Int = 0
+    var sequence: Int = 0
+    var mountedView: String? = nil
+}
+
+/// Optional passive verification: no SwiftUI state mutation, coordinates, or alignment targets.
+nonisolated final class MarkswiftInlineBaselineCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observations: [MarkswiftInlineBaselineObservation] = []
+    private var session = 0
+    private var sequence = 0
+    private var mountedView: String?
+    /// A harness names each independently mounted view; previous sessions remain observable.
+    func startSession(view: String) {
+        lock.lock(); defer { lock.unlock() }
+        session += 1; mountedView = view
+    }
+    func record(_ value: MarkswiftInlineBaselineObservation) {
+        lock.lock(); defer { lock.unlock() }
+        sequence += 1
+        var recorded = value
+        recorded.session = session; recorded.sequence = sequence; recorded.mountedView = mountedView
+        observations.append(recorded)
+    }
+    func snapshot() -> [MarkswiftInlineBaselineObservation] {
+        lock.lock(); defer { lock.unlock() }; return observations
+    }
+    func encoded() throws -> Data {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        struct Report: Encodable {
+            var observations: [MarkswiftInlineBaselineObservation]
+            let finalDrawSelection = "unavailable: Layout measurement/placement calls are not certified final draws"
+            let textGuideScope = "text-line-box-wrapper; not actual glyph ink or TextRenderer run geometry"
+        }
+        return try encoder.encode(Report(observations: snapshot()))
+    }
+}
+private struct MarkswiftInlineBaselineObserverKey: EnvironmentKey {
+    static let defaultValue: MarkswiftInlineBaselineCollector? = nil
+}
+extension EnvironmentValues {
+    var markswiftInlineBaselineObserver: MarkswiftInlineBaselineCollector? {
+        get { self[MarkswiftInlineBaselineObserverKey.self] }
+        set { self[MarkswiftInlineBaselineObserverKey.self] = newValue }
+    }
+}
+extension View {
+    func markswiftObserveInlineBaselines(_ collector: MarkswiftInlineBaselineCollector) -> some View {
+        environment(\\.markswiftInlineBaselineObserver, collector)
+    }
+}
+
+struct MarkswiftInlineBaselineRow<Content: View>: View {
+    var id: String
+    var strutAscent: CGFloat
+    var strutDescent: CGFloat
+    var items: [MarkswiftInlineBaselineItem]
+    var spacing: [CGFloat]
+    var leading: CGFloat
+    @ViewBuilder var content: () -> Content
+    @Environment(\\.markswiftInlineBaselineObserver) private var observer
+    var body: some View {
+        MarkswiftInlineBaselineLayout(id: id, strutAscent: strutAscent, strutDescent: strutDescent,
+                                     items: items, spacing: spacing, leading: leading, observer: observer) { content() }
+    }
+}
+
+struct MarkswiftInlineBaselineLayout: Layout {
+    var id: String
+    var strutAscent: CGFloat
+    var strutDescent: CGFloat
+    var items: [MarkswiftInlineBaselineItem]
+    var spacing: [CGFloat]
+    var leading: CGFloat
+    var observer: MarkswiftInlineBaselineCollector?
+    private struct Measurement {
+        var dimensions: [ViewDimensions]
+        var baseline: CGFloat
+        var lastBaseline: CGFloat
+        var size: CGSize
+    }
+
+    private func measure(_ proposal: ProposedViewSize, _ subviews: Subviews, phase: String) -> Measurement {
+        let width = proposal.width.flatMap { $0.isFinite ? Double($0) : nil }
+        let height = proposal.height.flatMap { $0.isFinite ? Double($0) : nil }
+        let count = subviews.count
+        guard count > 0 else {
+            observer?.record(MarkswiftInlineBaselineObservation(id: id, available: false, reason: "native-child-membership-mismatch", usedSourceStrut: false, children: [], phase: phase, proposalWidth: width, proposalHeight: height))
+            return Measurement(dimensions: [], baseline: 0, lastBaseline: 0, size: .zero)
+        }
+        var dimensions = subviews.map { $0.dimensions(in: .unspecified) }
+        let membership = count == items.count
+        let contracts = membership ? items : dimensions.map { MarkswiftInlineBaselineItem(widget: true, baseline: $0.height, height: $0.height, top: 0, bottom: 0) }
+        let gaps = spacing.prefix(max(0, count - 1)).reduce(CGFloat.zero, +)
+        let fixedWidth = zip(dimensions, contracts).filter { $0.1.widget }.reduce(CGFloat.zero) { $0 + $1.0.width }
+        let textCount = contracts.filter { !$0.widget }.count
+        if let width = proposal.width, textCount > 0 {
+            let remaining = max(0, width - leading - gaps - fixedWidth) / CGFloat(textCount)
+            for index in dimensions.indices where !contracts[index].widget {
+                dimensions[index] = subviews[index].dimensions(in: ProposedViewSize(width: remaining, height: nil))
+            }
+        }
+        var reason: String? = membership ? nil : "native-child-membership-mismatch"
+        let observations = dimensions.indices.map { index -> MarkswiftInlineBaselineObservation.Child in
+            let d = dimensions[index], item = contracts[index]
+            let first = d[.firstTextBaseline], last = d[.lastTextBaseline]
+            if !first.isFinite || !last.isFinite || !d.height.isFinite || first < 0 || first > d.height {
+                reason = reason ?? "native-guide-unavailable"
+            } else if !item.widget && abs(last - first) > 0.5 {
+                reason = reason ?? "native-inline-text-multiline"
+            } else if abs(first - item.baseline) > 0.5 || abs(d.height - item.height) > 0.5 {
+                reason = reason ?? "native-baseline-guide-mismatch"
+            }
+            return .init(guideKind: !membership ? "unclassified-native-subview" : item.widget ? "native-widget" : "text-line-box-wrapper", width: Double(d.width), height: Double(d.height), firstBaseline: first.isFinite ? Double(first) : nil, lastBaseline: last.isFinite ? Double(last) : nil)
+        }
+        let available = reason == nil
+        // On mismatch/new wrapping the old single-line CSS strut is explicitly discarded.
+        var baseline = available ? strutAscent : 0
+        var descent = available ? strutDescent : 0
+        for index in dimensions.indices {
+            let d = dimensions[index], guide = nativeGuide(d)
+            baseline = max(baseline, guide + contracts[index].top)
+            descent = max(descent, d.height - guide + contracts[index].bottom)
+        }
+        let last = baseline + dimensions.map { $0[.lastTextBaseline].isFinite ? max(0, $0[.lastTextBaseline] - nativeGuide($0)) : 0 }.max()!
+        observer?.record(.init(id: id, available: available, reason: reason, usedSourceStrut: available, children: observations, phase: phase, proposalWidth: width, proposalHeight: height))
+        let naturalWidth = leading + gaps + dimensions.reduce(CGFloat.zero) { $0 + $1.width }
+        return Measurement(dimensions: dimensions, baseline: baseline, lastBaseline: last,
+                           size: CGSize(width: proposal.width ?? naturalWidth, height: baseline + descent))
+    }
+    private func nativeGuide(_ dimensions: ViewDimensions) -> CGFloat {
+        let guide = dimensions[.firstTextBaseline]
+        return guide.isFinite && guide >= 0 && guide <= dimensions.height ? guide : dimensions.height
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        measure(proposal, subviews, phase: "sizeThatFits").size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let measured = measure(ProposedViewSize(width: bounds.width, height: nil), subviews, phase: "placeSubviews")
+        var x = bounds.minX + leading
+        for index in measured.dimensions.indices {
+            let d = measured.dimensions[index], guide = nativeGuide(d)
+            subviews[index].place(at: CGPoint(x: x, y: bounds.minY + measured.baseline - guide), anchor: .topLeading,
+                                 proposal: ProposedViewSize(width: d.width, height: d.height))
+            x += d.width + (index < spacing.count ? spacing[index] : 0)
+        }
+    }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        let measured = measure(proposal, subviews, phase: "explicitAlignment")
+        if guide == .firstTextBaseline { return measured.baseline }
+        if guide == .lastTextBaseline { return measured.lastBaseline }
+        return nil
     }
 }
 `;
@@ -20108,10 +20966,12 @@ ${INTRINSIC_FLEX_RUNTIME}
 ${TABLE_RUNTIME}
 ${TEXT_LINE_BOX_RUNTIME}
 ${MARKSWIFT_DISCLOSURE_RUNTIME}
+${PAINT_STOP_RUNTIME}
 ${PAINT_GRADIENT_RUNTIME}
 ${PAINT_RADIAL_RUNTIME}
 ${PAINT_CLIP_RUNTIME}
-${FIELDSET_RUNTIME}`;
+${FIELDSET_RUNTIME}
+${INLINE_BASELINE_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {
@@ -20132,7 +20992,8 @@ function emitSwift(screen, viewName, opts) {
     nameOf.set(p.node, p.name);
   const control = controlMembers(screen.root, opts.mode);
   const geometry = opts.geometryInstrumentation ? geometryInstrumentation(screen.root, viewName) : undefined;
-  const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, geometry, renderNode: (node) => refOf(node, ctx) };
+  const text = opts.textInstrumentation ? textInstrumentation(screen.root, viewName, screen.textSourceCapture) : undefined;
+  const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, geometry, text, renderNode: (node) => refOf(node, ctx) };
   const w = new Writer;
   const comment = (value) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   w.line("// Generated by Markswift — do not edit. Source: " + comment(screen.source) + " (" + comment(screen.name) + ", " + screen.theme + ")");
@@ -20144,7 +21005,10 @@ function emitSwift(screen, viewName, opts) {
     if (control.decls.length)
       w.line();
     w.block("var body: some View {", () => {
-      w.line(refOf(screen.root, ctx));
+      if (text)
+        w.block("MarkswiftTextObservationReader {", () => w.line(refOf(screen.root, ctx)));
+      else
+        w.line(refOf(screen.root, ctx));
     });
     for (const p of props) {
       w.line();
@@ -20168,7 +21032,7 @@ function emitSwift(screen, viewName, opts) {
     if (n.confidence !== "mapped")
       report.push({ id: n.id, kind: n.kind, confidence: n.confidence, notes: n.notes });
   });
-  return { view: w.toString(), shapes, report, mapping, ...geometry ? { geometry: geometry.manifest } : {} };
+  return { view: w.toString(), shapes, report, mapping, ...geometry ? { geometry: geometry.manifest } : {}, ...text ? { text: text.manifest } : {} };
 }
 function propName(id, i) {
   const clean = id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -20684,6 +21548,250 @@ struct MarkswiftGeometryReader<Content: View>: View {
 }
 `;
 
+// src/swift/text-observation-runtime.ts
+var TEXT_OBSERVATION_RUNTIME = `import SwiftUI
+import Foundation
+
+nonisolated struct MarkswiftObservedTextSlice: Codable, Sendable {
+    var ordinal: Int
+    var relativeCharacterIndices: [Int]
+    var bounds: [Double]
+    var baseline: [Double]
+}
+
+nonisolated struct MarkswiftObservedTextRun: Codable, Sendable {
+    var ordinal: Int
+    var emission: String?
+    var literal: String?
+    var fontBinding: String?
+    var characterIndexScope = "run-first-relative-unproven"
+    var relativeCharacterIndices: [Int]
+    var layoutDirection: String
+    var bounds: [Double]
+    var baseline: [Double]
+    var slices: [MarkswiftObservedTextSlice]
+}
+
+nonisolated struct MarkswiftObservedTextLine: Codable, Sendable {
+    var ordinal: Int
+    var indexScope = "layout-line-local"
+    var origin: [Double]
+    var bounds: [Double]
+    var runs: [MarkswiftObservedTextRun]
+}
+
+nonisolated struct MarkswiftObservedTextDraw: Codable, Sendable {
+    var session: Int
+    var draw: Int
+    var view: String
+    var truncated: Bool
+    var scopeStatus = "source-hard-line and cluster mapping require independent native proof"
+    var lines: [MarkswiftObservedTextLine]
+}
+
+nonisolated struct MarkswiftObservedTextFrame: Codable, Equatable, Sendable {
+    var key: String
+    var x: Double
+    var y: Double
+    var w: Double
+    var h: Double
+}
+
+/// Recording never updates SwiftUI state, substitutes expected boxes, or discards repeated draws.
+nonisolated final class MarkswiftTextObservationCollector: @unchecked Sendable {
+    static let shared = MarkswiftTextObservationCollector()
+    private let lock = NSLock()
+    private var session = 0
+    private var draw = 0
+    private var draws: [MarkswiftObservedTextDraw] = []
+    private var frameRevisions: [[MarkswiftObservedTextFrame]] = []
+
+    func startSession() {
+        lock.lock(); defer { lock.unlock() }
+        session += 1; draw = 0; draws = []; frameRevisions = []
+    }
+    func append(view: String, truncated: Bool, lines: [MarkswiftObservedTextLine]) {
+        lock.lock(); defer { lock.unlock() }
+        draw += 1
+        draws.append(MarkswiftObservedTextDraw(session: session, draw: draw, view: view, truncated: truncated, lines: lines))
+    }
+    func appendFrames(_ frames: [MarkswiftObservedTextFrame]) {
+        lock.lock(); defer { lock.unlock() }
+        frameRevisions.append(frames)
+    }
+    func encoded() throws -> Data {
+        struct Payload: Encodable {
+            var version = 1
+            var frameCoordinateSpace = "observed-root-local"
+            var drawCoordinateSpace = "text-layout-local; root mapping unproved"
+            var frameKind = "actual-text-view-aabb"
+            var finalDrawSelection = "unavailable; every draw retained"
+            var session: Int
+            var draws: [MarkswiftObservedTextDraw]
+            var frameRevisions: [[MarkswiftObservedTextFrame]]
+        }
+        lock.lock(); defer { lock.unlock() }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(Payload(session: session, draws: draws, frameRevisions: frameRevisions))
+    }
+}
+
+@available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *)
+nonisolated struct MarkswiftTextSourceAttribute: TextAttribute {
+    var emission: String
+    var literal: String
+    var fontBinding: String
+}
+
+@available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *)
+nonisolated struct MarkswiftPassiveTextRenderer: TextRenderer {
+    var view: String
+    func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
+        func rect(_ value: CGRect) -> [Double] { [Double(value.minX), Double(value.minY), Double(value.width), Double(value.height)] }
+        var lines: [MarkswiftObservedTextLine] = []
+        for (lineOrdinal, line) in layout.enumerated() {
+            var runs: [MarkswiftObservedTextRun] = []
+            for (runOrdinal, run) in line.enumerated() {
+                let attribute = run[MarkswiftTextSourceAttribute.self]
+                let first = run.characterIndices.first
+                let relative = run.characterIndices.map { first?.distance(to: $0) ?? 0 }
+                var slices: [MarkswiftObservedTextSlice] = []
+                for (sliceOrdinal, slice) in run.enumerated() {
+                    slices.append(MarkswiftObservedTextSlice(ordinal: sliceOrdinal,
+                        relativeCharacterIndices: slice.characterIndices.map { first?.distance(to: $0) ?? 0 },
+                        bounds: rect(slice.typographicBounds.rect), baseline: [Double(slice.typographicBounds.origin.x), Double(slice.typographicBounds.origin.y)]))
+                }
+                runs.append(MarkswiftObservedTextRun(ordinal: runOrdinal, emission: attribute?.emission, literal: attribute?.literal, fontBinding: attribute?.fontBinding,
+                    relativeCharacterIndices: relative, layoutDirection: run.layoutDirection == .rightToLeft ? "rtl" : "ltr",
+                    bounds: rect(run.typographicBounds.rect), baseline: [Double(run.typographicBounds.origin.x), Double(run.typographicBounds.origin.y)], slices: slices))
+            }
+            lines.append(MarkswiftObservedTextLine(ordinal: lineOrdinal, origin: [Double(line.origin.x), Double(line.origin.y)], bounds: rect(line.typographicBounds.rect), runs: runs))
+            ctx.draw(line)
+        }
+        MarkswiftTextObservationCollector.shared.append(view: view, truncated: layout.isTruncated, lines: lines)
+    }
+    func sizeThatFits(proposal: ProposedViewSize, text: TextProxy) -> CGSize { text.sizeThatFits(proposal) }
+    var displayPadding: EdgeInsets { EdgeInsets() }
+}
+
+extension Text {
+    nonisolated func markswiftTextSource(_ emission: String, _ literal: String, fontBinding: String) -> Text {
+        if #available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *) {
+            return customAttribute(MarkswiftTextSourceAttribute(emission: emission, literal: literal, fontBinding: fontBinding))
+        }
+        return self
+    }
+}
+
+nonisolated struct MarkswiftTextObservationAnchor {
+    var key: String
+    var bounds: Anchor<CGRect>
+}
+nonisolated struct MarkswiftTextObservationAnchors: PreferenceKey {
+    static var defaultValue: [MarkswiftTextObservationAnchor] { [] }
+    static func reduce(value: inout [MarkswiftTextObservationAnchor], nextValue: () -> [MarkswiftTextObservationAnchor]) { value.append(contentsOf: nextValue()) }
+}
+nonisolated struct MarkswiftTextObservationFrames: PreferenceKey {
+    static var defaultValue: [MarkswiftObservedTextFrame] { [] }
+    static func reduce(value: inout [MarkswiftObservedTextFrame], nextValue: () -> [MarkswiftObservedTextFrame]) { value.append(contentsOf: nextValue()) }
+}
+extension View {
+    @ViewBuilder nonisolated private func markswiftTextDrawing(_ key: String, recordDraws: Bool) -> some View {
+        if #available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *), recordDraws {
+            textRenderer(MarkswiftPassiveTextRenderer(view: key))
+        } else {
+            self
+        }
+    }
+    @ViewBuilder nonisolated func markswiftObserveText(_ key: String, recordDraws: Bool = true) -> some View {
+        if #available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *) {
+            markswiftTextDrawing(key, recordDraws: recordDraws)
+                .transformAnchorPreference(key: MarkswiftTextObservationAnchors.self, value: .bounds) { values, anchor in
+                    values.append(MarkswiftTextObservationAnchor(key: key, bounds: anchor))
+                }
+        } else {
+            self // No observation on older runtimes; absence cannot satisfy native coverage.
+        }
+    }
+}
+struct MarkswiftTextObservationReader<Content: View>: View {
+    var content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+    var body: some View {
+        content.overlayPreferenceValue(MarkswiftTextObservationAnchors.self) { anchors in
+            GeometryReader { proxy in
+                let frames = anchors.map { anchor in
+                    let rect = proxy[anchor.bounds]
+                    return MarkswiftObservedTextFrame(key: anchor.key, x: Double(rect.minX), y: Double(rect.minY), w: Double(rect.width), h: Double(rect.height))
+                }
+                Color.clear.preference(key: MarkswiftTextObservationFrames.self, value: frames)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
+        .onPreferenceChange(MarkswiftTextObservationFrames.self) { frames in MarkswiftTextObservationCollector.shared.appendFrames(frames) }
+    }
+}
+`;
+
+// src/swift/text-observed-greedy-runtime.ts
+var TEXT_OBSERVED_GREEDY_RUNTIME = `import SwiftUI
+import UIKit
+
+private struct MarkswiftObservedWord: Identifiable {
+    var id: String
+    var value: String
+}
+
+struct MarkswiftObservedGreedyText: View {
+    let value: String
+    let font: Font
+    let color: Color
+    let fontSize: CGFloat
+    let lineGap: CGFloat
+    let baselineStep: CGFloat?
+    let nativeWeight: CGFloat?
+    let fitContent: Bool
+    let minWidth: CGFloat
+    let maxWidth: CGFloat?
+    let observationKey: String
+
+    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil, fitContent: Bool = false, minWidth: CGFloat = 0, maxWidth: CGFloat? = nil, observationKey: String) {
+        self.value = value; self.font = font; self.color = color; self.fontSize = fontSize; self.lineGap = lineGap
+        self.baselineStep = baselineStep; self.nativeWeight = nativeWeight; self.fitContent = fitContent; self.minWidth = minWidth; self.maxWidth = maxWidth; self.observationKey = observationKey
+    }
+    var body: some View {
+        let words = value.split(separator: " ").enumerated().map { index, word in
+            MarkswiftObservedWord(id: observationKey + "/word/" + String(index), value: String(word))
+        }
+        let nativeFont = nativeWeight.map { UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(rawValue: $0)) }
+        let space = nativeFont.map { MarkswiftTextAdvance.width(" ", font: $0) } ?? fontSize * 0.25
+        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep, fitContent: fitContent, minWidth: minWidth, maxWidth: maxWidth) {
+            ForEach(words) { item in
+                let word = item.value
+                let key = item.id
+                if let nativeFont {
+                    Text(verbatim: word)
+                        .font(Font(nativeFont))
+                        .foregroundStyle(color)
+                        .markswiftTextSource(key, word, fontBinding: "shared-supplied-ui-font:" + nativeFont.fontName)
+                        .markswiftObserveText(key)
+                        .fixedSize(horizontal: true, vertical: true)
+                        .layoutValue(key: MarkswiftFlowItemAdvance.self, value: MarkswiftTextAdvance.width(word, font: nativeFont))
+                } else {
+                    Text(verbatim: word)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .markswiftTextSource(key, word, fontBinding: "emission-specified-swiftui-font; resolved-font-unavailable")
+                        .markswiftObserveText(key)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(value)
+    }
+}
+`;
+
 // src/compiler/batch.ts
 function compileLayouts(inputs) {
   if (!inputs.length)
@@ -20755,11 +21863,14 @@ function compileLayouts(inputs) {
       mode: input.mode ?? "app",
       tokens: screenTokens(tokens, screen),
       fontMetrics: input.fontMetrics,
-      geometryInstrumentation: input.geometryInstrumentation
+      geometryInstrumentation: input.geometryInstrumentation,
+      textInstrumentation: input.textInstrumentation
     });
-    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...result.geometry ? { geometry: result.geometry } : {} });
+    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...result.geometry ? { geometry: result.geometry } : {}, ...result.text ? { text: result.text } : {} });
     if (result.geometry)
       add("MarkswiftGeometry.swift", GEOMETRY_RUNTIME, "file", "geometry runtime");
+    if (result.text)
+      add("MarkswiftTextObservation.swift", TEXT_OBSERVATION_RUNTIME + TEXT_OBSERVED_GREEDY_RUNTIME, "file", "text observation runtime");
     add(`${input.name}.swift`, result.view, "file", "view file");
     for (const [name, source] of Object.entries(result.shapes)) {
       if (shapes[name] !== undefined && shapes[name] !== source)
@@ -20869,6 +21980,7 @@ function compileResponsiveLayouts(options) {
       bundledFamilies: options.bundledFamilies,
       fontMetrics: options.fontMetrics,
       geometryInstrumentation: options.geometryInstrumentation,
+      textInstrumentation: options.textInstrumentation,
       supportFiles: options.supportFiles,
       assets: options.assets
     },
@@ -20879,7 +21991,8 @@ function compileResponsiveLayouts(options) {
       mode: options.mode,
       bundledFamilies: options.bundledFamilies,
       fontMetrics: options.fontMetrics,
-      geometryInstrumentation: options.geometryInstrumentation
+      geometryInstrumentation: options.geometryInstrumentation,
+      textInstrumentation: options.textInstrumentation
     }
   ]);
   const wrapperName = `${options.name}.swift`;
@@ -20930,7 +22043,8 @@ function compileLayout(layout, options = {}) {
     mode: options.mode ?? "app",
     tokens: screenTokens(tokens, screen),
     fontMetrics: options.fontMetrics,
-    geometryInstrumentation: options.geometryInstrumentation
+    geometryInstrumentation: options.geometryInstrumentation,
+    textInstrumentation: options.textInstrumentation
   });
   return {
     name,
@@ -20938,6 +22052,7 @@ function compileLayout(layout, options = {}) {
     diagnostics: result.report,
     mapping: result.mapping,
     ...result.geometry ? { geometry: result.geometry } : {},
+    ...result.text ? { text: result.text } : {},
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,
@@ -20947,7 +22062,8 @@ import SwiftUI
 
 ` + Object.keys(result.shapes).sort().map((key) => result.shapes[key]).join(`
 `),
-      ...result.geometry ? { "MarkswiftGeometry.swift": GEOMETRY_RUNTIME } : {}
+      ...result.geometry ? { "MarkswiftGeometry.swift": GEOMETRY_RUNTIME } : {},
+      ...result.text ? { "MarkswiftTextObservation.swift": TEXT_OBSERVATION_RUNTIME + TEXT_OBSERVED_GREEDY_RUNTIME } : {}
     }
   };
 }

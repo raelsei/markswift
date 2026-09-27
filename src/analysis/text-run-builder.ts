@@ -10,6 +10,8 @@ import { textPaintOf } from "./style.ts";
 import { unionRect } from "./geometry.ts";
 import { applyInlineEffects, inlineBoxHasPaint } from "./inline-effects.ts";
 import { linkDestinationLoss, nativeExternalURL } from "./link-destination.ts";
+import { textSourceProjection, trimTextSource, prependInferredSource, omittedTextSource } from "./text-provenance.ts";
+import type { TextRunSource } from "../model/text-source.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -19,6 +21,7 @@ export interface BuiltTextRuns {
   built: MeasuredTextRun[];
   painted: LayoutNode[];
   union?: Rect;
+  sourceAccounting?: TextRunSource;
 }
 
 export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: InferenceContext, note: (s: string) => void): BuiltTextRuns {
@@ -28,6 +31,7 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
   let union: Rect | undefined;
   let pendingSpace = false;
   let prevRun: SourceTextRun | undefined;
+  let sourceAccounting: TextRunSource | undefined;
   for (const r of runs) {
     const s = r.styleOf.styles;
     const boundary = r.node.tag === "br" ? "\n" : r.node.tag === "wbr" ? "\u200b" : undefined;
@@ -36,15 +40,23 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     const normalized = normalizeWhitespace(boundary ?? (r.node.text ?? ""), mode);
     let text = normalized.text;
     let src = normalized.src;
+    let source = textSourceProjection(r.node, text, src, mode);
     if (mode === "collapse") {
       // Collapsible whitespace merges across run boundaries; a whitespace-only run is just the
       // separator between its neighbours.
       const prev = out[out.length - 1];
       if (!text.trim()) {
         if (prev && !/\s$/.test(prev.text)) pendingSpace = true;
+        const omitted = omittedTextSource(r.node);
+        if (omitted) {
+          sourceAccounting ??= { version: 1, units: [], excluded: [], unavailable: [] };
+          sourceAccounting.excluded.push(...omitted.excluded);
+          sourceAccounting.unavailable.push(...omitted.unavailable);
+        }
         continue;
       }
       if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+        if (source) source = trimTextSource(source, 1, text.length);
         text = text.slice(1);
         src = src.slice(1);
       }
@@ -67,16 +79,19 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     if (pendingSpace && !text.startsWith(" ")) {
       if (deco && r.styleOf !== host) {
         const spaceRun = hostSpace(host, ctx.bundledFamilies);
+        if (ctx.root.textSourceCapture) spaceRun.run.source = { version: 1, units: [{ output: [0, 1], sources: [], operation: "synthetic", reason: "inferred host separator without source ownership" }], excluded: [], unavailable: ["inferred separator source unavailable"] };
         out.push(spaceRun.run);
         built.push(spaceRun);
       } else {
         text = " " + text;
         src = [-1, ...src];
+        if (source) source = prependInferredSource(source);
       }
     }
     pendingSpace = false;
     prevRun = r;
     const run: TextRun = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    if (source) run.source = source;
     // The family the run ends up with: a design that ships a web font we do not bundle, or names
     // `cursive`/`fantasy`, silently gets SF Pro instead — the report has to say which family went.
     const families = fontFamilies(s["font-family"]);
@@ -140,5 +155,5 @@ export function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: Infe
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
   }
-  return { out, built, painted, union };
+  return { out, built, painted, union, ...(sourceAccounting ? { sourceAccounting } : {}) };
 }

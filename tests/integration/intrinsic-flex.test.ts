@@ -137,3 +137,33 @@ browserTest("intrinsic font admission leaves legacy greedy paragraph emission un
   expect(result.code).toContain("MarkswiftGreedyText(");
   expect(result.code).not.toContain("MarkswiftIntrinsicFlex(");
 }, 30000);
+
+browserTest("captured canonical font stretch follows actual trimmed Chrome advances and declines narrowed fonts", async () => {
+  const { html, css } = intrinsicFlexControl(intrinsicFlexControls[0]);
+  const labels = html.replace("Computed CSS", "  AVATAR office  ");
+  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  const observed: Array<{ stretch: string; alias: string; width: number }> = [];
+  try {
+    const page = await browser.newPage();
+    for (const stretch of ["100%", "75%"]) {
+      const styles = `${css}.item{font-size:48px;line-height:60px;font-stretch:${stretch}}`;
+      await page.setContent(`<style>${styles}</style>${labels}`);
+      observed.push(await page.evaluate(() => {
+        const el = document.querySelector(".item")!, text = el.firstChild!, style = getComputedStyle(el);
+        const range = document.createRange(); range.setStart(text, 2); range.setEnd(text, text.textContent!.length - 2);
+        return { stretch: style.getPropertyValue("font-stretch"), alias: style.getPropertyValue("font-width"), width: range.getBoundingClientRect().width };
+      }));
+      const captured = await convertHtml(labels, { root: "#corpus", css: styles, mode: "app", viewport: { width: 390, height: 420 } });
+      const row = flex(inferScreen(captured.layout, "StretchAdmission").root);
+      expect(captured.layout.root.children[0]!.children[0]!.styles["font-stretch"]).toBe(stretch);
+      if (stretch === "100%") expect(row.intrinsicFlex).toBeDefined();
+      else {
+        expect(row.intrinsicFlex).toBeUndefined(); expect(row.measured).toBeDefined();
+        expect(row.notes.join(" ")).toContain("font-stretch:75%");
+        expect(row.notes.join(" ")).toContain("native glyph styling may differ");
+      }
+    }
+    expect(observed[0]!.stretch).toBe("100%"); expect(observed[1]!.stretch).toBe("75%");
+    expect(observed[1]!.width).toBeLessThan(observed[0]!.width);
+  } finally { await browser.close(); }
+}, 30000);

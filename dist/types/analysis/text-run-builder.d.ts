@@ -2,10 +2,12 @@
 import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type TextRun } from "../model/semantic.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
+import type { TextRunSource } from "../model/text-source.ts";
 export interface BuiltTextRuns {
     out: TextRun[];
     built: MeasuredTextRun[];
     painted: LayoutNode[];
     union?: Rect;
+    sourceAccounting?: TextRunSource;
 }
 export declare function buildTextRuns(host: LayoutNode, runs: SourceTextRun[], ctx: InferenceContext, note: (s: string) => void): BuiltTextRuns;

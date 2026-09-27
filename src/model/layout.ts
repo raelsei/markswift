@@ -4,6 +4,7 @@
  * by the semantic inference pass. Nothing here knows about SwiftUI.
  */
 import { z } from "zod";
+import { TextSourceOccurrence, TextSourceCapture } from "./text-source.ts";
 
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
@@ -64,6 +65,10 @@ export interface LayoutNode {
   /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
   preferredSize?: PreferredSize;
   markerLayout?: MarkerLayout;
+  /** Parent CSS strut font-box facts, independently measured without changing DOM layout. */
+  inlineStrut?: { ascent: number; descent: number; lineHeight: number };
+  /** Nonnegative fixed physical widget margins (top/right/bottom/left); absence is unknown. */
+  inlineControlMargins?: [number, number, number, number];
   /** Capture-local form/tree identity, resolved before boxless ancestors are flattened. */
   formOwner?: string;
   /** Live selection ordinal; -1 means explicitly unselected, absent means a legacy capture. */
@@ -74,6 +79,10 @@ export interface LayoutNode {
   bounds: Rect;
   /** Laid-out text for `#text` nodes. */
   text?: string;
+  /** Optional raw text/break occurrence before layout pruning; not a verification oracle. */
+  textSource?: TextSourceOccurrence;
+  /** Capture-root source claims, including empty and unlaid-out occurrences. */
+  textSourceCapture?: TextSourceCapture;
   /** Measured first text baseline, in capture-root CSS pixels; absent in legacy captures. */
   firstBaseline?: number;
   /**
@@ -97,11 +106,15 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     flattenedCustomElements: z.array(z.object({ tag: z.string(), id: z.string().optional() })).optional(),
     preferredSize: PreferredSize.optional(),
     markerLayout: MarkerLayout.optional(),
+    inlineStrut: z.object({ ascent: z.number().positive(), descent: z.number().nonnegative(), lineHeight: z.number().positive() }).optional(),
+    inlineControlMargins: z.tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()]).optional(),
     formOwner: z.string().optional(),
     selectedIndex: z.number().int().min(-1).optional(),
     option: z.object({ label: z.string(), value: z.string(), hidden: z.boolean().optional() }).optional(),
     bounds: Rect,
     text: z.string().optional(),
+    textSource: TextSourceOccurrence.optional(),
+    textSourceCapture: TextSourceCapture.optional(),
     firstBaseline: z.number().finite().optional(),
     lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number(), baseline: z.number().finite().optional() })).optional(),
     paint: z.number().optional(),
@@ -178,6 +191,7 @@ export type LayoutDoc = z.infer<typeof LayoutDoc>;
 
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
 export const STYLE_WHITELIST = [
+  "appearance",
   "align-content",
   "align-items",
   "align-self",
@@ -238,6 +252,7 @@ export const STYLE_WHITELIST = [
   "font-optical-sizing",
   "font-size",
   "font-size-adjust",
+  "font-stretch",
   "font-style",
   "font-synthesis",
   "font-variant-alternates",

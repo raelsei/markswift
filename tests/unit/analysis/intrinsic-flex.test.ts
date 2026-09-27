@@ -75,6 +75,7 @@ test.each([
   ["font-variant-ligatures", "none"], ["font-variant-caps", "small-caps"], ["font-variant-east-asian", "jis04"],
   ["font-variant-position", "super"], ["font-variant-alternates", "historical-forms"],
   ["font-optical-sizing", "none"], ["font-size-adjust", "0.7"], ["font-synthesis", "none"], ["unicode-bidi", "bidi-override"],
+  ["font-stretch", "75%"], ["font-stretch", "unknown"], ["font-width", "75%"], ["font-width", "normal"],
 ])("native intrinsic widths decline captured %s:%s with a specific diagnostic", (property, value) => {
   const doc = intrinsicFlexFixture(); doc.root.children[0]!.children[0]!.styles[property] = value;
   const row = flex(doc);
@@ -87,6 +88,13 @@ test("legacy captures missing font settings keep measured placement and explain 
   const row = flex(doc);
   expect(row.intrinsicFlex).toBeUndefined(); expect(row.measured).toBeDefined();
   expect(row.notes.join(" ")).toContain("font setting metadata unavailable");
+});
+
+test("legacy captures missing the canonical font width keep measured placement", () => {
+  const doc = intrinsicFlexFixture(); delete doc.root.children[0]!.children[0]!.styles["font-stretch"];
+  const row = flex(doc);
+  expect(row.intrinsicFlex).toBeUndefined(); expect(row.measured).toBeDefined();
+  expect(row.notes.join(" ")).toContain("font setting metadata unavailable (font-stretch)");
 });
 
 test("LTR default block isolation does not change plain whole-word advances", () => {

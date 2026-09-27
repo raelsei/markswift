@@ -6,6 +6,8 @@ import { extractTokens, emitDesignTokens, screenTokens } from "../swift/tokens.t
 import { validateName } from "./naming.ts";
 import type { CompileOptions, CompileResult } from "./index.ts";
 import { GEOMETRY_RUNTIME } from "../swift/geometry-runtime.ts";
+import { TEXT_OBSERVATION_RUNTIME } from "../swift/text-observation-runtime.ts";
+import { TEXT_OBSERVED_GREEDY_RUNTIME } from "../swift/text-observed-greedy-runtime.ts";
 
 export interface CompileLayoutInput extends CompileOptions {
   layout: LayoutDoc;
@@ -92,9 +94,11 @@ export function compileLayouts(inputs: readonly CompileLayoutInput[]): CompileBa
     const result = emitSwift(screen, input.name, {
       mode: input.mode ?? "app", tokens: screenTokens(tokens, screen), fontMetrics: input.fontMetrics,
       geometryInstrumentation: input.geometryInstrumentation,
+      textInstrumentation: input.textInstrumentation,
     });
-    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...(result.geometry ? { geometry: result.geometry } : {}) });
+    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...(result.geometry ? { geometry: result.geometry } : {}), ...(result.text ? { text: result.text } : {}) });
     if (result.geometry) add("MarkswiftGeometry.swift", GEOMETRY_RUNTIME, "file", "geometry runtime");
+    if (result.text) add("MarkswiftTextObservation.swift", TEXT_OBSERVATION_RUNTIME + TEXT_OBSERVED_GREEDY_RUNTIME, "file", "text observation runtime");
     add(`${input.name}.swift`, result.view, "file", "view file");
     for (const [name, source] of Object.entries(result.shapes)) {
       if (shapes[name] !== undefined && shapes[name] !== source) throw new Error(`Conflicting shape definition: ${name}`);
