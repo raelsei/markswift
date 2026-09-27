@@ -10,6 +10,7 @@ import { automaticHeight, equalCalculatedAllocation, flexAllocation, intrinsicFl
 import { measuredLayoutOf } from "./measured-layout.ts";
 import { px } from "../css/syntax.ts";
 import { flowFrame, relativeFallback } from "./relative-position.ts";
+import { buildIntrinsicFlex } from "./intrinsic-flex.ts";
 
 /** Build a grid-free flow stack and decide whether measured overflow needs scrolling. */
 export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis: Axis, display: string, ctx?: InferenceContext): StackNode {
@@ -56,7 +57,9 @@ export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChil
   if (/flex/.test(display) && !wraps && axis === "h") {
     const ordered = [...items].sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x);
     const admitted = flexAllocation(n, ordered, align, distribution, ctx);
-    if (admitted.tracks) {
+    const intrinsic = buildIntrinsicFlex(n, base, items, align, distribution);
+    if (intrinsic) stack = intrinsic;
+    else if (admitted.tracks) {
       stack.padding = insetsOf(n.styles);
       stack.allocation = { tracks: admitted.tracks };
       stack.spacing = px(n.styles["column-gap"]);
@@ -92,7 +95,7 @@ export function buildFlowStack(n: LayoutNode, base: SemBase, items: AnalyzedChil
   }
 
   if (stack.children.some(relativeFallback)) {
-    delete stack.allocation; delete stack.wrap;
+    delete stack.allocation; delete stack.wrap; delete stack.intrinsicFlex;
     for (const child of stack.children) { child.width = { kind: "fixed", px: child.frame.w }; child.height = { kind: "fixed", px: child.frame.h }; }
     stack.measured = measuredLayoutOf(stack, stack.children);
     stack.notes.push("approximated: relative position uses captured child placement; cannot recompute at another width");

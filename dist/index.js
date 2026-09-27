@@ -7071,6 +7071,7 @@ var PreferredSize = object({
   inlineSizeDefinite: boolean2().optional(),
   hasRelativePadding: boolean2().optional(),
   hasAutoMargins: boolean2().optional(),
+  horizontalAutoMargins: tuple([boolean2(), boolean2()]).optional(),
   relativeInsets: tuple([string2(), string2(), string2(), string2()]).optional(),
   relativeContainingDirection: _enum(["ltr", "rtl"]).optional(),
   gridTemplateColumns: string2().optional(),
@@ -7138,6 +7139,7 @@ var STYLE_WHITELIST = [
   "background-clip",
   "background-color",
   "background-image",
+  "background-origin",
   "background-position",
   "background-repeat",
   "background-size",
@@ -7166,6 +7168,7 @@ var STYLE_WHITELIST = [
   "clear",
   "clip-path",
   "color",
+  "color-scheme",
   "column-gap",
   "content",
   "direction",
@@ -7180,9 +7183,20 @@ var STYLE_WHITELIST = [
   "flex-wrap",
   "float",
   "font-family",
+  "font-feature-settings",
+  "font-kerning",
+  "font-optical-sizing",
   "font-size",
+  "font-size-adjust",
   "font-style",
+  "font-synthesis",
+  "font-variant-alternates",
+  "font-variant-caps",
+  "font-variant-east-asian",
+  "font-variant-ligatures",
   "font-variant-numeric",
+  "font-variant-position",
+  "font-variation-settings",
   "font-weight",
   "grid-auto-flow",
   "grid-column-start",
@@ -7216,6 +7230,7 @@ var STYLE_WHITELIST = [
   "mix-blend-mode",
   "object-fit",
   "object-position",
+  "image-rendering",
   "opacity",
   "order",
   "outline-color",
@@ -7255,6 +7270,7 @@ var STYLE_WHITELIST = [
   "transform-origin",
   "transition-duration",
   "transition-property",
+  "unicode-bidi",
   "vertical-align",
   "visibility",
   "-webkit-line-clamp",
@@ -7832,6 +7848,9 @@ async function readPreferredSizes(page, selector) {
           size.hasRelativePadding = true;
         if (["top", "right", "bottom", "left"].some((edge) => map?.get(`margin-${edge}`)?.toString() === "auto"))
           size.hasAutoMargins = true;
+        const horizontalMargins = ["left", "right"].map((edge) => map?.get(`margin-${edge}`)?.toString());
+        if (horizontalMargins.every((value) => value !== undefined))
+          size.horizontalAutoMargins = horizontalMargins.map((value) => value === "auto");
         if (getComputedStyle(el).position === "relative") {
           const insets = ["top", "right", "bottom", "left"].map((edge) => map?.get(edge)?.toString());
           if (insets.every((value) => value !== undefined))
@@ -8880,9 +8899,134 @@ function parseBlendModes(s) {
     return [];
   return splitTop(s, ",").map((t) => parseBlendMode(t) ?? "normal");
 }
+// src/css/gradient-line.ts
+function linearGradientLine(angle, w, h, corner) {
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return { direction: [0, 0], length: 0, start: [0.5, 0.5], end: [0.5, 0.5] };
+  }
+  const rad = angle * Math.PI / 180;
+  const norm = Math.hypot(w, h);
+  const dx = corner ? corner[0] * h / norm : Math.sin(rad);
+  const dy = corner ? corner[1] * w / norm : -Math.cos(rad);
+  const length = Math.abs(w * dx) + Math.abs(h * dy);
+  const x = length * dx / (2 * w), y = length * dy / (2 * h);
+  return { direction: [dx, dy], length, start: [0.5 - x, 0.5 - y], end: [0.5 + x, 0.5 + y] };
+}
+
+// src/css/gradient-interpolation.ts
+function gradientInterpolation(args) {
+  const result = [...args];
+  const explicit = /\bin\s+([a-z][\w-]*)/i.exec(result[0] ?? "");
+  let oklab = result.some((stop) => /^(?:lab|lch|oklab|oklch|color)\(/i.test(stop.trim()));
+  if (explicit) {
+    const space = explicit[1].toLowerCase();
+    if (space !== "srgb" && space !== "oklab")
+      return;
+    if (/\b(?:shorter|longer|increasing|decreasing|hue)\b/i.test(result[0]))
+      return;
+    oklab = space === "oklab";
+    const prelude = result[0].replace(explicit[0], "").replace(/\s+/g, " ").trim();
+    if (prelude)
+      result[0] = prelude;
+    else
+      result.shift();
+  }
+  return { args: result, oklab };
+}
+
+// src/css/radial-gradient.ts
+var extents = new Set(["closest-side", "farthest-side", "closest-corner", "farthest-corner"]);
+function length(token) {
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(px|%)$/.exec(token);
+  if (match)
+    return { value: Number(match[1]), unit: match[2] };
+  return token === "0" ? { value: 0, unit: "px" } : undefined;
+}
+function coordinate(token) {
+  const keyword = { left: 0, top: 0, center: 50, right: 100, bottom: 100 }[token];
+  return keyword === undefined ? length(token) : { value: keyword, unit: "%" };
+}
+function position(tokens) {
+  const middle = { value: 50, unit: "%" };
+  if (tokens.length === 1) {
+    const value = coordinate(tokens[0]);
+    if (!value)
+      return;
+    return /^(top|bottom)$/.test(tokens[0]) ? [middle, value] : [value, middle];
+  }
+  if (tokens.length !== 2)
+    return;
+  let [x, y] = tokens;
+  if (/^(top|bottom)$/.test(x) || /^(left|right)$/.test(y))
+    [x, y] = [y, x];
+  if (/^(top|bottom)$/.test(x) || /^(left|right)$/.test(y))
+    return;
+  const cx = coordinate(x), cy = coordinate(y);
+  return cx && cy ? [cx, cy] : undefined;
+}
+function parseRadialPrelude(prelude) {
+  const parts = prelude.trim().split(/\s+at\s+|^at\s+/);
+  if (parts.length > 2)
+    return;
+  const tokens = (parts[0] ?? "").split(/\s+/).filter(Boolean);
+  const shapes = tokens.filter((token) => token === "circle" || token === "ellipse");
+  if (shapes.length > 1)
+    return;
+  const dimensions = tokens.filter((token) => token !== "circle" && token !== "ellipse");
+  let size;
+  let ellipse = shapes[0] !== "circle";
+  if (dimensions.length === 1 && extents.has(dimensions[0])) {
+    if (dimensions[0] !== "farthest-corner")
+      size = dimensions[0];
+  } else if (dimensions.length) {
+    const values = dimensions.map(length);
+    if (values.some((value) => !value || value.value < 0))
+      return;
+    if (values.length === 1 && shapes[0] !== "ellipse" && values[0].unit === "px") {
+      ellipse = false;
+      size = [values[0], values[0]];
+    } else if (values.length === 2 && shapes[0] !== "circle") {
+      size = values;
+    } else
+      return;
+  }
+  const point = parts.length === 2 ? position(parts[1].trim().split(/\s+/)) : undefined;
+  if (parts.length === 2 && !point)
+    return;
+  const center = point ? point.map((value) => value.unit === "%" ? value.value / 100 : 0.5) : [0.5, 0.5];
+  return { ellipse, center, ...size ? { size } : {}, ...point?.some((value) => value.unit === "px") ? { position: point } : {} };
+}
+function gradientLength(value, dimension) {
+  return value.unit === "px" ? value.value : value.value * dimension / 100;
+}
+function radialGeometry(paint, width, height) {
+  const center = paint.position ? [gradientLength(paint.position[0], width), gradientLength(paint.position[1], height)] : [paint.center[0] * width, paint.center[1] * height];
+  if (Array.isArray(paint.size))
+    return { center, radii: [gradientLength(paint.size[0], width), gradientLength(paint.size[1], height)] };
+  const extent = paint.size ?? "farthest-corner";
+  const distances = [[Math.abs(center[0]), Math.abs(width - center[0])], [Math.abs(center[1]), Math.abs(height - center[1])]];
+  const choose = extent.startsWith("closest") ? Math.min : Math.max;
+  const x = choose(...distances[0]), y = choose(...distances[1]);
+  const corner = extent.endsWith("corner");
+  if (paint.ellipse)
+    return { center, radii: [x * (corner ? Math.SQRT2 : 1), y * (corner ? Math.SQRT2 : 1)] };
+  const radius = corner ? Math.hypot(x, y) : choose(x, y);
+  return { center, radii: [radius, radius] };
+}
+
 // src/css/paint.ts
 function paintWithin(p, host, sub) {
-  if (p.kind === "radial" || p.kind === "conic") {
+  if (p.kind === "radial") {
+    const geometry = radialGeometry(p, host.w, host.h);
+    const point = [host.x + geometry.center[0] - sub.x, host.y + geometry.center[1] - sub.y];
+    return {
+      ...p,
+      center: [sub.w ? point[0] / sub.w : 0.5, sub.h ? point[1] / sub.h : 0.5],
+      position: point.map((value) => ({ value, unit: "px" })),
+      size: geometry.radii.map((value) => ({ value, unit: "px" }))
+    };
+  }
+  if (p.kind === "conic") {
     const center = [
       sub.w ? (host.x + p.center[0] * host.w - sub.x) / sub.w : 0.5,
       sub.h ? (host.y + p.center[1] * host.h - sub.y) / sub.h : 0.5
@@ -8891,9 +9035,7 @@ function paintWithin(p, host, sub) {
   }
   if (p.kind !== "linear" || p.stops.length < 2)
     return p;
-  const rad = p.angle * Math.PI / 180;
-  const dx = Math.sin(rad), dy = -Math.cos(rad);
-  const length = Math.abs(host.w * dx) + Math.abs(host.h * dy);
+  const { direction: [dx, dy], length } = linearGradientLine(p.angle, host.w, host.h, p.corner);
   if (length === 0)
     return p;
   const start = (host.x + host.w / 2) * dx + (host.y + host.h / 2) * dy - length / 2;
@@ -8917,7 +9059,10 @@ function paintWithin(p, host, sub) {
     return stops[stops.length - 1].color;
   };
   const cut = [{ color: at(0), pos: 0 }, ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })), { color: at(1), pos: 1 }];
-  return { ...p, stops: cut };
+  if (!p.corner)
+    return { ...p, stops: cut };
+  const { corner: _, ...numeric } = p;
+  return { ...numeric, angle: Math.atan2(dx, -dy) * 180 / Math.PI, stops: cut };
 }
 function parseBackgroundImage(s) {
   if (!s || s === "none")
@@ -8934,31 +9079,45 @@ function parseGradient(s) {
   if (!m)
     return { kind: "unsupported", raw: s };
   const kind = m[2];
-  const args = splitTop(m[3], ",");
+  const interpolation = gradientInterpolation(splitTop(m[3], ","));
+  if (!interpolation)
+    return { kind: "unsupported", raw: s };
+  const args = interpolation.args;
   let paint;
   if (kind === "linear") {
     let angle = 180;
+    let corner;
     if (args[0] && !looksLikeColor(args[0])) {
       const a = args.shift();
       const deg = /^[-+]?[\d.]/.test(a) ? hue(a) : undefined;
       if (deg !== undefined)
         angle = deg;
-      else if (/^to\s+/.test(a))
+      else if (/^to\s+/.test(a)) {
         angle = sideAngle(a);
-      else
+        if (/\b(left|right)\b/.test(a) && /\b(top|bottom)\b/.test(a)) {
+          corner = [/\bright\b/.test(a) ? 1 : -1, /\bbottom\b/.test(a) ? 1 : -1];
+        }
+      } else
         return { kind: "unsupported", raw: s };
     }
-    paint = { kind: "linear", angle, stops: parseStops(args) };
+    const stops = parseStops(args);
+    if (!stops)
+      return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "linear", angle, stops };
+    if (corner)
+      paint.corner = corner;
   } else if (kind === "radial") {
-    let ellipse = true;
-    let center = [0.5, 0.5];
+    let geometry = { ellipse: true, center: [0.5, 0.5] };
     if (args[0] && !looksLikeColor(args[0])) {
-      const a = args.shift();
-      if (/\bcircle\b/.test(a))
-        ellipse = false;
-      center = atPosition(a) ?? center;
+      const parsed = parseRadialPrelude(args.shift());
+      if (!parsed)
+        return { kind: "unsupported", raw: s };
+      geometry = parsed;
     }
-    paint = { kind: "radial", stops: parseStops(args), center, ellipse };
+    const stops = parseStops(args);
+    if (!stops)
+      return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "radial", stops, ...geometry };
   } else {
     let from = 0;
     let center = [0.5, 0.5];
@@ -8969,10 +9128,15 @@ function parseGradient(s) {
         from = hue(f[1]) ?? 0;
       center = atPosition(a) ?? center;
     }
-    paint = { kind: "conic", stops: parseStops(args), from, center };
+    const stops = parseStops(args);
+    if (!stops)
+      return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "conic", stops, from, center };
   }
   if (m[1])
     paint.repeating = true;
+  if (interpolation.oklab)
+    paint.interpolation = "oklab";
   return paint;
 }
 function atPosition(prelude) {
@@ -9010,8 +9174,10 @@ function parseStops(args) {
   for (const a of args) {
     const m = new RegExp(String.raw`^(${COLOR_TOKEN})\s*(?:([-+\d.]+)(%|px|deg))?\s*$`, "i").exec(a);
     if (!m)
-      continue;
-    const color = parseColor(m[1]) ?? TRANSPARENT;
+      return;
+    const color = parseColor(m[1]);
+    if (!color)
+      return;
     const stop = { color };
     if (m[2] !== undefined && m[3] === "%")
       stop.pos = +m[2] / 100;
@@ -9021,6 +9187,8 @@ function parseStops(args) {
       stop.px = +m[2];
     stops.push(stop);
   }
+  if (stops.length < 2)
+    return;
   if (!stops.some((s) => s.px !== undefined))
     fillEvenly(stops);
   return stops;
@@ -9055,11 +9223,9 @@ function resolvePaint(p, w, h) {
     return p;
   let length;
   if (p.kind === "linear") {
-    const rad = p.angle * Math.PI / 180;
-    length = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
+    length = linearGradientLine(p.angle, w, h, p.corner).length;
   } else {
-    const cx = p.center[0] * w, cy = p.center[1] * h;
-    length = Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
+    length = radialGeometry(p, w, h).radii[0];
   }
   const stops = p.stops.map(({ color, pos, px }) => {
     const stop = { color };
@@ -9240,7 +9406,7 @@ var UNITS = {
   em: 16,
   rem: 16
 };
-function length(raw) {
+function length2(raw) {
   if (raw === undefined || raw.trim().endsWith("%"))
     return {};
   const match = /^\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]*)\s*$/i.exec(raw);
@@ -9254,7 +9420,7 @@ function length(raw) {
   return px > 0 ? { px } : { invalid: true };
 }
 function svgRootDimensions(attrs, fallbackBox = [300, 150]) {
-  const width = length(attrs["width"]), height = length(attrs["height"]);
+  const width = length2(attrs["width"]), height = length2(attrs["height"]);
   const notes = [];
   for (const [name, parsed] of [["width", width], ["height", height]]) {
     if (parsed.unsupported)
@@ -12259,6 +12425,28 @@ function measuredTextLineBox(host, node, built, sources = built, note) {
   };
 }
 
+// src/analysis/boolean-paint.ts
+function markColorScheme(node, notes) {
+  const value = node.styles["color-scheme"];
+  if (value === undefined)
+    return;
+  const tokens = value.trim().toLowerCase().split(/\s+/);
+  if (tokens.length === 1 && tokens[0] === "normal")
+    return "light";
+  if (tokens.some((token) => !["only", "light", "dark"].includes(token))) {
+    notes.push(`approximated: checkbox/radio custom color-scheme ${JSON.stringify(value)} → supported Chrome light/dark schemes only`);
+  }
+  const light = tokens.includes("light"), dark = tokens.includes("dark");
+  if (light && dark)
+    return "light dark";
+  if (light)
+    return "light";
+  if (dark)
+    return "dark";
+  notes.push(`approximated: checkbox/radio color-scheme ${JSON.stringify(value)} has no supported native scheme → Chrome default light palette`);
+  return "light";
+}
+
 // src/analysis/controls.ts
 function controlOf(n) {
   const a = n.attrs;
@@ -12335,6 +12523,7 @@ function controlOf(n) {
       if (control === "toggle" || control === "radio") {
         if ("checked" in a)
           spec.checked = true;
+        spec.markColorScheme = markColorScheme(n, notes);
       } else if (a["value"] !== undefined)
         spec.value = a["value"];
       else if (type === "submit")
@@ -12570,10 +12759,25 @@ function backgroundFills(s, w, h, notes) {
     const p = layers[i];
     const top = layers.length - 1 - i;
     if (p.kind === "unsupported")
-      notes.push(`unmapped: background-image ${p.raw.slice(0, 40)}`);
+      notes.push(`unmapped: background-image ${p.raw.slice(0, 40)}${p.reason ? ` (${p.reason})` : ""}`);
     else if (p.kind === "image")
       fills.push(imagePaint(p.url, s, "background", top, w, h));
     else {
+      if (p.kind !== "solid" && p.interpolation === "oklab")
+        notes.push("approximated: CSS Oklab gradient uses SwiftUI perceptual interpolation with stops converted to sRGB; wide-gamut colors and exact interpolation are not proved");
+      if (p.kind === "radial" && p.ellipse && /\btext\b/.test(s["background-clip"] ?? ""))
+        notes.push("approximated: elliptical radial text fill uses a circular native text gradient");
+      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some((stop) => stop.px !== undefined))
+        notes.push("approximated: absolute gradient stop positions retain normalization to the captured box");
+      if (p.kind !== "solid") {
+        const origin = layerValue(s["background-origin"], top) ?? "padding-box";
+        const originInsets = EDGES.map((edge) => edgeWidth(s, edge) + (origin === "content-box" ? px(s[`padding-${edge}`]) : 0));
+        if (origin !== "border-box" && originInsets.some((value) => value > 0))
+          notes.push("approximated: gradient background origin uses the border box instead of the authored inset origin");
+        const size = layerValue(s["background-size"], top);
+        if (size && size !== "auto" && size !== "auto auto")
+          notes.push("approximated: gradient background-size is not applied to its native paint field");
+      }
       if (p.kind !== "solid" && p.repeating)
         notes.push(`approximated: repeating ${p.kind} gradient tiled from its first period`);
       fills.push(resolvePaint(p, w, h));
@@ -12592,6 +12796,14 @@ function backgroundFills(s, w, h, notes) {
       if (box !== "padding-box" && box !== "content-box")
         return;
       f.inset = EDGES.map((e) => round2(edgeWidth(s, e) + (box === "content-box" ? px(s[`padding-${e}`]) : 0)));
+      if (f.kind === "linear" || f.kind === "radial" || f.kind === "conic" || f.kind === "solid") {
+        const corners = ["top-left", "top-right", "bottom-right", "bottom-left"].map((corner) => parseRadiusXY(s[`border-${corner}-radius`], w, h));
+        const rounded = corners.some((point) => point.some((value) => value > 0));
+        const uniformRadius = corners.every((point) => point[0] === point[1] && point[0] === corners[0][0]);
+        const uniformInset = f.inset.every((value) => value === f.inset[0]);
+        if (rounded && (!uniformRadius || !uniformInset))
+          notes.push("approximated: inset background clipping with unequal or elliptical corner radii is not reconstructed");
+      }
     });
   }
   const blendModes = parseBlendModes(s["background-blend-mode"]);
@@ -12898,6 +13110,8 @@ function styleOf(n, notes) {
   const s = n.styles;
   const { w, h } = n.bounds;
   const style = { fills: backgroundFills(s, w, h, notes), shadows: parseShadows(s["box-shadow"]) };
+  if (s["image-rendering"] === "pixelated" || s["image-rendering"] === "crisp-edges")
+    style.imageRendering = s["image-rendering"];
   Object.assign(style, borderStyle(s, w, h, notes));
   applyEffects(n, style, notes);
   return style;
@@ -13298,6 +13512,38 @@ function relativeFallback(n) {
   return n.notes.some((note) => note.startsWith("approximated: relative position "));
 }
 
+// src/analysis/auto-margins.ts
+function horizontalAutoAlignment(n, width, ctx, notes) {
+  const auto = n.preferredSize?.horizontalAutoMargins;
+  if (!auto?.some(Boolean) || !ctx.parent || width.kind === "fill")
+    return;
+  const parent = ctx.parent;
+  if (ctx.parentAxis !== "v" || !/^(block|flow-root)$/.test(ctx.parentDisplay ?? parent.styles.display ?? "block"))
+    return;
+  const reject = (reason) => {
+    notes.push(`approximated: horizontal auto margins (${reason}); native block alignment is not reconstructed`);
+    return;
+  };
+  if (!/^(block|flow-root|flex|grid|table)$/.test(n.styles.display ?? "block") || (n.styles.float ?? "none") !== "none" || /^(absolute|fixed)$/.test(n.styles.position ?? "static"))
+    return reject("outside ordinary block flow");
+  if ([n, parent].some((node) => (node.styles["writing-mode"] ?? "horizontal-tb") !== "horizontal-tb" || (node.styles.direction ?? "ltr") !== "ltr"))
+    return reject("writing mode or direction unsupported");
+  if (relativePosition(n).reason)
+    return reject("static used position unavailable");
+  const [, right, , left] = insetsOf(parent.styles), frame = flowBounds(n);
+  const available = parent.bounds.w - left - right, free = available - frame.w;
+  if (!Number.isFinite(free) || free <= 0.5)
+    return;
+  const fixedEdge = auto[0] ? "right" : "left";
+  const fixedMargin = n.styles[`margin-${fixedEdge}`] ?? "0px";
+  if (!(auto[0] && auto[1]) && !/^(?:0|0px)$/.test(fixedMargin))
+    return reject("nonzero opposite margin");
+  const expected = parent.bounds.x + left + (auto[0] ? auto[1] ? free / 2 : free : 0);
+  if (Math.abs(frame.x - expected) > 0.5)
+    return reject("captured used position disagrees with auto-margin allocation");
+  return auto[0] ? auto[1] ? "center" : "end" : undefined;
+}
+
 // src/analysis/sizing.ts
 function trailingInset(n, height, padBottom) {
   if (height.kind !== "hug" || n.children.length === 0)
@@ -13374,7 +13620,8 @@ function sizeOf(n, d, ctx, notes) {
   let fillsW = false, fillsH = false;
   if (ctx.parent) {
     const [ppt, ppr, ppb, ppl] = insetsOf(ctx.parent.styles);
-    const outerW = n.bounds.w + px(s["margin-left"]) + px(s["margin-right"]);
+    const autoMargins = n.preferredSize?.horizontalAutoMargins;
+    const outerW = n.bounds.w + (autoMargins?.[0] ? 0 : px(s["margin-left"])) + (autoMargins?.[1] ? 0 : px(s["margin-right"]));
     const outerH = n.bounds.h + px(s["margin-top"]) + px(s["margin-bottom"]);
     fillsW = Math.abs(outerW - (ctx.parent.bounds.w - ppl - ppr)) <= 1;
     fillsH = Math.abs(outerH - (ctx.parent.bounds.h - ppt - ppb)) <= 1;
@@ -13425,7 +13672,7 @@ function sizeOf(n, d, ctx, notes) {
   else
     height = measuredH;
   const constraints = constraintsOf(n, d, ctx, notes);
-  let selfAlign;
+  let selfAlign = horizontalAutoAlignment(n, width, ctx, notes);
   if (width.kind === "fill" && ctx.parentAxis === "v" && !abs) {
     const ml = px(s["margin-left"]);
     const mr = px(s["margin-right"]);
@@ -13499,6 +13746,78 @@ function preserveSymbolLineLeading(n, stack) {
   stack.padding[2] += Math.max(0, contentBottom - bottom);
 }
 
+// src/analysis/fieldset-paint.ts
+var ordinary2 = (value) => value === undefined || /^(block|inline-block|flow-root)$/.test(value);
+var rendered = (node) => node.styles.display !== "none";
+var inFlow2 = (node) => (node.styles.float ?? "none") === "none" && !/^(absolute|fixed)$/.test(node.styles.position ?? "static");
+function fieldsetAdmission(node, style) {
+  const legends = node.children.filter((child) => child.tag === "legend" && rendered(child));
+  const legend = legends.find(inFlow2);
+  if (!legend)
+    return legends.length ? { reason: "floated/absolute legend has no supported rendered-legend decoration" } : {};
+  if ((node.styles["writing-mode"] ?? "horizontal-tb") !== "horizontal-tb")
+    return { reason: "vertical writing mode" };
+  if (!ordinary2(node.styles.display) || !ordinary2(legend.styles.display))
+    return { reason: "nonordinary or inline-collapsed legend flow" };
+  if (!Number.isFinite(legend.bounds.w) || !Number.isFinite(legend.bounds.h) || legend.bounds.w <= 0 || legend.bounds.h <= 0)
+    return { reason: "legend border geometry unavailable" };
+  if (relativePosition(legend).reason)
+    return { reason: "relative legend displacement is not fixed-pixel proved" };
+  if (legend.styles.transform && legend.styles.transform !== "none")
+    return { reason: "transformed legend static border geometry" };
+  if (["box-shadow", "filter", "backdrop-filter", "transform", "mask-image", "clip-path"].some((property) => node.styles[property] && node.styles[property] !== "none"))
+    return { reason: "complex fieldset effect/clip/shadow" };
+  if (style.shadows.length || style.filters?.length || style.blur !== undefined || style.backdropBlur !== undefined || style.transform || style.mask || style.clipPath || style.clip || style.outline || style.blend)
+    return { reason: "complex fieldset effect/clip/shadow" };
+  if (node.styles["background-image"] && node.styles["background-image"] !== "none" || node.styles["background-clip"] && node.styles["background-clip"] !== "border-box" || node.styles["background-blend-mode"] && node.styles["background-blend-mode"] !== "normal")
+    return { reason: "complex fieldset fill or background clipping" };
+  if (style.fills.some((fill) => fill.kind !== "solid" || fill.blend || fill.inset?.some((inset) => inset !== 0)))
+    return { reason: "complex fieldset fill or background clipping" };
+  if (style.borderSides || style.border?.dashed)
+    return { reason: "nonuniform or nonsolid fieldset border" };
+  const edges = ["top", "right", "bottom", "left"].map((edge) => ({
+    width: node.styles[`border-${edge}-width`] ?? "0px",
+    style: node.styles[`border-${edge}-style`] ?? "none",
+    color: node.styles[`border-${edge}-color`] ?? ""
+  }));
+  if (edges.some((edge) => edge.width !== edges[0].width || edge.style !== edges[0].style || edge.color !== edges[0].color) || edges.some((edge) => !["none", "hidden", "solid"].includes(edge.style)))
+    return { reason: "nonuniform or nonsolid fieldset border" };
+  for (const corner of ["top-left", "top-right", "bottom-right", "bottom-left"]) {
+    const radius = node.styles[`border-${corner}-radius`];
+    if (radius && (!/^(?:\d+(?:\.\d+)?px|0)(?: (?:\d+(?:\.\d+)?px|0))?$/.test(radius) || radius.split(" ").some((value) => value !== radius.split(" ")[0])))
+      return { reason: "percentage or elliptical fieldset radius" };
+  }
+  return { legend };
+}
+function keyFor(node, root) {
+  const locate = (current, path) => {
+    if (current === node)
+      return path;
+    for (let index = 0;index < current.children.length; index++) {
+      const found = locate(current.children[index], `${path}/${index}`);
+      if (found)
+        return found;
+    }
+    return;
+  };
+  return `fieldset:${locate(root, "root") ?? node.id ?? "unknown"}`;
+}
+function fieldsetMetadata(node, ctx, style, notes) {
+  if (node.tag === "fieldset") {
+    const { legend, reason } = fieldsetAdmission(node, style);
+    if (reason)
+      notes.push(`approximated: fieldset decoration (${reason}) → ordinary captured box paint`);
+    return legend ? { fieldsetPaint: { key: keyFor(node, ctx.root), legendId: legend.id ?? "" } } : {};
+  }
+  if (node.tag === "legend" && ctx.parent?.tag === "fieldset") {
+    const parent = ctx.parent;
+    const { legend } = fieldsetAdmission(parent, styleOf(parent, []));
+    if (legend === node)
+      return { fieldsetLegend: { key: keyFor(parent, ctx.root), relativeOffset: relativePosition(node).offset ?? [0, 0] } };
+  }
+  return {};
+}
+
 // src/analysis/node-base.ts
 function finish(node) {
   node.confidence = worst(node.notes);
@@ -13542,6 +13861,7 @@ function makeBase(n, ctx, declared) {
     ...selfAlign !== undefined ? { selfAlign } : {},
     padding,
     style,
+    ...fieldsetMetadata(n, ctx, style, notes),
     confidence: "mapped",
     notes,
     overlays: []
@@ -14874,6 +15194,167 @@ function equalWrappingColumns(n, base, items, columnGap) {
   return columns;
 }
 
+// src/analysis/text-flow-admission.ts
+var SYSTEM_LINE_HEIGHT = 1.193359;
+function naturalLineHeight(f, metrics) {
+  if (f.family.kind !== "custom")
+    return f.size * SYSTEM_LINE_HEIGHT;
+  const m = metrics[f.family.name.toLowerCase()];
+  const ratio = m ? (m.ascent + m.descent + m.lineGap) / m.upem : SYSTEM_LINE_HEIGHT;
+  return f.size * ratio;
+}
+function usesGreedyWords(n) {
+  const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
+  if (!n.lineBox && n.sourceTag !== "p" && !heading || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate || n.wrapAnywhere)
+    return false;
+  if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden)
+    return false;
+  const r = n.runs[0];
+  if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
+    return false;
+  const lineHeight = r.font.lineHeight ?? n.lineBox?.baselineStep;
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || !n.lineBox && !heading && r.font.weight !== 400 || lineHeight === undefined)
+    return false;
+  if (n.lineBox && r.text.split(" ").some((word) => !/^[A-Za-z0-9_]+(?:['.][A-Za-z0-9_]+)*[.,;:!?]*$/.test(word)))
+    return false;
+  if (!n.lineBox && !heading && lineHeight < naturalLineHeight(r.font, {}))
+    return false;
+  if (n.notes.some((note) => note.includes("font-family")))
+    return false;
+  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)*$/.test(r.text) && (n.lineBox !== undefined || r.text.includes(" "));
+}
+
+// src/analysis/intrinsic-font-settings.ts
+var ordinarySettings = [
+  ["font-kerning", /^(auto|normal)$/],
+  ["font-feature-settings", /^normal$/],
+  ["font-variation-settings", /^normal$/],
+  ["font-variant-ligatures", /^normal$/],
+  ["font-variant-caps", /^normal$/],
+  ["font-variant-east-asian", /^normal$/],
+  ["font-variant-position", /^normal$/],
+  ["font-variant-alternates", /^normal$/],
+  ["font-variant-numeric", /^normal$/],
+  ["font-optical-sizing", /^auto$/],
+  ["font-size-adjust", /^none$/],
+  ["font-synthesis", /^weight style small-caps$/],
+  ["unicode-bidi", /^(normal|isolate)$/]
+];
+function intrinsicFontSettingsReason(node) {
+  if (node.styles.display === "none")
+    return;
+  if (node.tag !== "#text")
+    for (const [property, allowed] of ordinarySettings) {
+      const value = node.styles[property];
+      if (value === undefined)
+        return `font setting metadata unavailable (${property})`;
+      if (!allowed.test(value))
+        return `unsupported ${property}:${value}`;
+    }
+  for (const child of node.children) {
+    const reason = intrinsicFontSettingsReason(child);
+    if (reason)
+      return reason;
+  }
+}
+
+// src/analysis/intrinsic-flex.ts
+function isIntrinsicFlexCaption(node) {
+  if (!node.lineBox || node.lines !== 1 || node.runs.length !== 1 || node.width.kind !== "hug" || node.height.kind !== "hug" || node.padding.some((value) => value !== 0) || !plainBox(node) || node.style.fills.length || node.style.shadows.length)
+    return false;
+  const run = node.runs[0];
+  if (run.text.split(" ").length > 2)
+    return false;
+  return usesGreedyWords({ ...node, runs: [{ ...run, decoration: undefined }] });
+}
+function intrinsicFlexText(node, wrapping) {
+  if (node.kind === "text" && node.lineBox && usesGreedyWords(node))
+    return node;
+  if (!wrapping && node.kind === "control" && (node.control === "link" || node.control === "button") && !node.files && !node.disabled && node.content.length === 1) {
+    const caption = node.content[0];
+    if (caption.kind === "text" && isIntrinsicFlexCaption(caption))
+      return caption;
+  }
+}
+function plainBox(node) {
+  return !node.overlays.length && !node.relativeOffset && !relativeFallback(node) && !node.style.hidden && !node.style.clip && !node.style.transform && !node.style.mask && !node.style.clipPath && !node.style.filters && !node.style.fills.some((fill) => fill.kind !== "solid") && node.minWidth === undefined && node.maxWidth === undefined && node.minHeight === undefined && node.maxHeight === undefined;
+}
+var preferred2 = (node, property) => node.preferredSize?.[property] ?? parseDeclared(node.attrs.style)[property] ?? "auto";
+var pixelGap = (value) => value === undefined || value === "normal" ? 0 : fixedLength(value);
+function intrinsicFlex(n, base, items, align, distribution) {
+  const wrapping = n.styles["flex-wrap"] === "wrap";
+  if (!items.length || !/^(row)?$/.test(n.styles["flex-direction"] ?? "") || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || hasRelativePadding(n) || !/^(?:wrap|nowrap)$/.test(n.styles["flex-wrap"] ?? "nowrap") || !/^(start|center|end|between)$/.test(distribution) || !/^(start|center|end|stretch)$/.test(align) || !/^(normal|flex-start|start|center|flex-end|end|space-between)?$/.test(n.styles["justify-content"] ?? "") || !automaticHeight(n) || base.minHeight !== undefined || base.maxHeight !== undefined || (n.styles["overflow-x"] ?? "visible") !== "visible" || (n.styles["overflow-y"] ?? "visible") !== "visible" || n.styles.display === "inline-flex" && preferred2(n, "width") === "auto" || base.relativeOffset || relativeFallback(base) || base.overlays.length || base.style.clip || base.style.transform || base.style.mask || base.style.clipPath)
+    return;
+  const columnGap = pixelGap(n.styles["column-gap"]), rowGap = pixelGap(n.styles["row-gap"]);
+  if (columnGap === undefined || rowGap === undefined)
+    return;
+  if (!/^(normal|stretch|start|flex-start|center|end|flex-end)?$/.test(n.styles["align-content"] ?? ""))
+    return;
+  const shrink = [], automaticMinimum = [];
+  for (const { node, sem } of items) {
+    const s = node.styles, declared = parseDeclared(node.attrs.style);
+    const basis = node.preferredSize?.flexBasis ?? s["flex-basis"] ?? declared["flex-basis"] ?? "auto";
+    const factor = Number(s["flex-shrink"] ?? 1);
+    if (!n.children.includes(node) || !plainBox(sem) || hasAutoMargins(node) || hasRelativePadding(node) || preferred2(node, "width") !== "auto" || preferred2(node, "height") !== "auto" || basis !== "auto" || Number(s["flex-grow"] ?? 0) !== 0 || factor !== 0 && factor !== 1 || Number(s.order ?? 0) !== 0 || !/^(auto|0(?:px)?)$/.test(s["min-width"] ?? "auto") || (s["max-width"] ?? "none") !== "none" || !/^(auto|0(?:px)?)$/.test(s["min-height"] ?? "auto") || (s["max-height"] ?? "none") !== "none" || (s["aspect-ratio"] ?? "auto") !== "auto" || !/^(static|relative)?$/.test(s.position ?? "") || (s["overflow-x"] ?? "visible") !== "visible" || (s["overflow-y"] ?? "visible") !== "visible" || EDGES.some((edge) => px(s[`margin-${edge}`]) !== 0) || !/^(auto|normal)?$/.test(s["align-self"] ?? "") || !intrinsicFlexText(sem, wrapping))
+      return;
+    shrink.push(factor);
+    automaticMinimum.push((s["min-width"] ?? "auto") === "auto");
+  }
+  for (const { node } of items) {
+    const fontSettings = intrinsicFontSettingsReason(node);
+    if (fontSettings)
+      return { fontFallback: fontSettings };
+  }
+  return { wrapping, columnGap, rowGap, shrink, automaticMinimum };
+}
+function buildIntrinsicFlex(n, base, items, align, distribution) {
+  const admitted = intrinsicFlex(n, base, items, align, distribution);
+  if (!admitted)
+    return;
+  if ("fontFallback" in admitted) {
+    const children = items.map(({ sem }) => {
+      sem.width = { kind: "fixed", px: sem.frame.w };
+      sem.height = { kind: "fixed", px: sem.frame.h };
+      return finish(sem);
+    });
+    const stack = {
+      ...base,
+      padding: insetsOf(n.styles),
+      kind: "stack",
+      axis: "h",
+      align,
+      distribution,
+      spacing: 0,
+      leadInset: 0,
+      children
+    };
+    stack.measured = measuredLayoutOf(stack, children);
+    stack.notes.push(`approximated: intrinsic flex ${admitted.fontFallback} → captured child allocation; native glyph styling may differ`);
+    return stack;
+  }
+  const children = items.map(({ node, sem }) => {
+    restoreAllocatedInsets(node, sem);
+    sem.width = { kind: "fill" };
+    sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+    return finish(sem);
+  });
+  const stack = {
+    ...base,
+    padding: insetsOf(n.styles),
+    kind: "stack",
+    axis: "h",
+    align,
+    distribution,
+    spacing: admitted.columnGap,
+    leadInset: 0,
+    height: { kind: "hug" },
+    children,
+    intrinsicFlex: admitted
+  };
+  stack.measured = measuredLayoutOf(stack, children);
+  return stack;
+}
+
 // src/analysis/wrapping.ts
 function gap(value) {
   if (!value || value === "normal")
@@ -14967,6 +15448,9 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
 function buildWrapping(n, base, all, axis, align, distribution) {
   const plain = { ...base, padding: insetsOf(n.styles) };
   const items = all.filter((item) => renders(item.node));
+  const intrinsic = axis === "h" ? buildIntrinsicFlex(n, plain, items, align, distribution) : undefined;
+  if (intrinsic)
+    return intrinsic;
   const columnGap = gap(n.styles["column-gap"]), rowGap = gap(n.styles["row-gap"]);
   const columns = equalWrappingColumns(n, plain, items, columnGap);
   const live = columns ? { ...plain, height: { kind: "hug" } } : plain;
@@ -15033,7 +15517,10 @@ function buildFlowStack(n, base, items, axis, display, ctx) {
   if (/flex/.test(display) && !wraps && axis === "h") {
     const ordered = [...items].sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x);
     const admitted = flexAllocation(n, ordered, align, distribution, ctx);
-    if (admitted.tracks) {
+    const intrinsic = buildIntrinsicFlex(n, base, items, align, distribution);
+    if (intrinsic)
+      stack = intrinsic;
+    else if (admitted.tracks) {
       stack.padding = insetsOf(n.styles);
       stack.allocation = { tracks: admitted.tracks };
       stack.spacing = px(n.styles["column-gap"]);
@@ -15070,6 +15557,7 @@ function buildFlowStack(n, base, items, axis, display, ctx) {
   if (stack.children.some(relativeFallback)) {
     delete stack.allocation;
     delete stack.wrap;
+    delete stack.intrinsicFlex;
     for (const child of stack.children) {
       child.width = { kind: "fixed", px: child.frame.w };
       child.height = { kind: "fixed", px: child.frame.h };
@@ -15198,11 +15686,11 @@ function declaredTracks(nodes, count) {
     return true;
   };
   for (const node of nodes) {
-    if (!ordinary2(node))
+    if (!ordinary3(node))
       return;
     if (node.tag === "colgroup" && node.children.length) {
       for (const child of node.children)
-        if (child.tag !== "col" || !ordinary2(child) || !add(child, intent(node)))
+        if (child.tag !== "col" || !ordinary3(child) || !add(child, intent(node)))
           return;
     } else if (!add(node))
       return;
@@ -15244,7 +15732,7 @@ function spacing(value) {
     return;
   return [px(parts[0]), px(parts[1] ?? parts[0])];
 }
-function ordinary2(node) {
+function ordinary3(node) {
   const styles = node.styles;
   return (!styles.position || styles.position === "static") && (!styles.float || styles.float === "none") && (!styles.direction || styles.direction === "ltr") && (!styles["writing-mode"] || styles["writing-mode"] === "horizontal-tb") && (!styles.transform || styles.transform === "none") && styles.visibility !== "collapse";
 }
@@ -15307,7 +15795,7 @@ function readTableStructure(table, decline) {
         columns.push(node);
     } else if (node.tag === "tr")
       rows.push({ node });
-    else if (groups2.has(node.tag) && ordinary2(node) && intent(node) === "auto" && node.children.every((row) => row.tag === "tr")) {
+    else if (groups2.has(node.tag) && ordinary3(node) && intent(node) === "auto" && node.children.every((row) => row.tag === "tr")) {
       rows.push(...node.children.map((row) => ({ node: row, group: node })));
     } else
       return decline("anonymous or irregular table structure has no native track mapping");
@@ -15325,7 +15813,7 @@ function readTableStructure(table, decline) {
       return decline(effect);
     let column = 0;
     for (const cell of row.children) {
-      if (!cells2.has(cell.tag) || !ordinary2(cell) || !unconstrained2(cell) || cell.styles.display !== "table-cell" || !["top", "middle", "bottom"].includes(cell.styles["vertical-align"] ?? "middle")) {
+      if (!cells2.has(cell.tag) || !ordinary3(cell) || !unconstrained2(cell) || cell.styles.display !== "table-cell" || !["top", "middle", "bottom"].includes(cell.styles["vertical-align"] ?? "middle")) {
         return decline("cell constraints, positioning or baseline alignment require captured geometry");
       }
       while (occupancy[r][column])
@@ -15419,7 +15907,7 @@ function intrinsicTableCells(structure, collapsed, families, decline) {
   if (structure.caption)
     return reject("caption minimum-content sizing requires captured geometry");
   const columns = structure.columns.flatMap((column) => [column, ...column.children]);
-  if (columns.some((column) => !ordinary2(column) || !column.preferredSize || intent(column) !== "auto")) {
+  if (columns.some((column) => !ordinary3(column) || !column.preferredSize || intent(column) !== "auto")) {
     return reject("specified column widths require a broader automatic allocation algorithm");
   }
   const cells = [];
@@ -15622,7 +16110,7 @@ function analyzeNativeTable(table, parent, families = {}) {
   const mode = table.styles["table-layout"];
   if (mode !== "fixed" && mode !== "auto")
     return decline("automatic/intrinsic column allocation requires captured table-layout intent");
-  if (table.styles.display !== "table" || intent(table) !== "100%" || !ordinary2(table) || !unconstrained2(table) || intent(table, "height") !== "auto" || parent && parent.styles.display !== "block") {
+  if (table.styles.display !== "table" || intent(table) !== "100%" || !ordinary3(table) || !unconstrained2(table) || intent(table, "height") !== "auto" || parent && parent.styles.display !== "block") {
     return decline("native allocation requires an unconstrained full-width table in ordinary block flow");
   }
   if (parent) {
@@ -15641,7 +16129,7 @@ function analyzeNativeTable(table, parent, families = {}) {
     return;
   const { rows, caption, placed, count } = structure;
   const captionSide = caption?.styles["caption-side"] ?? "top";
-  if (caption && (!ordinary2(caption) || !unconstrained2(caption) || intent(caption) !== "auto" || caption.styles.display !== "table-caption" || !close(caption.bounds.w, table.bounds.w) || !close(caption.bounds.x, table.bounds.x) || !["top", "bottom"].includes(captionSide))) {
+  if (caption && (!ordinary3(caption) || !unconstrained2(caption) || intent(caption) !== "auto" || caption.styles.display !== "table-caption" || !close(caption.bounds.w, table.bounds.w) || !close(caption.bounds.x, table.bounds.x) || !["top", "bottom"].includes(captionSide))) {
     return decline("constrained, positioned or side captions require captured geometry");
   }
   const captionMargins = caption ? [px(caption.styles["margin-top"]), px(caption.styles["margin-bottom"])] : [0, 0];
@@ -15661,7 +16149,7 @@ function analyzeNativeTable(table, parent, families = {}) {
     return decline("table body extends outside its captured box");
   for (let i = 0;i < rows.length; i++) {
     const row = rows[i].node;
-    if (!ordinary2(row) || intent(row) !== "auto" || row.styles.display !== "table-row" || !close(row.bounds.x, first.bounds.x) || !close(row.bounds.w, first.bounds.w) || i > 0 && !close(row.bounds.y, rows[i - 1].node.bounds.y + rows[i - 1].node.bounds.h + gap[1])) {
+    if (!ordinary3(row) || intent(row) !== "auto" || row.styles.display !== "table-row" || !close(row.bounds.x, first.bounds.x) || !close(row.bounds.w, first.bounds.w) || i > 0 && !close(row.bounds.y, rows[i - 1].node.bounds.y + rows[i - 1].node.bounds.h + gap[1])) {
       return decline("row geometry or positioning cannot be expressed by native table tracks");
     }
   }
@@ -16231,18 +16719,19 @@ function imageLayer(p, n, prop, ctx) {
   return ["Color.clear", ".overlay(alignment: .topLeading) {", ...indent(x || y ? [...view, `.offset(x: ${num3(x)}, y: ${num3(y)})`] : view, 1), "}"];
 }
 function imageSource(url, n, prop, ctx, sizedBackground = false) {
+  const sampling = n.style.imageRendering ? ".interpolation(.none)" : "";
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url))
-      return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
+      return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sampling}${sizing} } placeholder: { Color.clear }` };
     const name = url.replace(/[?#].*$/, "").replace(/^.*\//, "").replace(/\.[a-z0-9]+$/i, "");
-    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sampling}${sizing}` };
   }
   const [, mime = "", params = "", payload = ""] = data;
   const base64 = params.split(";").includes("base64");
   if (mime !== "image/svg+xml") {
     const b64 = base64 ? payload : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))), "latin1").toString("base64");
-    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sampling}${sizing}` };
   }
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
@@ -16356,6 +16845,31 @@ function imageNodeExpr(n, ctx) {
   return ["Color.clear", ".overlay(alignment: .center) {", ...indent(n.objectPosition ? [...drawn, `.offset(x: ${num3(offsetX)}, y: ${num3(offsetY)})`] : drawn, 1), "}", ...a11y];
 }
 
+// src/swift/paint-radial.ts
+function length3(value) {
+  return value.unit === "px" ? `.points(${num3(value.value)})` : `.fraction(${num3(value.value / 100)})`;
+}
+function radialGradientArguments(paint) {
+  const args = [`center: UnitPoint(x: ${num3(paint.center[0])}, y: ${num3(paint.center[1])})`, `ellipse: ${paint.ellipse}`];
+  if (paint.position)
+    args.push(`position: (${length3(paint.position[0])}, ${length3(paint.position[1])})`);
+  if (Array.isArray(paint.size))
+    args.push(`extent: .explicit(${length3(paint.size[0])}, ${length3(paint.size[1])})`);
+  else if (paint.size)
+    args.push(`extent: .${paint.size.replace(/-([a-z])/g, (_, value) => value.toUpperCase())}`);
+  return args.join(", ");
+}
+
+// src/swift/paint-clip.ts
+function backgroundClip(p, n, shape, inset) {
+  const edges = p.kind !== "unsupported" ? p.inset : undefined;
+  const radii = n.style.radius;
+  if (edges && edges.some((value) => value > 0) && edges.every((value) => value === edges[0]) && !n.style.ellipse && radii?.some((value) => value > 0) && radii.every((value) => value === radii[0])) {
+    return `.mask { MarkswiftCSSInsetRoundClip(radius: ${num3(radii[0])}, inset: ${num3(edges[0])}) }`;
+  }
+  return inset ? `.mask { ${shape}${inset} }` : `.clipShape(${shape})`;
+}
+
 // src/swift/paint.ts
 function shapeExpr(st, w, h) {
   if (st.ellipse)
@@ -16376,22 +16890,31 @@ function paintExpr(p, w, h, ctx, id) {
     case "solid":
       return colorExpr(p.color, ctx, id);
     case "linear": {
-      const rad = p.angle * Math.PI / 180;
-      const sx = 0.5 - 0.5 * Math.sin(rad), sy = 0.5 + 0.5 * Math.cos(rad);
-      const ex = 0.5 + 0.5 * Math.sin(rad), ey = 0.5 - 0.5 * Math.cos(rad);
-      return `LinearGradient(stops: ${stops(p, ctx, id)}, startPoint: UnitPoint(x: ${num3(sx)}, y: ${num3(sy)}), endPoint: UnitPoint(x: ${num3(ex)}, y: ${num3(ey)}))`;
+      const { start: [sx, sy], end: [ex, ey] } = linearGradientLine(p.angle, w, h, p.corner);
+      return `LinearGradient.linearGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), startPoint: UnitPoint(x: ${num3(sx)}, y: ${num3(sy)}), endPoint: UnitPoint(x: ${num3(ex)}, y: ${num3(ey)}))`;
     }
     case "radial": {
-      const [cx, cy] = p.center;
-      const fx = Math.max(cx, 1 - cx) * w, fy = Math.max(cy, 1 - cy) * h;
-      const R = p.ellipse ? Math.hypot(fx, fy) : Math.hypot(fx, fy);
-      return `RadialGradient(stops: ${stops(p, ctx, id)}, center: UnitPoint(x: ${num3(cx)}, y: ${num3(cy)}), startRadius: 0, endRadius: ${num3(R)})`;
+      const geometry = radialGeometry(p, w, h);
+      const [cx, cy] = geometry.center;
+      return `RadialGradient.radialGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num3(w ? cx / w : 0.5)}, y: ${num3(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num3(geometry.radii[0])})`;
     }
     case "conic":
-      return `AngularGradient(stops: ${stops(p, ctx, id)}, center: UnitPoint(x: ${num3(p.center[0])}, y: ${num3(p.center[1])}), startAngle: .degrees(${num3(p.from - 90)}), endAngle: .degrees(${num3(p.from + 270)}))`;
+      return `AngularGradient.angularGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num3(p.center[0])}, y: ${num3(p.center[1])}), startAngle: .degrees(${num3(p.from - 90)}), endAngle: .degrees(${num3(p.from + 270)}))`;
     default:
       return "Color.clear";
   }
+}
+function linearGradientViewExpr(p, ctx, id) {
+  const corner = p.corner ? `, corner: UnitPoint(x: ${num3((p.corner[0] + 1) / 2)}, y: ${num3((p.corner[1] + 1) / 2)})` : "";
+  const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
+  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}, angle: ${num3(p.angle)}${corner}${interpolation})`;
+}
+function radialGradientViewExpr(p, ctx, id) {
+  const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
+  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}, ${radialGradientArguments(p)}${interpolation})`;
+}
+function gradientSpace(p) {
+  return p.interpolation === "oklab" ? ".perceptual" : ".device";
 }
 function stops(p, ctx, id) {
   let s = p.stops;
@@ -16407,9 +16930,15 @@ function stops(p, ctx, id) {
 }
 function fillModifier(p, n, shape, ctx) {
   const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num3(p.inset[0])}, leading: ${num3(p.inset[3])}, bottom: ${num3(p.inset[2])}, trailing: ${num3(p.inset[1])}))` : "";
+  if (p.kind === "linear")
+    return [`.background { ${linearGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)} }`];
+  if (p.kind === "radial")
+    return [`.background { ${radialGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)} }`];
+  if (p.kind === "conic")
+    return [`.background { Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)} }`];
   if (p.kind !== "image") {
     const paint = paintExpr(p, n.frame.w, n.frame.h, ctx, n.id);
-    return inset ? [`.background { ${shape}.fill(${paint})${inset} }`] : [`.background(${paint}, in: ${shape})`];
+    return inset ? [`.background { Rectangle().fill(${paint})${backgroundClip(p, n, shape, inset)} }`] : [`.background(${paint}, in: ${shape})`];
   }
   const layer = imageLayer(p, n, "background-image", ctx);
   return layer ? [".background {", ...indent([...layer, `.clipShape(${shape})${inset}`], 1), "}"] : [];
@@ -16455,8 +16984,14 @@ function fillLayerView(p, n, shape, ctx) {
   const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num3(p.inset[0])}, leading: ${num3(p.inset[3])}, bottom: ${num3(p.inset[2])}, trailing: ${num3(p.inset[1])}))` : "";
   if (p.kind === "unsupported")
     return [];
+  if (p.kind === "linear")
+    return [`${linearGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)}`];
+  if (p.kind === "radial")
+    return [`${radialGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)}`];
+  if (p.kind === "conic")
+    return [`Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)}`];
   if (p.kind !== "image")
-    return [`${shape}.fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${inset}`];
+    return inset ? [`Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)}`] : [`${shape}.fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})`];
   const layer = imageLayer(p, n, "background-image", ctx);
   return layer ? [...layer, `.clipShape(${shape})${inset}`] : [];
 }
@@ -16501,14 +17036,6 @@ function textLineBoxExpr(node, mode, content, spacing, greedy = false, width) {
 }
 
 // src/swift/text.ts
-var SYSTEM_LINE_HEIGHT = 1.193359;
-function naturalLineHeight(f, metrics) {
-  if (f.family.kind !== "custom")
-    return f.size * SYSTEM_LINE_HEIGHT;
-  const m = metrics[f.family.name.toLowerCase()];
-  const ratio = m ? (m.ascent + m.descent + m.lineGap) / m.upem : SYSTEM_LINE_HEIGHT;
-  return f.size * ratio;
-}
 function textExpr(n, ctx) {
   const runs = n.runs;
   if (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length))
@@ -16518,7 +17045,8 @@ function textExpr(n, ctx) {
     const natural = naturalLineHeight(run.font, ctx.fontMetrics);
     const lineHeight = run.font.lineHeight ?? n.lineBox.baselineStep;
     const leading = lineHeight - natural;
-    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""})`];
+    const limits = n.width.kind === "hug" ? `, fitContent: true${n.minWidth === undefined ? "" : `, minWidth: ${num3(Math.max(0, n.minWidth - n.padding[1] - n.padding[3]))}`}${n.maxWidth === undefined ? "" : `, maxWidth: ${num3(Math.max(0, n.maxWidth - n.padding[1] - n.padding[3]))}`}` : "";
+    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""}${limits})`];
     if (n.lineBox)
       return textLineBoxExpr(n, ctx.mode, out, leading, true);
     if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
@@ -16574,26 +17102,6 @@ function textExpr(n, ctx) {
     out.push(`.padding(.vertical, ${num3(leading / 2)})`);
   }
   return out;
-}
-function usesGreedyWords(n) {
-  const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
-  if (!n.lineBox && n.sourceTag !== "p" && !heading || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate || n.wrapAnywhere)
-    return false;
-  if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden)
-    return false;
-  const r = n.runs[0];
-  if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
-    return false;
-  const lineHeight = r.font.lineHeight ?? n.lineBox?.baselineStep;
-  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || !n.lineBox && !heading && r.font.weight !== 400 || lineHeight === undefined)
-    return false;
-  if (n.lineBox && r.text.split(" ").some((word) => !/^[A-Za-z0-9_]+(?:['.][A-Za-z0-9_]+)*[.,;:!?]*$/.test(word)))
-    return false;
-  if (!n.lineBox && !heading && lineHeight < naturalLineHeight(r.font, {}))
-    return false;
-  if (n.notes.some((note) => note.includes("font-family")))
-    return false;
-  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)*$/.test(r.text) && (n.lineBox !== undefined || r.text.includes(" "));
 }
 function runExpr(r, n, literalTransform, ctx) {
   if (r.gap !== undefined)
@@ -16745,6 +17253,11 @@ function selectExpr(node, state, still, label) {
 function painted(text, alignment) {
   return [`Text(verbatim: ${str(text)})`, `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`];
 }
+
+// src/swift/boolean-control.ts
+function isDrawnMarkControl(node) {
+  return node.kind === "control" && (node.control === "radio" || node.control === "toggle" && !(node.frame.w >= node.frame.h * 1.4 && node.frame.w >= 28));
+}
 // src/swift/control-runtime.ts
 var CONTROL_RUNTIME = `
 // \`UTType\` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
@@ -16786,13 +17299,46 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
+/// This style owns its disabled paint. A plain button style would dim that paint a second time.
+@MainActor struct MarkswiftMarkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
+
 @MainActor struct MarkswiftMarkToggleStyle: ToggleStyle {
     enum Mark { case check, dot }
+    enum Palette { case light, dark }
     let mark: Mark
     let tint: Color
+    var disabled = false
+    var palette: Palette = .light
+    @Environment(\\.isEnabled) private var isEnabled
+
+    private var paintsDisabled: Bool { disabled || !isEnabled }
+    // Chrome 154 ui/color/color_provider_utils.cc, CompleteDefaultWebNativeRendererColorIdsDefinition.
+    // Preserve alpha: these colors composite against the actual surface, not a sampled white one.
+    private var enabledBackground: Color {
+        palette == .dark ? Color(.sRGB, red: 59.0/255, green: 59.0/255, blue: 59.0/255) : Color(.sRGB, red: 1, green: 1, blue: 1)
+    }
+    private var enabledBorder: Color {
+        let component = palette == .dark ? 133.0/255 : 118.0/255
+        return Color(.sRGB, red: component, green: component, blue: component)
+    }
+    private var disabledAccent: Color {
+        palette == .dark ? Color(.sRGB, red: 117.0/255, green: 117.0/255, blue: 117.0/255) : Color(.sRGB, red: 118.0/255, green: 118.0/255, blue: 118.0/255, opacity: 77.0/255)
+    }
+    private var disabledBorder: Color {
+        palette == .dark ? Color(.sRGB, red: 98.0/255, green: 98.0/255, blue: 98.0/255) : disabledAccent
+    }
+    private var disabledBackground: Color {
+        palette == .dark ? Color(.sRGB, red: 59.0/255, green: 59.0/255, blue: 59.0/255) : Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 153.0/255)
+    }
+    private var disabledLightenLayer: Color {
+        palette == .dark ? disabledBackground : Color(.sRGB, red: 169.0/255, green: 169.0/255, blue: 169.0/255, opacity: 51.0/255)
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
+            guard !paintsDisabled else { return }
             configuration.isOn.toggle()
         } label: {
             ZStack {
@@ -16800,21 +17346,50 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
                 if configuration.isOn { fill }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MarkswiftMarkButtonStyle())
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
-        let face = on ? tint : Color(uiColor: .systemBackground)
-        let line = on ? tint : Color(uiColor: .systemGray2)
+        if paintsDisabled {
+            switch mark {
+            case .check:
+                disabledFace
+                    .overlay {
+                        if on { RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledAccent) }
+                        else { RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(disabledBorder, lineWidth: 1) }
+                    }
+            case .dot:
+                disabledFace
+                    .overlay(Circle().strokeBorder(on ? disabledAccent : disabledBorder, lineWidth: 1))
+            }
+        } else {
+            let face = on ? tint : enabledBackground
+            let line = on ? tint : enabledBorder
+            switch mark {
+            case .check:
+                RoundedRectangle(cornerRadius: 2, style: .circular)
+                    .fill(face)
+                    .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(line, lineWidth: 1))
+            case .dot:
+                Circle()
+                    .fill(enabledBackground)
+                    .overlay(Circle().strokeBorder(line, lineWidth: on ? 2 : 1))
+            }
+        }
+    }
+
+    // NativeThemeBase::PaintCheckboxRadioCommon paints a separate lighten layer and background,
+    // inset by 0.2 CSS pixels for the one-pixel border; keep both translucent layers independent.
+    @ViewBuilder private var disabledFace: some View {
         switch mark {
         case .check:
-            RoundedRectangle(cornerRadius: 2, style: .circular)
-                .fill(face)
-                .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(line, lineWidth: 1))
+            RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledLightenLayer)
+                .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledBackground))
+                .padding(0.2)
         case .dot:
-            Circle()
-                .fill(on ? Color.clear : face)
-                .overlay(Circle().strokeBorder(line, lineWidth: on ? 2 : 1))
+            Circle().fill(disabledLightenLayer)
+                .overlay(Circle().fill(disabledBackground))
+                .padding(0.2)
         }
     }
 
@@ -16825,10 +17400,10 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
                 .resizable()
                 .scaledToFit()
                 .fontWeight(.bold)
-                .foregroundStyle(Color(uiColor: .systemBackground))
+                .foregroundStyle(paintsDisabled ? disabledBackground : enabledBackground)
                 .padding(2)
         case .dot:
-            Circle().fill(tint).padding(3)
+            Circle().fill(paintsDisabled ? disabledAccent : tint).padding(3)
         }
     }
 }
@@ -16938,6 +17513,10 @@ function core2(n, deps) {
   const state = deps.stateOf.get(n);
   const binding = state ? `$${state}` : "";
   const still = deps.mode === "fidelity" || n.readOnly === true;
+  if (isDrawnMarkControl(n) && n.markColorScheme === undefined) {
+    note(n, "approximated: checkbox/radio color-scheme metadata unavailable → legacy captured screen theme palette");
+  }
+  const markPalette = n.markColorScheme === "light dark" || n.markColorScheme === undefined ? deps.theme : n.markColorScheme;
   switch (n.control) {
     case "button": {
       const action = n.action !== undefined ? deps.actionOf.get(n.action) ?? "{}" : "{}";
@@ -16977,11 +17556,11 @@ function core2(n, deps) {
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
     case "radio": {
       const radio = still ? `.constant(${n.checked ? "true" : "false"})` : deps.radioBindingOf?.get(n) ?? `.constant(${n.checked ? "true" : "false"})`;
-      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[deps.theme].accent}))`]);
+      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[markPalette].accent}, disabled: ${!!n.disabled}, palette: .${markPalette}))`]);
     }
     case "toggle": {
-      const ua = UA[deps.theme];
-      const style = n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const ua = UA[markPalette];
+      const style = isDrawnMarkControl(n) ? `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent}, disabled: ${!!n.disabled}, palette: .${markPalette})` : ".switch";
       return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
     }
     case "slider": {
@@ -17096,6 +17675,7 @@ function stackOfNodes(nodes, deps) {
 function frameModifier(n, ctx) {
   const parts = [];
   const app = ctx.mode === "app";
+  const greedyHug = app && n.kind === "text" && n.width.kind === "hug" && usesGreedyWords(n);
   const allocatedHug = app && n.kind === "stack" && !!n.allocation && n.height.kind === "hug";
   const w = n.width.kind === "fixed" ? n.width.px : n.width.kind === "fraction" && !app ? n.width.capturedPx : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
@@ -17113,14 +17693,14 @@ function frameModifier(n, ctx) {
   const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
   const flex = [
-    !fixedW && n.minWidth !== undefined ? `minWidth: ${num3(n.minWidth)}` : "",
-    !fixedW && n.maxWidth !== undefined ? `maxWidth: ${num3(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
+    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${num3(n.minWidth ?? 0)}` : "",
+    !fixedW && !greedyHug && n.maxWidth !== undefined ? `maxWidth: ${num3(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
     !fixedH && minHeight !== undefined ? `minHeight: ${num3(minHeight)}` : "",
     !fixedH && maxHeight !== undefined ? `maxHeight: ${num3(maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : ""
   ].filter(Boolean);
   if (flex.length)
     parts.push(`.frame(${flex.join(", ")}, alignment: ${align})`);
-  const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
+  const hugW = !fixedW && !greedyHug && n.width.kind === "hug" && n.maxWidth !== undefined;
   const hugH = !fixedH && n.height.kind === "hug" && maxHeight !== undefined;
   if (hugW || hugH)
     parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
@@ -17304,6 +17884,10 @@ function maskModifier(p, n, ctx) {
   }
   if (p.kind === "unsupported")
     return [];
+  if (p.kind === "linear")
+    return [`.mask { ${linearGradientViewExpr(p, ctx)} }`];
+  if (p.kind === "radial")
+    return [`.mask { ${radialGradientViewExpr(p, ctx)} }`];
   return [`.mask { ${paintExpr(p, n.frame.w, n.frame.h, ctx)} }`];
 }
 
@@ -17431,6 +18015,24 @@ function geometryModifier(node, state, viewport = false) {
   return [`.markswiftObserveGeometry(${JSON.stringify(entry.key)}, role: ${JSON.stringify(entry.role)})`];
 }
 
+// src/swift/fieldset-paint.ts
+function fieldsetFillModifiers(node, shape, ctx) {
+  const fieldset = node.fieldsetPaint;
+  if (!fieldset)
+    return [];
+  return [...node.style.fills].reverse().flatMap((fill) => fill.kind === "solid" ? [
+    `.modifier(MarkswiftFieldsetBackground(legendKey: ${str(fieldset.key)}, shape: ${shape}, fill: ${colorExpr(fill.color, ctx, node.id)}, borderWidth: ${num3(node.style.border?.width ?? 0)}))`
+  ] : []);
+}
+function fieldsetBorderModifiers(node, shape, ctx) {
+  const border = node.style.border, fieldset = node.fieldsetPaint;
+  return border && fieldset ? [`.modifier(MarkswiftFieldsetBorder(legendKey: ${str(fieldset.key)}, shape: ${shape}, color: ${colorExpr(border.color, ctx, node.id)}, width: ${num3(border.width)}))`] : [];
+}
+function fieldsetLegendModifier(node) {
+  const legend = node.fieldsetLegend;
+  return legend ? [`.markswiftFieldsetLegend(${str(legend.key)}, relativeX: ${num3(legend.relativeOffset[0])}, relativeY: ${num3(legend.relativeOffset[1])})`] : [];
+}
+
 // src/swift/modifiers.ts
 function modifiers(n, ctx) {
   const m = [];
@@ -17449,14 +18051,18 @@ function modifiers(n, ctx) {
   for (const o of [...n.overlays.filter((o) => o.layer === "background")].reverse())
     m.push(...overlayModifier(o, "background", ctx));
   m.push(...insetShadowModifiers(n, ctx));
-  if (st.fills.some((f) => f.kind !== "unsupported" && f.blend))
+  if (n.fieldsetPaint)
+    m.push(...fieldsetFillModifiers(n, shape, ctx));
+  else if (st.fills.some((f) => f.kind !== "unsupported" && f.blend))
     m.push(...blendedFillModifier(st.fills, n, shape, ctx));
   else
     for (const f of [...st.fills].reverse())
       m.push(...fillModifier(f, n, shape, ctx));
   if (st.clip || st.radius && (n.kind === "stack" || n.kind === "grid") && n.overlays.length)
     m.push(`.clipShape(${shape})`);
-  if (st.border) {
+  if (n.fieldsetPaint)
+    m.push(...fieldsetBorderModifiers(n, shape, ctx));
+  else if (st.border) {
     const b = st.border;
     m.push(b.dashed ? `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, style: StrokeStyle(lineWidth: ${num3(b.width)}, dash: [${num3(b.width * 3)}, ${num3(b.width * 2)}])))` : `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, lineWidth: ${num3(b.width)}))`);
   } else if (st.borderSides)
@@ -17478,7 +18084,7 @@ function modifiers(n, ctx) {
     m.push(clipPathModifier(st.clipPath, n, ctx));
   if (st.mask)
     m.push(...maskModifier(st.mask, n, ctx));
-  const nativeDim = ctx.mode === "app" && n.kind === "control" && n.disabled === true;
+  const nativeDim = ctx.mode === "app" && n.kind === "control" && n.disabled === true && !isDrawnMarkControl(n);
   if (st.opacity !== undefined && !nativeDim)
     m.push(`.opacity(${num3(st.opacity)})`);
   if (st.blur !== undefined)
@@ -17491,6 +18097,7 @@ function modifiers(n, ctx) {
   m.push(...geometryModifier(n, ctx.geometry));
   if (ctx.mode === "fidelity" && n.kind === "stack" && n.scroll)
     m.push(...geometryModifier(n, ctx.geometry, true));
+  m.push(...fieldsetLegendModifier(n));
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined)
@@ -17663,11 +18270,38 @@ function interactive(node) {
   return node.kind === "control" || (node.kind === "stack" || node.kind === "grid") && node.children.some(interactive);
 }
 
+// src/swift/intrinsic-flex.ts
+function intrinsicFlexExpr(n, ctx) {
+  const flow = n.intrinsicFlex;
+  const horizontal = n.distribution === "center" ? ".center" : n.distribution === "end" ? ".trailing" : ".leading";
+  const vertical = n.align === "center" ? ".center" : n.align === "end" ? ".bottom" : ".top";
+  const out = [`MarkswiftIntrinsicFlex(columnGap: ${num3(flow.columnGap)}, rowGap: ${num3(flow.rowGap)}, wrapping: ${flow.wrapping}, horizontal: ${horizontal}, vertical: ${vertical}, between: ${n.distribution === "between"}, stretch: ${n.align === "stretch"}) {`];
+  n.children.forEach((child, index) => {
+    const text = intrinsicFlexText(child, flow.wrapping);
+    const run = text.runs[0];
+    const inset = child.padding[1] + child.padding[3];
+    const font = `UIFont.systemFont(ofSize: ${num3(run.font.size)}, weight: .${nativeTextWeight(run.font)})`;
+    const words = [...new Set(run.text.split(" "))].map(str).join(", ");
+    const minimum = flow.automaticMinimum[index] ? `([${words}].map { MarkswiftTextAdvance.width($0, font: ${font}) }.max() ?? 0) + ${num3(inset)}` : num3(inset);
+    out.push(...indent([
+      ...ctx.renderNode(child).split(`
+`),
+      `.layoutValue(key: MarkswiftIntrinsicFlexMinimum.self, value: ${minimum})`,
+      `.layoutValue(key: MarkswiftIntrinsicFlexShrink.self, value: ${num3(flow.shrink[index])})`,
+      `.layoutValue(key: MarkswiftIntrinsicFlexInset.self, value: ${num3(inset)})`
+    ], 1));
+  });
+  out.push("}");
+  return out;
+}
+
 // src/swift/layout.ts
 function containerExpr(n, ctx) {
   const out = [];
   if (n.kind === "stack" && n.table)
     out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex)
+    out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks))
     out.push(...weightedLayoutExpr(n, ctx));
   else if (n.measured)
@@ -17834,6 +18468,9 @@ struct MarkswiftFlow: Layout {
     var columns: Int? = nil
     var stretch: Bool = false
     var baselineStep: CGFloat? = nil
+    var fitContent: Bool = false
+    var minWidth: CGFloat = 0
+    var maxWidth: CGFloat? = nil
 
     private struct Item {
         var index: Int
@@ -17847,7 +18484,18 @@ struct MarkswiftFlow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
+        let available: CGFloat?
+        if fitContent {
+            let intrinsic = rows(width: .infinity, subviews: subviews)
+            let maximum = intrinsic.map { $0.width }.max() ?? 0
+            let minimum = intrinsic.flatMap { $0.items }.map { $0.size.width }.max() ?? 0
+            // CSS shrink-to-fit retains whole words. Authored max-width constrains the box,
+            // even below min-content; oversized words still retain their original advances.
+            let fit = min(maximum, max(minimum, finiteWidth(proposal.width) ?? maximum))
+            available = max(minWidth, min(maxWidth ?? .infinity, fit))
+        } else {
+            available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
+        }
         let rows = rows(width: available ?? .infinity, subviews: subviews)
         let width = available ?? rows.map { $0.width }.max() ?? 0
         let height = baselineStep.map { $0 * CGFloat(max(0, rows.count - 1)) + (rows.last?.height ?? 0) }
@@ -17957,8 +18605,11 @@ struct MarkswiftGreedyText: View {
     let lineGap: CGFloat
     let baselineStep: CGFloat?
     let nativeWeight: CGFloat?
+    let fitContent: Bool
+    let minWidth: CGFloat
+    let maxWidth: CGFloat?
 
-    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil) {
+    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil, fitContent: Bool = false, minWidth: CGFloat = 0, maxWidth: CGFloat? = nil) {
         self.value = value
         self.font = font
         self.color = color
@@ -17966,13 +18617,16 @@ struct MarkswiftGreedyText: View {
         self.lineGap = lineGap
         self.baselineStep = baselineStep
         self.nativeWeight = nativeWeight
+        self.fitContent = fitContent
+        self.minWidth = minWidth
+        self.maxWidth = maxWidth
     }
 
     var body: some View {
         let words = value.split(separator: " ")
         let nativeFont = nativeWeight.map { UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(rawValue: $0)) }
         let space = nativeFont.map { MarkswiftTextAdvance.width(" ", font: $0) } ?? fontSize * 0.25
-        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep) {
+        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep, fitContent: fitContent, minWidth: minWidth, maxWidth: maxWidth) {
             ForEach(words.indices, id: \\.self) { index in
                 if let nativeFont {
                     let word = String(words[index])
@@ -18792,6 +19446,368 @@ nonisolated struct MarkswiftDisclosureTriangle: SwiftUI.Shape {
     }
 }`;
 
+// src/swift/paint-gradient-runtime.ts
+var PAINT_GRADIENT_RUNTIME = `
+nonisolated enum MarkswiftCSSGradientLine {
+    static func endpoints(angle: Double, corner: UnitPoint? = nil, size: CGSize) -> (start: UnitPoint, end: UnitPoint) {
+        let w = size.width, h = size.height
+        guard w.isFinite, h.isFinite, w > 0, h > 0 else { return (.center, .center) }
+        let dx: CGFloat, dy: CGFloat
+        if let corner {
+            let norm = hypot(w, h)
+            dx = (2 * corner.x - 1) * h / norm
+            dy = (2 * corner.y - 1) * w / norm
+        } else {
+            let radians = CGFloat(angle) * .pi / 180
+            dx = sin(radians)
+            dy = -cos(radians)
+        }
+        let length = abs(w * dx) + abs(h * dy)
+        let x = length * dx / (2 * w), y = length * dy / (2 * h)
+        return (UnitPoint(x: 0.5 - x, y: 0.5 - y), UnitPoint(x: 0.5 + x, y: 0.5 + y))
+    }
+}
+
+struct MarkswiftCSSLinearGradient: View {
+    let stops: [Gradient.Stop]
+    let angle: Double
+    var corner: UnitPoint? = nil
+    var perceptual: Bool = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let line = MarkswiftCSSGradientLine.endpoints(angle: angle, corner: corner, size: geometry.size)
+            // Stops are already resolved fractions. Absolute CSS stops retain their
+            // captured normalization; changing bounds here only corrects line geometry.
+            // Legacy CSS gradients interpolate encoded sRGB components. SwiftUI's
+            // default is perceptual; the explicit device space preserves these stops.
+            Rectangle().fill(LinearGradient.linearGradient(
+                Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
+                startPoint: line.start, endPoint: line.end))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+`;
+
+// src/swift/paint-radial-runtime.ts
+var PAINT_RADIAL_RUNTIME = `
+nonisolated enum MarkswiftCSSGradientLength {
+    case points(CGFloat), fraction(CGFloat)
+    func resolve(_ dimension: CGFloat) -> CGFloat {
+        switch self {
+        case .points(let value): return value
+        case .fraction(let value): return value * dimension
+        }
+    }
+}
+
+nonisolated enum MarkswiftCSSRadialExtent {
+    case closestSide, farthestSide, closestCorner, farthestCorner
+    case explicit(MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)
+
+    func radii(center: CGPoint, size: CGSize, ellipse: Bool) -> CGSize {
+        if case .explicit(let x, let y) = self {
+            return CGSize(width: x.resolve(size.width), height: y.resolve(size.height))
+        }
+        let closest: Bool, corner: Bool
+        switch self {
+        case .closestSide: closest = true; corner = false
+        case .farthestSide: closest = false; corner = false
+        case .closestCorner: closest = true; corner = true
+        default: closest = false; corner = true
+        }
+        let left = abs(center.x), right = abs(size.width - center.x)
+        let top = abs(center.y), bottom = abs(size.height - center.y)
+        let x = closest ? min(left, right) : max(left, right)
+        let y = closest ? min(top, bottom) : max(top, bottom)
+        if ellipse {
+            let scale: CGFloat = corner ? sqrt(2) : 1
+            return CGSize(width: x * scale, height: y * scale)
+        }
+        let radius = corner ? hypot(x, y) : (closest ? min(x, y) : max(x, y))
+        return CGSize(width: radius, height: radius)
+    }
+}
+
+struct MarkswiftCSSRadialGradient: View {
+    let stops: [Gradient.Stop]
+    var center: UnitPoint = .center
+    var ellipse: Bool = true
+    var position: (MarkswiftCSSGradientLength, MarkswiftCSSGradientLength)? = nil
+    var extent: MarkswiftCSSRadialExtent = .farthestCorner
+    var perceptual: Bool = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let point = CGPoint(x: position?.0.resolve(size.width) ?? center.x * size.width,
+                                y: position?.1.resolve(size.height) ?? center.y * size.height)
+            let radii = extent.radii(center: point, size: size, ellipse: ellipse)
+            if size.width > 0, size.height > 0, radii.width > 0, radii.height > 0 {
+                let scale = radii.height / radii.width
+                Rectangle().fill(RadialGradient.radialGradient(
+                    Gradient(stops: stops).colorSpace(perceptual ? .perceptual : .device),
+                    center: UnitPoint(x: point.x / size.width, y: point.y / size.height),
+                    startRadius: 0, endRadius: radii.width))
+                    .frame(width: size.width, height: size.height / scale)
+                    .scaleEffect(x: 1, y: scale, anchor: .topLeading)
+                    .frame(width: size.width, height: size.height, alignment: .topLeading)
+            } else {
+                Rectangle().fill(stops.last?.color ?? .clear)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+`;
+
+// src/swift/paint-clip-runtime.ts
+var PAINT_CLIP_RUNTIME = `
+struct MarkswiftCSSInsetRoundClip: View {
+    let radius: CGFloat
+    let inset: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            let outer = min(radius, min(geometry.size.width, geometry.size.height) / 2)
+            RoundedRectangle(cornerRadius: max(0, outer - inset), style: .circular)
+                .fill(Color.white)
+                .padding(inset)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+`;
+
+// src/swift/fieldset-runtime.ts
+var FIELDSET_RUNTIME = `
+nonisolated struct MarkswiftFieldsetLegendAnchor {
+    var key: String
+    var bounds: Anchor<CGRect>
+    var relative: CGSize
+}
+
+nonisolated struct MarkswiftFieldsetLegendAnchors: PreferenceKey {
+    static var defaultValue: [MarkswiftFieldsetLegendAnchor] { [] }
+    static func reduce(value: inout [MarkswiftFieldsetLegendAnchor], nextValue: () -> [MarkswiftFieldsetLegendAnchor]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+extension View {
+    nonisolated func markswiftFieldsetLegend(_ key: String, relativeX: CGFloat, relativeY: CGFloat) -> some View {
+        transformAnchorPreference(key: MarkswiftFieldsetLegendAnchors.self, value: .bounds) { values, anchor in
+            values.append(MarkswiftFieldsetLegendAnchor(key: key, bounds: anchor, relative: CGSize(width: relativeX, height: relativeY)))
+        }
+    }
+}
+
+nonisolated struct MarkswiftFieldsetGeometry {
+    var decoration: CGRect
+    var cutout: CGRect
+    // Chrome 154 FieldsetPaintInfo, horizontal-tb. No captured target positions participate.
+    init(size: CGSize, legend: CGRect, borderWidth: CGFloat) {
+        let top = max(0, (legend.height - borderWidth) / 2)
+        decoration = CGRect(x: 0, y: top, width: max(0, size.width), height: max(0, size.height - top))
+        cutout = CGRect(x: legend.minX, y: 0, width: legend.width, height: max(legend.height, borderWidth))
+    }
+}
+
+nonisolated struct MarkswiftFieldsetBorderMask: Shape {
+    var cutout: CGRect
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(rect)
+        path.addRect(cutout)
+        return path
+    }
+}
+
+struct MarkswiftFieldsetBackground<S: SwiftUI.Shape>: ViewModifier {
+    var legendKey: String
+    var shape: S
+    var fill: Color
+    var borderWidth: CGFloat
+    func body(content: Content) -> some View {
+        content.backgroundPreferenceValue(MarkswiftFieldsetLegendAnchors.self) { anchors in
+            GeometryReader { proxy in
+                if let anchor = anchors.first(where: { $0.key == legendKey }) {
+                    let legend = proxy[anchor.bounds].offsetBy(dx: -anchor.relative.width, dy: -anchor.relative.height)
+                    let geometry = MarkswiftFieldsetGeometry(size: proxy.size, legend: legend, borderWidth: borderWidth)
+                    shape.fill(fill)
+                        .frame(width: geometry.decoration.width, height: geometry.decoration.height)
+                        .offset(y: geometry.decoration.minY)
+                }
+            }.allowsHitTesting(false).accessibilityHidden(true)
+        }
+    }
+}
+
+struct MarkswiftFieldsetBorder<S: SwiftUI.InsettableShape>: ViewModifier {
+    var legendKey: String
+    var shape: S
+    var color: Color
+    var width: CGFloat
+    func body(content: Content) -> some View {
+        content.overlayPreferenceValue(MarkswiftFieldsetLegendAnchors.self) { anchors in
+            GeometryReader { proxy in
+                if let anchor = anchors.first(where: { $0.key == legendKey }) {
+                    let legend = proxy[anchor.bounds].offsetBy(dx: -anchor.relative.width, dy: -anchor.relative.height)
+                    let geometry = MarkswiftFieldsetGeometry(size: proxy.size, legend: legend, borderWidth: width)
+                    shape.strokeBorder(color, lineWidth: width)
+                        .frame(width: geometry.decoration.width, height: geometry.decoration.height)
+                        .offset(y: geometry.decoration.minY)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                        .mask(alignment: .topLeading) {
+                            MarkswiftFieldsetBorderMask(cutout: geometry.cutout)
+                                .fill(Color.white, style: FillStyle(eoFill: true))
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                        }
+                }
+            }.allowsHitTesting(false).accessibilityHidden(true)
+        }
+    }
+}
+`;
+
+// src/swift/intrinsic-flex-runtime.ts
+var INTRINSIC_FLEX_CORE = `
+nonisolated struct MarkswiftIntrinsicFlexRow {
+    var indices: [Int]
+    var widths: [CGFloat]
+}
+
+nonisolated enum MarkswiftIntrinsicFlexGeometry {
+    static func rows(width: CGFloat, tracks: [MarkswiftAllocationTrack], gap: CGFloat, wrapping: Bool) -> [MarkswiftIntrinsicFlexRow] {
+        var lines: [[Int]] = []
+        var line: [Int] = []
+        var used: CGFloat = 0
+        for index in tracks.indices {
+            let hypothetical = Swift.max(tracks[index].min, tracks[index].basis)
+            let next = used + (line.isEmpty ? 0 : gap) + hypothetical
+            if wrapping && !line.isEmpty && next > width {
+                lines.append(line)
+                line = []
+                used = 0
+            }
+            used += (line.isEmpty ? 0 : gap) + hypothetical
+            line.append(index)
+        }
+        if !line.isEmpty { lines.append(line) }
+        return lines.map { indices in
+            let available = width - CGFloat(Swift.max(0, indices.count - 1)) * gap
+            return MarkswiftIntrinsicFlexRow(indices: indices,
+                widths: MarkswiftAllocation.flex(available, indices.map { tracks[$0] }))
+        }
+    }
+}
+`;
+var INTRINSIC_FLEX_RUNTIME = INTRINSIC_FLEX_CORE + `
+nonisolated struct MarkswiftIntrinsicFlexMinimum: LayoutValueKey {
+    static var defaultValue: CGFloat { 0 }
+}
+nonisolated struct MarkswiftIntrinsicFlexShrink: LayoutValueKey {
+    static var defaultValue: CGFloat { 1 }
+}
+nonisolated struct MarkswiftIntrinsicFlexInset: LayoutValueKey {
+    static var defaultValue: CGFloat { 0 }
+}
+
+/// Plain auto-basis flex items, with native min-content floors and authored pixel gaps.
+struct MarkswiftIntrinsicFlex: Layout {
+    var columnGap: CGFloat
+    var rowGap: CGFloat
+    var wrapping: Bool
+    var horizontal: HorizontalAlignment = .leading
+    var vertical: VerticalAlignment = .top
+    var between: Bool = false
+    var stretch: Bool = false
+
+    private struct Item {
+        var index: Int
+        var width: CGFloat
+        var height: CGFloat
+    }
+    private struct Row {
+        var items: [Item]
+        var width: CGFloat
+        var height: CGFloat
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let tracks = tracks(subviews)
+        let ideal = tracks.reduce(CGFloat(0)) { $0 + Swift.max($1.min, $1.basis) }
+            + CGFloat(Swift.max(0, tracks.count - 1)) * columnGap
+        let width = finite(proposal.width) ?? ideal
+        let measured = rows(width: width, tracks: tracks, subviews: subviews)
+        let height = measured.reduce(CGFloat(0)) { $0 + $1.height }
+            + CGFloat(Swift.max(0, measured.count - 1)) * rowGap
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let measured = rows(width: Swift.max(0, bounds.width), tracks: tracks(subviews), subviews: subviews)
+        var y = bounds.minY
+        for row in measured {
+            let slack = bounds.width - row.width
+            // CSS space-between falls back to start for negative free space and singleton rows.
+            let gap = columnGap + (between && row.items.count > 1 ? Swift.max(0, slack) / CGFloat(row.items.count - 1) : 0)
+            var x = bounds.minX + (horizontal == .center ? slack / 2 : horizontal == .trailing ? slack : 0)
+            for item in row.items {
+                let height = stretch ? row.height : item.height
+                let cross = row.height - height
+                let dy = vertical == .center ? cross / 2 : vertical == .bottom ? cross : 0
+                subviews[item.index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
+                    proposal: ProposedViewSize(width: item.width, height: height))
+                x += item.width + gap
+            }
+            y += row.height + rowGap
+        }
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
+        let measured = rows(width: Swift.max(0, bounds.width), tracks: tracks(subviews), subviews: subviews)
+        let index = guide == .firstTextBaseline ? 0 : measured.count - 1
+        guard measured.indices.contains(index), let item = measured[index].items.first else { return nil }
+        let row = measured[index]
+        let height = stretch ? row.height : item.height
+        let cross = row.height - height
+        let dy = vertical == .center ? cross / 2 : vertical == .bottom ? cross : 0
+        let y = measured.prefix(index).reduce(CGFloat(0)) { $0 + $1.height + rowGap }
+        return y + dy + subviews[item.index].dimensions(in: ProposedViewSize(width: item.width, height: height))[guide]
+    }
+
+    private func finite(_ value: CGFloat?) -> CGFloat? {
+        guard let value, value.isFinite else { return nil }
+        return Swift.max(0, value)
+    }
+
+    private func tracks(_ subviews: Subviews) -> [MarkswiftAllocationTrack] {
+        subviews.map { subview in
+            MarkswiftAllocationTrack(basis: finite(subview.sizeThatFits(.unspecified).width) ?? 0,
+                grow: 0, shrink: subview[MarkswiftIntrinsicFlexShrink.self],
+                min: subview[MarkswiftIntrinsicFlexMinimum.self], inset: subview[MarkswiftIntrinsicFlexInset.self])
+        }
+    }
+
+    private func rows(width: CGFloat, tracks: [MarkswiftAllocationTrack], subviews: Subviews) -> [Row] {
+        MarkswiftIntrinsicFlexGeometry.rows(width: width, tracks: tracks, gap: columnGap, wrapping: wrapping).map { allocated in
+            let items = zip(allocated.indices, allocated.widths).map { index, width in
+                Item(index: index, width: width,
+                    height: finite(subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil)).height) ?? 0)
+            }
+            return Row(items: items, width: allocated.widths.reduce(0, +) + CGFloat(Swift.max(0, items.count - 1)) * columnGap,
+                height: items.map { $0.height }.max() ?? 0)
+        }
+    }
+}
+`;
+
 // src/swift/runtime.ts
 var SWIFT_RUNTIME = `// Generated by Markswift — runtime helpers shared by all generated views.
 import SwiftUI
@@ -19088,9 +20104,14 @@ ${RELATIVE_WIDTH_RUNTIME}
 ${SELECT_LIST_RUNTIME}
 ${SELECT_PAINT_RUNTIME}
 ${ALLOCATION_RUNTIME}
+${INTRINSIC_FLEX_RUNTIME}
 ${TABLE_RUNTIME}
 ${TEXT_LINE_BOX_RUNTIME}
-${MARKSWIFT_DISCLOSURE_RUNTIME}`;
+${MARKSWIFT_DISCLOSURE_RUNTIME}
+${PAINT_GRADIENT_RUNTIME}
+${PAINT_RADIAL_RUNTIME}
+${PAINT_CLIP_RUNTIME}
+${FIELDSET_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {

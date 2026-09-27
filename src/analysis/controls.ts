@@ -15,6 +15,7 @@ import { applyRadioInput } from "./radio-input.ts";
 import { applySelectInput } from "./select-input.ts";
 import { applyDisclosureInput } from "./disclosure-input.ts";
 import { reframeText } from "./text-line-box.ts";
+import { markColorScheme } from "./boolean-paint.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -24,6 +25,7 @@ export interface ControlSpec {
   captionTransform?: TextTransform;
   placeholder?: string;
   checked?: boolean;
+  markColorScheme?: ControlNode["markColorScheme"];
   radioGroup?: string;
   disabled?: boolean;
   readOnly?: boolean;
@@ -120,6 +122,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       applyReadOnly(n, spec);
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
+        spec.markColorScheme = markColorScheme(n, notes);
       } else if (a["value"] !== undefined) spec.value = a["value"];
       else if (type === "submit") spec.value = "Submit";
       else if (type === "reset") spec.value = "Reset";

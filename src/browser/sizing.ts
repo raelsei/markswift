@@ -10,7 +10,7 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
   return page.evaluate(({ selector, properties }) => {
     const root = document.querySelector(selector);
     if (!root) throw new Error(`capture root ${selector} not found`);
-    const out: Record<string, { width: string; height: string; flexBasis?: string; inlineSizeDefinite?: boolean; hasRelativePadding?: boolean; hasAutoMargins?: boolean; relativeInsets?: [string, string, string, string]; relativeContainingDirection?: "ltr" | "rtl"; gridTemplateColumns?: string; gridTemplateRows?: string; gridAutoRows?: string; columnStyles?: Record<string, string> }> = {};
+    const out: Record<string, { width: string; height: string; flexBasis?: string; inlineSizeDefinite?: boolean; hasRelativePadding?: boolean; hasAutoMargins?: boolean; horizontalAutoMargins?: [boolean, boolean]; relativeInsets?: [string, string, string, string]; relativeContainingDirection?: "ltr" | "rtl"; gridTemplateColumns?: string; gridTemplateRows?: string; gridAutoRows?: string; columnStyles?: Record<string, string> }> = {};
     const definite = new WeakMap<Element, boolean>();
     const preferred = (el: Element, property: string): string | undefined => {
       const typed = el as Element & { computedStyleMap?: () => { get(property: string): { toString(): string } | undefined } };
@@ -63,6 +63,8 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
         if (basis !== undefined && basis !== "auto") size.flexBasis = basis;
         if (["top", "right", "bottom", "left"].some(edge => map?.get(`padding-${edge}`)?.toString().includes("%"))) size.hasRelativePadding = true;
         if (["top", "right", "bottom", "left"].some(edge => map?.get(`margin-${edge}`)?.toString() === "auto")) size.hasAutoMargins = true;
+        const horizontalMargins = ["left", "right"].map(edge => map?.get(`margin-${edge}`)?.toString());
+        if (horizontalMargins.every(value => value !== undefined)) size.horizontalAutoMargins = horizontalMargins.map(value => value === "auto") as [boolean, boolean];
         if (getComputedStyle(el).position === "relative") {
           const insets = ["top", "right", "bottom", "left"].map(edge => map?.get(edge)?.toString());
           if (insets.every(value => value !== undefined)) size.relativeInsets = insets as [string, string, string, string];

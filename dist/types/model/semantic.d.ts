@@ -83,6 +83,8 @@ export type ClipShape = {
 export interface Style {
     /** Background layers, bottom-most first. */
     fills: Paint[];
+    /** Browser nearest-neighbor image scaling; inherited and applied to raster paint. */
+    imageRendering?: "pixelated" | "crisp-edges";
     /** Corner radii: top-left, top-right, bottom-right, bottom-left (px). */
     radius?: [number, number, number, number];
     /** All four corners meet at half-width/half-height: CSS 50% radii form an ellipse. */
@@ -292,6 +294,16 @@ export interface SemBase extends SizeConstraints {
     frame: Rect;
     /** Relative positioning moves paint only; frame remains the captured painted border. */
     relativeOffset?: [number, number];
+    /** Supported fieldset decoration resolves the emitted legend's live native border anchor. */
+    fieldsetPaint?: {
+        key: string;
+        legendId: string;
+    };
+    /** Direct rendered legend anchor; displacement is removed for the fieldset's static cutout. */
+    fieldsetLegend?: {
+        key: string;
+        relativeOffset: [number, number];
+    };
     width: Size;
     height: Size;
     /**
@@ -333,6 +345,14 @@ export interface StackNode extends SemBase {
     /** Proven CSS flex bases and growth/shrink factors for a responsive native row. */
     allocation?: {
         tracks: AllocationTrack[];
+    };
+    /** Plain auto-basis items measured natively before line collection and shrink allocation. */
+    intrinsicFlex?: {
+        wrapping: boolean;
+        columnGap: number;
+        rowGap: number;
+        shrink: number[];
+        automaticMinimum: boolean[];
     };
     /** Proven column definitions and cell spans, independent of DOM wrapper boxes. */
     table?: TableLayout;
@@ -454,6 +474,8 @@ export interface ControlNode extends SemBase {
     placeholder?: string;
     /** `@checked`: initial on state of a toggle/radio. */
     checked?: boolean;
+    /** Supported native checkbox/radio CSS color-scheme; both follow the captured screen preference. */
+    markColorScheme?: "light" | "dark" | "light dark";
     /** Captured DOM tree/form owner plus nonempty name; absent radios select independently. */
     radioGroup?: string;
     /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */

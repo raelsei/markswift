@@ -3,6 +3,10 @@ import type { Style, SemNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { colorExpr, indent, num, type ColorCtx } from "./format.ts";
 import { imageLayer } from "./images.ts";
+import { linearGradientLine } from "../css/gradient-line.ts";
+import { radialGeometry } from "../css/radial-gradient.ts";
+import { radialGradientArguments } from "./paint-radial.ts";
+import { backgroundClip } from "./paint-clip.ts";
 export function shapeExpr(st: Style, w: number, h: number): string {
   if (st.ellipse) return "Ellipse()";
   const r = st.radius;
@@ -21,23 +25,34 @@ export function paintExpr(p: Paint, w: number, h: number, ctx: ColorCtx, id?: st
     case "solid":
       return colorExpr(p.color, ctx, id);
     case "linear": {
-      const rad = (p.angle * Math.PI) / 180;
-      const sx = 0.5 - 0.5 * Math.sin(rad), sy = 0.5 + 0.5 * Math.cos(rad);
-      const ex = 0.5 + 0.5 * Math.sin(rad), ey = 0.5 - 0.5 * Math.cos(rad);
-      return `LinearGradient(stops: ${stops(p, ctx, id)}, startPoint: UnitPoint(x: ${num(sx)}, y: ${num(sy)}), endPoint: UnitPoint(x: ${num(ex)}, y: ${num(ey)}))`;
+      const { start: [sx, sy], end: [ex, ey] } = linearGradientLine(p.angle, w, h, p.corner);
+      return `LinearGradient.linearGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), startPoint: UnitPoint(x: ${num(sx)}, y: ${num(sy)}), endPoint: UnitPoint(x: ${num(ex)}, y: ${num(ey)}))`;
     }
     case "radial": {
-      const [cx, cy] = p.center;
-      const fx = Math.max(cx, 1 - cx) * w, fy = Math.max(cy, 1 - cy) * h;
-      const R = p.ellipse ? Math.hypot(fx, fy) : Math.hypot(fx, fy);
-      return `RadialGradient(stops: ${stops(p, ctx, id)}, center: UnitPoint(x: ${num(cx)}, y: ${num(cy)}), startRadius: 0, endRadius: ${num(R)})`;
+      const geometry = radialGeometry(p, w, h);
+      const [cx, cy] = geometry.center;
+      return `RadialGradient.radialGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num(w ? cx / w : 0.5)}, y: ${num(h ? cy / h : 0.5)}), startRadius: 0, endRadius: ${num(geometry.radii[0])})`;
     }
     case "conic":
-      return `AngularGradient(stops: ${stops(p, ctx, id)}, center: UnitPoint(x: ${num(p.center[0])}, y: ${num(p.center[1])}), startAngle: .degrees(${num(p.from - 90)}), endAngle: .degrees(${num(p.from + 270)}))`;
+      return `AngularGradient.angularGradient(Gradient(stops: ${stops(p, ctx, id)}).colorSpace(${gradientSpace(p)}), center: UnitPoint(x: ${num(p.center[0])}, y: ${num(p.center[1])}), startAngle: .degrees(${num(p.from - 90)}), endAngle: .degrees(${num(p.from + 270)}))`;
     default:
       return "Color.clear";
   }
 }
+
+/** Decorative linear paint is a View so its direction follows live bounds in either mode. */
+export function linearGradientViewExpr(p: Extract<Paint, { kind: "linear" }>, ctx: ColorCtx, id?: string): string {
+  const corner = p.corner ? `, corner: UnitPoint(x: ${num((p.corner[0] + 1) / 2)}, y: ${num((p.corner[1] + 1) / 2)})` : "";
+  const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
+  return `MarkswiftCSSLinearGradient(stops: ${stops(p, ctx, id)}, angle: ${num(p.angle)}${corner}${interpolation})`;
+}
+
+export function radialGradientViewExpr(p: Extract<Paint, { kind: "radial" }>, ctx: ColorCtx, id?: string): string {
+  const interpolation = p.interpolation === "oklab" ? ", perceptual: true" : "";
+  return `MarkswiftCSSRadialGradient(stops: ${stops(p, ctx, id)}, ${radialGradientArguments(p)}${interpolation})`;
+}
+
+function gradientSpace(p: Gradient): string { return p.interpolation === "oklab" ? ".perceptual" : ".device"; }
 
 type Gradient = Extract<Paint, { stops: unknown }>;
 
@@ -63,9 +78,12 @@ function stops(p: Gradient, ctx: ColorCtx, id?: string): string {
  */
 export function fillModifier(p: Paint, n: SemNode, shape: string, ctx: EmitContext): string[] {
   const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num(p.inset[0])}, leading: ${num(p.inset[3])}, bottom: ${num(p.inset[2])}, trailing: ${num(p.inset[1])}))` : "";
+  if (p.kind === "linear") return [`.background { ${linearGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)} }`];
+  if (p.kind === "radial") return [`.background { ${radialGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)} }`];
+  if (p.kind === "conic") return [`.background { Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)} }`];
   if (p.kind !== "image") {
     const paint = paintExpr(p, n.frame.w, n.frame.h, ctx, n.id);
-    return inset ? [`.background { ${shape}.fill(${paint})${inset} }`] : [`.background(${paint}, in: ${shape})`];
+    return inset ? [`.background { Rectangle().fill(${paint})${backgroundClip(p, n, shape, inset)} }`] : [`.background(${paint}, in: ${shape})`];
   }
   const layer = imageLayer(p, n, "background-image", ctx);
   return layer ? [".background {", ...indent([...layer, `.clipShape(${shape})${inset}`], 1), "}"] : [];
@@ -128,7 +146,12 @@ export function blendedFillModifier(fills: Paint[], n: SemNode, shape: string, c
 function fillLayerView(p: Paint, n: SemNode, shape: string, ctx: EmitContext): string[] {
   const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num(p.inset[0])}, leading: ${num(p.inset[3])}, bottom: ${num(p.inset[2])}, trailing: ${num(p.inset[1])}))` : "";
   if (p.kind === "unsupported") return [];
-  if (p.kind !== "image") return [`${shape}.fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${inset}`];
+  if (p.kind === "linear") return [`${linearGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)}`];
+  if (p.kind === "radial") return [`${radialGradientViewExpr(p, ctx, n.id)}${backgroundClip(p, n, shape, inset)}`];
+  if (p.kind === "conic") return [`Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)}`];
+  if (p.kind !== "image") return inset
+    ? [`Rectangle().fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${backgroundClip(p, n, shape, inset)}`]
+    : [`${shape}.fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})`];
   const layer = imageLayer(p, n, "background-image", ctx);
   return layer ? [...layer, `.clipShape(${shape})${inset}`] : [];
 }

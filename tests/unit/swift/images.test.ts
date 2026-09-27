@@ -79,3 +79,32 @@ test("unsupported object-position values remain an explicit approximation", () =
   expect(result.diagnostics.find(item => item.id === "#image")?.notes.join(" ")).toContain("position syntax unsupported");
   expect(result.code).toContain(".overlay(alignment: .center)");
 });
+
+test("effective pixelated and crisp-edge paint preserve nearest sampling across raster source routes", async () => {
+  const png = await sharp(Buffer.from([255, 0, 0, 0, 0, 255]), { raw: { width: 2, height: 1, channels: 3 } }).png().toBuffer();
+  for (const src of [`data:image/png;base64,${png.toString("base64")}`, "https://example.test/art.png", "art.png"]) {
+    for (const sampling of ["pixelated", "crisp-edges", "auto", "smooth"] as const) {
+      const doc = layout("cover", "200px", "left top", src);
+      doc.root.children[0]!.styles["image-rendering"] = sampling;
+      for (const mode of ["app", "fidelity"] as const) {
+        const code = compileLayout(doc, { name: "RasterSampling", mode }).code;
+        expect(code.includes(".interpolation(.none)")).toBe(sampling === "pixelated" || sampling === "crisp-edges");
+      }
+    }
+  }
+  const vector = layout("cover", "200px");
+  vector.root.children[0]!.styles["image-rendering"] = "pixelated";
+  expect(compileLayout(vector, { name: "VectorSampling" }).code).not.toContain(".interpolation(.none)");
+});
+
+test("nearest sampling also applies to repeated and positioned background raster layers", async () => {
+  const png = await sharp(Buffer.from([255, 0, 0, 0, 0, 255]), { raw: { width: 2, height: 1, channels: 3 } }).png().toBuffer();
+  for (const repeat of ["repeat", "no-repeat"]) {
+    const doc = layout("cover", "200px");
+    doc.root.children = [];
+    Object.assign(doc.root.styles, { "image-rendering": "pixelated", "background-image": `url("data:image/png;base64,${png.toString("base64")}")`,
+      "background-size": "20px 10px", "background-repeat": repeat, "background-position": "0px 0px" });
+    const code = compileLayout(doc, { name: "BackgroundSampling" }).code;
+    expect(code).toContain(".interpolation(.none).resizable()");
+  }
+});

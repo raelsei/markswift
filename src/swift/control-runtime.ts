@@ -46,13 +46,46 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
+/// This style owns its disabled paint. A plain button style would dim that paint a second time.
+@MainActor struct MarkswiftMarkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
+
 @MainActor struct MarkswiftMarkToggleStyle: ToggleStyle {
     enum Mark { case check, dot }
+    enum Palette { case light, dark }
     let mark: Mark
     let tint: Color
+    var disabled = false
+    var palette: Palette = .light
+    @Environment(\\.isEnabled) private var isEnabled
+
+    private var paintsDisabled: Bool { disabled || !isEnabled }
+    // Chrome 154 ui/color/color_provider_utils.cc, CompleteDefaultWebNativeRendererColorIdsDefinition.
+    // Preserve alpha: these colors composite against the actual surface, not a sampled white one.
+    private var enabledBackground: Color {
+        palette == .dark ? Color(.sRGB, red: 59.0/255, green: 59.0/255, blue: 59.0/255) : Color(.sRGB, red: 1, green: 1, blue: 1)
+    }
+    private var enabledBorder: Color {
+        let component = palette == .dark ? 133.0/255 : 118.0/255
+        return Color(.sRGB, red: component, green: component, blue: component)
+    }
+    private var disabledAccent: Color {
+        palette == .dark ? Color(.sRGB, red: 117.0/255, green: 117.0/255, blue: 117.0/255) : Color(.sRGB, red: 118.0/255, green: 118.0/255, blue: 118.0/255, opacity: 77.0/255)
+    }
+    private var disabledBorder: Color {
+        palette == .dark ? Color(.sRGB, red: 98.0/255, green: 98.0/255, blue: 98.0/255) : disabledAccent
+    }
+    private var disabledBackground: Color {
+        palette == .dark ? Color(.sRGB, red: 59.0/255, green: 59.0/255, blue: 59.0/255) : Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 153.0/255)
+    }
+    private var disabledLightenLayer: Color {
+        palette == .dark ? disabledBackground : Color(.sRGB, red: 169.0/255, green: 169.0/255, blue: 169.0/255, opacity: 51.0/255)
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
+            guard !paintsDisabled else { return }
             configuration.isOn.toggle()
         } label: {
             ZStack {
@@ -60,21 +93,50 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
                 if configuration.isOn { fill }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MarkswiftMarkButtonStyle())
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
-        let face = on ? tint : Color(uiColor: .systemBackground)
-        let line = on ? tint : Color(uiColor: .systemGray2)
+        if paintsDisabled {
+            switch mark {
+            case .check:
+                disabledFace
+                    .overlay {
+                        if on { RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledAccent) }
+                        else { RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(disabledBorder, lineWidth: 1) }
+                    }
+            case .dot:
+                disabledFace
+                    .overlay(Circle().strokeBorder(on ? disabledAccent : disabledBorder, lineWidth: 1))
+            }
+        } else {
+            let face = on ? tint : enabledBackground
+            let line = on ? tint : enabledBorder
+            switch mark {
+            case .check:
+                RoundedRectangle(cornerRadius: 2, style: .circular)
+                    .fill(face)
+                    .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(line, lineWidth: 1))
+            case .dot:
+                Circle()
+                    .fill(enabledBackground)
+                    .overlay(Circle().strokeBorder(line, lineWidth: on ? 2 : 1))
+            }
+        }
+    }
+
+    // NativeThemeBase::PaintCheckboxRadioCommon paints a separate lighten layer and background,
+    // inset by 0.2 CSS pixels for the one-pixel border; keep both translucent layers independent.
+    @ViewBuilder private var disabledFace: some View {
         switch mark {
         case .check:
-            RoundedRectangle(cornerRadius: 2, style: .circular)
-                .fill(face)
-                .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).strokeBorder(line, lineWidth: 1))
+            RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledLightenLayer)
+                .overlay(RoundedRectangle(cornerRadius: 2, style: .circular).fill(disabledBackground))
+                .padding(0.2)
         case .dot:
-            Circle()
-                .fill(on ? Color.clear : face)
-                .overlay(Circle().strokeBorder(line, lineWidth: on ? 2 : 1))
+            Circle().fill(disabledLightenLayer)
+                .overlay(Circle().fill(disabledBackground))
+                .padding(0.2)
         }
     }
 
@@ -85,10 +147,10 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
                 .resizable()
                 .scaledToFit()
                 .fontWeight(.bold)
-                .foregroundStyle(Color(uiColor: .systemBackground))
+                .foregroundStyle(paintsDisabled ? disabledBackground : enabledBackground)
                 .padding(2)
         case .dot:
-            Circle().fill(tint).padding(3)
+            Circle().fill(paintsDisabled ? disabledAccent : tint).padding(3)
         }
     }
 }

@@ -10,8 +10,11 @@ struct MarkswiftGreedyText: View {
     let lineGap: CGFloat
     let baselineStep: CGFloat?
     let nativeWeight: CGFloat?
+    let fitContent: Bool
+    let minWidth: CGFloat
+    let maxWidth: CGFloat?
 
-    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil) {
+    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil, fitContent: Bool = false, minWidth: CGFloat = 0, maxWidth: CGFloat? = nil) {
         self.value = value
         self.font = font
         self.color = color
@@ -19,13 +22,16 @@ struct MarkswiftGreedyText: View {
         self.lineGap = lineGap
         self.baselineStep = baselineStep
         self.nativeWeight = nativeWeight
+        self.fitContent = fitContent
+        self.minWidth = minWidth
+        self.maxWidth = maxWidth
     }
 
     var body: some View {
         let words = value.split(separator: " ")
         let nativeFont = nativeWeight.map { UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(rawValue: $0)) }
         let space = nativeFont.map { MarkswiftTextAdvance.width(" ", font: $0) } ?? fontSize * 0.25
-        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep) {
+        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep, fitContent: fitContent, minWidth: minWidth, maxWidth: maxWidth) {
             ForEach(words.indices, id: \\.self) { index in
                 if let nativeFont {
                     let word = String(words[index])

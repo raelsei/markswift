@@ -9,6 +9,7 @@ import { measuredLayoutOf } from "./measured-layout.ts";
 import { equalWrappingColumns } from "./wrapping-tracks.ts";
 import { finish } from "./node-base.ts";
 import { flowFrame, relativeFallback } from "./relative-position.ts";
+import { buildIntrinsicFlex } from "./intrinsic-flex.ts";
 
 function gap(value: string | undefined): number | undefined {
   if (!value || value === "normal") return 0;
@@ -90,6 +91,8 @@ export function buildWrapping(n: LayoutNode, base: SemBase, all: AnalyzedChild[]
   // Wrapping owns its whole content box. Trailing alignment slack is geometry, never padding.
   const plain: SemBase = { ...base, padding: insetsOf(n.styles) };
   const items = all.filter(item => renders(item.node));
+  const intrinsic = axis === "h" ? buildIntrinsicFlex(n, plain, items, align, distribution) : undefined;
+  if (intrinsic) return intrinsic;
   const columnGap = gap(n.styles["column-gap"]), rowGap = gap(n.styles["row-gap"]);
   const columns = equalWrappingColumns(n, plain, items, columnGap);
   const live = columns ? { ...plain, height: { kind: "hug" as const } } : plain;

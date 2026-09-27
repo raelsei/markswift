@@ -60,17 +60,18 @@ type ImageSource =
  * `undefined` (with a note) when the payload is unusable.
  */
 function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext, sizedBackground = false): ImageSource | undefined {
+  const sampling = n.style.imageRendering ? ".interpolation(.none)" : "";
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
-    if (/^https?:/i.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
+    if (/^https?:/i.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sampling}${sizing} } placeholder: { Color.clear }` };
     const name = url.replace(/[?#].*$/, "").replace(/^.*\//, "").replace(/\.[a-z0-9]+$/i, "");
-    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sampling}${sizing}` };
   }
   const [, mime = "", params = "", payload = ""] = data;
   const base64 = params.split(";").includes("base64");
   if (mime !== "image/svg+xml") {
     const b64 = base64 ? payload : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))), "latin1").toString("base64");
-    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sizing}` };
+    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sampling}${sizing}` };
   }
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });

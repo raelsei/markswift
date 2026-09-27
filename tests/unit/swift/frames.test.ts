@@ -83,3 +83,31 @@ test("a measured fallback keeps its captured height in app mode instead of accep
   screen.root.measured = { width: 200, height: 100, frames: [{ x: 0, y: 0, w: 200, h: 30 }] };
   expect(emitSwift(screen, "ConstraintView", { mode: "app" }).view).toContain(".frame(height: 100.0, alignment: .topLeading)");
 });
+
+test("semantic fill accepts smaller proposals while preserving authored width floors", () => {
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  const node = screen.root.children[0]!;
+  node.width = { kind: "fill" };
+  for (const mode of ["app", "fidelity"] as const) {
+    expect(emitSwift(screen, "FillProposal", { mode }).view).toContain(".frame(minWidth: 0.0, maxWidth: .infinity, alignment: .leading)");
+    node.minWidth = 72;
+    expect(emitSwift(screen, "FillFloor", { mode }).view).toContain(".frame(minWidth: 72.0, maxWidth: .infinity, alignment: .leading)");
+    delete node.minWidth;
+  }
+});
+
+test("fill caps accept their proposal without changing fixed or intrinsic width frames", () => {
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  const node = screen.root.children[0]!;
+  node.width = { kind: "fill" };
+  node.maxWidth = 120;
+  expect(emitSwift(screen, "FillCap", { mode: "fidelity" }).view).toContain(".frame(minWidth: 0.0, maxWidth: 120.0");
+  node.width = { kind: "fixed", px: 80 };
+  expect(emitSwift(screen, "FixedWidth", { mode: "fidelity" }).view).toContain(".frame(width: 80.0");
+  const fixedSection = emitSwift(screen, "FixedWidth", { mode: "fidelity" }).view.split('Text(verbatim: "Hi")')[1]!.split("\n        }")[0]!;
+  expect(fixedSection).not.toContain("minWidth: 0.0");
+  node.width = { kind: "hug" };
+  expect(emitSwift(screen, "HugWidth", { mode: "fidelity" }).view).toContain(".frame(maxWidth: 120.0");
+});

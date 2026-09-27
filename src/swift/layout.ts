@@ -9,9 +9,11 @@ import { tableExpr } from "./table-layout.ts";
 import { geometryAlias } from "./geometry-observation.ts";
 import { note } from "./diagnostics.ts";
 import { flowFrame } from "../analysis/relative-position.ts";
+import { intrinsicFlexExpr } from "./intrinsic-flex.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
   if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
+  else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex) out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks)) out.push(...weightedLayoutExpr(n, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));

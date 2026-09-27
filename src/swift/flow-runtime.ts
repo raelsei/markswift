@@ -12,6 +12,9 @@ struct MarkswiftFlow: Layout {
     var columns: Int? = nil
     var stretch: Bool = false
     var baselineStep: CGFloat? = nil
+    var fitContent: Bool = false
+    var minWidth: CGFloat = 0
+    var maxWidth: CGFloat? = nil
 
     private struct Item {
         var index: Int
@@ -25,7 +28,18 @@ struct MarkswiftFlow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
+        let available: CGFloat?
+        if fitContent {
+            let intrinsic = rows(width: .infinity, subviews: subviews)
+            let maximum = intrinsic.map { $0.width }.max() ?? 0
+            let minimum = intrinsic.flatMap { $0.items }.map { $0.size.width }.max() ?? 0
+            // CSS shrink-to-fit retains whole words. Authored max-width constrains the box,
+            // even below min-content; oversized words still retain their original advances.
+            let fit = min(maximum, max(minimum, finiteWidth(proposal.width) ?? maximum))
+            available = max(minWidth, min(maxWidth ?? .infinity, fit))
+        } else {
+            available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
+        }
         let rows = rows(width: available ?? .infinity, subviews: subviews)
         let width = available ?? rows.map { $0.width }.max() ?? 0
         let height = baselineStep.map { $0 * CGFloat(max(0, rows.count - 1)) + (rows.last?.height ?? 0) }

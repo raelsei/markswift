@@ -1,8 +1,11 @@
 /** Pure paint interpretation of browser-resolved CSS values. */
-import { type Color, hue, parseColor, TRANSPARENT } from "./color.ts";
+import { type Color, hue, parseColor } from "./color.ts";
 import { type BlendMode } from "./blend.ts";
 import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
 import { splitTop } from "./syntax.ts";
+import { linearGradientLine, type GradientCorner } from "./gradient-line.ts";
+import { gradientInterpolation } from "./gradient-interpolation.ts";
+import { parseRadialPrelude, radialGeometry, type RadialGeometrySpec } from "./radial-gradient.ts";
 
 
 export interface GradientStop {
@@ -21,6 +24,9 @@ export type PaintInset = {
   blend?: BlendMode;
 };
 
+/** Absence preserves legacy encoded-sRGB interpolation. */
+type GradientInterpolation = { interpolation?: "oklab" };
+
 
 /**
  * One `background-image` layer (or a solid `background-color`). Gradient variants carry
@@ -31,11 +37,11 @@ export type PaintInset = {
  */
 export type Paint =
   | ({ kind: "solid"; color: Color } & PaintInset)
-  | ({ kind: "linear"; angle: number; stops: GradientStop[]; repeating?: true } & PaintInset)
-  | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true } & PaintInset)
-  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true } & PaintInset)
+  | ({ kind: "linear"; angle: number; corner?: GradientCorner; stops: GradientStop[]; repeating?: true } & PaintInset & GradientInterpolation)
+  | ({ kind: "radial"; stops: GradientStop[]; repeating?: true } & RadialGeometrySpec & PaintInset & GradientInterpolation)
+  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true } & PaintInset & GradientInterpolation)
   | ({ kind: "image"; url: string; size?: BackgroundSize; position?: [number, number]; repeat?: BackgroundRepeat } & PaintInset)
-  | { kind: "unsupported"; raw: string };
+  | { kind: "unsupported"; raw: string; reason?: string };
 
 
 /**
@@ -45,7 +51,16 @@ export type Paint =
  * text`, where the browser paints across the block but the glyph run is what gets filled.
  */
 export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h: number }, sub: { x: number; y: number; w: number; h: number }): Paint {
-  if (p.kind === "radial" || p.kind === "conic") {
+  if (p.kind === "radial") {
+    const geometry = radialGeometry(p, host.w, host.h);
+    const point: [number, number] = [host.x + geometry.center[0] - sub.x, host.y + geometry.center[1] - sub.y];
+    return { ...p,
+      center: [sub.w ? point[0] / sub.w : 0.5, sub.h ? point[1] / sub.h : 0.5],
+      position: point.map(value => ({ value, unit: "px" })) as NonNullable<typeof p.position>,
+      size: geometry.radii.map(value => ({ value, unit: "px" })) as Exclude<typeof p.size, string | undefined>,
+    };
+  }
+  if (p.kind === "conic") {
     const center: [number, number] = [
       sub.w ? (host.x + p.center[0] * host.w - sub.x) / sub.w : 0.5,
       sub.h ? (host.y + p.center[1] * host.h - sub.y) / sub.h : 0.5,
@@ -54,9 +69,7 @@ export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h
   }
   if (p.kind !== "linear" || p.stops.length < 2) return p;
   // Unit direction of the gradient line (CSS: 0deg = up, clockwise) and the host line length.
-  const rad = (p.angle * Math.PI) / 180;
-  const dx = Math.sin(rad), dy = -Math.cos(rad);
-  const length = Math.abs(host.w * dx) + Math.abs(host.h * dy);
+  const { direction: [dx, dy], length } = linearGradientLine(p.angle, host.w, host.h, p.corner);
   if (length === 0) return p;
   // Host line start = host centre − ½·length along the direction; project sub's centre ± half-extent.
   const start = (host.x + host.w / 2) * dx + (host.y + host.h / 2) * dy - length / 2;
@@ -78,7 +91,11 @@ export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h
     return stops[stops.length - 1]!.color;
   };
   const cut: GradientStop[] = [{ color: at(0), pos: 0 }, ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })), { color: at(1), pos: 1 }];
-  return { ...p, stops: cut };
+  if (!p.corner) return { ...p, stops: cut };
+  // The sub-paint keeps the host's physical direction; its different aspect must not
+  // reinterpret the host's corner keyword as a new direction.
+  const { corner: _, ...numeric } = p;
+  return { ...numeric, angle: Math.atan2(dx, -dy) * 180 / Math.PI, stops: cut };
 }
 
 
@@ -102,27 +119,39 @@ export function parseGradient(s: string): Paint {
   const m = /^(repeating-)?(linear|radial|conic)-gradient\((.*)\)$/s.exec(s);
   if (!m) return { kind: "unsupported", raw: s };
   const kind = m[2]!;
-  const args = splitTop(m[3]!, ",");
+  const interpolation = gradientInterpolation(splitTop(m[3]!, ","));
+  if (!interpolation) return { kind: "unsupported", raw: s };
+  const args = interpolation.args;
   let paint: Paint;
   if (kind === "linear") {
     let angle = 180; // CSS default: to bottom
+    let corner: GradientCorner | undefined;
     if (args[0] && !looksLikeColor(args[0])) {
       const a = args.shift()!;
       const deg = /^[-+]?[\d.]/.test(a) ? hue(a) : undefined;
       if (deg !== undefined) angle = deg;
-      else if (/^to\s+/.test(a)) angle = sideAngle(a);
+      else if (/^to\s+/.test(a)) {
+        angle = sideAngle(a);
+        if (/\b(left|right)\b/.test(a) && /\b(top|bottom)\b/.test(a)) {
+          corner = [/\bright\b/.test(a) ? 1 : -1, /\bbottom\b/.test(a) ? 1 : -1];
+        }
+      }
       else return { kind: "unsupported", raw: s };
     }
-    paint = { kind: "linear", angle, stops: parseStops(args) };
+    const stops = parseStops(args);
+    if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "linear", angle, stops };
+    if (corner) paint.corner = corner;
   } else if (kind === "radial") {
-    let ellipse = true;
-    let center: [number, number] = [0.5, 0.5];
+    let geometry: RadialGeometrySpec = { ellipse: true, center: [0.5, 0.5] };
     if (args[0] && !looksLikeColor(args[0])) {
-      const a = args.shift()!;
-      if (/\bcircle\b/.test(a)) ellipse = false;
-      center = atPosition(a) ?? center;
+      const parsed = parseRadialPrelude(args.shift()!);
+      if (!parsed) return { kind: "unsupported", raw: s };
+      geometry = parsed;
     }
-    paint = { kind: "radial", stops: parseStops(args), center, ellipse };
+    const stops = parseStops(args);
+    if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "radial", stops, ...geometry };
   } else {
     let from = 0;
     let center: [number, number] = [0.5, 0.5];
@@ -132,9 +161,12 @@ export function parseGradient(s: string): Paint {
       if (f) from = hue(f[1]!) ?? 0;
       center = atPosition(a) ?? center;
     }
-    paint = { kind: "conic", stops: parseStops(args), from, center };
+    const stops = parseStops(args);
+    if (!stops) return { kind: "unsupported", raw: s, reason: "unresolved gradient color stops or transition hints" };
+    paint = { kind: "conic", stops, from, center };
   }
   if (m[1]) paint.repeating = true;
+  if (interpolation.oklab) paint.interpolation = "oklab";
   return paint;
 }
 
@@ -178,18 +210,20 @@ function sideAngle(a: string): number {
 }
 
 
-function parseStops(args: string[]): GradientStop[] {
+function parseStops(args: string[]): GradientStop[] | undefined {
   const stops: GradientStop[] = [];
   for (const a of args) {
     const m = new RegExp(String.raw`^(${COLOR_TOKEN})\s*(?:([-+\d.]+)(%|px|deg))?\s*$`, "i").exec(a);
-    if (!m) continue;
-    const color = parseColor(m[1]!) ?? TRANSPARENT;
+    if (!m) return undefined;
+    const color = parseColor(m[1]!);
+    if (!color) return undefined;
     const stop: GradientStop = { color };
     if (m[2] !== undefined && m[3] === "%") stop.pos = +m[2] / 100;
     else if (m[2] !== undefined && m[3] === "deg") stop.pos = +m[2] / 360;
     else if (m[2] !== undefined && m[3] === "px") stop.px = +m[2];
     stops.push(stop);
   }
+  if (stops.length < 2) return undefined;
   // px stops need the box; `resolvePaint` finishes them.
   if (!stops.some((s) => s.px !== undefined)) fillEvenly(stops);
   return stops;
@@ -228,11 +262,9 @@ export function resolvePaint(p: Paint, w: number, h: number): Paint {
   if (!p.stops.some((s) => s.px !== undefined)) return p;
   let length: number;
   if (p.kind === "linear") {
-    const rad = (p.angle * Math.PI) / 180;
-    length = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
+    length = linearGradientLine(p.angle, w, h, p.corner).length;
   } else {
-    const cx = p.center[0] * w, cy = p.center[1] * h;
-    length = Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
+    length = radialGeometry(p, w, h).radii[0];
   }
   const stops = p.stops.map(({ color, pos, px }) => {
     const stop: GradientStop = { color };

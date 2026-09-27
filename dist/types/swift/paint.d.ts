@@ -5,6 +5,13 @@ import { type ColorCtx } from "./format.ts";
 export declare function shapeExpr(st: Style, w: number, h: number): string;
 /** A CSS paint as a SwiftUI style. `ctx`/`id` resolve its colours; see `colorExpr`. */
 export declare function paintExpr(p: Paint, w: number, h: number, ctx: ColorCtx, id?: string): string;
+/** Decorative linear paint is a View so its direction follows live bounds in either mode. */
+export declare function linearGradientViewExpr(p: Extract<Paint, {
+    kind: "linear";
+}>, ctx: ColorCtx, id?: string): string;
+export declare function radialGradientViewExpr(p: Extract<Paint, {
+    kind: "radial";
+}>, ctx: ColorCtx, id?: string): string;
 /**
  * One background layer: shape styles go through `.background(_:in:)`, images through a clipped
  * view. `background-clip: padding-box | content-box` (`Paint.inset`) pads the painted shape

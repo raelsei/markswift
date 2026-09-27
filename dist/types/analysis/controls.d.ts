@@ -16,6 +16,7 @@ export interface ControlSpec {
     captionTransform?: TextTransform;
     placeholder?: string;
     checked?: boolean;
+    markColorScheme?: ControlNode["markColorScheme"];
     radioGroup?: string;
     disabled?: boolean;
     readOnly?: boolean;

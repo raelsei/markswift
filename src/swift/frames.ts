@@ -2,6 +2,7 @@ import type { SemNode } from "../model/semantic.ts";
 import type { EmitContext, EmitMode } from "./context.ts";
 import { num } from "./format.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
+import { usesGreedyWords } from "../analysis/text-flow-admission.ts";
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
@@ -9,6 +10,8 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // text-only stack is a floor (`minHeight`) so native text metrics can grow it without clipping.
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
+  // This runtime applies content-width limits while retaining the live parent proposal.
+  const greedyHug = app && n.kind === "text" && n.width.kind === "hug" && usesGreedyWords(n);
   // The allocation layout applies these height limits to its used cross size before stretch.
   // An outer flexible limit frame would accept spare parent height and enlarge an auto row.
   const allocatedHug = app && n.kind === "stack" && !!n.allocation && n.height.kind === "hug";
@@ -33,15 +36,17 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
   const flex = [
-    !fixedW && n.minWidth !== undefined ? `minWidth: ${num(n.minWidth)}` : "",
-    !fixedW && n.maxWidth !== undefined ? `maxWidth: ${num(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
+    // Both bounds make a fill frame accept its proposal even when glyphs are wider.
+    // Allocated track minima remain owned by the parent layout; authored IR floors win.
+    !fixedW && !greedyHug && (n.minWidth !== undefined || fillW) ? `minWidth: ${num(n.minWidth ?? 0)}` : "",
+    !fixedW && !greedyHug && n.maxWidth !== undefined ? `maxWidth: ${num(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
     !fixedH && minHeight !== undefined ? `minHeight: ${num(minHeight)}` : "",
     !fixedH && maxHeight !== undefined ? `maxHeight: ${num(maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : "",
   ].filter(Boolean);
   if (flex.length) parts.push(`.frame(${flex.join(", ")}, alignment: ${align})`);
   // A finite SwiftUI frame accepts its parent's proposal even for intrinsic content. Ask
   // for the capped frame's ideal size on hugging axes before any background is painted.
-  const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
+  const hugW = !fixedW && !greedyHug && n.width.kind === "hug" && n.maxWidth !== undefined;
   const hugH = !fixedH && n.height.kind === "hug" && maxHeight !== undefined;
   if (hugW || hugH) parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
   return parts;

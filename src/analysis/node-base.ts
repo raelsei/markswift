@@ -9,6 +9,7 @@ import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { markerPaintRect } from "./list-symbol.ts";
 import { relativePosition } from "./relative-position.ts";
+import { fieldsetMetadata } from "./fieldset-paint.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = worst(node.notes);
@@ -54,6 +55,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(selfAlign !== undefined ? { selfAlign } : {}),
     padding,
     style,
+    ...fieldsetMetadata(n, ctx, style, notes),
     confidence: "mapped",
     notes,
     overlays: [],

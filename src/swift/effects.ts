@@ -3,7 +3,7 @@ import type { SemNode, Filter, ClipShape } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { Writer, colorExpr, hash, indent, num, type ColorCtx } from "./format.ts";
 import { note } from "./diagnostics.ts";
-import { paintExpr } from "./paint.ts";
+import { linearGradientViewExpr, radialGradientViewExpr, paintExpr } from "./paint.ts";
 import { imageLayer } from "./images.ts";
 
 /**
@@ -109,6 +109,8 @@ export function maskModifier(p: Paint, n: SemNode, ctx: EmitContext): string[] {
     return layer ? [".mask {", ...indent(layer, 1), "}"] : [];
   }
   if (p.kind === "unsupported") return [];
+  if (p.kind === "linear") return [`.mask { ${linearGradientViewExpr(p, ctx)} }`];
+  if (p.kind === "radial") return [`.mask { ${radialGradientViewExpr(p, ctx)} }`];
   // No node id: a mask is read for its alpha, and the extractor does not enumerate its
   // colours — a theme-adaptive token in a mask would change the shape of the mask, not a hue.
   return [`.mask { ${paintExpr(p, n.frame.w, n.frame.h, ctx)} }`];

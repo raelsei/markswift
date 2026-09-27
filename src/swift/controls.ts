@@ -1,5 +1,7 @@
 import { numericValue } from "./control-state.ts";
 import { selectExpr } from "./select-control.ts";
+import { isDrawnMarkControl } from "./boolean-control.ts";
+import { note } from "./diagnostics.ts";
 /**
  * `ControlNode` → SwiftUI. The node's box (fill, border, radius, padding, frame) is painted by
  * the shared modifier chain in `modifiers.ts`; this file emits only the interactive core that goes
@@ -66,9 +68,8 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     if (prompt) out.push(".foregroundStyle(Color(uiColor: .placeholderText))");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
   }
-  // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
-  // the design's `:disabled` opacity there so the two do not compound). Fidelity renders a still
-  // image that nothing interacts with, and keeps the design's measured opacity instead.
+  // Drawn marks own their disabled palette and use an identity ButtonStyle; native controls
+  // retain platform dimming. Fidelity keeps the captured paint without an interactive disabled flag.
   if (n.disabled && deps.mode === "app") out.push(".disabled(true)");
   return out;
 }
@@ -77,6 +78,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
   const binding = state ? `$${state}` : "";
   const still = deps.mode === "fidelity" || n.readOnly === true;
+  // A captured screen keeps its capture-time CSS scheme in both modes. Legacy captures without
+  // this metadata retain the previous screen-theme route, with an inference diagnostic.
+  if (isDrawnMarkControl(n) && n.markColorScheme === undefined) {
+    note(n, "approximated: checkbox/radio color-scheme metadata unavailable → legacy captured screen theme palette");
+  }
+  const markPalette = n.markColorScheme === "light dark" || n.markColorScheme === undefined ? deps.theme : n.markColorScheme;
   switch (n.control) {
     case "button": {
       const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
@@ -123,13 +130,13 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
     case "radio": {
       const radio = still ? `.constant(${n.checked ? "true" : "false"})` : deps.radioBindingOf?.get(n) ?? `.constant(${n.checked ? "true" : "false"})`;
-      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[deps.theme].accent}))`]);
+      return wrap(`Toggle(isOn: ${radio}) {`, body(n, deps), ["}", `.toggleStyle(MarkswiftMarkToggleStyle(mark: .dot, tint: ${UA[markPalette].accent}, disabled: ${!!n.disabled}, palette: .${markPalette}))`]);
     }
     case "toggle": {
       // A switch is the right control only when the design drew one: HTML checkboxes and radios
       // are small squares/circles, and an iOS switch would not fit their measured box.
-      const ua = UA[deps.theme];
-      const style = n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const ua = UA[markPalette];
+      const style = isDrawnMarkControl(n) ? `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent}, disabled: ${!!n.disabled}, palette: .${markPalette})` : ".switch";
       return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
     }
     case "slider": {

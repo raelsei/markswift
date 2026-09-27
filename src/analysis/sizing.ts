@@ -11,6 +11,7 @@ import { flexGrowthSize } from "./flex-sizing.ts";
 import { equalCalculatedFlexWidth, responsiveFraction } from "./responsive-width.ts";
 import { hasEqualFixedTableWidth } from "./table-width.ts";
 import { flowBounds } from "./relative-position.ts";
+import { horizontalAutoAlignment } from "./auto-margins.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -111,7 +112,10 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   let fillsW = false, fillsH = false;
   if (ctx.parent) {
     const [ppt, ppr, ppb, ppl] = insetsOf(ctx.parent.styles);
-    const outerW = n.bounds.w + px(s["margin-left"]) + px(s["margin-right"]);
+    // Used auto margins consume the block slot's spare width, not the element's painted box.
+    // Counting them as content turns a max-content/hugging child into a filling one.
+    const autoMargins = n.preferredSize?.horizontalAutoMargins;
+    const outerW = n.bounds.w + (autoMargins?.[0] ? 0 : px(s["margin-left"])) + (autoMargins?.[1] ? 0 : px(s["margin-right"]));
     const outerH = n.bounds.h + px(s["margin-top"]) + px(s["margin-bottom"]);
     fillsW = Math.abs(outerW - (ctx.parent.bounds.w - ppl - ppr)) <= 1;
     fillsH = Math.abs(outerH - (ctx.parent.bounds.h - ppt - ppb)) <= 1;
@@ -157,7 +161,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   // centred box, like plain side margins, make the margin box fill the parent while the border
   // box does not. Cap the width at what they leave and place the box the way they placed it.
   // (Computed style resolves `auto` to px, so this is geometry, not a declared property.)
-  let selfAlign: "center" | "end" | undefined;
+  let selfAlign = horizontalAutoAlignment(n, width, ctx, notes);
   if (width.kind === "fill" && ctx.parentAxis === "v" && !abs) {
     const ml = px(s["margin-left"]);
     const mr = px(s["margin-right"]);

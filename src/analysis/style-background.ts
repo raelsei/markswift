@@ -1,6 +1,6 @@
 /** Computed background paint and text-clipped gradients. */
 import type { LayoutNode, Rect } from "../model/layout.ts";
-import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes, parseRadiusXY } from "../css/index.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
 
 /**
@@ -55,9 +55,19 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
   for (let i = 0; i < layers.length; i++) {
     const p = layers[i]!;
     const top = layers.length - 1 - i;
-    if (p.kind === "unsupported") notes.push(`unmapped: background-image ${p.raw.slice(0, 40)}`);
+    if (p.kind === "unsupported") notes.push(`unmapped: background-image ${p.raw.slice(0, 40)}${p.reason ? ` (${p.reason})` : ""}`);
     else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h));
     else {
+      if (p.kind !== "solid" && p.interpolation === "oklab") notes.push("approximated: CSS Oklab gradient uses SwiftUI perceptual interpolation with stops converted to sRGB; wide-gamut colors and exact interpolation are not proved");
+      if (p.kind === "radial" && p.ellipse && /\btext\b/.test(s["background-clip"] ?? "")) notes.push("approximated: elliptical radial text fill uses a circular native text gradient");
+      if ((p.kind === "linear" || p.kind === "radial") && p.stops.some(stop => stop.px !== undefined)) notes.push("approximated: absolute gradient stop positions retain normalization to the captured box");
+      if (p.kind !== "solid") {
+        const origin = layerValue(s["background-origin"], top) ?? "padding-box";
+        const originInsets = EDGES.map(edge => edgeWidth(s, edge) + (origin === "content-box" ? px(s[`padding-${edge}`]) : 0));
+        if (origin !== "border-box" && originInsets.some(value => value > 0)) notes.push("approximated: gradient background origin uses the border box instead of the authored inset origin");
+        const size = layerValue(s["background-size"], top);
+        if (size && size !== "auto" && size !== "auto auto") notes.push("approximated: gradient background-size is not applied to its native paint field");
+      }
       if (p.kind !== "solid" && p.repeating) notes.push(`approximated: repeating ${p.kind} gradient tiled from its first period`);
       fills.push(resolvePaint(p, w, h));
     }
@@ -73,6 +83,13 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
       const box = j < imageStart ? boxes[boxes.length - 1] : boxes[(fills.length - 1 - j) % boxes.length];
       if (box !== "padding-box" && box !== "content-box") return;
       f.inset = EDGES.map((e) => round2(edgeWidth(s, e) + (box === "content-box" ? px(s[`padding-${e}`]) : 0))) as [number, number, number, number];
+      if (f.kind === "linear" || f.kind === "radial" || f.kind === "conic" || f.kind === "solid") {
+        const corners = ["top-left", "top-right", "bottom-right", "bottom-left"].map(corner => parseRadiusXY(s[`border-${corner}-radius`], w, h));
+        const rounded = corners.some(point => point.some(value => value > 0));
+        const uniformRadius = corners.every(point => point[0] === point[1] && point[0] === corners[0]![0]);
+        const uniformInset = f.inset.every(value => value === f.inset![0]);
+        if (rounded && (!uniformRadius || !uniformInset)) notes.push("approximated: inset background clipping with unequal or elliptical corner radii is not reconstructed");
+      }
     });
   }
   // `background-blend-mode` blends a node's own layers against each other, not against the

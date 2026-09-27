@@ -2,6 +2,8 @@
 import { type Color } from "./color.ts";
 import { type BlendMode } from "./blend.ts";
 import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
+import { type GradientCorner } from "./gradient-line.ts";
+import { type RadialGeometrySpec } from "./radial-gradient.ts";
 export interface GradientStop {
     color: Color;
     /** 0..1 along the gradient line, undefined = evenly distributed. */
@@ -14,6 +16,10 @@ export type PaintInset = {
     inset?: [number, number, number, number];
     /** `background-blend-mode` for this layer, against the layers below it. Absent = `normal`. */
     blend?: BlendMode;
+};
+/** Absence preserves legacy encoded-sRGB interpolation. */
+type GradientInterpolation = {
+    interpolation?: "oklab";
 };
 /**
  * One `background-image` layer (or a solid `background-color`). Gradient variants carry
@@ -28,21 +34,20 @@ export type Paint = ({
 } & PaintInset) | ({
     kind: "linear";
     angle: number;
+    corner?: GradientCorner;
     stops: GradientStop[];
     repeating?: true;
-} & PaintInset) | ({
+} & PaintInset & GradientInterpolation) | ({
     kind: "radial";
     stops: GradientStop[];
-    center: [number, number];
-    ellipse: boolean;
     repeating?: true;
-} & PaintInset) | ({
+} & RadialGeometrySpec & PaintInset & GradientInterpolation) | ({
     kind: "conic";
     stops: GradientStop[];
     from: number;
     center: [number, number];
     repeating?: true;
-} & PaintInset) | ({
+} & PaintInset & GradientInterpolation) | ({
     kind: "image";
     url: string;
     size?: BackgroundSize;
@@ -51,6 +56,7 @@ export type Paint = ({
 } & PaintInset) | {
     kind: "unsupported";
     raw: string;
+    reason?: string;
 };
 /**
  * Re-express a gradient painted over `host` so that the same colours land on `sub` (both
@@ -86,3 +92,4 @@ export declare const COLOR_TOKEN: string;
  * period so the consumer can tile. Paints without px stops are returned as-is.
  */
 export declare function resolvePaint(p: Paint, w: number, h: number): Paint;
+export {};

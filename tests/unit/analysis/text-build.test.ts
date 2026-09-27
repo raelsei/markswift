@@ -37,9 +37,11 @@ test("rich inline text keeps byte-stable Swift in app and fidelity modes", () =>
     expect(result.diagnostics.flatMap((item) => item.notes).join("\n")).toContain("destination dropped");
     expect(result.code).toContain(".background(Color.markswift(1.0, 1.0, 0.0), in: Rectangle())");
   }
+  // Fill frames explicitly accept narrow proposals with minWidth: 0; rich-text content,
+  // break handling, styles and diagnostics remain covered by the assertions above/below.
   expect(outputs.map((result) => createHash("sha256").update(result.code).digest("hex"))).toEqual([
-    "66ad7fd367e14929adb0525086e5e9664729c3e81e1275c8b82ef9f621feb27b",
-    "4ae35899a6fdfb888371504dcea4f361ca7a425188d8c5bf5dc80336939fbda9",
+    "104970114ed1554683f998d188e662099b0837f8f478b83974cff78ef38686b0",
+    "044497473e0275982bde668d9e506632861b2965425b414d66004be85ee03c23",
   ]);
   expect(outputs[1]!.code).toContain('Text(verbatim: "\\nlink")');
   expect(outputs[1]!.code).not.toContain('Text(verbatim: "\\nFinish")');

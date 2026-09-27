@@ -8,6 +8,8 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { geometryModifier } from "./geometry-observation.ts";
+import { isDrawnMarkControl } from "./boolean-control.ts";
+import { fieldsetFillModifiers, fieldsetBorderModifiers, fieldsetLegendModifier } from "./fieldset-paint.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
@@ -29,13 +31,15 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // Unless a layer carries a `background-blend-mode`: blending is against the layers *below it
   // inside this node*, so the whole stack has to live in one compositing group instead of a
   // chain of independent `.background` modifiers.
-  if (st.fills.some((f) => f.kind !== "unsupported" && f.blend)) m.push(...blendedFillModifier(st.fills, n, shape, ctx));
+  if (n.fieldsetPaint) m.push(...fieldsetFillModifiers(n, shape, ctx));
+  else if (st.fills.some((f) => f.kind !== "unsupported" && f.blend)) m.push(...blendedFillModifier(st.fills, n, shape, ctx));
   else for (const f of [...st.fills].reverse()) m.push(...fillModifier(f, n, shape, ctx));
   // backdrop-filter: over the flat canvases these designs use, blurring the backdrop changes
   // nothing visible, while SwiftUI materials add their own tint (badly in dark mode). The
   // translucent fill above already carries the "glass" look; keep the node flagged approximated.
   if (st.clip || (st.radius && (n.kind === "stack" || n.kind === "grid") && n.overlays.length)) m.push(`.clipShape(${shape})`);
-  if (st.border) {
+  if (n.fieldsetPaint) m.push(...fieldsetBorderModifiers(n, shape, ctx));
+  else if (st.border) {
     const b = st.border;
     m.push(
       b.dashed
@@ -59,8 +63,9 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // A disabled control's dimming is expressed twice over: the design's own `:disabled` opacity
   // and SwiftUI's automatic dimming from `.disabled(true)`. App mode keeps the native one (a
   // live control must dim the way the platform dims); fidelity keeps the design's number and
-  // omits `.disabled` entirely, since nothing interacts with a rendered image.
-  const nativeDim = ctx.mode === "app" && n.kind === "control" && n.disabled === true;
+  // omits `.disabled` entirely, since nothing interacts with a rendered image. Drawn marks use
+  // an identity ButtonStyle and their own disabled palette, so their authored opacity remains.
+  const nativeDim = ctx.mode === "app" && n.kind === "control" && n.disabled === true && !isDrawnMarkControl(n);
   if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
   if (st.blur !== undefined) m.push(`.blur(radius: ${num(st.blur)})`);
   if (st.blend) {
@@ -71,6 +76,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // transformed rectangle. Anchoring after an effect observes its unchanged layout envelope.
   m.push(...geometryModifier(n, ctx.geometry));
   if (ctx.mode === "fidelity" && n.kind === "stack" && n.scroll) m.push(...geometryModifier(n, ctx.geometry, true));
+  m.push(...fieldsetLegendModifier(n));
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));

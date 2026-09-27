@@ -32,7 +32,7 @@ describe("parseBackgroundImage", () => {
     expect(parseBackgroundImage("conic-gradient(from 45deg, rgb(255, 0, 0), rgb(0, 0, 255))")[0]).toMatchObject({ kind: "conic", from: 45, center: [0.5, 0.5] });
     expect(parseBackgroundImage("conic-gradient(from 57.2958deg, rgb(255, 0, 0), rgb(0, 0, 255))")[0]).toMatchObject({ from: 57.2958 });
     expect(parseBackgroundImage("conic-gradient(at 0% 0%, rgb(255, 0, 0), rgb(0, 0, 255))")[0]).toMatchObject({ from: 0, center: [0, 0] });
-    expect(parseBackgroundImage("conic-gradient(from 0.25turn at right bottom, red, blue)")[0]).toMatchObject({ from: 90, center: [1, 1] });
+    expect(parseBackgroundImage("conic-gradient(from 0.25turn at right bottom, rgb(255, 0, 0), rgb(0, 0, 255))")[0]).toMatchObject({ from: 90, center: [1, 1], stops: [{ color: red, pos: 0 }, { color: blue, pos: 1 }] });
     expect(parseBackgroundImage("conic-gradient(rgb(255, 0, 0), rgb(0, 0, 255))")[0]).toMatchObject({ from: 0, center: [0.5, 0.5] });
   });
 
@@ -113,5 +113,30 @@ describe("paintWithin", () => {
     expect(paintWithin(p, { x: 0, y: 0, w: 200, h: 40 }, { x: 80, y: 0, w: 50, h: 40 })).toEqual(p);
     const r: Paint = { kind: "radial", stops: [{ color: red, pos: 0 }, { color: blue, pos: 1 }], center: [0.5, 0.5], ellipse: true };
     expect(paintWithin(r, { x: 0, y: 0, w: 200, h: 40 }, { x: 0, y: 0, w: 100, h: 40 })).toMatchObject({ center: [1, 0.5] });
+  });
+});
+
+describe("corner gradient geometry", () => {
+  const ramp = "rgb(255, 0, 0), rgb(0, 0, 255)";
+  test("both keyword orders preserve corner direction while cardinals keep numeric constructors", () => {
+    const p = parseBackgroundImage(`linear-gradient(to top right, ${ramp})`)[0]!;
+    expect(p).toMatchObject({ kind: "linear", corner: [1, -1] });
+    expect(parseBackgroundImage(`linear-gradient(to right top, ${ramp})`)[0]).toEqual(p);
+    expect(parseBackgroundImage(`linear-gradient(to right, ${ramp})`)[0]).toEqual({ kind: "linear", angle: 90,
+      stops: [{ color: { r: 1, g: 0, b: 0, a: 1 }, pos: 0 }, { color: { r: 0, g: 0, b: 1, a: 1 }, pos: 1 }] });
+  });
+  test("corner px stops use the aspect-aware perpendicular gradient line", () => {
+    const p = parseBackgroundImage("linear-gradient(to bottom right, rgb(255, 0, 0) 0px, rgb(0, 0, 255) 20px)")[0]!;
+    // 240×80's perpendicular line length is 151.7893277px, so 20px is .1318.
+    expect(resolvePaint(p, 240, 80)).toMatchObject({ corner: [1, 1], stops: [{ pos: 0 }, { pos: 0.1318 }] });
+  });
+  test("text clipping freezes the host corner direction before projection into a differently shaped run", () => {
+    const p = parseBackgroundImage(`linear-gradient(to bottom right, ${ramp})`)[0]!;
+    const sub = paintWithin(p, { x: 0, y: 0, w: 240, h: 80 }, { x: 0, y: 0, w: 120, h: 80 });
+    expect(sub).not.toHaveProperty("corner");
+    if (sub.kind !== "linear") throw new Error("Expected linear paint");
+    expect(sub.angle).toBeCloseTo(161.565051177078, 10);
+    expect(sub.stops[0]!.color).toEqual({ r: 1, g: 0, b: 0, a: 1 });
+    expect(sub.stops.at(-1)!.color).toEqual({ r: 0.25, g: 0, b: 0.75, a: 1 });
   });
 });
