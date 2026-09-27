@@ -27,6 +27,11 @@ interface View {
  * SVG inlined through an `<img>` has no enumerated colours, so it passes none and stays literal.
  */
 export function svgExpr(n: SvgNode, shapes: Record<string, string>, ctx: ColorCtx, id?: string): string[] {
+  if (n.disclosureSymbol) {
+    const { capturedExpanded, rect } = n.disclosureSymbol;
+    const color = n.paths[0]?.fill ?? { r: 0, g: 0, b: 0, a: 1 };
+    return [`MarkswiftDisclosureSymbol(capturedExpanded: ${capturedExpanded}, symbolRect: CGRect(x: ${num(rect.x)}, y: ${num(rect.y)}, width: ${num(rect.w)}, height: ${num(rect.h)}), viewport: CGSize(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}), color: ${colorExpr(color, ctx, id)})`];
+  }
   const [, , vw, vh] = n.viewBox;
   // preserveAspectRatio default (`xMidYMid meet`): uniform scale, content centred in the frame.
   const scale = vw > 0 && vh > 0 ? (n.stretch ? n.frame.w / vw : Math.min(n.frame.w / vw, n.frame.h / vh)) : 1;

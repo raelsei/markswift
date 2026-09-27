@@ -41,6 +41,29 @@ export function fractionGridTracks(value: string | undefined): FractionGridTrack
   return tracks.length ? tracks : undefined;
 }
 
+/** Definite pixel rows or content-driven auto rows; no intrinsic or relative track guesses. */
+export function gridRowTracks(value: string | undefined): Array<number | null> | undefined {
+  if (value === "none") return [];
+  if (!value) return undefined;
+  const tokens = trackTokens(value.replace(/\[[^\]]*\]/g, " "));
+  if (!tokens) return undefined;
+  const rows: Array<number | null> = [];
+  for (const token of tokens) {
+    if (token === "auto") { rows.push(null); continue; }
+    const repeat = /^repeat\(\s*(\d+)\s*,\s*(.*)\)$/s.exec(token);
+    if (repeat) {
+      const count = Number(repeat[1]), inner = gridRowTracks(repeat[2]);
+      if (count < 1 || count > 256 || !inner?.length || inner.length * count + rows.length > 256) return;
+      for (let i = 0; i < count; i++) rows.push(...inner);
+      continue;
+    }
+    const px = /^(\d+(?:\.\d*)?|\.\d+)(px)?$/.exec(token);
+    if (!px || (!px[2] && Number(px[1]) !== 0)) return;
+    rows.push(Number(px[1]));
+  }
+  return rows.length && rows.length <= 256 ? rows : undefined;
+}
+
 function trackTokens(value: string): string[] | undefined {
   let depth = 0, token = "";
   const tokens: string[] = [];

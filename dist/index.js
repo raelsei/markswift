@@ -7068,10 +7068,22 @@ var PreferredSize = object({
   width: string2(),
   height: string2(),
   flexBasis: string2().optional(),
+  inlineSizeDefinite: boolean2().optional(),
+  hasRelativePadding: boolean2().optional(),
   hasAutoMargins: boolean2().optional(),
+  relativeInsets: tuple([string2(), string2(), string2(), string2()]).optional(),
+  relativeContainingDirection: _enum(["ltr", "rtl"]).optional(),
   gridTemplateColumns: string2().optional(),
   gridTemplateRows: string2().optional(),
   gridAutoRows: string2().optional()
+});
+var MarkerLayout = object({
+  symbol: _enum(["disc", "circle", "square", "disclosure-open", "disclosure-closed"]),
+  fontAscent: number2().positive(),
+  fontDescent: number2().nonnegative(),
+  fontSize: number2().positive(),
+  pixelOffset: object({ x: number2().min(0).lt(1), y: number2().min(0).lt(1) }).optional(),
+  disclosureControl: boolean2().optional()
 });
 var LayoutNode = lazy(() => object({
   id: string2().optional(),
@@ -7080,12 +7092,14 @@ var LayoutNode = lazy(() => object({
   styles: record(string2(), string2()),
   flattenedCustomElements: array(object({ tag: string2(), id: string2().optional() })).optional(),
   preferredSize: PreferredSize.optional(),
+  markerLayout: MarkerLayout.optional(),
   formOwner: string2().optional(),
   selectedIndex: number2().int().min(-1).optional(),
   option: object({ label: string2(), value: string2(), hidden: boolean2().optional() }).optional(),
   bounds: Rect,
   text: string2().optional(),
-  lines: array(object({ bounds: Rect, start: number2(), length: number2() })).optional(),
+  firstBaseline: number2().finite().optional(),
+  lines: array(object({ bounds: Rect, start: number2(), length: number2(), baseline: number2().finite().optional() })).optional(),
   paint: number2().optional(),
   children: array(LayoutNode)
 }));
@@ -7171,6 +7185,10 @@ var STYLE_WHITELIST = [
   "font-variant-numeric",
   "font-weight",
   "grid-auto-flow",
+  "grid-column-start",
+  "grid-column-end",
+  "grid-row-start",
+  "grid-row-end",
   "grid-template-columns",
   "grid-template-rows",
   "height",
@@ -7180,6 +7198,9 @@ var STYLE_WHITELIST = [
   "left",
   "letter-spacing",
   "line-height",
+  "list-style-image",
+  "list-style-position",
+  "list-style-type",
   "margin-bottom",
   "margin-left",
   "margin-right",
@@ -7659,8 +7680,15 @@ function appendChildren(raw, origin, identity, path, out, host) {
     if (c.type === 3) {
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
         const text = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
+        if (c.firstBaseline !== undefined)
+          text.firstBaseline = Math.round((c.firstBaseline - origin.y) * 100) / 100;
         if (c.lines && c.lines.length > 1)
-          text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
+          text.lines = c.lines.map((l) => ({
+            bounds: rebase(l.bounds, origin),
+            start: l.start,
+            length: l.length,
+            ...l.baseline !== undefined ? { baseline: Math.round((l.baseline - origin.y) * 100) / 100 } : {}
+          }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
         out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
@@ -7719,6 +7747,7 @@ function pseudoElement(raw, origin, identity, parentPath) {
     attrs: {},
     styles: raw.styles,
     bounds,
+    ...raw.markerLayout ? { markerLayout: { ...raw.markerLayout, pixelOffset: { x: origin.x - Math.floor(origin.x), y: origin.y - Math.floor(origin.y) } } } : {},
     children: imageUrl && imageBounds ? [{ tag: "img", attrs: { src: imageUrl, alt: "" }, styles: { display: "block", "object-fit": "fill" }, bounds: imageBounds, children: [] }] : text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : []
   };
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
@@ -7745,13 +7774,53 @@ async function readPreferredSizes(page, selector) {
     if (!root)
       throw new Error(`capture root ${selector} not found`);
     const out = {};
+    const definite = new WeakMap;
+    const preferred = (el, property) => {
+      const typed = el;
+      return typed.computedStyleMap?.().get(property)?.toString();
+    };
+    const parentBox = (el) => {
+      const tree = el.getRootNode();
+      const parent = el.assignedSlot ?? el.parentElement ?? (tree instanceof ShadowRoot ? tree.host : undefined);
+      return parent && getComputedStyle(parent).display === "contents" ? parentBox(parent) : parent ?? undefined;
+    };
+    const inlineSizeDefinite = (el) => {
+      const known = definite.get(el);
+      if (known !== undefined)
+        return known;
+      definite.set(el, false);
+      const style = getComputedStyle(el);
+      const width = preferred(el, "width");
+      if (style.writingMode !== "horizontal-tb" || width === undefined)
+        return false;
+      if (["min-width", "max-width"].some((property) => {
+        const value = preferred(el, property);
+        return value !== undefined && !/^(?:auto|none|(?:\d+(?:\.\d*)?|\.\d+)(?:px|%))$/.test(value);
+      }))
+        return false;
+      let result = false;
+      if (/^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(width))
+        result = true;
+      else if (style.float === "none" && /^(static|relative)$/.test(style.position)) {
+        const parent = parentBox(el);
+        const percentage = /^(?:\d+(?:\.\d*)?|\.\d+)%$/.test(width);
+        const block = /^(block|flow-root|flex|grid)$/.test(style.display);
+        if (el === document.documentElement)
+          result = block && (width === "auto" || percentage);
+        else if (parent && /^(block|flow-root)$/.test(getComputedStyle(parent).display)) {
+          result = (percentage || width === "auto" && block) && inlineSizeDefinite(parent);
+        }
+      }
+      definite.set(el, result);
+      return result;
+    };
     const walk = (el, path) => {
       const typed = el;
       const map = typed.computedStyleMap?.();
       const width = map?.get("width")?.toString();
       const height = map?.get("height")?.toString();
       if (width !== undefined && height !== undefined) {
-        const size = { width, height };
+        const size = { width, height, inlineSizeDefinite: inlineSizeDefinite(el) };
         if (el.localName === "col" || el.localName === "colgroup") {
           const style = getComputedStyle(el);
           size.columnStyles = Object.fromEntries(properties.map((property) => [property, style.getPropertyValue(property)]));
@@ -7759,13 +7828,26 @@ async function readPreferredSizes(page, selector) {
         const basis = map?.get("flex-basis")?.toString();
         if (basis !== undefined && basis !== "auto")
           size.flexBasis = basis;
+        if (["top", "right", "bottom", "left"].some((edge) => map?.get(`padding-${edge}`)?.toString().includes("%")))
+          size.hasRelativePadding = true;
         if (["top", "right", "bottom", "left"].some((edge) => map?.get(`margin-${edge}`)?.toString() === "auto"))
           size.hasAutoMargins = true;
+        if (getComputedStyle(el).position === "relative") {
+          const insets = ["top", "right", "bottom", "left"].map((edge) => map?.get(edge)?.toString());
+          if (insets.every((value) => value !== undefined))
+            size.relativeInsets = insets;
+          let containing = parentBox(el);
+          while (containing && getComputedStyle(containing).display === "inline")
+            containing = parentBox(containing);
+          if (containing)
+            size.relativeContainingDirection = getComputedStyle(containing).direction === "rtl" ? "rtl" : "ltr";
+        }
         const display = map?.get("display")?.toString();
         if (display === "grid" || display === "inline-grid") {
           const columns = map?.get("grid-template-columns")?.toString();
           const rows = map?.get("grid-template-rows")?.toString();
-          const autoRows = map?.get("grid-auto-rows")?.toString();
+          const autoRowValues = map?.getAll?.("grid-auto-rows");
+          const autoRows = autoRowValues?.length ? autoRowValues.map((value) => value.toString()).join(" ") : map?.get("grid-auto-rows")?.toString();
           if (columns !== undefined)
             size.gridTemplateColumns = columns;
           if (rows !== undefined)
@@ -8001,6 +8083,135 @@ function mediaWarning(conditions) {
   return `CSS @media conditions ${shown.join("; ")}${remaining ? `; +${remaining} more` : ""} were captured at one viewport/theme; the generated Swift view freezes this media-query state.`;
 }
 
+// src/browser/text-metrics.ts
+async function readTextMetrics(page, selector) {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root)
+      throw new Error(`capture root ${selector} not found`);
+    const context = document.createElement("canvas").getContext("2d");
+    const result = {};
+    const walk = (element, path) => {
+      if (element.shadowRoot || element instanceof HTMLSlotElement)
+        return;
+      const style = getComputedStyle(element);
+      if (style.writingMode !== "horizontal-tb" || style.direction !== "ltr")
+        return;
+      context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      let ordinal = 0;
+      for (const child of element.childNodes) {
+        if (child.nodeType !== Node.TEXT_NODE)
+          continue;
+        const key = `${path}/#text:${ordinal++}`;
+        const text = child.textContent ?? "";
+        if (!text.trim() || !/^[\x09\x0a\x0d\x20-\x7e]*$/.test(text))
+          continue;
+        const metrics = context.measureText(text);
+        if (Number.isFinite(metrics.fontBoundingBoxAscent) && Number.isFinite(metrics.fontBoundingBoxDescent)) {
+          result[key] = { ascent: metrics.fontBoundingBoxAscent, descent: metrics.fontBoundingBoxDescent };
+        }
+      }
+      Array.from(element.children).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
+    };
+    walk(root, "");
+    return result;
+  }, selector);
+}
+function attachTextMetrics(root, metrics) {
+  const walk = (raw, path) => {
+    if (raw.children.some((child) => child.shadowRootType))
+      return;
+    let ordinal = 0, elementIndex = 0;
+    for (const child of raw.children) {
+      if (child.type === 3) {
+        const metric = metrics[`${path}/#text:${ordinal++}`];
+        if (!metric || !child.bounds)
+          continue;
+        const lines = child.lines?.length ? child.lines : [{ bounds: child.bounds, start: 0, length: child.text?.length ?? 0 }];
+        if (metric.ascent <= 0 || metric.descent < 0 || lines.some((line) => Math.abs(line.bounds.h - metric.ascent - metric.descent) > 0.15))
+          continue;
+        child.firstBaseline = Math.min(...lines.map((line) => line.bounds.y + metric.ascent));
+        if (child.lines)
+          child.lines = child.lines.map((line) => ({ ...line, baseline: line.bounds.y + metric.ascent }));
+      } else if (child.type === 1 && child.pseudo === undefined) {
+        const childPath = path ? `${path}/${elementIndex++}` : String(elementIndex++);
+        walk(child, childPath);
+      }
+    }
+  };
+  walk(root, "");
+}
+
+// src/browser/list-markers.ts
+async function readMarkerLayouts(page, selector, cdp) {
+  const captured = await page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root)
+      throw new Error(`capture root ${selector} not found`);
+    const context = document.createElement("canvas").getContext("2d");
+    const result = {};
+    const summaries = Array.from(document.querySelectorAll("summary"));
+    const walk = (element, path) => {
+      if (element.shadowRoot || element instanceof HTMLSlotElement)
+        return;
+      const own = getComputedStyle(element), style = getComputedStyle(element, "::marker");
+      if (own.display === "list-item" && style.content === "normal" && style.listStyleImage === "none" && style.writingMode === "horizontal-tb" && style.direction === "ltr" && ["disc", "circle", "square", "disclosure-open", "disclosure-closed"].includes(style.listStyleType)) {
+        context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const metrics = context.measureText("M"), fontSize = parseFloat(style.fontSize);
+        if (metrics.fontBoundingBoxAscent > 0 && metrics.fontBoundingBoxDescent >= 0 && fontSize > 0) {
+          const details = element.parentElement;
+          const summary = element.tagName === "SUMMARY" && details instanceof HTMLDetailsElement && Array.from(details.children).find((child) => child.tagName === "SUMMARY") === element && style.listStyleType === (details.open ? "disclosure-open" : "disclosure-closed") ? summaries.indexOf(element) : undefined;
+          result[path] = {
+            symbol: style.listStyleType,
+            fontAscent: metrics.fontBoundingBoxAscent,
+            fontDescent: metrics.fontBoundingBoxDescent,
+            fontSize,
+            ...summary !== undefined ? { summary } : {}
+          };
+        }
+      }
+      Array.from(element.children).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
+    };
+    walk(root, "");
+    return result;
+  }, selector);
+  const result = {};
+  const candidates = Object.values(captured).some((metric) => metric.summary !== undefined);
+  let summaryNodes = [];
+  if (candidates) {
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const { root } = await cdp.send("DOM.getDocument");
+    summaryNodes = (await cdp.send("DOM.querySelectorAll", { nodeId: root.nodeId, selector: "summary" })).nodeIds;
+  }
+  for (const [path, { summary, symbol, ...metric }] of Object.entries(captured)) {
+    let disclosureControl = false;
+    if (summary !== undefined && summaryNodes[summary] !== undefined) {
+      const matched = await cdp.send("CSS.getMatchedStylesForNode", { nodeId: summaryNodes[summary] });
+      const affectsMarker = (properties) => properties.some((p) => !p.disabled && (p.name === "all" || /^list-style(?:-|$)/.test(p.name)));
+      const author = affectsMarker(matched.inlineStyle?.cssProperties ?? []) || affectsMarker(matched.attributesStyle?.cssProperties ?? []) || matched.matchedCSSRules?.some((match) => match.rule.origin !== "user-agent" && affectsMarker(match.rule.style.cssProperties)) || matched.pseudoElements?.some((pseudo) => pseudo.pseudoType === "marker" && pseudo.matches.some((match) => match.rule.origin !== "user-agent" && affectsMarker(match.rule.style.cssProperties))) || matched.inherited?.some((parent) => affectsMarker(parent.inlineStyle?.cssProperties ?? []) || parent.matchedCSSRules.some((match) => match.rule.origin !== "user-agent" && affectsMarker(match.rule.style.cssProperties))) || matched.cssKeyframesRules?.some((rule) => rule.keyframes.some((frame) => affectsMarker(frame.style.cssProperties)));
+      const ua = matched.matchedCSSRules?.some((match) => match.rule.origin === "user-agent" && match.rule.style.cssProperties.some((p) => p.name === "list-style-type" && p.value === symbol));
+      disclosureControl = !!ua && !author;
+    }
+    result[path] = { ...metric, symbol, ...disclosureControl ? { disclosureControl: true } : {} };
+  }
+  return result;
+}
+function attachMarkerLayouts(root, layouts) {
+  const walk = (raw, path) => {
+    if (raw.children.some((child) => child.shadowRootType))
+      return;
+    let index = 0;
+    for (const child of raw.children) {
+      if (child.pseudo === "marker" && layouts[path])
+        child.markerLayout = layouts[path];
+      else if (child.type === 1 && child.pseudo === undefined)
+        walk(child, path ? `${path}/${index++}` : String(index++));
+    }
+  };
+  walk(root, "");
+}
+
 // src/browser/capture.ts
 var ROOT_MARK = "data-h2s-root-capture";
 
@@ -8101,6 +8312,8 @@ class BrowserCapture {
       }, { sel: spec.root, mark: ROOT_MARK });
       const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
+      const textMetrics = await readTextMetrics(page, spec.root);
+      const markerLayouts = await readMarkerLayouts(page, spec.root, cdp);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       const formSnapshot = await readFormSnapshot(page);
       const snapA = await cdp.send("DOMSnapshot.captureSnapshot", snapArgs);
@@ -8121,6 +8334,8 @@ class BrowserCapture {
       restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
+      attachTextMetrics(rootRaw, textMetrics);
+      attachMarkerLayouts(rootRaw, markerLayouts);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
       if (!root)
@@ -10467,7 +10682,7 @@ var CDATA = ElementType.CDATA;
 var Doctype = ElementType.Doctype;
 
 // node_modules/domhandler/lib/esm/node.js
-class Node {
+class Node2 {
   constructor() {
     this.parent = null;
     this.prev = null;
@@ -10498,7 +10713,7 @@ class Node {
   }
 }
 
-class DataNode extends Node {
+class DataNode extends Node2 {
   constructor(data) {
     super();
     this.data = data;
@@ -10542,7 +10757,7 @@ class ProcessingInstruction extends DataNode {
   }
 }
 
-class NodeWithChildren extends Node {
+class NodeWithChildren extends Node2 {
   constructor(children) {
     super();
     this.children = children;
@@ -11941,6 +12156,109 @@ function optionText2(node) {
   return node.children.map(optionText2).join("");
 }
 
+// src/analysis/disclosure-input.ts
+function applyDisclosureInput(n, spec) {
+  if ("open" in n.attrs)
+    spec.expanded = true;
+  const summary = n.children.find((child) => child.tag === "summary");
+  if (!summary) {
+    spec.notes.push("approximated: <details> has no captured summary; native disclosure supplies its default trigger");
+    return;
+  }
+  const content = spec.expanded ? n.children.filter((child) => child !== summary && child.bounds.w > 0 && child.bounds.h > 0 && (child.tag !== "#text" || child.text?.trim())) : [];
+  const gap = content.length ? Math.min(...content.map((child) => child.bounds.y)) - summary.bounds.y - summary.bounds.h : 0;
+  const contentLeft = n.bounds.x + insetsOf(n.styles)[3];
+  const labelInset = summary.bounds.x - contentLeft, contentInset = content.length ? content[0].bounds.x - contentLeft : 0;
+  const ordered = [...content].sort((a, b) => a.bounds.y - b.bounds.y);
+  const gaps = ordered.slice(1).map((child, i) => child.bounds.y - ordered[i].bounds.y - ordered[i].bounds.h);
+  if (labelInset < -0.5 || contentInset < -0.5 || content.some((child) => Math.abs(child.bounds.x - contentLeft - contentInset) > 0.5 || /^(absolute|fixed)$/.test(child.styles.position ?? "")) || gaps.some((value) => value < -0.5 || Math.abs(value - gaps[0]) > 0.5)) {
+    spec.notes.push("approximated: disclosure content has unequal/negative leading insets, positioned children or nonuniform vertical gaps; native disclosure layout retained");
+    return;
+  }
+  if (gap < -0.5 || !Number.isFinite(gap) || !/^(block|list-item)$/.test(summary.styles.display ?? "block") || /flex|grid/.test(n.styles.display ?? "block")) {
+    spec.notes.push("approximated: disclosure summary/content layout is not a supported vertical captured flow; native disclosure spacing retained");
+    return;
+  }
+  spec.disclosureLayout = { gap: Math.max(0, gap), labelInset: Math.max(0, labelInset), contentInset: Math.max(0, contentInset), contentAvailable: content.length > 0 };
+  if (!spec.expanded && !content.length)
+    spec.notes.push("approximated: closed <details> descendants have no captured layout; opening exposes only captured content");
+  const markers = summary.children.filter((child) => child.tag === "::marker");
+  if (markers.some((marker) => marker.styles.content === "normal" && /^disclosure-/.test(marker.styles["list-style-type"] ?? "") && !marker.markerLayout?.disclosureControl)) {
+    spec.notes.push("approximated: disclosure marker state is not proved to come from UA rules; captured marker remains static when toggled");
+  }
+}
+
+// src/analysis/text-line-box.ts
+var nativeFamilies = new Set(["system-ui", "-apple-system", "blinkmacsystemfont"]);
+function reframeText(node, frame) {
+  const box = node.lineBox;
+  if (box) {
+    const top = node.frame.y - frame.y, bottom = frame.y + frame.h - node.frame.y - node.frame.h;
+    const firstBaseline = round2(box.firstBaseline + top), baselineToBottom = round2(box.baselineToBottom + bottom);
+    if (firstBaseline >= 0 && baselineToBottom >= 0)
+      node.lineBox = {
+        ...box,
+        firstBaseline,
+        baselineToBottom,
+        baselines: box.baselines.map((baseline) => round2(baseline + top))
+      };
+    else {
+      delete node.lineBox;
+      node.notes.push("approximated: caption content box clips measured baselines; native text placement retained");
+    }
+  }
+  node.frame = frame;
+}
+function measuredTextLineBox(host, node, built, sources = built, note) {
+  const glyphs = built.filter((value) => /\S/.test(value.run.text) && value.run.gap === undefined);
+  const first = glyphs[0];
+  if (!first || first.node.firstBaseline === undefined || node.layoutDirection === "rtl" || node.lineLimit !== undefined || node.truncate || node.maxHeight !== undefined || node.overlays.length || node.style.clip || node.style.clipPath || host.flattenedCustomElements?.length || node.runs.some((run) => run.gap !== undefined) || node.notes.some((note) => note.includes("font-family")))
+    return;
+  const font = first.run.font;
+  if (font.family.kind !== "system" || font.family.design !== "default")
+    return;
+  const normal = font.lineHeight === undefined;
+  if (normal && (node.lines !== 1 || host.preferredSize?.height !== "auto"))
+    return;
+  const step = font.lineHeight ?? first.node.bounds.h;
+  if (!Number.isFinite(step) || step <= 0 || !normal && step < font.size * 1.193359 - 0.01)
+    return;
+  if (!Number.isInteger(font.weight) || font.weight < 100 || font.weight > 900 || font.weight % 100 !== 0) {
+    note?.(`approximated: measured baseline geometry is not admitted for font-weight ${font.weight}; the nearest named native weight remains in use`);
+    return;
+  }
+  const fingerprint = JSON.stringify(font);
+  if (node.runs.some((run) => JSON.stringify(run.font) !== fingerprint) || sources.some((source) => JSON.stringify(fontOf(source.styleOf.styles, {})) !== fingerprint))
+    return;
+  for (const value of glyphs) {
+    const run = value.run, style = value.styleOf.styles;
+    if (JSON.stringify(run.font) !== fingerprint || run.italic || run.bound || run.baselineOffset !== undefined || run.gap !== undefined || run.transform || run.kerning || run.tabularNums || run.paint || run.shadow || !nativeFamilies.has(fontFamilies(style["font-family"])[0]?.toLowerCase() ?? "") || style.direction && style.direction !== "ltr" || style["writing-mode"] && style["writing-mode"] !== "horizontal-tb" || style.transform && style.transform !== "none" || value.node.firstBaseline === undefined)
+      return;
+  }
+  const measured = glyphs.flatMap((value) => value.node.lines?.length ? value.node.lines.map((line) => line.baseline) : [value.node.firstBaseline]);
+  if (measured.some((value) => value === undefined || !Number.isFinite(value)))
+    return;
+  const baselines = [];
+  for (const baseline of measured.sort((a, b) => a - b)) {
+    if (!baselines.length || baseline - baselines.at(-1) > 0.15)
+      baselines.push(baseline);
+  }
+  if (baselines.length !== node.lines || baselines.slice(1).some((baseline, i) => Math.abs(baseline - baselines[i] - step) > 0.15))
+    return;
+  const origin = node.frame.y + node.padding[0], height = node.frame.h - node.padding[0] - node.padding[2];
+  if (normal && (Math.abs(height - step) > 0.15 || glyphs.some((value) => Math.abs(value.node.bounds.h - step) > 0.15)))
+    return;
+  const firstBaseline = baselines[0] - origin, baselineToBottom = origin + height - baselines.at(-1);
+  if (firstBaseline < 0 || baselineToBottom < 0 || firstBaseline > step || baselineToBottom > step)
+    return;
+  return {
+    firstBaseline: round2(firstBaseline),
+    baselineToBottom: round2(baselineToBottom),
+    baselineStep: step,
+    baselines: baselines.map((baseline) => round2(baseline - origin))
+  };
+}
+
 // src/analysis/controls.ts
 function controlOf(n) {
   const a = n.attrs;
@@ -11988,8 +12306,7 @@ function controlOf(n) {
     }
     case "details": {
       const spec = { control: "disclosure", notes };
-      if ("open" in a)
-        spec.expanded = true;
+      applyDisclosureInput(n, spec);
       return spec;
     }
     case "progress":
@@ -12085,11 +12402,11 @@ function buildControl(spec, parts) {
     }
     return true;
   });
-  const content = [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const content = control === "disclosure" && state.disclosureLayout?.contentAvailable === false ? [] : [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
   const only = content.length === 1 ? content[0] : undefined;
   if (only && only.kind === "text" && !parts.children.length) {
     const [pt, pr, pb, pl] = base.padding;
-    only.frame = { x: base.frame.x + pl, y: base.frame.y + pt, w: base.frame.w - pl - pr, h: base.frame.h - pt - pb };
+    reframeText(only, { x: base.frame.x + pl, y: base.frame.y + pt, w: base.frame.w - pl - pr, h: base.frame.h - pt - pb });
     if (base.width.kind !== "hug")
       only.width = { kind: "fill" };
   }
@@ -12947,6 +13264,40 @@ function unconstrained(node) {
   return (styles["min-width"] === undefined || /^(?:auto|0(?:px)?)$/.test(styles["min-width"])) && (styles["max-width"] === undefined || styles["max-width"] === "none") && px(styles["margin-left"]) === 0 && px(styles["margin-right"]) === 0;
 }
 
+// src/analysis/relative-position.ts
+var pixel = (value) => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:px)?$/.test(value) && (value.endsWith("px") || Number(value) === 0) ? Number.parseFloat(value) : undefined;
+function relativePosition(n) {
+  if (n.styles.position !== "relative")
+    return {};
+  const insets = n.preferredSize?.relativeInsets;
+  if (!insets) {
+    const absent = ["top", "right", "bottom", "left"].every((edge) => n.styles[edge] === undefined);
+    const declared = Object.keys(parseDeclared(n.attrs.style)).some((property) => /^(?:inset(?:-|$)|top$|right$|bottom$|left$)/.test(property));
+    if (absent && !declared)
+      return {};
+    return { reason: "authored relative insets unavailable" };
+  }
+  const values = insets.map((value) => value === "auto" ? null : pixel(value));
+  if (values.some((value) => value === undefined))
+    return { reason: "percentage or complex relative inset" };
+  const [top, right, bottom, left] = values;
+  if (left !== null && right !== null && !n.preferredSize?.relativeContainingDirection)
+    return { reason: "relative containing-block direction unavailable" };
+  const x = left !== null && (right === null || n.preferredSize?.relativeContainingDirection !== "rtl") ? left : right !== null ? -right : 0;
+  const y = top !== null ? top : bottom !== null ? -bottom : 0;
+  return x || y ? { offset: [x, y] } : {};
+}
+function flowFrame(n) {
+  const [x, y] = n.relativeOffset ?? [0, 0];
+  return x || y ? { ...n.frame, x: n.frame.x - x, y: n.frame.y - y } : n.frame;
+}
+function flowBounds(n) {
+  return flowFrame({ frame: n.bounds, relativeOffset: relativePosition(n).offset });
+}
+function relativeFallback(n) {
+  return n.notes.some((note) => note.startsWith("approximated: relative position "));
+}
+
 // src/analysis/sizing.ts
 function trailingInset(n, height, padBottom) {
   if (height.kind !== "hug" || n.children.length === 0)
@@ -12979,10 +13330,10 @@ function contentExtent(n, margins) {
     if (c.tag !== "#text") {
       if (c.bounds.w === 0 && c.bounds.h === 0)
         continue;
-      if (!renders(c) || hangsLeading(c.bounds, contentLeft))
+      if (!renders(c) || hangsLeading(flowBounds(c), contentLeft))
         continue;
     }
-    let box = c.bounds;
+    let box = flowBounds(c);
     if (margins) {
       const [mt, mr, mb, ml] = EDGES.map((e) => px(c.styles[`margin-${e}`]));
       box = { x: box.x - ml, y: box.y - mt, w: box.w + ml + mr, h: box.h + mt + mb };
@@ -13089,6 +13440,65 @@ function sizeOf(n, d, ctx, notes) {
   return { width, height, ...constraints, ...selfAlign !== undefined ? { selfAlign } : {} };
 }
 
+// src/analysis/list-symbol.ts
+function markerPaintRect(n) {
+  const metric = n.markerLayout, text = n.children.find((child) => child.tag === "#text");
+  if (!metric || !text || n.bounds.w <= 0 || n.bounds.h <= 0 || Math.abs(text.bounds.h - metric.fontAscent - metric.fontDescent) > 0.2)
+    return;
+  const ascent = Math.round(metric.fontAscent);
+  if (metric.symbol.startsWith("disclosure-")) {
+    const size = Math.trunc(metric.fontSize * 0.66 * 64) / 64;
+    return { x: text.bounds.x - n.bounds.x, y: text.bounds.y + ascent - size - n.bounds.y, w: size, h: size };
+  }
+  const twoThirds = Math.trunc(ascent * 2 / 3), size = Math.trunc((twoThirds + 1) / 2);
+  const x = text.bounds.x + 1, y = text.bounds.y + Math.trunc(3 * (ascent - twoThirds) / 2);
+  const sx = metric.pixelOffset?.x ?? 0, sy = metric.pixelOffset?.y ?? 0;
+  return {
+    x: Math.round(x + sx) - sx - n.bounds.x,
+    y: Math.round(y + sy) - sy - n.bounds.y,
+    w: Math.round(x + sx + size) - Math.round(x + sx),
+    h: Math.round(y + sy + size) - Math.round(y + sy)
+  };
+}
+function buildListSymbol(n, base) {
+  const rect = markerPaintRect(n), metric = n.markerLayout;
+  if (!rect || !metric)
+    return;
+  const color = parseColor(n.styles["-webkit-text-fill-color"] ?? n.styles.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const { x, y, w, h } = rect;
+  let path;
+  if (metric.symbol.startsWith("disclosure-")) {
+    const points = metric.symbol === "disclosure-open" ? [[0, 0.07], [0.5, 0.93], [1, 0.07]] : [[0, 0], [0.86, 0.5], [0, 1]];
+    path = { d: points.map(([px, py], i) => `${i ? "L" : "M"}${x + px * w} ${y + py * h}`).join(" ") + " Z", fill: color };
+  } else if (metric.symbol === "square")
+    path = { d: `M${x} ${y} h${w} v${h} h${-w} Z`, fill: color };
+  else {
+    const ellipse = `M${x} ${y + h / 2} a${w / 2} ${h / 2} 0 1 0 ${w} 0 a${w / 2} ${h / 2} 0 1 0 ${-w} 0 Z`;
+    path = metric.symbol === "circle" ? { d: ellipse, stroke: color, strokeWidth: 1 } : { d: ellipse, fill: color };
+  }
+  return {
+    ...base,
+    kind: "svg",
+    width: { kind: "fixed", px: n.bounds.w },
+    height: { kind: "fixed", px: n.bounds.h },
+    padding: [0, 0, 0, 0],
+    viewBox: [0, 0, n.bounds.w, n.bounds.h],
+    paths: [path],
+    ...metric.disclosureControl ? { disclosureSymbol: { capturedExpanded: metric.symbol === "disclosure-open", rect } } : {}
+  };
+}
+function preserveSymbolLineLeading(n, stack) {
+  if (stack.axis !== "h" || /flex|grid/.test(n.styles.display ?? "") || !n.children.some((child) => child.markerLayout && markerPaintRect(child)) || !stack.children.length)
+    return;
+  const top = Math.min(...stack.children.map((child) => child.frame.y));
+  const bottom = Math.max(...stack.children.map((child) => child.frame.y + child.frame.h));
+  const contentTop = n.bounds.y + stack.padding[0], contentBottom = n.bounds.y + n.bounds.h - stack.padding[2];
+  if (top < contentTop - 0.2 || bottom > contentBottom + 0.2)
+    return;
+  stack.padding[0] += Math.max(0, top - contentTop);
+  stack.padding[2] += Math.max(0, contentBottom - bottom);
+}
+
 // src/analysis/node-base.ts
 function finish(node) {
   node.confidence = worst(node.notes);
@@ -13107,9 +13517,14 @@ function withBase(n, ctx, extra) {
 }
 function makeBase(n, ctx, declared) {
   const notes = [];
+  const relative = ctx.parent ? relativePosition(n) : {};
+  if (relative.reason)
+    notes.push(`approximated: relative position ${relative.reason}; captured placement cannot recompute at another width`);
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.note)
     notes.push(policy.note);
+  if ([n, ...n.children.filter((child) => child.tag === "::marker")].some((marker) => marker.tag === "::marker" && marker.styles.content === "normal" && /^(disc|circle|square|disclosure-open|disclosure-closed)$/.test(marker.styles["list-style-type"] ?? "") && !markerPaintRect(marker)))
+    notes.push("approximated: default list symbol font metrics/direction are not proved; captured marker text glyph retained instead of browser shape paint");
   for (const custom of n.flattenedCustomElements ?? []) {
     notes.push(`approximated: <${custom.tag}>${custom.id ? ` #${custom.id}` : ""} display: contents wrapper has no box; custom semantics and behavior are not translated`);
   }
@@ -13120,6 +13535,7 @@ function makeBase(n, ctx, declared) {
   return {
     id: n.id ?? "",
     frame: n.bounds,
+    ...relative.offset ? { relativeOffset: relative.offset } : {},
     width,
     height,
     ...constraints,
@@ -13184,6 +13600,36 @@ function fractionGridTracks(value) {
   }
   return tracks.length ? tracks : undefined;
 }
+function gridRowTracks(value) {
+  if (value === "none")
+    return [];
+  if (!value)
+    return;
+  const tokens = trackTokens(value.replace(/\[[^\]]*\]/g, " "));
+  if (!tokens)
+    return;
+  const rows = [];
+  for (const token of tokens) {
+    if (token === "auto") {
+      rows.push(null);
+      continue;
+    }
+    const repeat = /^repeat\(\s*(\d+)\s*,\s*(.*)\)$/s.exec(token);
+    if (repeat) {
+      const count = Number(repeat[1]), inner = gridRowTracks(repeat[2]);
+      if (count < 1 || count > 256 || !inner?.length || inner.length * count + rows.length > 256)
+        return;
+      for (let i = 0;i < count; i++)
+        rows.push(...inner);
+      continue;
+    }
+    const px = /^(\d+(?:\.\d*)?|\.\d+)(px)?$/.exec(token);
+    if (!px || !px[2] && Number(px[1]) !== 0)
+      return;
+    rows.push(Number(px[1]));
+  }
+  return rows.length && rows.length <= 256 ? rows : undefined;
+}
 function trackTokens(value) {
   let depth = 0, token = "";
   const tokens = [];
@@ -13210,7 +13656,8 @@ function trackTokens(value) {
 
 // src/analysis/allocation.ts
 var clamp = (value, track) => Math.max(track.min, Math.min(track.max ?? Infinity, value));
-function flexAllocatedWidths(available, tracks) {
+function flexAllocatedWidths(available, tracks, basisWidth = available) {
+  tracks = tracks.map((track) => track.basisFraction === undefined ? track : { ...track, basis: Math.max(track.inset ?? 0, track.basis + track.basisFraction * basisWidth) });
   const growing = tracks.reduce((sum, track) => sum + clamp(track.basis, track), 0) < available;
   const target = tracks.map((track) => track.basis);
   const frozen = tracks.map((track) => (growing ? track.grow : track.shrink) === 0 || (growing ? track.basis > clamp(track.basis, track) : track.basis < clamp(track.basis, track)));
@@ -13265,6 +13712,37 @@ function gridAllocatedWidths(available, tracks) {
   return sizes;
 }
 
+// src/analysis/flex-basis.ts
+function percentageBasis(value) {
+  if (value === undefined || !/^(?:\d+(?:\.\d*)?|\.\d+)%$/.test(value.trim()))
+    return;
+  const fraction = Number.parseFloat(value) / 100;
+  return Number.isFinite(fraction) ? fraction : undefined;
+}
+function definiteFlexInlineSize(n, ctx) {
+  if (n.preferredSize?.inlineSizeDefinite !== undefined)
+    return n.preferredSize.inlineSizeDefinite;
+  const width = n.preferredSize?.width ?? parseDeclared(n.attrs.style).width ?? "auto";
+  if (/^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(width))
+    return true;
+  if (!ctx || n === ctx.root)
+    return false;
+  const path = (node) => {
+    if (node === n)
+      return [node];
+    for (const child of node.children) {
+      const found = path(child);
+      if (found)
+        return [node, ...found];
+    }
+  };
+  const ancestors = path(ctx.root);
+  const parent = ancestors?.[ancestors.length - 2];
+  if (!parent || !/^(block|flow-root)$/.test(parent.styles.display ?? "block") || !/^(static|relative)?$/.test(n.styles.position ?? "") || !/^(none)?$/.test(n.styles.float ?? ""))
+    return false;
+  return (percentageBasis(width) !== undefined || width === "auto" && /^(block|flow-root|flex|grid)$/.test(n.styles.display ?? "block")) && definiteFlexInlineSize(parent, ctx);
+}
+
 // src/analysis/flex-allocation.ts
 function fixedLength(value) {
   return value !== undefined && /^(?:\d+(?:\.\d*)?|\.\d+)(?:px)?$/.test(value.trim()) && (value.trim().endsWith("px") || Number(value) === 0) ? Number.parseFloat(value) : undefined;
@@ -13278,24 +13756,27 @@ function automaticHeight(n) {
 function hasAutoMargins(n) {
   return n.preferredSize?.hasAutoMargins === true || Object.entries(parseDeclared(n.attrs.style)).some(([property, value]) => property.startsWith("margin") && /\bauto\b/.test(value));
 }
+function hasRelativePadding(n) {
+  return n.preferredSize?.hasRelativePadding === true || [n.styles, parseDeclared(n.attrs.style)].some((properties) => Object.entries(properties).some(([property, value]) => property.startsWith("padding") && value.includes("%"))) || n.children.some(hasRelativePadding);
+}
 function equalCalculatedAllocation(n, items, align, distribution) {
-  if (items.length < 2 || distribution !== "start" || align === "baseline" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
+  if (items.length < 2 || distribution !== "start" || align === "baseline" || hasRelativePadding(n) || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
     return false;
   const rawGap = n.styles["column-gap"] ?? n.styles.gap;
   if (rawGap !== undefined && rawGap !== "normal" && fixedLength(rawGap) === undefined)
     return false;
   const ctx = { root: n, parent: n, parentAxis: "h", parentDisplay: n.styles.display ?? "flex", bundledFamilies: {}, fixed: [] };
-  return items.every(({ node: child }) => !hasAutoMargins(child) && n.children.includes(child) && child.preferredSize?.width !== undefined && equalCalculatedFlexWidth(child, child.preferredSize.width, ctx));
+  return items.every(({ node: child }) => !hasAutoMargins(child) && !hasRelativePadding(child) && n.children.includes(child) && child.preferredSize?.width !== undefined && equalCalculatedFlexWidth(child, child.preferredSize.width, ctx));
 }
 function intrinsicFlexFlow(n, items, align, distribution) {
-  if (!items.length || !/^(start|center|end)$/.test(distribution) || align === "baseline" || (n.styles["flex-direction"] ?? "row") !== "row" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
+  if (!items.length || hasRelativePadding(n) || !/^(start|center|end)$/.test(distribution) || align === "baseline" || (n.styles["flex-direction"] ?? "row") !== "row" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? "") || n.styles.display === "inline-flex" && (n.preferredSize?.width ?? "auto") === "auto")
     return false;
   const rawGap = n.styles["column-gap"] ?? n.styles.gap;
   if (rawGap !== undefined && rawGap !== "normal" && fixedLength(rawGap) === undefined)
     return false;
   let intrinsicItems = 0;
   return items.every(({ node: child, sem }) => {
-    if (!n.children.includes(child) || Number(child.styles["flex-grow"] ?? 0) !== 0 || hasAutoMargins(child) || ["left", "right", "top", "bottom"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0) || !/^(auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none")
+    if (!n.children.includes(child) || Number(child.styles["flex-grow"] ?? 0) !== 0 || hasAutoMargins(child) || hasRelativePadding(child) || ["left", "right", "top", "bottom"].some((edge) => px(child.styles[`margin-${edge}`]) !== 0) || !/^(auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") || (child.styles["max-width"] ?? "none") !== "none")
       return false;
     if (!/^(static|relative)?$/.test(child.styles.position ?? "") || ["left", "right", "top", "bottom"].some((edge) => {
       const value = child.styles[edge];
@@ -13326,11 +13807,18 @@ function restoreAllocatedInsets(n, sem) {
   else if (sem.kind === "stack" && sem.axis === "v") {
     const flow = n.children.filter((child) => child.tag !== "#text" && child.styles.display !== "none" && !/^(absolute|fixed)$/.test(child.styles.position ?? ""));
     const end = flow.sort((a, b) => b.bounds.y + b.bounds.h - (a.bounds.y + a.bounds.h))[0];
-    sem.padding[2] = Math.min(sem.padding[2], actual[2] + Math.max(0, px(end?.styles["margin-bottom"])));
+    sem.padding[2] = actual[2] + Math.max(0, px(end?.styles["margin-bottom"]));
   }
 }
-function flexAllocation(n, items, align, distribution) {
-  if (!items.some((item) => px(item.node.styles["flex-grow"]) > 0 || px(item.node.styles["flex-shrink"]) > 0))
+function flexAllocation(n, items, align, distribution, ctx) {
+  if (hasRelativePadding(n) || items.some((item) => hasRelativePadding(item.node)))
+    return { reason: "relative padding" };
+  const authoredBasis = (child) => {
+    const declared = parseDeclared(child.attrs.style);
+    const basis = child.preferredSize?.flexBasis ?? child.styles["flex-basis"] ?? declared["flex-basis"] ?? "auto";
+    return basis === "auto" ? child.preferredSize?.width ?? declared.width : basis;
+  };
+  if (!items.some((item) => px(item.node.styles["flex-grow"]) > 0 || px(item.node.styles["flex-shrink"]) > 0 || (percentageBasis(authoredBasis(item.node)) ?? 0) > 0))
     return {};
   if ((n.styles["flex-direction"] ?? "row") !== "row" || n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? ""))
     return { reason: "reverse, vertical or RTL flow" };
@@ -13345,6 +13833,8 @@ function flexAllocation(n, items, align, distribution) {
   if (gap === undefined)
     return { reason: "relative or intrinsic gap" };
   const tracks = [];
+  if (items.some((item) => relativeFallback(item.sem)))
+    return { reason: "unproved relative item position" };
   for (const { node: child } of items) {
     if (!n.children.includes(child) || child.tag === "#text")
       return { reason: "anonymous flex item" };
@@ -13360,13 +13850,14 @@ function flexAllocation(n, items, align, distribution) {
     if (child.styles["aspect-ratio"] && child.styles["aspect-ratio"] !== "auto")
       return { reason: "aspect-ratio sizing" };
     const [, cpr, , cpl] = insetsOf(child.styles), inset = cpr + cpl;
-    const declared = parseDeclared(child.attrs.style);
-    let rawBasis = child.preferredSize?.flexBasis ?? child.styles["flex-basis"] ?? declared["flex-basis"];
-    if (rawBasis === "auto")
-      rawBasis = child.preferredSize?.width ?? declared.width;
-    const basis = /^(?:0%|0px|0)$/.test(rawBasis ?? "") ? 0 : fixedLength(rawBasis);
+    const rawBasis = authoredBasis(child);
+    const fraction = percentageBasis(rawBasis);
+    const dynamic = fraction !== undefined && fraction > 0;
+    const basis = dynamic || /^(?:0%|0px|0)$/.test(rawBasis ?? "") ? 0 : fixedLength(rawBasis);
     if (basis === undefined)
-      return { reason: `intrinsic or percentage flex-basis ${rawBasis ?? "auto"}` };
+      return { reason: `intrinsic or unproved flex-basis ${rawBasis ?? "auto"}` };
+    if (dynamic && !definiteFlexInlineSize(n, ctx))
+      return { reason: "percentage flex-basis in an indefinite container" };
     const borderBox = child.styles["box-sizing"] === "border-box";
     const minRaw = child.styles["min-width"] ?? "auto", maxRaw = child.styles["max-width"] ?? "none";
     const zeroMinimum = zeroAutomaticMinimum(child);
@@ -13380,14 +13871,22 @@ function flexAllocation(n, items, align, distribution) {
     const shrink = fixedLength(child.styles["flex-shrink"] ? `${child.styles["flex-shrink"]}px` : "1px");
     if (grow === undefined || shrink === undefined)
       return { reason: "invalid flex factor" };
-    tracks.push({ basis: Math.max(inset, basis + (borderBox ? 0 : inset)), grow, shrink, min: minimum, ...maximum !== undefined ? { max: maximum } : {}, inset });
+    tracks.push({
+      basis: dynamic ? borderBox ? 0 : inset : Math.max(inset, basis + (borderBox ? 0 : inset)),
+      ...dynamic ? { basisFraction: fraction } : {},
+      grow,
+      shrink,
+      min: minimum,
+      ...maximum !== undefined ? { max: maximum } : {},
+      inset
+    });
   }
   const available = n.bounds.w - pl - pr - Math.max(0, tracks.length - 1) * gap;
-  const widths = flexAllocatedWidths(available, tracks);
+  const widths = flexAllocatedWidths(available, tracks, n.bounds.w - pl - pr);
   let x = n.bounds.x + pl;
   const contentH = n.bounds.h - pt - pb;
   const valid = items.every((item, i) => {
-    const frame = item.sem.frame;
+    const frame = flowFrame(item.sem);
     const width = widths[i];
     const y = n.bounds.y + pt + (align === "center" ? (contentH - frame.h) / 2 : align === "end" ? contentH - frame.h : 0);
     const agrees = Math.abs(frame.x - x) <= 0.5 && Math.abs(frame.w - width) <= 0.5 && Math.abs(frame.y - y) <= 0.5;
@@ -13397,23 +13896,229 @@ function flexAllocation(n, items, align, distribution) {
   return valid ? { tracks } : { reason: "captured sizes or placement disagree with explicit allocation" };
 }
 
+// src/css/grid-placement.ts
+function gridLine(value, explicitTracks) {
+  value = value.trim();
+  if (value === "auto")
+    return { auto: true };
+  if (/^[+-]?\d+$/.test(value)) {
+    const number = Number(value);
+    if (number === 0 || Math.abs(number) > 257 || number < 0 && explicitTracks === undefined)
+      return;
+    const line = number < 0 ? explicitTracks + 2 + number : number;
+    return { line };
+  }
+  const span = /^(?:span\s+(\d+)|(\d+)\s+span)$/.exec(value);
+  const count = Number(span?.[1] ?? span?.[2]);
+  return count >= 1 && count <= 256 ? { span: count } : undefined;
+}
+function gridAxisPlacement(startValue = "auto", endValue = "auto", explicitTracks) {
+  const start = gridLine(startValue, explicitTracks);
+  let end = gridLine(endValue, explicitTracks);
+  if (!start || !end)
+    return;
+  if ("span" in start && "span" in end)
+    end = { auto: true };
+  if ("line" in start && "line" in end) {
+    const first = Math.min(start.line, end.line), last = Math.max(start.line, end.line);
+    return { start: first - 1, span: Math.max(1, last - first) };
+  }
+  if ("line" in start)
+    return { start: start.line - 1, span: "span" in end ? end.span : 1 };
+  if ("line" in end) {
+    const span = "span" in start ? start.span : 1;
+    return { start: end.line - span - 1, span };
+  }
+  return { span: "span" in start ? start.span : ("span" in end) ? end.span : 1 };
+}
+
+// src/analysis/grid-placement.ts
+function gridPlacements(nodes, columns, flow = "row", explicitRows) {
+  if (flow !== "row")
+    return { reason: "dense or column grid auto-flow" };
+  const specs = nodes.map((node) => ({
+    column: gridAxisPlacement(node.styles["grid-column-start"], node.styles["grid-column-end"], columns),
+    row: gridAxisPlacement(node.styles["grid-row-start"], node.styles["grid-row-end"], explicitRows)
+  }));
+  if (specs.some((spec) => !spec.column || !spec.row))
+    return { reason: "named or unproved grid lines" };
+  if (specs.some((spec) => spec.row.span !== 1))
+    return { reason: "row spans require intrinsic track distribution" };
+  if (specs.some((spec) => spec.column.span > columns || spec.column.start !== undefined && (spec.column.start < 0 || spec.column.start + spec.column.span > columns)))
+    return { reason: "implicit grid columns" };
+  if (specs.some((spec) => spec.row.start !== undefined && (spec.row.start < 0 || spec.row.start >= 256)))
+    return { reason: "grid row range" };
+  const placements = new Array(nodes.length);
+  const occupied = new Set;
+  const fits = (row, column, span) => column + span <= columns && Array.from({ length: span }, (_, i) => `${row}/${column + i}`).every((cell) => !occupied.has(cell));
+  const place = (index, row, column) => {
+    const span = specs[index].column.span;
+    if (row >= 256 || !fits(row, column, span))
+      return false;
+    placements[index] = { row, column, columnSpan: span };
+    for (let i = 0;i < span; i++)
+      occupied.add(`${row}/${column + i}`);
+    return true;
+  };
+  const ordered = nodes.map((node, index) => ({ index, order: Number(node.styles.order ?? 0) })).sort((a, b) => a.order - b.order || a.index - b.index).map((item) => item.index);
+  for (const i of ordered) {
+    const spec = specs[i];
+    if (spec.row.start !== undefined && spec.column.start !== undefined && !place(i, spec.row.start, spec.column.start)) {
+      return { reason: "overlapping grid cells" };
+    }
+  }
+  const rowEnds = new Map;
+  for (const i of ordered) {
+    const spec = specs[i];
+    if (placements[i] || spec.row.start === undefined)
+      continue;
+    const row = spec.row.start;
+    let column = rowEnds.get(row) ?? 0;
+    while (column < columns && !fits(row, column, spec.column.span))
+      column++;
+    if (!place(i, row, column))
+      return { reason: "implicit grid columns" };
+    rowEnds.set(row, column + spec.column.span);
+  }
+  let row = 0, column = 0;
+  for (const i of ordered) {
+    if (placements[i])
+      continue;
+    const spec = specs[i].column;
+    if (spec.start !== undefined) {
+      if (spec.start < column)
+        row++;
+      column = spec.start;
+      while (row < 256 && !fits(row, column, spec.span))
+        row++;
+    } else {
+      while (row < 256 && !fits(row, column, spec.span)) {
+        column++;
+        if (column + spec.span > columns) {
+          row++;
+          column = 0;
+        }
+      }
+    }
+    if (!place(i, row, column))
+      return { reason: "grid row range" };
+  }
+  return { placements, rows: Math.max(explicitRows ?? 0, ...placements.map((item) => item.row + 1), 0) };
+}
+
 // src/analysis/measured-layout.ts
 function measuredLayoutOf(base, children) {
   const [pt, pr, pb, pl] = base.padding;
   return {
     width: round2(Math.max(0, base.frame.w - pl - pr)),
     height: round2(Math.max(0, base.frame.h - pt - pb)),
-    frames: children.map((child) => ({
-      x: round2(child.frame.x - base.frame.x - pl),
-      y: round2(child.frame.y - base.frame.y - pt),
-      w: round2(child.frame.w),
-      h: round2(child.frame.h)
-    }))
+    frames: children.map((child) => {
+      const frame = flowFrame(child);
+      return { x: round2(frame.x - base.frame.x - pl), y: round2(frame.y - base.frame.y - pt), w: round2(frame.w), h: round2(frame.h) };
+    })
   };
 }
 
+// src/analysis/grid-allocation.ts
+var near = (a, b) => Math.abs(a - b) <= 0.5;
+var starts = (sizes, gap, origin) => {
+  let at = origin;
+  return sizes.map((size) => {
+    const start = at;
+    at += size + gap;
+    return start;
+  });
+};
+function allocatedGrid(n, base, items, hSpacing, vSpacing) {
+  if (hasRelativePadding(n))
+    return { reason: "relative padding is not reconstructed at another width" };
+  if (![n.styles["column-gap"], n.styles["row-gap"]].every((value) => value === undefined || value === "normal" || fixedLength(value) !== undefined)) {
+    return { reason: "relative or intrinsic grid gap is not reconstructed at another width" };
+  }
+  if (n.styles.direction === "rtl" || !/^(horizontal-tb)?$/.test(n.styles["writing-mode"] ?? ""))
+    return { reason: "grid writing direction" };
+  if (!/^(normal|stretch)?$/.test(n.styles["align-items"] ?? "") || !/^(normal|stretch)?$/.test(n.styles["justify-items"] ?? "")) {
+    return { reason: "item alignment requires intrinsic cell sizes and is not reconstructed at another width" };
+  }
+  if (!automaticHeight(n) || !/^(auto|0(?:px)?)$/.test(n.styles["min-height"] ?? "auto") || (n.styles["max-height"] ?? "none") !== "none" || !/^(normal|stretch|start)?$/.test(n.styles["align-content"] ?? "") || !/^(normal|stretch|start)?$/.test(n.styles["justify-content"] ?? "")) {
+    return { reason: "constrained grid height or track alignment" };
+  }
+  const intent = fractionGridTracks(n.preferredSize?.gridTemplateColumns);
+  const widths = resolvedGridTracks(n.styles["grid-template-columns"]);
+  const heights = resolvedGridTracks(n.styles["grid-template-rows"]);
+  if (intent && widths && intent.length !== widths.length)
+    return { reason: "implicit grid columns are not reconstructed" };
+  if (!intent || !widths || !heights)
+    return { reason: "intrinsic or unproved grid tracks" };
+  const explicitRows = gridRowTracks(n.preferredSize?.gridTemplateRows);
+  const implicitRows = gridRowTracks(n.preferredSize?.gridAutoRows ?? "auto");
+  if (!explicitRows || !implicitRows?.length)
+    return { reason: "intrinsic or unproved grid row sizing" };
+  const placed = gridPlacements(items.map((item) => item.node), intent.length, n.styles["grid-auto-flow"] ?? "row", explicitRows.length);
+  if (!placed.placements)
+    return { reason: placed.reason };
+  const placements = placed.placements;
+  if (placed.rows !== heights.length)
+    return { reason: "grid row extent disagrees with authored placement" };
+  const reconstructed = intent.every((track) => ("fixed" in track)) || placements.some((placement, i) => placement.columnSpan !== 1 || placement.column !== i % intent.length || placement.row !== Math.floor(i / intent.length));
+  if (reconstructed && (n.preferredSize?.inlineSizeDefinite !== true || n.styles.display === "inline-grid" && n.preferredSize?.width === "auto")) {
+    return { reason: "indefinite grid container for numeric placement" };
+  }
+  const rowSizes = heights.map((_, row) => row < explicitRows.length ? explicitRows[row] : implicitRows[(row - explicitRows.length) % implicitRows.length]);
+  if (rowSizes.some((size, row) => size !== null ? !near(size, heights[row]) : !placements.some((item) => item.row === row) && !near(0, heights[row]))) {
+    return { reason: "grid row sizing disagrees with authored rules" };
+  }
+  const tracks = intent.map((track) => ("fixed" in track) ? { basis: track.fixed, grow: 0, shrink: 0, min: track.fixed, max: track.fixed } : { basis: 0, grow: track.fraction, shrink: 0, min: track.minimum ?? 0 });
+  const minima = intent.every((track, column) => ("fixed" in track) || track.minimum !== undefined || items.every((item, i) => {
+    const placement = placements[i];
+    return column < placement.column || column >= placement.column + placement.columnSpan || zeroAutomaticMinimum(item.node);
+  }));
+  if (!minima)
+    return { reason: "automatic grid column minimums are unproved" };
+  const cells = items.every(({ node: child, sem }) => n.children.includes(child) && !hasAutoMargins(child) && ["top", "right", "bottom", "left"].every((edge) => px(child.styles[`margin-${edge}`]) === 0) && /^(auto)?$/.test(child.preferredSize?.width ?? "") && /^(auto|0(?:px)?)$/.test(child.styles["min-width"] ?? "auto") && (child.styles["max-width"] ?? "none") === "none" && /^(auto|0(?:px)?)$/.test(child.styles["min-height"] ?? "auto") && (child.styles["max-height"] ?? "none") === "none" && /^(auto|normal|stretch)?$/.test(child.styles["justify-self"] ?? "") && /^(auto|normal|stretch)?$/.test(child.styles["align-self"] ?? "") && /^(auto)?$/.test(child.styles["aspect-ratio"] ?? "") && /^(static|relative)?$/.test(child.styles.position ?? "") && !relativeFallback(sem) && (automaticHeight(child) || fixedLength(child.preferredSize?.height) !== undefined));
+  if (!cells)
+    return { reason: "grid cell sizing, margins or alignment are unproved" };
+  const contentW = base.frame.w - base.padding[1] - base.padding[3];
+  const allocated = gridAllocatedWidths(contentW - (intent.length - 1) * hSpacing, tracks);
+  if (!widths.every((width, i) => near(width, allocated[i])))
+    return { reason: "grid column allocation disagrees with authored rules" };
+  const xs = starts(widths, hSpacing, base.frame.x + base.padding[3]);
+  const ys = starts(heights, vSpacing, base.frame.y + base.padding[0]);
+  const geometry = items.every(({ sem }, i) => {
+    const p = placements[i], f = flowFrame(sem);
+    const width = widths.slice(p.column, p.column + p.columnSpan).reduce((sum, size) => sum + size, 0) + (p.columnSpan - 1) * hSpacing;
+    return near(f.x, xs[p.column]) && near(f.y, ys[p.row]) && near(f.w, width) && near(f.h, heights[p.row]);
+  });
+  const naturalHeight = heights.reduce((sum, height) => sum + height, 0) + (heights.length - 1) * vSpacing;
+  if (!geometry || !near(naturalHeight, base.frame.h - base.padding[0] - base.padding[2]))
+    return { reason: "grid cell geometry disagrees with authored placement" };
+  const children = items.map((item, i) => {
+    item.sem.width = { kind: "fill" };
+    const height = rowSizes[placements[i].row];
+    if (height !== null)
+      item.sem.height = { kind: "fixed", px: height };
+    else if (automaticHeight(item.node))
+      item.sem.height = { kind: "fill" };
+    restoreAllocatedInsets(item.node, item.sem);
+    return item.sem;
+  });
+  return { grid: {
+    ...base,
+    kind: "grid",
+    columns: intent.length,
+    hSpacing,
+    vSpacing,
+    tracks,
+    placements,
+    rowSizes,
+    height: { kind: "hug" },
+    children,
+    measured: measuredLayoutOf(base, children)
+  } };
+}
+
 // src/analysis/grid.ts
-function starts(tracks, gap, origin) {
+function starts2(tracks, gap, origin) {
   let at = origin;
   return tracks.map((size) => {
     const start = at;
@@ -13421,80 +14126,46 @@ function starts(tracks, gap, origin) {
     return start;
   });
 }
-var near = (a, b) => Math.abs(a - b) <= 0.5;
+var near2 = (a, b) => Math.abs(a - b) <= 0.5;
 function buildGrid(n, base, all) {
   base.padding = insetsOf(n.styles);
   const items = all.filter((item) => renders(item.node));
+  const relativePadding = hasRelativePadding(n) || items.some((item) => hasRelativePadding(item.node));
   const widths = resolvedGridTracks(n.styles["grid-template-columns"]);
   const heights = resolvedGridTracks(n.styles["grid-template-rows"]);
   const hSpacing = round2(px(n.styles["column-gap"]));
   const vSpacing = round2(px(n.styles["row-gap"]));
-  const columns = widths?.length ?? Math.max(1, new Set(items.map((item) => round2(item.sem.frame.x))).size);
-  const xs = starts(widths ?? [], hSpacing, base.frame.x + base.padding[3]);
-  const ys = starts(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
-  const ordered = [...items].sort((a, b) => a.sem.frame.y - b.sem.frame.y || a.sem.frame.x - b.sem.frame.x);
+  const columns = widths?.length ?? Math.max(1, new Set(items.map((item) => round2(flowFrame(item.sem).x))).size);
+  const xs = starts2(widths ?? [], hSpacing, base.frame.x + base.padding[3]);
+  const ys = starts2(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
+  if (n.preferredSize?.gridTemplateColumns !== undefined) {
+    const admitted = allocatedGrid(n, base, items, hSpacing, vSpacing);
+    if (admitted.grid)
+      return admitted.grid;
+    const children = [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0)).map((item) => {
+      item.sem.width = { kind: "fixed", px: round2(item.sem.frame.w) };
+      item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
+      return item.sem;
+    });
+    base.notes.push(`approximated: captured grid placement; ${admitted.reason ?? "responsive grid rules are unproved"}`);
+    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
+  }
+  const ordered = [...items].sort((a, b) => flowFrame(a.sem).y - flowFrame(b.sem).y || flowFrame(a.sem).x - flowFrame(b.sem).x);
   const regular = widths && heights && widths.every((w) => w > 0) && heights.every((h) => h > 0) && ordered.length >= columns && Math.ceil(ordered.length / columns) === heights.length && ordered.every((item, index) => {
-    const row = Math.floor(index / columns), column = index % columns, f = item.sem.frame;
-    return near(f.x, xs[column]) && near(f.y, ys[row]) && near(f.w, widths[column]) && near(f.h, heights[row]);
+    const row = Math.floor(index / columns), column = index % columns, f = flowFrame(item.sem);
+    return near2(f.x, xs[column]) && near2(f.y, ys[row]) && near2(f.w, widths[column]) && near2(f.h, heights[row]);
   });
-  if (!regular || n.styles.direction === "rtl") {
+  if (!regular || relativePadding || n.styles.direction === "rtl") {
     const children = [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0)).map((item) => item.sem);
     for (const child of children) {
       child.width = { kind: "fixed", px: round2(child.frame.w) };
       child.height = { kind: "fixed", px: round2(child.frame.h) };
     }
-    base.notes.push("approximated: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
+    base.notes.push(relativePadding ? "approximated: captured grid placement; relative padding is not reconstructed at another width" : "approximated: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
     return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
   }
-  const intent = fractionGridTracks(n.preferredSize?.gridTemplateColumns);
-  const autoRows = n.preferredSize?.gridTemplateRows;
-  const automaticRows = autoRows === "auto" || /^repeat\(\s*\d+\s*,\s*auto\s*\)$/.test(autoRows ?? "") || /^auto(?:\s+auto)*$/.test(autoRows ?? "") || autoRows === "none" && n.preferredSize?.gridAutoRows === "auto";
-  const rowCount = heights.length;
-  const declaredRowCount = autoRows?.match(/^repeat\(\s*(\d+)\s*,\s*auto\s*\)$/)?.[1] ?? (autoRows === "none" ? "0" : String(autoRows?.split(/\s+/).length ?? 0));
-  const rowsProven = automaticRows && (rowCount <= Number(declaredRowCount) || n.preferredSize?.gridAutoRows === "auto");
-  const explicitRows = autoRows === "none" ? [] : fractionGridTracks(autoRows);
-  const implicitRows = fractionGridTracks(n.preferredSize?.gridAutoRows);
-  const fixedRows = explicitRows?.every((track) => ("fixed" in track)) && (implicitRows === undefined || implicitRows.every((track) => ("fixed" in track))) ? heights.map((_, row) => {
-    const explicit = explicitRows[row];
-    const implicit = implicitRows?.[(row - explicitRows.length) % implicitRows.length];
-    const track = explicit ?? implicit;
-    return track && "fixed" in track ? track.fixed : undefined;
-  }) : undefined;
-  const fixedRowsProven = fixedRows?.every((height, row) => height !== undefined && near(height, heights[row]));
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
-  const tracks = intent?.length === columns ? intent.map((track) => ("fixed" in track) ? { basis: track.fixed, grow: 0, shrink: 0, min: track.fixed, max: track.fixed } : { basis: 0, grow: track.fraction, shrink: 0, min: track.minimum ?? 0 }) : undefined;
-  const minProven = intent?.every((track, column) => ("fixed" in track) || track.minimum !== undefined || ordered.filter((_, i) => i % columns === column).every((item) => zeroAutomaticMinimum(item.node)));
-  const simpleCells = ordered.every((item) => {
-    const child = item.node;
-    const width = child.preferredSize?.width;
-    return n.children.includes(child) && !hasAutoMargins(child) && ["top", "right", "bottom", "left"].every((edge) => px(child.styles[`margin-${edge}`]) === 0) && (width === undefined || width === "auto") && (fixedLength(child.styles["min-width"]) === 0 || (child.styles["min-width"] ?? "auto") === "auto") && (child.styles["max-width"] ?? "none") === "none" && /^(auto|normal|stretch)?$/.test(child.styles["justify-self"] ?? "") && /^(auto|normal|stretch)?$/.test(child.styles["align-self"] ?? "") && /^(auto)?$/.test(child.styles["aspect-ratio"] ?? "") && (automaticHeight(child) || fixedLength(child.preferredSize?.height) !== undefined);
-  });
-  const allocated = tracks && gridAllocatedWidths(contentW - (columns - 1) * hSpacing, tracks);
-  const agrees = allocated && widths.every((width, i) => near(width, allocated[i]));
-  const itemAlignment = /^(normal|stretch)?$/.test(n.styles["align-items"] ?? "") && /^(normal|stretch)?$/.test(n.styles["justify-items"] ?? "");
-  const spacingProven = [n.styles["column-gap"], n.styles["row-gap"]].every((value) => value === undefined || value === "normal" || fixedLength(value) !== undefined);
-  if (tracks && tracks.some((track) => track.grow > 0) && minProven && simpleCells && (rowsProven || fixedRowsProven) && agrees && itemAlignment && spacingProven && /^(row)?$/.test(n.styles["grid-auto-flow"] ?? "") && automaticHeight(n) && (n.styles["min-height"] === undefined || n.styles["min-height"] === "auto" || fixedLength(n.styles["min-height"]) === 0) && (n.styles["max-height"] ?? "none") === "none" && /^(normal|stretch|start)?$/.test(n.styles["align-content"] ?? "")) {
-    const children = ordered.map((item, i) => {
-      item.sem.width = { kind: "fill" };
-      if (fixedRowsProven)
-        item.sem.height = { kind: "fixed", px: fixedRows[Math.floor(i / columns)] };
-      else if (automaticHeight(item.node))
-        item.sem.height = { kind: "fill" };
-      restoreAllocatedInsets(item.node, item.sem);
-      return item.sem;
-    });
-    return { ...base, kind: "grid", columns, hSpacing, vSpacing, tracks, height: { kind: "hug" }, children, measured: measuredLayoutOf(base, children) };
-  }
-  if (n.preferredSize?.gridTemplateColumns !== undefined) {
-    const children = ordered.map((item) => {
-      item.sem.width = { kind: "fixed", px: round2(item.sem.frame.w) };
-      item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
-      return item.sem;
-    });
-    base.notes.push(!spacingProven ? "approximated: captured grid placement; relative or intrinsic grid gap is not reconstructed at another width" : itemAlignment ? "approximated: captured grid placement; track intent, automatic minimums, row sizing or flow do not establish native responsive allocation" : "approximated: captured grid placement; item alignment requires intrinsic cell sizes and is not reconstructed at another width");
-    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
-  }
-  const equalFill = widths.every((w) => near(w, widths[0])) && near(widths.reduce((sum, w) => sum + w, 0) + (columns - 1) * hSpacing, contentW);
+  const equalFill = widths.every((w) => near2(w, widths[0])) && near2(widths.reduce((sum, w) => sum + w, 0) + (columns - 1) * hSpacing, contentW);
   const children = ordered.map((item) => {
     item.sem.width = equalFill ? { kind: "fill" } : { kind: "fixed", px: round2(item.sem.frame.w) };
     if (item.sem.height.kind === "fill")
@@ -13598,6 +14269,7 @@ function trimRun(b, edge) {
 function markLineBreaks(built) {
   let previousLine;
   let previousShift = 0;
+  let previousMeasuredBaseline;
   let explicitBreak = false;
   for (const b of built) {
     if (!/[^\s\u200b]/u.test(b.run.text)) {
@@ -13606,7 +14278,7 @@ function markLineBreaks(built) {
         explicitBreak = true;
       continue;
     }
-    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0 }];
+    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0, baseline: b.node.firstBaseline }];
     const ordered = [...boxes].sort((p, q) => p.bounds.y - q.bounds.y || p.bounds.x - q.bounds.x);
     const starts = [];
     let lineTop = -Infinity;
@@ -13619,8 +14291,8 @@ function markLineBreaks(built) {
     const breaks = [];
     const first = starts[0]?.bounds;
     const shift = b.run.baselineOffset ?? 0;
-    const baseline = first ? first.y + ASCENT_RATIO * first.h + shift : undefined;
-    const previousBaseline = previousLine ? previousLine.y + ASCENT_RATIO * previousLine.h + previousShift : undefined;
+    const baseline = first ? (starts[0]?.baseline ?? first.y + ASCENT_RATIO * first.h) + shift : undefined;
+    const previousBaseline = previousLine ? (previousMeasuredBaseline ?? previousLine.y + ASCENT_RATIO * previousLine.h) + previousShift : undefined;
     const tolerance = Math.max(2, (first?.h ?? 0) * 0.05, (previousLine?.h ?? 0) * 0.05);
     if (baseline !== undefined && previousBaseline !== undefined && baseline - previousBaseline >= tolerance && !explicitBreak && !/^[ \t]*\n/.test(b.run.text)) {
       const at = collapseOf(b.styleOf.styles) !== "preserve" && b.run.text.startsWith(" ") ? 1 : 0;
@@ -13636,6 +14308,7 @@ function markLineBreaks(built) {
         breaks.push(at);
     }
     previousLine = starts[starts.length - 1]?.bounds ?? previousLine;
+    previousMeasuredBaseline = starts.at(-1)?.baseline;
     previousShift = shift;
     explicitBreak = /\n[ \t\u200b]*$/.test(b.run.text);
     if (breaks.length)
@@ -13659,7 +14332,7 @@ function markBaselineShifts(built, host, note) {
     }
     const a = ref.node.bounds;
     const s = b.node.bounds;
-    const offset = round2(a.y + ASCENT_RATIO * a.h - (s.y + ASCENT_RATIO * s.h));
+    const offset = round2((ref.node.firstBaseline ?? a.y + ASCENT_RATIO * a.h) - (b.node.firstBaseline ?? s.y + ASCENT_RATIO * s.h));
     if (Math.abs(offset) >= 0.5)
       b.run.baselineOffset = offset;
   }
@@ -13872,6 +14545,10 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
   const side = ta === "start" ? dir === "rtl" ? "right" : "left" : ta === "end" ? dir === "rtl" ? "left" : "right" : ta;
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
+  const declaredHeight = host.preferredSize?.height ?? parseDeclared(host.attrs.style).height;
+  const independentHeight = base.height.kind === "fixed" && declaredHeight !== undefined && declaredHeight !== "auto";
+  const actualPadding = [...base.padding];
+  let topPackedSurplus = false;
   let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
   if (leaf)
     lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
@@ -13881,9 +14558,10 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
     const ai = /flex|-webkit-box/.test(host.styles["display"] ?? "") ? host.styles["align-items"] : undefined;
     if (surplus > 2 && ai !== "center") {
       base.padding = ai === "flex-end" || ai === "end" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+      topPackedSurplus = ai !== "flex-end" && ai !== "end";
     }
   }
-  if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
+  if (leaf && !independentHeight && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
     base.height = { kind: "hug" };
   }
   markBaselineShifts(built, host, note);
@@ -13933,8 +14611,16 @@ function finishTextNode(host, runs, base, leaf, constructed, note) {
   }
   if (host.styles["text-overflow"] === "ellipsis")
     node.truncate = true;
+  if ([host.styles, ...runs.map((run) => run.styleOf.styles)].some((styles) => ["break-all", "break-word"].includes(styles["word-break"] ?? "") || ["anywhere", "break-word"].includes(styles["overflow-wrap"] ?? "")))
+    node.wrapAnywhere = true;
   if (dir === "rtl")
     node.layoutDirection = "rtl";
+  const lineBox = measuredTextLineBox(host, node, built, runs, note);
+  if (lineBox) {
+    node.lineBox = lineBox;
+    if (independentHeight && topPackedSurplus)
+      node.padding = actualPadding;
+  }
   if (ta === "justify")
     note("approximated: text-align: justify → ragged right (SwiftUI Text cannot justify)");
   noteUnsupportedTextFlow(host, runs, note);
@@ -13970,6 +14656,9 @@ function buildText(host, runs, ctx, leaf = false) {
       notes.push(s);
     noted[s] = true;
   };
+  if (runs.some((run) => run.styleOf !== host && run.styleOf.styles.position === "relative" && (relativePosition(run.styleOf).offset || relativePosition(run.styleOf).reason))) {
+    note("approximated: inline relative positioning is retained in captured text runs; native per-run paint offsets are not reconstructed");
+  }
   return finishTextNode(host, runs, base, leaf, buildTextRuns(host, runs, ctx, note), note);
 }
 
@@ -13978,12 +14667,15 @@ function partitionChildren(n, ctx) {
   const flow = [];
   const abs = [];
   const runs = [];
+  const contentLeft = n.bounds.x + insetsOf(n.styles)[3];
   for (const c of n.children) {
+    if (c.tag === "::marker" && !/^(absolute|fixed)$/.test(c.styles.position ?? "") && hangsLeading(c.bounds, contentLeft))
+      continue;
     if (c.tag === "#text" || c.tag === "br" || c.tag === "wbr") {
       runs.push({ node: c, styleOf: n });
       continue;
     }
-    if (isInlineText(c)) {
+    if (!c.markerLayout && isInlineText(c)) {
       collectRuns(c, runs);
       continue;
     }
@@ -14004,16 +14696,17 @@ function liftClearedText(base, items, align, distribution) {
     const sem = it.sem;
     if (floating(it.node) || sem.kind !== "text" || sem.lineLimit !== undefined || sem.truncate)
       continue;
-    const over = items.filter((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, sem.frame.x + sem.frame.w) - Math.max(f.sem.frame.x, sem.frame.x) > 1);
+    const textFlow = flowFrame(sem);
+    const over = items.filter((f) => floating(f.node) && Math.min(flowFrame(f.sem).x + f.sem.frame.w, textFlow.x + sem.frame.w) - Math.max(flowFrame(f.sem).x, textFlow.x) > 1);
     const bounds = [];
     sem.runs.forEach((r, i) => {
       for (const b of r.breaks ?? [])
         bounds.push([i, b]);
     });
-    const tops = lineTops(it.node);
+    const tops = lineTops(it.node).map((y) => y - (sem.relativeOffset?.[1] ?? 0));
     if (!over.length || !bounds.length || tops.length !== bounds.length + 1 || tops.length !== sem.lines)
       continue;
-    const ends = Math.max(...over.map((f) => f.sem.frame.y + f.sem.frame.h + px(f.node.styles["margin-bottom"])));
+    const ends = Math.max(...over.map((f) => flowFrame(f.sem).y + f.sem.frame.h + px(f.node.styles["margin-bottom"])));
     const cut = tops.findIndex((y, i) => i > 0 && y >= ends - 0.5);
     if (cut < 1)
       continue;
@@ -14048,8 +14741,8 @@ function liftClearedText(base, items, align, distribution) {
       overlays: []
     };
     const rowItems = items.map((i) => i === it ? { node: i.node, sem: shaped } : i);
-    const bottom = Math.max(...rowItems.map((i) => i.sem.frame.y + i.sem.frame.h));
-    const rowBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
+    const bottom = Math.max(...rowItems.map((i) => flowFrame(i.sem).y + i.sem.frame.h));
+    const rowBase = { ...base, relativeOffset: undefined, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
     const outer = stackOf(base, "v", [{ node: it.node, sem: row }, { node: it.node, sem: cleared }], "stretch", "start");
     outer.notes.push("approximated: float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
@@ -14059,7 +14752,7 @@ function liftClearedText(base, items, align, distribution) {
 }
 function stackOf(base, axis, all, align, distribution) {
   const [pt, , , pl] = base.padding;
-  const items = all.filter((i) => renders(i.node) && !hangsLeading(i.sem.frame, base.frame.x + pl));
+  const items = all.filter((i) => renders(i.node) && !hangsLeading(flowFrame(i.sem), base.frame.x + pl));
   if (axis === "h" && items.length > 1) {
     const lifted = liftClearedText(base, items, align, distribution);
     if (lifted)
@@ -14069,7 +14762,8 @@ function stackOf(base, axis, all, align, distribution) {
   for (let i = 1;i < items.length; i++) {
     const a = items[i - 1];
     const b = items[i];
-    let g = axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
+    const af = flowFrame(a.sem), bf = flowFrame(b.sem);
+    let g = axis === "h" ? bf.x - (af.x + af.w) : bf.y - (af.y + af.h);
     if (g < -0.5) {
       if (axis === "h" && a.node.styles["float"] === "left")
         g = Math.max(0, px(a.node.styles["margin-right"]));
@@ -14095,7 +14789,7 @@ function stackOf(base, axis, all, align, distribution) {
     for (const it of items) {
       if (floating(it.node) || it.sem.width.kind !== "fill" || band <= 0 || band >= it.sem.frame.w)
         continue;
-      const shaped = items.some((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, it.sem.frame.x + it.sem.frame.w) - Math.max(f.sem.frame.x, it.sem.frame.x) > 1);
+      const shaped = items.some((f) => floating(f.node) && Math.min(flowFrame(f.sem).x + f.sem.frame.w, flowFrame(it.sem).x + it.sem.frame.w) - Math.max(flowFrame(f.sem).x, flowFrame(it.sem).x) > 1);
       if (shaped)
         it.sem.frame = { ...it.sem.frame, w: band };
     }
@@ -14107,7 +14801,7 @@ function stackOf(base, axis, all, align, distribution) {
   }
   let leadInset = 0;
   if (items[0]) {
-    const f = items[0].sem.frame;
+    const f = flowFrame(items[0].sem);
     leadInset = round2(axis === "h" ? f.x - (base.frame.x + pl) : f.y - (base.frame.y + pt));
     if (Math.abs(leadInset) < 0.5)
       leadInset = 0;
@@ -14120,11 +14814,11 @@ function linesOf(all) {
   const lines = [];
   let top = 0;
   let bottom = 0;
-  for (const it of all.filter((i) => renders(i.node)).sort((a, b) => a.sem.frame.y - b.sem.frame.y)) {
-    const f = it.sem.frame;
+  for (const it of all.filter((i) => renders(i.node)).sort((a, b) => flowFrame(a.sem).y - flowFrame(b.sem).y)) {
+    const f = flowFrame(it.sem);
     const line = lines[lines.length - 1];
     const overlap = Math.min(bottom, f.y + f.h) - Math.max(top, f.y);
-    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
+    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= flowFrame(o.sem).x + o.sem.frame.w - 1 || f.x + f.w <= flowFrame(o.sem).x + 1);
     if (line && clear && overlap > 1 && overlap >= Math.min(f.h, bottom - top) / 2) {
       line.push(it);
       bottom = Math.max(bottom, f.y + f.h);
@@ -14135,7 +14829,7 @@ function linesOf(all) {
     }
   }
   for (const l of lines)
-    l.sort((a, b) => a.sem.frame.x - b.sem.frame.x);
+    l.sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x);
   return lines;
 }
 
@@ -14201,6 +14895,8 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
   if (columnGap === undefined || rowGap === undefined)
     return "relative or complex row/column gaps";
   for (const item of items) {
+    if (relativeFallback(item.sem))
+      return "unproved relative child position";
     const s = item.node.styles;
     if (!columns && (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0))
       return "flex grow/shrink allocation";
@@ -14226,7 +14922,7 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
       return "relative or intrinsic child width";
   }
   const lines = linesOf(items);
-  const rows = lines.map((line) => line.map((item) => item.sem.frame).reduce(unionRect));
+  const rows = lines.map((line) => line.map((item) => flowFrame(item.sem)).reduce(unionRect));
   const contentWidth = Math.max(0, base.frame.w - base.padding[1] - base.padding[3]);
   const nativeLines = [];
   let nativeLine = [], usedWidth = 0;
@@ -14260,7 +14956,7 @@ function unsupported(n, base, items, axis, align, distribution, columnGap, rowGa
     let x = base.frame.x + base.padding[3] + (distribution === "center" ? (contentWidth - width) / 2 : distribution === "end" ? contentWidth - width : 0);
     for (const item of line) {
       const top = y + (align === "center" ? (row.h - item.sem.frame.h) / 2 : align === "end" ? row.h - item.sem.frame.h : 0);
-      if (Math.abs(item.sem.frame.x - x) > 1 || Math.abs(item.sem.frame.y - top) > 1)
+      if (Math.abs(flowFrame(item.sem).x - x) > 1 || Math.abs(flowFrame(item.sem).y - top) > 1)
         return "ambiguous child alignment";
       x += item.sem.frame.w + columnGap;
     }
@@ -14294,12 +14990,12 @@ function buildWrapping(n, base, all, axis, align, distribution) {
 }
 
 // src/analysis/infer-flow.ts
-function buildFlowStack(n, base, items, axis, display) {
+function buildFlowStack(n, base, items, axis, display, ctx) {
   const notes = base.notes;
   const align = crossAlign(n, axis);
   const distribution = distributionOf(n.styles["justify-content"], display);
   const wraps = /flex/.test(display) && /^(wrap|wrap-reverse)$/.test(n.styles["flex-wrap"] ?? "");
-  const lines = axis === "h" ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
+  const lines = axis === "h" ? [[...items].sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x)] : linesOf(items);
   let stack;
   const multi = lines.some((l) => l.length > 1);
   if (wraps) {
@@ -14315,7 +15011,7 @@ function buildFlowStack(n, base, items, axis, display) {
     const rows = lines.map((line, i) => {
       if (line.length === 1)
         return line[0];
-      const u = line.map((it) => it.sem.frame).reduce(unionRect);
+      const u = line.map((it) => flowFrame(it.sem)).reduce(unionRect);
       const rowBase = {
         id: base.id ? `${base.id}/row${i}` : "",
         frame: { x: n.bounds.x + base.padding[3], y: u.y, w: n.bounds.w - base.padding[1] - base.padding[3], h: u.h },
@@ -14335,8 +15031,8 @@ function buildFlowStack(n, base, items, axis, display) {
     stack = stackOf(base, axis, lines.flat(), align, distribution);
   }
   if (/flex/.test(display) && !wraps && axis === "h") {
-    const ordered = [...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x);
-    const admitted = flexAllocation(n, ordered, align, distribution);
+    const ordered = [...items].sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x);
+    const admitted = flexAllocation(n, ordered, align, distribution, ctx);
     if (admitted.tracks) {
       stack.padding = insetsOf(n.styles);
       stack.allocation = { tracks: admitted.tracks };
@@ -14346,10 +15042,13 @@ function buildFlowStack(n, base, items, axis, display) {
         stack.height = { kind: "hug" };
       stack.children = ordered.map((item) => {
         item.sem.width = { kind: "fill" };
-        if (automaticHeight(item.node))
+        if (automaticHeight(item.node)) {
           item.sem.height = { kind: align === "stretch" ? "fill" : "hug" };
+          if (align === "stretch")
+            item.sem.minHeight ??= 0;
+        }
         restoreAllocatedInsets(item.node, item.sem);
-        item.sem.notes = item.sem.notes.filter((note) => !note.startsWith("approximated: unequal flex-grow") && !(note.startsWith("approximated:") && note.endsWith("measured width pinned")));
+        item.sem.notes = item.sem.notes.filter((note) => !note.startsWith("approximated: unequal flex-grow") && !(note.startsWith("approximated:") && note.endsWith("measured width pinned")) && !(note.startsWith("approximated: width:") && note.endsWith("generated view may not resize proportionally with its parent")));
         finish(item.sem);
         return item.sem;
       });
@@ -14367,6 +15066,16 @@ function buildFlowStack(n, base, items, axis, display) {
         stack.notes.push(`approximated: flex captured allocation (${admitted.reason}); cannot recompute at another width`);
       }
     }
+  }
+  if (stack.children.some(relativeFallback)) {
+    delete stack.allocation;
+    delete stack.wrap;
+    for (const child of stack.children) {
+      child.width = { kind: "fixed", px: child.frame.w };
+      child.height = { kind: "fixed", px: child.frame.h };
+    }
+    stack.measured = measuredLayoutOf(stack, stack.children);
+    stack.notes.push("approximated: relative position uses captured child placement; cannot recompute at another width");
   }
   const items2 = stack.children;
   const oy = n.styles["overflow-y"];
@@ -14407,15 +15116,16 @@ function buildOverlays(host, abs, firstFlow, ctx, build) {
   }
   const contentLeft = host.bounds.x + insetsOf(host.styles)[3];
   for (const c of host.children) {
-    if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c))
+    if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c) && c.tag !== "::marker")
       continue;
     const pos = c.styles["position"];
-    if (pos === "absolute" || pos === "fixed" || !hangsLeading(c.bounds, contentLeft))
+    if (pos === "absolute" || pos === "fixed" || !hangsLeading(flowBounds(c), contentLeft))
       continue;
+    const flow = flowBounds(c);
     out.push({
       node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host }),
       layer: "overlay",
-      offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
+      offset: [round2(flow.x - host.bounds.x), round2(flow.y - host.bounds.y)],
       covers: false
     });
   }
@@ -14703,10 +15413,135 @@ function tableLayers(table, structure, insets, widths, gap, bodyTop, bodyBottom)
   return members;
 }
 
+// src/analysis/table-intrinsic.ts
+function intrinsicTableCells(structure, collapsed, families, decline) {
+  const reject = (reason) => decline(`automatic/intrinsic column allocation: ${reason}`);
+  if (structure.caption)
+    return reject("caption minimum-content sizing requires captured geometry");
+  const columns = structure.columns.flatMap((column) => [column, ...column.children]);
+  if (columns.some((column) => !ordinary2(column) || !column.preferredSize || intent(column) !== "auto")) {
+    return reject("specified column widths require a broader automatic allocation algorithm");
+  }
+  const cells = [];
+  const browserMaximums = Array(structure.count).fill(0);
+  for (const { node, placement } of structure.placed) {
+    if (placement.columnSpan !== 1 || placement.rowSpan !== 1)
+      return reject("spanning intrinsic cells require captured geometry");
+    if (!node.preferredSize || intent(node) !== "auto" || node.preferredSize.hasRelativePadding || ["left", "right", "top", "bottom"].some((edge) => !/^(?:0|\d+(?:\.\d+)?px)$/.test(node.styles[`padding-${edge}`] ?? "0"))) {
+      return reject("cell widths and padding must be unconstrained resolved pixel lengths");
+    }
+    if (node.children.length > 1 || node.children.some((child) => child.tag !== "#text") || node.flattenedCustomElements?.length) {
+      return reject("only plain text cells have proven native intrinsic widths");
+    }
+    const styles = node.styles;
+    const unsupported = [
+      ["font-style", /^(?:normal)$/],
+      ["font-variant-numeric", /^(?:normal)$/],
+      ["letter-spacing", /^(?:normal|0(?:px)?)$/],
+      ["text-transform", /^(?:none)$/],
+      ["word-break", /^(?:normal)$/],
+      ["overflow-wrap", /^(?:normal)$/],
+      ["text-indent", /^(?:0(?:px)?)$/],
+      ["text-overflow", /^(?:clip)$/]
+    ];
+    if (unsupported.some(([property, neutral]) => styles[property] && !neutral.test(styles[property])) || styles["-webkit-line-clamp"] && styles["-webkit-line-clamp"] !== "none" || collapseOf(styles) !== "collapse") {
+      return reject("text shaping, breaking or clipping modifiers require captured geometry");
+    }
+    const source = node.children[0];
+    const text = normalizeWhitespace(source?.text ?? "", "collapse").text.trim();
+    if (!(noWrap(styles) ? /^[\x20-\x7e]*$/.test(text) : /^[A-Za-z0-9_]*$/.test(text))) {
+      return reject("cells need one unbreakable ASCII token or an explicitly nonwrapping ASCII string");
+    }
+    const family = fontFamilies(styles["font-family"])[0]?.toLowerCase();
+    const font = fontOf(styles, families);
+    if (!family || !SYSTEM_DESIGNS[family] || family === "cursive" || family === "fantasy" || font.family.kind !== "system" || font.size <= 0) {
+      return reject("custom or unresolved fonts lack a matching native intrinsic descriptor");
+    }
+    if (text && (!source || source.bounds.w <= 0 || source.lines && source.lines.length !== 1 || source.bounds.h > (font.lineHeight ?? font.size * 1.5) * 1.5)) {
+      return reject("the captured whole-token text extent must occupy one line");
+    }
+    const inset = insetsOf(styles);
+    const horizontalInset = inset[1] + inset[3] - (collapsed ? (edgeWidth(styles, "left") + edgeWidth(styles, "right")) / 2 : 0);
+    cells.push({ column: placement.column, text, font, horizontalInset });
+    browserMaximums[placement.column] = Math.max(browserMaximums[placement.column], (text ? source.bounds.w : 0) + horizontalInset);
+  }
+  return { cells, browserMaximums };
+}
+function allocateIntrinsicTableColumns(maximums, available) {
+  const total = maximums.reduce((sum, width) => sum + width, 0);
+  const width = Math.max(available, total);
+  return total > 0 ? maximums.map((value) => value * width / total) : maximums.map(() => width / maximums.length);
+}
+
+// src/analysis/table-content.ts
+function tableCellInsets(node, collapsed) {
+  const insets = insetsOf(node.styles);
+  if (!collapsed)
+    return insets;
+  const edges = ["top", "right", "bottom", "left"];
+  return insets.map((inset, i) => inset - edgeWidth(node.styles, edges[i]) / 2);
+}
+function tableTextContentFrame(node, text, padding) {
+  if (text.overlays.length || text.lineLimit !== undefined || text.truncate || text.maxHeight !== undefined || text.runs.some((run) => run.gap !== undefined || run.baselineOffset !== undefined))
+    return;
+  const first = text.runs[0]?.font;
+  if (!first || text.runs.some((run) => JSON.stringify(run.font) !== JSON.stringify(first)))
+    return;
+  const boxes = [];
+  const visit = (source) => {
+    if (source.tag === "#text" && /\S/.test(source.text ?? "")) {
+      boxes.push(...source.lines?.length ? source.lines.map((line) => line.bounds) : [source.bounds]);
+    } else
+      source.children.forEach(visit);
+  };
+  node.children.forEach(visit);
+  if (!boxes.length || boxes.some((box) => box.h <= 0))
+    return;
+  boxes.sort((a, b) => a.y - b.y);
+  const union = boxes.reduce(unionRect), lineHeight = first.lineHeight;
+  let y, height;
+  if (lineHeight === undefined) {
+    if (text.lines !== 1 || boxes.some((box) => Math.abs(box.y - boxes[0].y) > 0.15 || Math.abs(box.h - boxes[0].h) > 0.15))
+      return;
+    y = union.y;
+    height = union.h;
+  } else {
+    height = text.lines * lineHeight;
+    if (union.h > height + 0.15 || boxes.some((box) => box.h > lineHeight + 0.15))
+      return;
+    y = boxes[0].y - (lineHeight - boxes[0].h) / 2;
+  }
+  const [top, , bottom] = padding;
+  const frame = { x: node.bounds.x, y: round2(y - top), w: node.bounds.w, h: round2(height + top + bottom) };
+  if (frame.y < node.bounds.y - 0.15 || frame.y + frame.h > node.bounds.y + node.bounds.h + 0.15)
+    return;
+  return frame;
+}
+function restoreTableCellFlow(node, content, padding) {
+  if (content.kind === "text" && content.lineBox) {
+    const top = content.padding[0] - padding[0], bottom = content.padding[2] - padding[2];
+    content.lineBox = {
+      ...content.lineBox,
+      firstBaseline: round2(content.lineBox.firstBaseline + top),
+      baselineToBottom: round2(content.lineBox.baselineToBottom + bottom),
+      baselines: content.lineBox.baselines.map((baseline) => round2(baseline + top))
+    };
+  }
+  content.padding = padding;
+  if (content.kind !== "stack" || content.axis !== "v" || content.measured || content.wrap)
+    return;
+  const first = content.children[0], last = content.children.at(-1);
+  const firstSource = node.children.find((source) => source.id && source.id === first?.id);
+  const lastSource = node.children.find((source) => source.id && source.id === last?.id);
+  content.leadInset = firstSource ? px(firstSource.styles["margin-top"]) : 0;
+  if (lastSource)
+    content.padding[2] += Math.max(0, px(lastSource.styles["margin-bottom"]));
+}
+
 // src/analysis/table-layout.ts
 var reasons = new WeakMap;
 function buildNativeTable(table, base, ctx, build) {
-  const analysis = analyzeNativeTable(table, ctx.parent);
+  const analysis = analyzeNativeTable(table, ctx.parent, ctx.bundledFamilies);
   if (!analysis)
     return;
   const { fills, shadows, radius, ellipse, border, borderSides, outline, ...effects } = base.style;
@@ -14719,20 +15554,36 @@ function buildNativeTable(table, base, ctx, build) {
       paint.notes = allocatedWidthNotes(paint.notes);
       return finish({ ...paint, kind: "box", padding: [0, 0, 0, 0], width: { kind: "fill" }, height: { kind: "fill" } });
     }
-    const child = build(node, childCtx);
+    let child = build(node, childCtx);
+    if (placement.kind === "cell") {
+      const padding = tableCellInsets(node, analysis.collapsed);
+      if (child.kind === "text") {
+        const contentFrame = tableTextContentFrame(node, child, padding);
+        if (contentFrame) {
+          const capturedInsets = insetsOf(node.styles);
+          const inferenceFrame = {
+            ...contentFrame,
+            y: contentFrame.y + padding[0] - capturedInsets[0],
+            h: contentFrame.h - padding[0] - padding[2] + capturedInsets[0] + capturedInsets[2]
+          };
+          child = build({ ...node, bounds: inferenceFrame }, childCtx);
+          if (child.kind === "text") {
+            placement.contentFrame = contentFrame;
+            reframeText(child, node.bounds);
+          }
+        }
+      }
+      restoreTableCellFlow(node, child, padding);
+    }
     child.width = { kind: "fill" };
     child.notes = allocatedWidthNotes(child.notes);
     if (placement.kind === "cell")
       child.height = { kind: "fill" };
-    if (analysis.collapsed && placement.kind === "cell") {
-      const edges = ["top", "right", "bottom", "left"];
-      child.padding = insetsOf(node.styles).map((inset, i) => inset - edgeWidth(node.styles, edges[i]) / 2);
-    }
     return child;
   });
   const notes = [
     ...base.notes,
-    "approximated: native fixed table preserves declared columns and cell spans; row heights use captured minimums and native content growth",
+    analysis.layout.mode === "auto" ? "approximated: native automatic table measures nonbreaking cell strings in the emitted system font and distributes surplus by maximum-content widths; row heights use captured minimums and native content growth" : "approximated: native fixed table preserves declared columns and cell spans; row heights use captured minimums and native content growth",
     "approximated: table accessibility retains cell coordinates, headers and section labels; platform table navigation and HTML headers associations are unavailable"
   ];
   if (analysis.collapsed)
@@ -14763,15 +15614,16 @@ function tableFallbackReason(table) {
   const reason = reasons.get(table);
   return reason ? `approximated: table keeps captured geometry; ${reason}` : undefined;
 }
-function analyzeNativeTable(table, parent) {
+function analyzeNativeTable(table, parent, families = {}) {
   const decline = (reason) => {
     reasons.set(table, reason);
     return;
   };
-  if (table.styles["table-layout"] !== "fixed")
-    return decline("automatic/intrinsic column allocation cannot be inferred from one capture");
+  const mode = table.styles["table-layout"];
+  if (mode !== "fixed" && mode !== "auto")
+    return decline("automatic/intrinsic column allocation requires captured table-layout intent");
   if (table.styles.display !== "table" || intent(table) !== "100%" || !ordinary2(table) || !unconstrained2(table) || intent(table, "height") !== "auto" || parent && parent.styles.display !== "block") {
-    return decline("native allocation requires an unconstrained full-width fixed table in ordinary block flow");
+    return decline("native allocation requires an unconstrained full-width table in ordinary block flow");
   }
   if (parent) {
     const [, right, , left] = insetsOf(parent.styles);
@@ -14813,11 +15665,17 @@ function analyzeNativeTable(table, parent) {
       return decline("row geometry or positioning cannot be expressed by native table tracks");
     }
   }
-  const tracks = declaredTableColumns(structure.columns, count, placed, collapsed, gap, decline);
+  const intrinsic = mode === "auto" ? intrinsicTableCells(structure, collapsed, families, decline) : undefined;
+  if (mode === "auto" && (!intrinsic || !table.preferredSize || table.preferredSize.hasRelativePadding)) {
+    if (intrinsic)
+      return decline("automatic/intrinsic column allocation requires constant pixel table padding");
+    return;
+  }
+  const tracks = mode === "auto" ? Array.from({ length: count }, () => ({ kind: "auto" })) : declaredTableColumns(structure.columns, count, placed, collapsed, gap, decline);
   if (!tracks)
     return;
   const available = table.bounds.w - insets[1] - insets[3] - gap[0] * (count - 1);
-  const widths = allocateTableColumns(tracks, available);
+  const widths = intrinsic ? allocateIntrinsicTableColumns(intrinsic.browserMaximums, available) : allocateTableColumns(tracks, available);
   if (!widths)
     return decline("overcommitted declared widths require browser-specific shrinking or overflow");
   for (const { node, placement: p } of placed) {
@@ -14825,7 +15683,7 @@ function analyzeNativeTable(table, parent) {
     const w = widths.slice(p.column, p.column + p.columnSpan).reduce((sum, width) => sum + width, 0) + (p.columnSpan - 1) * gap[0];
     const h = rows.slice(p.row, p.row + p.rowSpan).reduce((sum, row) => sum + row.node.bounds.h, 0) + (p.rowSpan - 1) * gap[1];
     if (!close(node.bounds.x, x) || !close(node.bounds.w, w) || !close(node.bounds.y, rows[p.row].node.bounds.y) || !close(node.bounds.h, h)) {
-      return decline("declared column rules or cell spans do not reproduce the captured browser geometry");
+      return decline(`${intrinsic ? "intrinsic maximum-content allocation" : "declared column rules or cell spans"} do not reproduce the captured browser geometry`);
     }
   }
   const members = tableLayers(table, structure, insets, widths, gap, bodyTop, bodyBottom);
@@ -14833,6 +15691,7 @@ function analyzeNativeTable(table, parent) {
   return { collapsed, members, layout: {
     columns: tracks,
     placements: members.map((member) => member.placement),
+    ...intrinsic ? { mode: "auto", intrinsic: intrinsic.cells } : {},
     rowMinimums: rows.map((row) => row.node.bounds.h),
     spacing: [gap[0], gap[1]],
     insets,
@@ -14842,6 +15701,11 @@ function analyzeNativeTable(table, parent) {
 
 // src/analysis/infer-node.ts
 function build(n, ctx) {
+  if (n.tag === "::marker") {
+    const symbol = buildListSymbol(n, makeBase(n, ctx, parseDeclared(n.attrs.style)));
+    if (symbol)
+      return finish(symbol);
+  }
   const policy = classifyElement(n.tag, n.attrs);
   if (n.tag === "table") {
     const table = buildNativeTable(n, makeBase(n, ctx, parseDeclared(n.attrs.style)), ctx, build);
@@ -14929,7 +15793,8 @@ function build(n, ctx) {
     grid.overlays = buildOverlays(n, abs, flow[0], ctx, build);
     return finish(grid);
   }
-  const stack = buildFlowStack(n, base, items, axis, display);
+  const stack = buildFlowStack(n, base, items, axis, display, ctx);
+  preserveSymbolLineLeading(n, stack);
   if (n.tag === "table") {
     const reason = tableFallbackReason(n);
     if (reason)
@@ -15196,6 +16061,11 @@ function oneLine(s) {
 // src/swift/svg.ts
 var import_svgpath3 = __toESM(require_svgpath(), 1);
 function svgExpr(n, shapes, ctx, id) {
+  if (n.disclosureSymbol) {
+    const { capturedExpanded, rect } = n.disclosureSymbol;
+    const color = n.paths[0]?.fill ?? { r: 0, g: 0, b: 0, a: 1 };
+    return [`MarkswiftDisclosureSymbol(capturedExpanded: ${capturedExpanded}, symbolRect: CGRect(x: ${num3(rect.x)}, y: ${num3(rect.y)}, width: ${num3(rect.w)}, height: ${num3(rect.h)}), viewport: CGSize(width: ${num3(n.frame.w)}, height: ${num3(n.frame.h)}), color: ${colorExpr(color, ctx, id)})`];
+  }
   const [, , vw, vh] = n.viewBox;
   const scale = vw > 0 && vh > 0 ? n.stretch ? n.frame.w / vw : Math.min(n.frame.w / vw, n.frame.h / vh) : 1;
   const cw = n.stretch ? n.frame.w : vw * scale, ch = n.stretch ? n.frame.h : vh * scale;
@@ -15598,9 +16468,36 @@ function clipsFirstLine(n) {
   return n.maxHeight !== undefined && n.frame.h - n.padding[0] - n.padding[2] < lineHeight - 0.5;
 }
 function textBoxAlignment(n, top = false) {
+  top ||= !!n.lineBox && n.height.kind === "fixed";
   if (!top)
     return n.align === "center" ? ".center" : n.align === "trailing" ? ".trailing" : ".leading";
   return n.align === "center" ? ".top" : n.align === "trailing" ? ".topTrailing" : ".topLeading";
+}
+
+// src/swift/text-line-box.ts
+var weights = ["ultraLight", "thin", "light", "regular", "medium", "semibold", "bold", "heavy", "black"];
+function nativeTextWeight(font) {
+  const weight = weights.reduce((best, _, i) => Math.abs((i + 1) * 100 - font.weight) < Math.abs((best + 1) * 100 - font.weight) ? i : best, 0);
+  return weights[weight];
+}
+function textLineBoxExpr(node, mode, content, spacing, greedy = false, width) {
+  const box = node.lineBox, font = node.runs.find((run) => run.gap === undefined).font;
+  const height = node.frame.h - node.padding[0] - node.padding[2];
+  const fallbackLeading = height >= node.lines * box.baselineStep - 0.5 && Math.abs(spacing) >= 0.5 ? spacing / 2 : 0;
+  const args = [
+    `firstBaseline: ${num3(box.firstBaseline)}`,
+    `baselineToBottom: ${num3(box.baselineToBottom)}`,
+    `baselineStep: ${num3(box.baselineStep)}`,
+    `fontSize: ${num3(font.size)}`,
+    `fontWeight: UIFont.Weight.${nativeTextWeight(font)}.rawValue`,
+    `lineSpacing: ${num3(Math.max(0, spacing))}`,
+    `greedy: ${greedy}`,
+    `fallbackLeading: ${num3(fallbackLeading)}`,
+    ...node.align === "leading" ? [] : [`horizontal: .${node.align}`],
+    ...mode === "fidelity" ? [`fixedHeight: ${num3(height)}`, `expectedLines: ${box.baselines.length}`] : [],
+    ...width === undefined ? [] : [`fixedWidth: ${num3(width)}`]
+  ];
+  return [`MarkswiftTextLineBox(${args.join(", ")}) {`, ...content.map((line) => `    ${line}`), "}"];
 }
 
 // src/swift/text.ts
@@ -15619,9 +16516,12 @@ function textExpr(n, ctx) {
   if (ctx.mode === "app" && usesGreedyWords(n)) {
     const run = runs[0];
     const natural = naturalLineHeight(run.font, ctx.fontMetrics);
-    const leading = run.font.lineHeight - natural;
-    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)})`];
-    if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * run.font.lineHeight - 0.5) {
+    const lineHeight = run.font.lineHeight ?? n.lineBox.baselineStep;
+    const leading = lineHeight - natural;
+    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num3(run.font.size)}, lineGap: ${num3(leading)}${n.lineBox ? `, baselineStep: ${num3(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""})`];
+    if (n.lineBox)
+      return textLineBoxExpr(n, ctx.mode, out, leading, true);
+    if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
       out.push(`.padding(.vertical, ${num3(leading / 2)})`);
     }
     return out;
@@ -15662,6 +16562,8 @@ function textExpr(n, ctx) {
   const divided = n.noWrap === true || ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length);
   const noSoftWrap = !n.truncate && !clamped && (divided || ctx.mode === "fidelity" && n.lines === 1);
   out.push(`.fixedSize(horizontal: ${noSoftWrap}, vertical: true)`);
+  if (n.lineBox)
+    return textLineBoxExpr(n, ctx.mode, out, leading, false, ctx.mode === "fidelity" && noSoftWrap && divided ? n.frame.w - n.padding[1] - n.padding[3] : undefined);
   if (ctx.mode === "fidelity") {
     const written = 1 + runs.reduce((k, r) => k + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
     const shown = n.lineLimit === undefined ? written : Math.min(written, n.lineLimit);
@@ -15675,20 +16577,23 @@ function textExpr(n, ctx) {
 }
 function usesGreedyWords(n) {
   const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
-  if (n.sourceTag !== "p" && !heading || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate)
+  if (!n.lineBox && n.sourceTag !== "p" && !heading || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate || n.wrapAnywhere)
     return false;
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden)
     return false;
   const r = n.runs[0];
   if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined)
     return false;
-  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || !heading && r.font.weight !== 400 || r.font.lineHeight === undefined)
+  const lineHeight = r.font.lineHeight ?? n.lineBox?.baselineStep;
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || !n.lineBox && !heading && r.font.weight !== 400 || lineHeight === undefined)
     return false;
-  if (!heading && r.font.lineHeight < naturalLineHeight(r.font, {}))
+  if (n.lineBox && r.text.split(" ").some((word) => !/^[A-Za-z0-9_]+(?:['.][A-Za-z0-9_]+)*[.,;:!?]*$/.test(word)))
+    return false;
+  if (!n.lineBox && !heading && lineHeight < naturalLineHeight(r.font, {}))
     return false;
   if (n.notes.some((note) => note.includes("font-family")))
     return false;
-  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)+$/.test(r.text);
+  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)*$/.test(r.text) && (n.lineBox !== undefined || r.text.includes(" "));
 }
 function runExpr(r, n, literalTransform, ctx) {
   if (r.gap !== undefined)
@@ -15767,6 +16672,7 @@ function selectListExpr(node, state, still) {
   const groupAppearance = [...groups].map(([id, row]) => `${id}: ${rowAppearance(row, false)}`);
   return [
     "MarkswiftSelectionList(",
+    `    identifier: ${str(node.id)},`,
     `    choices: [${choices.join(", ")}],`,
     `    selected: ${selected},`,
     ...appearance.length ? [`    appearance: [${appearance.join(", ")}],`] : [],
@@ -16006,6 +16912,16 @@ var UA = {
 };
 function controlExpr(n, deps) {
   const out = core2(n, deps);
+  if (n.selectList || n.disclosureLayout)
+    out.push(".accessibilityElement(children: .contain)");
+  out.push(`.accessibilityIdentifier(${str(n.id)})`);
+  if (n.control === "toggle") {
+    const selected = deps.mode === "app" ? deps.stateOf.get(n) : undefined;
+    out.push(`.accessibilityValue(${selected ?? (n.checked ? "true" : "false")} ? "selected" : "unselected")`);
+  } else if (n.control === "radio") {
+    const selected = deps.mode === "app" ? deps.radioBindingOf?.get(n) : undefined;
+    out.push(`.accessibilityValue(${selected ? `(${selected}).wrappedValue` : n.checked ? "true" : "false"} ? "selected" : "unselected")`);
+  }
   if (n.font) {
     out.push(`.font(${fontExpr(n.font, deps)})`);
     const prompt = (deps.mode === "fidelity" || n.readOnly === true) && !n.value && n.placeholder !== undefined;
@@ -16113,6 +17029,14 @@ function core2(n, deps) {
       ];
     }
     case "disclosure":
+      if (n.disclosureLayout)
+        return [
+          `MarkswiftDisclosure(isExpanded: ${binding}, gap: ${num3(n.disclosureLayout.gap)}, labelInset: ${num3(n.disclosureLayout.labelInset)}, contentInset: ${num3(n.disclosureLayout.contentInset)}, contentAvailable: ${n.disclosureLayout.contentAvailable}, summaryIdentifier: ${str(n.label?.id ?? `${n.id}/summary`)}, contentIdentifier: ${str(`${n.id}/content`)}) {`,
+          ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
+          "} label: {",
+          ...indent(n.label ? deps.child(n.label) : ["EmptyView()"], 1),
+          "}"
+        ];
       return [
         `DisclosureGroup(isExpanded: ${binding}) {`,
         ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
@@ -16172,10 +17096,11 @@ function stackOfNodes(nodes, deps) {
 function frameModifier(n, ctx) {
   const parts = [];
   const app = ctx.mode === "app";
+  const allocatedHug = app && n.kind === "stack" && !!n.allocation && n.height.kind === "hug";
   const w = n.width.kind === "fixed" ? n.width.px : n.width.kind === "fraction" && !app ? n.width.capturedPx : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
-  const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack" && !n.measured && !n.wrap && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
+  const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack" && !n.measured && !n.wrap && !n.scroll && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num3(w)}` : undefined;
   const fixedH = h !== undefined && textFloor === undefined ? `height: ${num3(h)}` : undefined;
   const fillW = n.width.kind === "fill" || screenWide;
@@ -16185,17 +17110,18 @@ function frameModifier(n, ctx) {
     parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`);
   if (app && n.width.kind === "fraction")
     parts.push(`.modifier(MarkswiftRelativeWidth(fraction: ${num3(n.width.value)}, capturedWidth: ${num3(n.width.capturedPx)}))`);
-  const minHeight = n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
+  const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
+  const maxHeight = allocatedHug ? undefined : n.maxHeight;
   const flex = [
     !fixedW && n.minWidth !== undefined ? `minWidth: ${num3(n.minWidth)}` : "",
     !fixedW && n.maxWidth !== undefined ? `maxWidth: ${num3(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
     !fixedH && minHeight !== undefined ? `minHeight: ${num3(minHeight)}` : "",
-    !fixedH && n.maxHeight !== undefined ? `maxHeight: ${num3(n.maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : ""
+    !fixedH && maxHeight !== undefined ? `maxHeight: ${num3(maxHeight)}` : !fixedH && fillH ? "maxHeight: .infinity" : ""
   ].filter(Boolean);
   if (flex.length)
     parts.push(`.frame(${flex.join(", ")}, alignment: ${align})`);
   const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
-  const hugH = !fixedH && n.height.kind === "hug" && n.maxHeight !== undefined;
+  const hugH = !fixedH && n.height.kind === "hug" && maxHeight !== undefined;
   if (hugW || hugH)
     parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
   return parts;
@@ -16452,6 +17378,59 @@ function padding(inset) {
   return t === r && r === b && b === l ? `.padding(${num3(t)})` : `.padding(EdgeInsets(top: ${num3(t)}, leading: ${num3(l)}, bottom: ${num3(b)}, trailing: ${num3(r)}))`;
 }
 
+// src/swift/geometry-observation.ts
+function geometryInstrumentation(root, namespace) {
+  const state = { manifest: { version: 1, namespace, nodes: [] }, keys: new Map, entries: new Map, suppressed: new Set };
+  const walk = (node, path, parent, relation) => {
+    if (state.keys.has(node))
+      throw new Error("Geometry instrumentation requires a tree of distinct semantic occurrences");
+    const key = `${namespace}/${path}`;
+    state.keys.set(node, key);
+    const entry = {
+      key,
+      sourceId: node.id,
+      kind: node.kind,
+      parent,
+      relation,
+      role: node.kind === "stack" && node.scroll ? "scroll-content" : "border",
+      instrumented: false
+    };
+    state.manifest.nodes.push(entry);
+    state.entries.set(key, entry);
+    if (node.kind === "stack" || node.kind === "grid")
+      node.children.forEach((child, i) => walk(child, `${path}/children/${i}`, key, `children/${i}`));
+    if (node.kind === "control") {
+      if (node.label)
+        walk(node.label, `${path}/label`, key, "label");
+      node.content.forEach((child, i) => walk(child, `${path}/content/${i}`, key, `content/${i}`));
+    }
+    node.overlays.forEach((overlay, i) => walk(overlay.node, `${path}/overlays/${i}`, key, `overlays/${i}`));
+    if (node.kind === "stack" && node.scroll) {
+      const viewport = { ...entry, key: `${key}/viewport`, role: "scroll-viewport" };
+      state.manifest.nodes.push(viewport);
+      state.entries.set(viewport.key, viewport);
+    }
+  };
+  walk(root, "root", undefined, "root");
+  return state;
+}
+function geometryAlias(replacement, original, state, viewport = false) {
+  const key = state?.keys.get(original);
+  if (state && key)
+    state.keys.set(replacement, viewport ? `${key}/viewport` : key);
+}
+function geometryModifier(node, state, viewport = false) {
+  if (!state || state.suppressed.has(node))
+    return [];
+  const baseKey = state.keys.get(node);
+  const key = viewport && baseKey ? `${baseKey}/viewport` : baseKey;
+  const entry = key ? state.entries.get(key) : undefined;
+  if (!entry)
+    return [];
+  entry.instrumented = true;
+  return [`.markswiftObserveGeometry(${JSON.stringify(entry.key)}, role: ${JSON.stringify(entry.role)})`];
+}
+
 // src/swift/modifiers.ts
 function modifiers(n, ctx) {
   const m = [];
@@ -16509,6 +17488,9 @@ function modifiers(n, ctx) {
     if (mode)
       m.push(`.blendMode(${mode})`);
   }
+  m.push(...geometryModifier(n, ctx.geometry));
+  if (ctx.mode === "fidelity" && n.kind === "stack" && n.scroll)
+    m.push(...geometryModifier(n, ctx.geometry, true));
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined)
@@ -16523,6 +17505,8 @@ function modifiers(n, ctx) {
         m.push(`.offset(x: ${num3(t.tx)}, y: ${num3(t.ty)})`);
     }
   }
+  if (n.relativeOffset)
+    m.push(`.offset(x: ${num3(n.relativeOffset[0])}, y: ${num3(n.relativeOffset[1])})`);
   if (n.selfAlign)
     m.push(`.frame(maxWidth: .infinity, alignment: ${n.selfAlign === "center" ? ".center" : ".trailing"})`);
   if (st.hidden)
@@ -16569,18 +17553,49 @@ function wrappingExpr(n, ctx) {
 }
 
 // src/swift/allocation-layout.ts
+var fractionLiteral = (value) => Number.isFinite(value) ? /[.e]/.test(String(value)) ? String(value) : `${value}.0` : "0.0";
 function weightedLayoutExpr(n, ctx) {
   const grid = n.kind === "grid";
   const tracks = grid ? n.tracks : n.allocation.tracks;
-  const rendered = tracks.map((track) => `MarkswiftAllocationTrack(basis: ${num3(track.basis)}, grow: ${num3(track.grow)}, shrink: ${num3(track.shrink)}, min: ${num3(track.min)}${track.max === undefined ? "" : `, max: ${num3(track.max)}`}${track.inset === undefined ? "" : `, inset: ${num3(track.inset)}`})`);
+  const rendered = tracks.map((track) => `MarkswiftAllocationTrack(basis: ${num3(track.basis)}, grow: ${num3(track.grow)}, shrink: ${num3(track.shrink)}, min: ${num3(track.min)}${track.max === undefined ? "" : `, max: ${num3(track.max)}`}${track.inset === undefined ? "" : `, inset: ${num3(track.inset)}`}${track.basisFraction === undefined ? "" : `, basisFraction: ${fractionLiteral(track.basisFraction)}`})`);
   const contentWidth = n.frame.w - n.padding[1] - n.padding[3];
   const vertical = !grid && n.align === "center" ? ".center" : !grid && n.align === "end" ? ".bottom" : ".top";
-  const out = [`MarkswiftAllocatedLayout(tracks: [${rendered.join(", ")}], columnGap: ${num3(grid ? n.hSpacing : n.spacing)}, rowGap: ${num3(grid ? n.vSpacing : 0)}, grid: ${grid}, vertical: ${vertical}, stretch: ${grid || n.align === "stretch"}, capturedWidth: ${num3(contentWidth)}) {`];
+  const placements = grid && n.placements ? `, placements: [${n.placements.map((p) => `MarkswiftGridPlacement(row: ${p.row}, column: ${p.column}, columnSpan: ${p.columnSpan})`).join(", ")}]` : "";
+  const rowSizes = grid && n.rowSizes ? `, rowSizes: [${n.rowSizes.map((size) => size === null ? "nil" : num3(size)).join(", ")}]` : "";
+  const verticalInset = n.padding[0] + n.padding[2];
+  const heightPolicy = !grid && n.height.kind === "hug" ? `, intrinsicHeight: true${n.minHeight === undefined ? "" : `, minimumHeight: ${num3(Math.max(0, n.minHeight - verticalInset))}`}${n.maxHeight === undefined ? "" : `, maximumHeight: ${num3(Math.max(0, n.maxHeight - verticalInset))}`}` : "";
+  const out = [`MarkswiftAllocatedLayout(tracks: [${rendered.join(", ")}], columnGap: ${num3(grid ? n.hSpacing : n.spacing)}, rowGap: ${num3(grid ? n.vSpacing : 0)}, grid: ${grid}, vertical: ${vertical}, stretch: ${grid || n.align === "stretch"}${placements}${rowSizes}${heightPolicy}, capturedWidth: ${num3(contentWidth)}) {`];
   for (const child of n.children)
     out.push(...indent(ctx.renderNode(child).split(`
 `), 1));
   out.push("}");
   return out;
+}
+
+// src/swift/table-intrinsic.ts
+var weights2 = ["ultraLight", "thin", "light", "regular", "medium", "semibold", "bold", "heavy", "black"];
+var designs = { default: 0, rounded: 1, monospaced: 2, serif: 3 };
+function tableIntrinsicExpr(cell) {
+  if (cell.font.family.kind !== "system")
+    throw new Error("Native automatic tables require system fonts");
+  const index = weights2.reduce((best, _, i) => Math.abs((i + 1) * 100 - cell.font.weight) < Math.abs((best + 1) * 100 - cell.font.weight) ? i : best, 0);
+  const font = `MarkswiftTableFont.system(size: ${num3(cell.font.size)}, weight: .${weights2[index]}, design: ${designs[cell.font.family.design]})`;
+  return `.init(column: ${cell.column}, text: ${str(cell.text)}, font: ${font}, horizontalInset: ${num3(cell.horizontalInset)})`;
+}
+
+// src/swift/table-content.ts
+function tableTextContent(node, frame) {
+  if (node.lineBox) {
+    const top = node.frame.y - frame.y, bottom = frame.y + frame.h - node.frame.y - node.frame.h;
+    const box = node.lineBox;
+    node.lineBox = {
+      ...box,
+      firstBaseline: box.firstBaseline + top,
+      baselineToBottom: box.baselineToBottom + bottom,
+      baselines: box.baselines.map((baseline) => baseline + top)
+    };
+  }
+  node.frame = frame;
 }
 
 // src/swift/table-layout.ts
@@ -16598,20 +17613,25 @@ function tableExpr(node, ctx) {
     ...placements.map((placement) => `    ${placement},`),
     `], rowMinimums: [${table.rowMinimums.map(num3).join(", ")}], columnGap: ${num3(table.spacing[0])}, rowGap: ${num3(table.spacing[1])},`,
     `    insets: EdgeInsets(top: ${num3(top)}, leading: ${num3(left)}, bottom: ${num3(bottom)}, trailing: ${num3(right)}), capturedWidth: ${num3(node.frame.w)},`,
-    `    captionBottom: ${table.captionSide === "bottom"}, captionMargins: [${(table.captionMargins ?? [0, 0]).map(num3).join(", ")}], fixedRows: false) {`
+    `    captionBottom: ${table.captionSide === "bottom"}, captionMargins: [${(table.captionMargins ?? [0, 0]).map(num3).join(", ")}], fixedRows: false${table.mode === "auto" ? `, intrinsic: [${table.intrinsic.map(tableIntrinsicExpr).join(", ")}]` : ""}) {`
   ];
   node.children.forEach((child, index) => {
     const placement = table.placements[index];
     let lines;
     if (placement.kind === "cell") {
       const content = { ...child, height: { kind: "hug" }, style: { fills: [], shadows: [] }, overlays: [] };
+      if (content.kind === "text" && placement.contentFrame)
+        tableTextContent(content, placement.contentFrame);
+      ctx.geometry?.suppressed.add(content);
       lines = ctx.renderNode(content).split(`
 `);
       const horizontal = child.kind === "text" ? child.align : "leading";
       const vertical = placement.alignment ?? "center";
       const alignment = vertical === "center" ? horizontal === "center" ? ".center" : horizontal === "trailing" ? ".trailing" : ".leading" : `.${vertical}${horizontal === "center" ? "" : horizontal === "trailing" ? "Trailing" : "Leading"}`;
       lines.push(`.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`);
-      lines.push(...modifiers({ ...child, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0] }, ctx));
+      const cellPaint = { ...child, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0] };
+      geometryAlias(cellPaint, child, ctx.geometry);
+      lines.push(...modifiers(cellPaint, ctx));
       if (ctx.mode === "app") {
         lines.push(`.accessibilityElement(children: .${interactive(child) ? "contain" : "combine"})`);
         const section = placement.section === "thead" ? "Header section, " : placement.section === "tfoot" ? "Footer section, " : "";
@@ -16681,7 +17701,7 @@ function containerExpr(n, ctx) {
 `);
       const extra = [];
       if (geometry) {
-        const dy = Math.round((c.frame.y - (n.frame.y + n.padding[0])) * 100) / 100;
+        const dy = Math.round((flowFrame(c).y - (n.frame.y + n.padding[0])) * 100) / 100;
         if (dy > 0.5)
           extra.push(`.padding(.top, ${num3(dy)})`);
       }
@@ -16697,11 +17717,29 @@ function containerExpr(n, ctx) {
     if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill"))
       out.push(".fixedSize(horizontal: false, vertical: true)");
   }
+  if (n.kind === "stack" && n.scroll && ctx.mode === "app") {
+    const content = { ...n, style: { fills: [], shadows: [] }, selfAlign: undefined, relativeOffset: undefined };
+    const naturalExtent = !n.measured && !n.wrap && n.distribution === "start" && (n.scroll === "v" ? n.axis === "v" : n.axis === "h" && !n.allocation);
+    if (naturalExtent && n.scroll === "v") {
+      content.height = { kind: "hug" };
+      delete content.minHeight;
+      delete content.maxHeight;
+    } else if (naturalExtent) {
+      content.width = { kind: "hug" };
+      delete content.minWidth;
+      delete content.maxWidth;
+    } else {
+      note(n, "approximated: constrained scroll content retains captured extent; native scroll range may differ");
+    }
+    geometryAlias(content, n, ctx.geometry);
+    out.push(...modifiers(content, ctx));
+    const viewport = { ...n, padding: [0, 0, 0, 0], overlays: [] };
+    geometryAlias(viewport, n, ctx.geometry, true);
+    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), "}", ...modifiers(viewport, ctx)];
+  }
   out.push(...modifiers(n, ctx));
   if (n.kind === "stack" && n.scroll) {
-    if (ctx.mode === "fidelity")
-      return [...out, `.frame(width: ${num3(n.frame.w)}, height: ${num3(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
-    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), `}`];
+    return [...out, `.frame(width: ${num3(n.frame.w)}, height: ${num3(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
   }
   return out;
 }
@@ -16784,6 +17822,10 @@ struct MarkswiftMeasuredLayout: Layout {
 
 // src/swift/flow-runtime.ts
 var FLOW_RUNTIME = `
+nonisolated struct MarkswiftFlowItemAdvance: LayoutValueKey {
+    static var defaultValue: CGFloat? { nil }
+}
+
 struct MarkswiftFlow: Layout {
     var columnGap: CGFloat
     var rowGap: CGFloat
@@ -16791,6 +17833,7 @@ struct MarkswiftFlow: Layout {
     var vertical: VerticalAlignment = .top
     var columns: Int? = nil
     var stretch: Bool = false
+    var baselineStep: CGFloat? = nil
 
     private struct Item {
         var index: Int
@@ -16807,7 +17850,8 @@ struct MarkswiftFlow: Layout {
         let available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
         let rows = rows(width: available ?? .infinity, subviews: subviews)
         let width = available ?? rows.map { $0.width }.max() ?? 0
-        let height = rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowGap
+        let height = baselineStep.map { $0 * CGFloat(max(0, rows.count - 1)) + (rows.last?.height ?? 0) }
+            ?? (rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowGap)
         return CGSize(width: width, height: height)
     }
 
@@ -16825,8 +17869,22 @@ struct MarkswiftFlow: Layout {
                                           proposal: ProposedViewSize(width: item.size.width, height: height))
                 x += item.size.width + columnGap
             }
-            y += row.height + rowGap
+            y += baselineStep ?? (row.height + rowGap)
         }
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
+        let measured = rows(width: max(0, bounds.width), subviews: subviews)
+        let rowIndex = guide == .firstTextBaseline ? 0 : measured.count - 1
+        guard measured.indices.contains(rowIndex), let item = measured[rowIndex].items.first else { return nil }
+        let row = measured[rowIndex]
+        let height = stretch ? row.height : item.size.height
+        let slack = row.height - height
+        let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
+        let y = measured.prefix(rowIndex).reduce(CGFloat(0)) { $0 + (baselineStep ?? ($1.height + rowGap)) }
+        let dimensions = subviews[item.index].dimensions(in: ProposedViewSize(width: item.size.width, height: height))
+        return y + dy + dimensions[guide]
     }
 
     private func finiteWidth(_ value: CGFloat?) -> CGFloat? {
@@ -16848,7 +17906,8 @@ struct MarkswiftFlow: Layout {
         }
         for (index, subview) in subviews.enumerated() {
             let measured = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
-            let size = CGSize(width: columnWidth ?? (measured.width.isFinite ? max(0, measured.width) : 0),
+            let advance = subview[MarkswiftFlowItemAdvance.self].flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+            let size = CGSize(width: columnWidth ?? advance ?? (measured.width.isFinite ? max(0, measured.width) : 0),
                               height: measured.height.isFinite ? max(0, measured.height) : 0)
             let gap = row.items.isEmpty ? 0 : columnGap
             let full = columns.map { row.items.count >= $0 } ?? (row.width + gap + size.width > width + 0.0001)
@@ -16866,30 +17925,67 @@ struct MarkswiftFlow: Layout {
 }
 `;
 
+// src/swift/text-advance-runtime.ts
+var TEXT_ADVANCE_RUNTIME = `
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+nonisolated enum MarkswiftTextAdvance {
+#if canImport(UIKit)
+    typealias NativeFont = UIFont
+#else
+    typealias NativeFont = NSFont
+#endif
+    static func width(_ value: String, font: NativeFont) -> CGFloat {
+        let attributed = NSAttributedString(string: value, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attributed as CFAttributedString), nil, nil, nil))
+    }
+}
+`;
+
 // src/swift/greedy-text-runtime.ts
 var GREEDY_TEXT_RUNTIME = `
+${TEXT_ADVANCE_RUNTIME}
 struct MarkswiftGreedyText: View {
     let value: String
     let font: Font
     let color: Color
     let fontSize: CGFloat
     let lineGap: CGFloat
+    let baselineStep: CGFloat?
+    let nativeWeight: CGFloat?
 
-    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat) {
+    init(_ value: String, font: Font, color: Color, fontSize: CGFloat, lineGap: CGFloat, baselineStep: CGFloat? = nil, nativeWeight: CGFloat? = nil) {
         self.value = value
         self.font = font
         self.color = color
         self.fontSize = fontSize
         self.lineGap = lineGap
+        self.baselineStep = baselineStep
+        self.nativeWeight = nativeWeight
     }
 
     var body: some View {
         let words = value.split(separator: " ")
-        MarkswiftFlow(columnGap: fontSize * 0.25, rowGap: lineGap) {
+        let nativeFont = nativeWeight.map { UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(rawValue: $0)) }
+        let space = nativeFont.map { MarkswiftTextAdvance.width(" ", font: $0) } ?? fontSize * 0.25
+        MarkswiftFlow(columnGap: space, rowGap: lineGap, baselineStep: baselineStep) {
             ForEach(words.indices, id: \\.self) { index in
-                Text(verbatim: String(words[index]))
-                    .font(font)
-                    .foregroundStyle(color)
+                if let nativeFont {
+                    let word = String(words[index])
+                    Text(verbatim: word)
+                        .font(Font(nativeFont))
+                        .foregroundStyle(color)
+                        .fixedSize(horizontal: true, vertical: true)
+                        .layoutValue(key: MarkswiftFlowItemAdvance.self, value: MarkswiftTextAdvance.width(word, font: nativeFont))
+                } else {
+                    Text(verbatim: String(words[index]))
+                        .font(font)
+                        .foregroundStyle(color)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -16982,6 +18078,7 @@ nonisolated func markswiftSelectRowPaint(_ paint: MarkswiftSelectRowAppearance, 
 }
 
 struct MarkswiftSelectionList: SwiftUI.View {
+    var identifier = ""
     let choices: [MarkswiftSelectChoice]
     let selected: Set<Int>
     var appearance: [Int: MarkswiftSelectRowAppearance] = [:]
@@ -17003,7 +18100,9 @@ struct MarkswiftSelectionList: SwiftUI.View {
                             .opacity(choice.groupInvisible ? 0 : 1)
                             .accessibilityHidden(choice.groupInvisible)
                     }
-                    if interactive && isEnabled && !disabled && !choice.disabled && !choice.invisible {
+                    if choice.invisible {
+                        invisibleRow(choice)
+                    } else if interactive && isEnabled && !disabled && !choice.disabled {
                         SwiftUI.Button {
                             guard isEnabled && !disabled && !choice.disabled && !choice.hidden && !choice.invisible else { return }
                             activate(choice)
@@ -17012,16 +18111,32 @@ struct MarkswiftSelectionList: SwiftUI.View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                        .accessibilityIdentifier(identifier + "/option/" + String(choice.id))
+                        .accessibilityValue(selected.contains(choice.id) ? "selected" : "unselected")
                     } else {
                         row(choice)
-                            .opacity(choice.invisible ? 0 : 1)
-                            .accessibilityHidden(choice.invisible)
                             .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                            .accessibilityIdentifier(identifier + "/option/" + String(choice.id))
+                            .accessibilityValue(selected.contains(choice.id) ? "selected" : "unselected")
                     }
                 }
             }
         }
         .clipped()
+    }
+
+    @SwiftUI.ViewBuilder
+    private func invisibleRow(_ choice: MarkswiftSelectChoice) -> some SwiftUI.View {
+        if let paint = appearance[choice.id] {
+            SwiftUI.Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: paint.height)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        } else {
+            // Legacy rows still reserve their native intrinsic height, without AX metadata.
+            row(choice).hidden().accessibilityHidden(true).allowsHitTesting(false)
+        }
     }
 
     @SwiftUI.ViewBuilder
@@ -17134,6 +18249,7 @@ nonisolated struct MarkswiftAllocationTrack {
     var min: CGFloat
     var max: CGFloat? = nil
     var inset: CGFloat = 0
+    var basisFraction: CGFloat? = nil
 }
 
 nonisolated enum MarkswiftAllocation {
@@ -17141,7 +18257,14 @@ nonisolated enum MarkswiftAllocation {
         Swift.max(track.min, Swift.min(track.max ?? .infinity, value))
     }
 
-    static func flex(_ available: CGFloat, _ tracks: [MarkswiftAllocationTrack]) -> [CGFloat] {
+    static func flex(_ available: CGFloat, _ inputTracks: [MarkswiftAllocationTrack], basisWidth: CGFloat? = nil) -> [CGFloat] {
+        let tracks = inputTracks.map { track in
+            var resolved = track
+            if let fraction = track.basisFraction {
+                resolved.basis = Swift.max(track.inset, track.basis + fraction * (basisWidth ?? available))
+            }
+            return resolved
+        }
         let growing = tracks.reduce(CGFloat(0)) { $0 + clamp($1.basis, $1) } < available
         var target = tracks.map { $0.basis }
         var frozen = tracks.map { track in
@@ -17195,6 +18318,12 @@ nonisolated enum MarkswiftAllocation {
 }
 `;
 var ALLOCATION_RUNTIME = ALLOCATION_CORE + `
+nonisolated struct MarkswiftGridPlacement {
+    var row: Int
+    var column: Int
+    var columnSpan: Int
+}
+
 /// Explicit flex bases/factors or fixed/fr grid tracks; row heights are measured at each proposal.
 struct MarkswiftAllocatedLayout: Layout {
     var tracks: [MarkswiftAllocationTrack]
@@ -17203,10 +18332,16 @@ struct MarkswiftAllocatedLayout: Layout {
     var grid: Bool = false
     var vertical: VerticalAlignment = .top
     var stretch: Bool = false
+    var placements: [MarkswiftGridPlacement]? = nil
+    var rowSizes: [CGFloat?]? = nil
+    var intrinsicHeight: Bool = false
+    var minimumHeight: CGFloat = 0
+    var maximumHeight: CGFloat? = nil
     var capturedWidth: CGFloat
 
     private struct Item {
         var index: Int
+        var x: CGFloat
         var width: CGFloat
         var height: CGFloat
     }
@@ -17219,7 +18354,10 @@ struct MarkswiftAllocatedLayout: Layout {
         let width = finite(proposal.width) ?? capturedWidth
         let measured = rows(width: width, subviews: subviews)
         let naturalHeight = measured.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(Swift.max(0, measured.count - 1)) * rowGap
-        return CGSize(width: width, height: grid ? naturalHeight : finite(proposal.height) ?? naturalHeight)
+        // Auto-height flex rows use their children's natural cross size, even when a VStack
+        // offers spare height. Resolve their CSS limits here so stretch sees the used height.
+        let intrinsic = Swift.max(minimumHeight, Swift.min(maximumHeight ?? .infinity, naturalHeight))
+        return CGSize(width: width, height: grid ? naturalHeight : intrinsicHeight ? intrinsic : finite(proposal.height) ?? naturalHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -17227,14 +18365,12 @@ struct MarkswiftAllocatedLayout: Layout {
         var y = bounds.minY
         for row in measured {
             let rowHeight = grid ? row.height : bounds.height
-            var x = bounds.minX
             for item in row.items {
                 let height = stretch ? rowHeight : item.height
                 let slack = rowHeight - height
                 let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
-                subviews[item.index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
+                subviews[item.index].place(at: CGPoint(x: bounds.minX + item.x, y: y + dy), anchor: .topLeading,
                                           proposal: ProposedViewSize(width: item.width, height: height))
-                x += item.width + columnGap
             }
             y += rowHeight + rowGap
         }
@@ -17248,7 +18384,28 @@ struct MarkswiftAllocatedLayout: Layout {
     private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
         guard !tracks.isEmpty else { return [] }
         let available = width - CGFloat(Swift.max(0, tracks.count - 1)) * columnGap
-        let widths = grid ? MarkswiftAllocation.grid(available, tracks) : MarkswiftAllocation.flex(available, tracks)
+        let widths = grid ? MarkswiftAllocation.grid(available, tracks) : MarkswiftAllocation.flex(available, tracks, basisWidth: width)
+        if grid, let placements {
+            let declaredRows = rowSizes ?? []
+            let count = Swift.max(declaredRows.count, placements.map { $0.row + 1 }.max() ?? 0)
+            var result = (0..<count).map { row in Row(height: row < declaredRows.count ? declaredRows[row] ?? 0 : 0) }
+            var starts: [CGFloat] = []
+            var x: CGFloat = 0
+            for width in widths { starts.append(x); x += width + columnGap }
+            for (index, subview) in subviews.enumerated() {
+                guard index < placements.count else { continue }
+                let p = placements[index]
+                guard p.row >= 0, p.row < result.count, p.column >= 0, p.columnSpan > 0,
+                      p.column + p.columnSpan <= widths.count else { continue }
+                let childWidth = widths[p.column..<(p.column + p.columnSpan)].reduce(0, +) + CGFloat(p.columnSpan - 1) * columnGap
+                let fixedHeight = p.row < declaredRows.count ? declaredRows[p.row] : nil
+                let size = subview.sizeThatFits(ProposedViewSize(width: childWidth, height: fixedHeight))
+                let height = finite(size.height) ?? 0
+                result[p.row].items.append(Item(index: index, x: starts[p.column], width: childWidth, height: height))
+                if fixedHeight == nil { result[p.row].height = Swift.max(result[p.row].height, height) }
+            }
+            return result
+        }
         var result: [Row] = []
         var row = Row()
         for (index, subview) in subviews.enumerated() {
@@ -17258,11 +18415,80 @@ struct MarkswiftAllocatedLayout: Layout {
             let childWidth = widths[trackIndex]
             let size = subview.sizeThatFits(ProposedViewSize(width: childWidth, height: nil))
             let height = finite(size.height) ?? 0
-            row.items.append(Item(index: index, width: childWidth, height: height))
+            let x = row.items.reduce(CGFloat(0)) { $0 + $1.width + columnGap }
+            row.items.append(Item(index: index, x: x, width: childWidth, height: height))
             row.height = Swift.max(row.height, height)
         }
         if !row.items.isEmpty { result.append(row) }
         return result
+    }
+}
+`;
+
+// src/swift/table-intrinsic-runtime.ts
+var TABLE_INTRINSIC_RUNTIME = `
+nonisolated enum MarkswiftTableIntrinsic {
+    struct Cell: Sendable {
+        var column: Int
+        var text: String
+        var font: MarkswiftTableFont.Spec
+        var horizontalInset: CGFloat
+    }
+
+    static func maximums(_ cells: [Cell], count: Int) -> [CGFloat] {
+        var result = Array(repeating: CGFloat(0), count: count)
+        for cell in cells {
+            // UIFont/NSFont are accepted CoreText font attributes and retain the exact design.
+            let value = NSAttributedString(string: cell.text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): MarkswiftTableFont.native(cell.font)])
+            let line = CTLineCreateWithAttributedString(value as CFAttributedString)
+            let advance = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            result[cell.column] = max(result[cell.column], max(0, advance) + cell.horizontalInset)
+        }
+        return result
+    }
+
+    static func columns(_ maximums: [CGFloat], available: CGFloat) -> [CGFloat] {
+        let total = maximums.reduce(0, +)
+        let width = max(available, total)
+        return total > 0 ? maximums.map { $0 * width / total }
+            : maximums.map { _ in width / CGFloat(max(1, maximums.count)) }
+    }
+}
+`;
+var TABLE_INTRINSIC_FONT_RUNTIME = `
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+nonisolated enum MarkswiftTableFont {
+    struct Spec: Sendable {
+        var size: CGFloat
+        var weight: CGFloat
+        var design: Int
+    }
+#if canImport(UIKit)
+    typealias Weight = UIFont.Weight
+    static func native(_ spec: Spec) -> NSObject {
+        let font = UIFont.systemFont(ofSize: spec.size, weight: Weight(rawValue: spec.weight))
+        let descriptor = spec.design == 1 ? font.fontDescriptor.withDesign(.rounded)
+            : spec.design == 2 ? font.fontDescriptor.withDesign(.monospaced)
+            : spec.design == 3 ? font.fontDescriptor.withDesign(.serif) : nil
+        return descriptor.map { UIFont(descriptor: $0, size: spec.size) } ?? font
+    }
+#elseif canImport(AppKit)
+    typealias Weight = NSFont.Weight
+    static func native(_ spec: Spec) -> NSObject {
+        let font = NSFont.systemFont(ofSize: spec.size, weight: Weight(rawValue: spec.weight))
+        let descriptor = spec.design == 1 ? font.fontDescriptor.withDesign(.rounded)
+            : spec.design == 2 ? font.fontDescriptor.withDesign(.monospaced)
+            : spec.design == 3 ? font.fontDescriptor.withDesign(.serif) : nil
+        return descriptor.flatMap { NSFont(descriptor: $0, size: spec.size) } ?? font
+    }
+#endif
+    static func system(size: CGFloat, weight: Weight, design: Int) -> Spec {
+        Spec(size: size, weight: weight.rawValue, design: design)
     }
 }
 `;
@@ -17333,8 +18559,8 @@ nonisolated enum MarkswiftTableAllocation {
     }
 }
 `;
-var TABLE_RUNTIME = `${TABLE_ALLOCATION_RUNTIME}
-/// Declared fixed columns, section paint and spanning cells share one native proposal.
+var TABLE_RUNTIME = `${TABLE_ALLOCATION_RUNTIME}${TABLE_INTRINSIC_FONT_RUNTIME}${TABLE_INTRINSIC_RUNTIME}
+/// Declared or intrinsic columns, section paint and cells share one native proposal.
 struct MarkswiftTableLayout: Layout {
     struct Placement {
         var kind: Int // 0 cell, 1 row/section paint, 2 body paint, 3 caption
@@ -17350,6 +18576,7 @@ struct MarkswiftTableLayout: Layout {
     var captionBottom: Bool = false
     var captionMargins: [CGFloat] = [0, 0]
     var fixedRows: Bool = false
+    var intrinsic: [MarkswiftTableIntrinsic.Cell] = []
 
     private struct Geometry {
         var width: CGFloat
@@ -17389,9 +18616,12 @@ struct MarkswiftTableLayout: Layout {
 
     private func geometry(width: CGFloat, subviews: Subviews) -> Geometry {
         let overhead = insets.leading + insets.trailing + CGFloat(max(0, columns.count - 1)) * columnGap
-        let width = max(width, MarkswiftTableAllocation.minimum(columns) + overhead)
+        let maximums = intrinsic.isEmpty ? [] : MarkswiftTableIntrinsic.maximums(intrinsic, count: columns.count)
+        let minimum = maximums.isEmpty ? MarkswiftTableAllocation.minimum(columns) : maximums.reduce(0, +)
+        let width = max(width, minimum + overhead)
         let available = max(0, width - overhead)
-        let widths = MarkswiftTableAllocation.columns(columns, available: available)
+        let widths = maximums.isEmpty ? MarkswiftTableAllocation.columns(columns, available: available)
+            : MarkswiftTableIntrinsic.columns(maximums, available: available)
         var captionHeight: CGFloat = 0
         var cells: [MarkswiftTableAllocation.Cell] = []
         var measured: [CGFloat] = []
@@ -17416,6 +18646,151 @@ struct MarkswiftTableLayout: Layout {
     }
 }
 `;
+
+// src/swift/text-line-box-runtime.ts
+var TEXT_LINE_BOX_RUNTIME = `
+struct MarkswiftTextLineBox: Layout {
+    var firstBaseline: CGFloat
+    var baselineToBottom: CGFloat
+    var baselineStep: CGFloat
+    var fontSize: CGFloat
+    var fontWeight: CGFloat
+    var lineSpacing: CGFloat
+    var greedy: Bool = false
+    var fallbackLeading: CGFloat = 0
+    var horizontal: HorizontalAlignment = .leading
+    var fixedHeight: CGFloat? = nil
+    var expectedLines: Int? = nil
+    var fixedWidth: CGFloat? = nil
+
+    private struct Measurement {
+        var size: CGSize
+        var child: CGSize
+        var offset: CGFloat
+        var first: CGFloat
+        var last: CGFloat
+    }
+
+    private func measure(_ proposal: ProposedViewSize, _ subview: LayoutSubview) -> Measurement {
+        let dimensions = subview.dimensions(in: ProposedViewSize(width: fixedWidth ?? proposal.width, height: nil))
+        let nativeFirst = dimensions[.firstTextBaseline], nativeLast = dimensions[.lastTextBaseline]
+        let font = UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(rawValue: fontWeight))
+        let natural = font.ascender - font.descender + font.leading
+        let stride = greedy ? baselineStep : natural + lineSpacing
+        let rawCount = greedy ? (nativeLast - nativeFirst) / stride + 1 : (dimensions.height + lineSpacing) / stride
+        let finite = stride.isFinite && stride > 0 && rawCount.isFinite && rawCount >= 0.5 && rawCount < 100_000
+        let count = finite ? max(1, Int(rawCount.rounded())) : 1
+        let expectedHeight = natural + CGFloat(count - 1) * stride
+        // SwiftUI rounds ideal sizes and guides to device pixels. A bounded one-point guard
+        // covers that rounding at every supported scale; it never changes font metrics.
+        let valid = finite && abs(dimensions.height - expectedHeight) <= 1.001
+            && nativeFirst.isFinite && nativeFirst >= 0 && nativeFirst <= dimensions.height
+            && (!greedy || abs(nativeLast - nativeFirst - CGFloat(count - 1) * stride) <= 1.001)
+            && (expectedLines == nil || expectedLines == count)
+        let height = fixedHeight ?? (valid ? firstBaseline + CGFloat(count - 1) * baselineStep + baselineToBottom
+                                          : dimensions.height + 2 * fallbackLeading)
+        let offset = valid ? firstBaseline - nativeFirst : fixedHeight == nil ? fallbackLeading : (height - dimensions.height) / 2
+        return Measurement(size: CGSize(width: fixedWidth ?? dimensions.width, height: max(0, height)),
+                           child: CGSize(width: dimensions.width, height: dimensions.height), offset: offset,
+                           first: nativeFirst + offset, last: nativeLast + offset)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        return measure(proposal, subview).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+        let width = fixedWidth ?? proposal.width ?? bounds.width
+        let measured = measure(ProposedViewSize(width: width, height: nil), subview)
+        let slack = bounds.width - measured.child.width
+        let x = bounds.minX + (horizontal == .center ? slack / 2 : horizontal == .trailing ? slack : 0)
+        subview.place(at: CGPoint(x: x, y: bounds.minY + measured.offset), anchor: .topLeading,
+                      proposal: ProposedViewSize(width: width, height: measured.child.height))
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard let subview = subviews.first else { return nil }
+        let measured = measure(ProposedViewSize(width: fixedWidth ?? proposal.width ?? bounds.width, height: nil), subview)
+        if guide == .firstTextBaseline { return measured.first }
+        if guide == .lastTextBaseline { return measured.last }
+        return nil
+    }
+}
+`;
+
+// src/swift/disclosure-runtime.ts
+var MARKSWIFT_DISCLOSURE_RUNTIME = `
+private struct MarkswiftDisclosureExpandedKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+extension EnvironmentValues {
+    var markswiftDisclosureExpanded: Bool? {
+        get { self[MarkswiftDisclosureExpandedKey.self] }
+        set { self[MarkswiftDisclosureExpandedKey.self] = newValue }
+    }
+}
+
+struct MarkswiftDisclosure<Label: View, Content: View>: View {
+    @Binding var isExpanded: Bool
+    let gap: CGFloat
+    let labelInset: CGFloat
+    let contentInset: CGFloat
+    let contentAvailable: Bool
+    let summaryIdentifier: String
+    let contentIdentifier: String
+    @ViewBuilder let content: () -> Content
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: gap) {
+            SwiftUI.Button { isExpanded.toggle() } label: {
+                label().environment(\\.markswiftDisclosureExpanded, isExpanded)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "expanded" : "collapsed")
+            .accessibilityIdentifier(summaryIdentifier)
+            .padding(.leading, labelInset)
+            if isExpanded && contentAvailable {
+                content().padding(.leading, contentInset)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(contentIdentifier)
+            }
+        }
+    }
+}
+
+/// Blink canonical disclosure path; the rect is measured in the summary marker viewport.
+struct MarkswiftDisclosureSymbol: View {
+    @Environment(\\.markswiftDisclosureExpanded) private var expanded
+    let capturedExpanded: Bool
+    let symbolRect: CGRect
+    let viewport: CGSize
+    let color: SwiftUI.Color
+
+    var body: some View {
+        MarkswiftDisclosureTriangle(expanded: expanded ?? capturedExpanded, symbolRect: symbolRect)
+            .fill(color)
+            .frame(width: viewport.width, height: viewport.height)
+            .accessibilityHidden(true)
+    }
+}
+
+nonisolated struct MarkswiftDisclosureTriangle: SwiftUI.Shape {
+    let expanded: Bool
+    let symbolRect: CGRect
+    func path(in rect: CGRect) -> SwiftUI.Path {
+        let points: [CGPoint] = expanded
+            ? [CGPoint(x: 0, y: 0.07), CGPoint(x: 0.5, y: 0.93), CGPoint(x: 1, y: 0.07)]
+            : [CGPoint(x: 0, y: 0), CGPoint(x: 0.86, y: 0.5), CGPoint(x: 0, y: 1)]
+        var path = SwiftUI.Path()
+        path.addLines(points.map { CGPoint(x: symbolRect.minX + $0.x * symbolRect.width,
+                                         y: symbolRect.minY + $0.y * symbolRect.height) })
+        path.closeSubpath()
+        return path
+    }
+}`;
 
 // src/swift/runtime.ts
 var SWIFT_RUNTIME = `// Generated by Markswift — runtime helpers shared by all generated views.
@@ -17713,7 +19088,9 @@ ${RELATIVE_WIDTH_RUNTIME}
 ${SELECT_LIST_RUNTIME}
 ${SELECT_PAINT_RUNTIME}
 ${ALLOCATION_RUNTIME}
-${TABLE_RUNTIME}`;
+${TABLE_RUNTIME}
+${TEXT_LINE_BOX_RUNTIME}
+${MARKSWIFT_DISCLOSURE_RUNTIME}`;
 
 // src/swift/emit.ts
 function emitSwift(screen, viewName, opts) {
@@ -17733,7 +19110,8 @@ function emitSwift(screen, viewName, opts) {
   for (const p of props)
     nameOf.set(p.node, p.name);
   const control = controlMembers(screen.root, opts.mode);
-  const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, renderNode: (node) => refOf(node, ctx) };
+  const geometry = opts.geometryInstrumentation ? geometryInstrumentation(screen.root, viewName) : undefined;
+  const ctx = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, geometry, renderNode: (node) => refOf(node, ctx) };
   const w = new Writer;
   const comment = (value) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   w.line("// Generated by Markswift — do not edit. Source: " + comment(screen.source) + " (" + comment(screen.name) + ", " + screen.theme + ")");
@@ -17769,7 +19147,7 @@ function emitSwift(screen, viewName, opts) {
     if (n.confidence !== "mapped")
       report.push({ id: n.id, kind: n.kind, confidence: n.confidence, notes: n.notes });
   });
-  return { view: w.toString(), shapes, report, mapping };
+  return { view: w.toString(), shapes, report, mapping, ...geometry ? { geometry: geometry.manifest } : {} };
 }
 function propName(id, i) {
   const clean = id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -18187,6 +19565,104 @@ function emitDesignTokens(set) {
 `) + `
 `;
 }
+// src/swift/geometry-runtime.ts
+var GEOMETRY_RUNTIME = `import SwiftUI
+import Foundation
+
+nonisolated struct MarkswiftGeometryFrame: Codable, Equatable, Sendable {
+    var key: String
+    var role: String
+    var x: Double
+    var y: Double
+    var w: Double
+    var h: Double
+}
+
+nonisolated struct MarkswiftGeometryAnchor {
+    var key: String
+    var role: String
+    var bounds: Anchor<CGRect>
+}
+
+nonisolated struct MarkswiftGeometryAnchors: PreferenceKey {
+    static var defaultValue: [MarkswiftGeometryAnchor] { [] }
+    static func reduce(value: inout [MarkswiftGeometryAnchor], nextValue: () -> [MarkswiftGeometryAnchor]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+nonisolated struct MarkswiftGeometryFrames: PreferenceKey {
+    static var defaultValue: [MarkswiftGeometryFrame] { [] }
+    static func reduce(value: inout [MarkswiftGeometryFrame], nextValue: () -> [MarkswiftGeometryFrame]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+/// Observation callbacks do not update any SwiftUI state or participate in layout.
+nonisolated final class MarkswiftGeometryCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var frames: [MarkswiftGeometryFrame] = []
+    private var revision: Int = 0
+
+    func replace(_ input: [MarkswiftGeometryFrame]) {
+        let next = input.sorted { $0.key < $1.key }
+        lock.lock(); defer { lock.unlock() }
+        if next != frames { frames = next; revision += 1 }
+    }
+    func snapshot() -> [MarkswiftGeometryFrame] {
+        lock.lock(); defer { lock.unlock() }
+        return frames
+    }
+    func updateCount() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return revision
+    }
+    func encoded(backend: String, width: Double, height: Double) throws -> Data {
+        struct Payload: Encodable {
+            var version = 1
+            var coordinateSpace = "capture-viewport"
+            var frameKind = "painted-border-aabb"
+            var backend: String
+            var width: Double
+            var height: Double
+            var frames: [MarkswiftGeometryFrame]
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(Payload(backend: backend, width: width, height: height, frames: snapshot()))
+    }
+}
+
+extension View {
+    nonisolated func markswiftObserveGeometry(_ key: String, role: String) -> some View {
+        transformAnchorPreference(key: MarkswiftGeometryAnchors.self, value: .bounds) { values, anchor in
+            values.append(MarkswiftGeometryAnchor(key: key, role: role, bounds: anchor))
+        }
+    }
+}
+
+struct MarkswiftGeometryReader<Content: View>: View {
+    var content: Content
+    var collector: MarkswiftGeometryCollector
+    var body: some View {
+        content.overlayPreferenceValue(MarkswiftGeometryAnchors.self) { anchors in
+            GeometryReader { proxy in
+                let frames = anchors.map { anchor in
+                    let rect = proxy[anchor.bounds]
+                    return MarkswiftGeometryFrame(key: anchor.key, role: anchor.role,
+                        x: Double(rect.minX), y: Double(rect.minY), w: Double(rect.width), h: Double(rect.height))
+                }
+                Color.clear
+                    .preference(key: MarkswiftGeometryFrames.self, value: frames)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .onPreferenceChange(MarkswiftGeometryFrames.self) { frames in collector.replace(frames) }
+    }
+}
+`;
+
 // src/compiler/batch.ts
 function compileLayouts(inputs) {
   if (!inputs.length)
@@ -18257,9 +19733,12 @@ function compileLayouts(inputs) {
     const result = emitSwift(screen, input.name, {
       mode: input.mode ?? "app",
       tokens: screenTokens(tokens, screen),
-      fontMetrics: input.fontMetrics
+      fontMetrics: input.fontMetrics,
+      geometryInstrumentation: input.geometryInstrumentation
     });
-    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping });
+    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...result.geometry ? { geometry: result.geometry } : {} });
+    if (result.geometry)
+      add("MarkswiftGeometry.swift", GEOMETRY_RUNTIME, "file", "geometry runtime");
     add(`${input.name}.swift`, result.view, "file", "view file");
     for (const [name, source] of Object.entries(result.shapes)) {
       if (shapes[name] !== undefined && shapes[name] !== source)
@@ -18368,6 +19847,7 @@ function compileResponsiveLayouts(options) {
       mode: options.mode,
       bundledFamilies: options.bundledFamilies,
       fontMetrics: options.fontMetrics,
+      geometryInstrumentation: options.geometryInstrumentation,
       supportFiles: options.supportFiles,
       assets: options.assets
     },
@@ -18377,7 +19857,8 @@ function compileResponsiveLayouts(options) {
       componentId: `${options.name}-regular`,
       mode: options.mode,
       bundledFamilies: options.bundledFamilies,
-      fontMetrics: options.fontMetrics
+      fontMetrics: options.fontMetrics,
+      geometryInstrumentation: options.geometryInstrumentation
     }
   ]);
   const wrapperName = `${options.name}.swift`;
@@ -18427,13 +19908,15 @@ function compileLayout(layout, options = {}) {
   const result = emitSwift(screen, name, {
     mode: options.mode ?? "app",
     tokens: screenTokens(tokens, screen),
-    fontMetrics: options.fontMetrics
+    fontMetrics: options.fontMetrics,
+    geometryInstrumentation: options.geometryInstrumentation
   });
   return {
     name,
     code: result.view,
     diagnostics: result.report,
     mapping: result.mapping,
+    ...result.geometry ? { geometry: result.geometry } : {},
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,
@@ -18442,7 +19925,8 @@ function compileLayout(layout, options = {}) {
 import SwiftUI
 
 ` + Object.keys(result.shapes).sort().map((key) => result.shapes[key]).join(`
-`)
+`),
+      ...result.geometry ? { "MarkswiftGeometry.swift": GEOMETRY_RUNTIME } : {}
     }
   };
 }

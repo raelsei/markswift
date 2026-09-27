@@ -5,6 +5,7 @@ import { emitSwift, SWIFT_RUNTIME } from "../swift/emit.ts";
 import { extractTokens, emitDesignTokens, screenTokens } from "../swift/tokens.ts";
 import { validateName } from "./naming.ts";
 import type { CompileOptions, CompileResult } from "./index.ts";
+import { GEOMETRY_RUNTIME } from "../swift/geometry-runtime.ts";
 
 export interface CompileLayoutInput extends CompileOptions {
   layout: LayoutDoc;
@@ -90,8 +91,10 @@ export function compileLayouts(inputs: readonly CompileLayoutInput[]): CompileBa
   for (const { input, screen } of prepared) {
     const result = emitSwift(screen, input.name, {
       mode: input.mode ?? "app", tokens: screenTokens(tokens, screen), fontMetrics: input.fontMetrics,
+      geometryInstrumentation: input.geometryInstrumentation,
     });
-    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping });
+    views.push({ name: input.name, code: result.view, diagnostics: result.report, mapping: result.mapping, ...(result.geometry ? { geometry: result.geometry } : {}) });
+    if (result.geometry) add("MarkswiftGeometry.swift", GEOMETRY_RUNTIME, "file", "geometry runtime");
     add(`${input.name}.swift`, result.view, "file", "view file");
     for (const [name, source] of Object.entries(result.shapes)) {
       if (shapes[name] !== undefined && shapes[name] !== source) throw new Error(`Conflicting shape definition: ${name}`);

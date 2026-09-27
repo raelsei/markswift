@@ -11,12 +11,28 @@ export type Rect = z.infer<typeof Rect>;
 export const PreferredSize = z.object({
   width: z.string(), height: z.string(),
   flexBasis: z.string().optional(),
+  inlineSizeDefinite: z.boolean().optional(),
+  hasRelativePadding: z.boolean().optional(),
   hasAutoMargins: z.boolean().optional(),
+  /** Cascaded physical relative-position intent, before CSSOM resolves percentages. */
+  relativeInsets: z.tuple([z.string(), z.string(), z.string(), z.string()]).optional(),
+  relativeContainingDirection: z.enum(["ltr", "rtl"]).optional(),
   gridTemplateColumns: z.string().optional(),
   gridTemplateRows: z.string().optional(),
   gridAutoRows: z.string().optional(),
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
+
+/** Live default ::marker style and browser font box; absent for custom content/images. */
+export const MarkerLayout = z.object({
+  symbol: z.enum(["disc", "circle", "square", "disclosure-open", "disclosure-closed"]),
+  fontAscent: z.number().positive(), fontDescent: z.number().nonnegative(), fontSize: z.number().positive(),
+  /** Fractional capture origin: browser paint snaps in document pixels before root rebasing. */
+  pixelOffset: z.object({ x: z.number().min(0).lt(1), y: z.number().min(0).lt(1) }).optional(),
+  /** Direct first summary whose state-dependent list-style-type is proved to come from UA rules. */
+  disclosureControl: z.boolean().optional(),
+});
+export type MarkerLayout = z.infer<typeof MarkerLayout>;
 
 /**
  * One laid-out DOM node. `display: contents` elements are not here — their
@@ -45,6 +61,7 @@ export interface LayoutNode {
   flattenedCustomElements?: Array<{ tag: string; id?: string }>;
   /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
   preferredSize?: PreferredSize;
+  markerLayout?: MarkerLayout;
   /** Capture-local form/tree identity, resolved before boxless ancestors are flattened. */
   formOwner?: string;
   /** Live selection ordinal; -1 means explicitly unselected, absent means a legacy capture. */
@@ -55,13 +72,15 @@ export interface LayoutNode {
   bounds: Rect;
   /** Laid-out text for `#text` nodes. */
   text?: string;
+  /** Measured first text baseline, in capture-root CSS pixels; absent in legacy captures. */
+  firstBaseline?: number;
   /**
    * Measured line boxes of a `#text` node (CDP `DOMSnapshot` `textBoxes`), document-relative,
    * in layout order. `start`/`length` index the raw `text` string, so a box boundary is the
    * browser's line division; `fidelity` emit reproduces it instead of letting CoreText re-wrap.
    * Absent when the snapshot reported no boxes (empty or whitespace-only nodes).
    */
-  lines?: Array<{ bounds: Rect; start: number; length: number }>;
+  lines?: Array<{ bounds: Rect; start: number; length: number; baseline?: number }>;
   /** Global paint order index (stacking), when available. */
   paint?: number;
   children: LayoutNode[];
@@ -75,12 +94,14 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     styles: z.record(z.string(), z.string()),
     flattenedCustomElements: z.array(z.object({ tag: z.string(), id: z.string().optional() })).optional(),
     preferredSize: PreferredSize.optional(),
+    markerLayout: MarkerLayout.optional(),
     formOwner: z.string().optional(),
     selectedIndex: z.number().int().min(-1).optional(),
     option: z.object({ label: z.string(), value: z.string(), hidden: z.boolean().optional() }).optional(),
     bounds: Rect,
     text: z.string().optional(),
-    lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number() })).optional(),
+    firstBaseline: z.number().finite().optional(),
+    lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number(), baseline: z.number().finite().optional() })).optional(),
     paint: z.number().optional(),
     children: z.array(LayoutNode),
   }),
@@ -213,6 +234,10 @@ export const STYLE_WHITELIST = [
   "font-variant-numeric",
   "font-weight",
   "grid-auto-flow",
+  "grid-column-start",
+  "grid-column-end",
+  "grid-row-start",
+  "grid-row-end",
   "grid-template-columns",
   "grid-template-rows",
   "height",
@@ -222,6 +247,9 @@ export const STYLE_WHITELIST = [
   "left",
   "letter-spacing",
   "line-height",
+  "list-style-image",
+  "list-style-position",
+  "list-style-type",
   "margin-bottom",
   "margin-left",
   "margin-right",

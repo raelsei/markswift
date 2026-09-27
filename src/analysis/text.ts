@@ -6,6 +6,7 @@ import { type SourceTextRun, type InferenceContext } from "./context.ts";
 import { makeBase } from "./node-base.ts";
 import { buildTextRuns } from "./text-run-builder.ts";
 import { finishTextNode } from "./text-node.ts";
+import { relativePosition } from "./relative-position.ts";
 
 /**
  * @param leaf  the host holds nothing but this text → its box is the CSS line box (text-node
@@ -23,5 +24,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     if (!noted[s]) notes.push(s);
     noted[s] = true;
   };
+  if (runs.some(run => run.styleOf !== host && run.styleOf.styles.position === "relative"
+    && (relativePosition(run.styleOf).offset || relativePosition(run.styleOf).reason))) {
+    note("approximated: inline relative positioning is retained in captured text runs; native per-run paint offsets are not reconstructed");
+  }
   return finishTextNode(host, runs, base, leaf, buildTextRuns(host, runs, ctx, note), note);
 }

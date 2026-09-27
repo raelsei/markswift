@@ -17,6 +17,7 @@ export interface CompileResponsiveOptions {
     mode?: EmitMode;
     bundledFamilies?: Record<string, BundledFamily>;
     fontMetrics?: Record<string, FaceMetrics>;
+    geometryInstrumentation?: boolean;
     supportFiles?: Record<string, string>;
     assets?: Record<string, Uint8Array>;
 }

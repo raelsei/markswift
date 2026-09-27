@@ -6,6 +6,7 @@ import type { EmitContext, EmitOptions, NodeMapping, SwiftOutput } from "./conte
 import { refOf } from "./nodes.ts";
 import { containerExpr } from "./layout.ts";
 import { visit } from "./traversal.ts";
+import { geometryInstrumentation } from "./geometry-observation.ts";
 export type { EmitMode, EmitOptions, SwiftOutput } from "./context.ts";
 export { SWIFT_RUNTIME } from "./runtime.ts";
 export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): SwiftOutput {
@@ -27,7 +28,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   for (const p of props) nameOf.set(p.node, p.name);
   // Control state pass: a control owns its value, so the view that holds it declares the storage.
   const control = controlMembers(screen.root, opts.mode);
-  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, renderNode: (node) => refOf(node, ctx) };
+  const geometry = opts.geometryInstrumentation ? geometryInstrumentation(screen.root, viewName) : undefined;
+  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, geometry, renderNode: (node) => refOf(node, ctx) };
 
   const w = new Writer();
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
@@ -61,7 +63,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     mapping[n.confidence]++;
     if (n.confidence !== "mapped") report.push({ id: n.id, kind: n.kind, confidence: n.confidence, notes: n.notes });
   });
-  return { view: w.toString(), shapes, report, mapping };
+  return { view: w.toString(), shapes, report, mapping, ...(geometry ? { geometry: geometry.manifest } : {}) };
 }
 
 function propName(id: string, i: number): string {

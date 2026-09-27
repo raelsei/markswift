@@ -27,6 +27,16 @@ __pycache__/
 !/tools/verify/visual-fixtures.ts
 !/tools/verify/visual-metrics.ts
 !/tools/verify/visual-checks.ts
+!/tools/verify/pixel-metrics.ts
+!/tools/verify/native-modules.ts
+!/tools/verify/native-evidence.ts
+!/tools/verify/corpus.ts
+!/tools/verify/corpus-*.ts
+!/tools/verify/geometry*.ts
+!/tools/verify/relative-height-*.ts
+!/tools/verify/text-*.ts
+!/tools/verify/corpus/
+!/tools/verify/interaction/
 !/tools/verify/fixtures/
 /tools/verify/fixtures/*
 !/tools/verify/fixtures/rich-text.html

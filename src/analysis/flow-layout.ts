@@ -4,6 +4,7 @@ import { px, round2 } from "../css/index.ts";
 import { type AnalyzedChild } from "./context.ts";
 import { floating, lineTops, renders, hangsLeading, fillsWidthInside } from "./geometry.ts";
 import { finish } from "./node-base.ts";
+import { flowFrame } from "./relative-position.ts";
 
 /**
  * A float's neighbour, split where its lines clear the float.
@@ -25,20 +26,21 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
     if (floating(it.node) || sem.kind !== "text" || sem.lineLimit !== undefined || sem.truncate) continue;
     // Only a box the float overlaps had its lines shortened instead of its width: a flex item's
     // computed `float` survives even though flex layout ignores it, and it sits clear of its row.
-    const over = items.filter((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, sem.frame.x + sem.frame.w) - Math.max(f.sem.frame.x, sem.frame.x) > 1);
+    const textFlow = flowFrame(sem);
+    const over = items.filter((f) => floating(f.node) && Math.min(flowFrame(f.sem).x + f.sem.frame.w, textFlow.x + sem.frame.w) - Math.max(flowFrame(f.sem).x, textFlow.x) > 1);
     // Where each line after the first begins, as a (run, offset into its text) pair: a run's
     // `breaks` are the boundaries inside it, and the runs are in document order.
     const bounds: Array<[number, number]> = [];
     sem.runs.forEach((r, i) => {
       for (const b of r.breaks ?? []) bounds.push([i, b]);
     });
-    const tops = lineTops(it.node);
+    const tops = lineTops(it.node).map(y => y - (sem.relativeOffset?.[1] ?? 0));
     // The division has to be the measured one: one forced break per line boundary, over as many
     // lines as the node was built with (an already split node carries fewer than it measured).
     // A boundary that fell between two runs was never recorded, and shows up as a count mismatch.
     if (!over.length || !bounds.length || tops.length !== bounds.length + 1 || tops.length !== sem.lines) continue;
     // The exclusion ends at the float's margin box; a line level with that is already clear.
-    const ends = Math.max(...over.map((f) => f.sem.frame.y + f.sem.frame.h + px(f.node.styles["margin-bottom"])));
+    const ends = Math.max(...over.map((f) => flowFrame(f.sem).y + f.sem.frame.h + px(f.node.styles["margin-bottom"])));
     const cut = tops.findIndex((y, i) => i > 0 && y >= ends - 0.5);
     if (cut < 1) continue;
     const [ri, at] = bounds[cut - 1]!;
@@ -69,8 +71,8 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
       overlays: [],
     };
     const rowItems: AnalyzedChild[] = items.map((i) => (i === it ? { node: i.node, sem: shaped } : i));
-    const bottom = Math.max(...rowItems.map((i) => i.sem.frame.y + i.sem.frame.h));
-    const rowBase: SemBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
+    const bottom = Math.max(...rowItems.map((i) => flowFrame(i.sem).y + i.sem.frame.h));
+    const rowBase: SemBase = { ...base, relativeOffset: undefined, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
     const outer = stackOf(base, "v", [{ node: it.node, sem: row }, { node: it.node, sem: cleared }], "stretch", "start");
     outer.notes.push("approximated: float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
@@ -87,7 +89,7 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
  */
 export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: CrossAlign, distribution: Distribution): StackNode {
   const [pt, , , pl] = base.padding;
-  const items = all.filter((i) => renders(i.node) && !hangsLeading(i.sem.frame, base.frame.x + pl));
+  const items = all.filter((i) => renders(i.node) && !hangsLeading(flowFrame(i.sem), base.frame.x + pl));
   // A row whose text clears the float part-way down is two blocks, not one (see `liftClearedText`).
   if (axis === "h" && items.length > 1) {
     const lifted = liftClearedText(base, items, align, distribution);
@@ -97,7 +99,8 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   for (let i = 1; i < items.length; i++) {
     const a = items[i - 1]!;
     const b = items[i]!;
-    let g = axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
+    const af = flowFrame(a.sem), bf = flowFrame(b.sem);
+    let g = axis === "h" ? bf.x - (af.x + af.w) : bf.y - (af.y + af.h);
     if (g < -0.5) {
       if (axis === "h" && a.node.styles["float"] === "left") g = Math.max(0, px(a.node.styles["margin-right"]));
       else if (axis === "h" && b.node.styles["float"] === "right") g = Math.max(0, px(b.node.styles["margin-left"]));
@@ -126,7 +129,7 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
     const band = round2(base.frame.w - base.padding[1] - pl - taken);
     for (const it of items) {
       if (floating(it.node) || it.sem.width.kind !== "fill" || band <= 0 || band >= it.sem.frame.w) continue;
-      const shaped = items.some((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, it.sem.frame.x + it.sem.frame.w) - Math.max(f.sem.frame.x, it.sem.frame.x) > 1);
+      const shaped = items.some((f) => floating(f.node) && Math.min(flowFrame(f.sem).x + f.sem.frame.w, flowFrame(it.sem).x + it.sem.frame.w) - Math.max(flowFrame(f.sem).x, flowFrame(it.sem).x) > 1);
       if (shaped) it.sem.frame = { ...it.sem.frame, w: band };
     }
   }
@@ -139,7 +142,7 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   let leadInset = 0;
   if (items[0]) {
     // Negative = the child hangs outside the content box (a negative margin).
-    const f = items[0].sem.frame;
+    const f = flowFrame(items[0].sem);
     leadInset = round2(axis === "h" ? f.x - (base.frame.x + pl) : f.y - (base.frame.y + pt));
     if (Math.abs(leadInset) < 0.5) leadInset = 0;
   }
@@ -161,11 +164,11 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
   const lines: AnalyzedChild[][] = [];
   let top = 0;
   let bottom = 0;
-  for (const it of all.filter((i) => renders(i.node)).sort((a, b) => a.sem.frame.y - b.sem.frame.y)) {
-    const f = it.sem.frame;
+  for (const it of all.filter((i) => renders(i.node)).sort((a, b) => flowFrame(a.sem).y - flowFrame(b.sem).y)) {
+    const f = flowFrame(it.sem);
     const line = lines[lines.length - 1];
     const overlap = Math.min(bottom, f.y + f.h) - Math.max(top, f.y);
-    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
+    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= flowFrame(o.sem).x + o.sem.frame.w - 1 || f.x + f.w <= flowFrame(o.sem).x + 1);
     if (line && clear && overlap > 1 && overlap >= Math.min(f.h, bottom - top) / 2) {
       line.push(it);
       bottom = Math.max(bottom, f.y + f.h);
@@ -175,6 +178,6 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
       bottom = f.y + f.h;
     }
   }
-  for (const l of lines) l.sort((a, b) => a.sem.frame.x - b.sem.frame.x);
+  for (const l of lines) l.sort((a, b) => flowFrame(a.sem).x - flowFrame(b.sem).x);
   return lines;
 }

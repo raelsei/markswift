@@ -10,6 +10,7 @@ import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
 import { equalCalculatedFlexWidth, responsiveFraction } from "./responsive-width.ts";
 import { hasEqualFixedTableWidth } from "./table-width.ts";
+import { flowBounds } from "./relative-position.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -55,9 +56,9 @@ function contentExtent(n: LayoutNode, margins: boolean): Rect | undefined {
     if (pos === "absolute" || pos === "fixed") continue;
     if (c.tag !== "#text") {
       if (c.bounds.w === 0 && c.bounds.h === 0) continue;
-      if (!renders(c) || hangsLeading(c.bounds, contentLeft)) continue;
+      if (!renders(c) || hangsLeading(flowBounds(c), contentLeft)) continue;
     }
-    let box = c.bounds;
+    let box = flowBounds(c);
     if (margins) {
       const [mt, mr, mb, ml] = EDGES.map((e) => px(c.styles[`margin-${e}`]));
       box = { x: box.x - ml!, y: box.y - mt!, w: box.w + ml! + mr!, h: box.h + mt! + mb! };

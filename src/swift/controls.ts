@@ -47,6 +47,17 @@ const UA: Record<"light" | "dark", { accent: string; track: string; edge: string
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
+  // Preserve HTML identity for assistive technology and native UI automation. List rows remain
+  // separate accessible children; their ordinal identifiers are emitted by the list runtime.
+  if (n.selectList || n.disclosureLayout) out.push(".accessibilityElement(children: .contain)");
+  out.push(`.accessibilityIdentifier(${str(n.id)})`);
+  if (n.control === "toggle") {
+    const selected = deps.mode === "app" ? deps.stateOf.get(n) : undefined;
+    out.push(`.accessibilityValue(${selected ?? (!!n.checked ? "true" : "false")} ? "selected" : "unselected")`);
+  } else if (n.control === "radio") {
+    const selected = deps.mode === "app" ? deps.radioBindingOf?.get(n) : undefined;
+    out.push(`.accessibilityValue(${selected ? `(${selected}).wrappedValue` : (!!n.checked ? "true" : "false")} ? "selected" : "unselected")`);
+  }
   if (n.font) {
     out.push(`.font(${fontExpr(n.font, deps)})`);
     // Static fields, including readonly app fields, paint the prompt themselves. Editable app
@@ -163,6 +174,13 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     }
     case "disclosure":
+      if (n.disclosureLayout) return [
+        `MarkswiftDisclosure(isExpanded: ${binding}, gap: ${num(n.disclosureLayout.gap)}, labelInset: ${num(n.disclosureLayout.labelInset)}, contentInset: ${num(n.disclosureLayout.contentInset)}, contentAvailable: ${n.disclosureLayout.contentAvailable}, summaryIdentifier: ${str(n.label?.id ?? `${n.id}/summary`)}, contentIdentifier: ${str(`${n.id}/content`)}) {`,
+        ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
+        "} label: {",
+        ...indent(n.label ? deps.child(n.label) : ["EmptyView()"], 1),
+        "}",
+      ];
       return [
         `DisclosureGroup(isExpanded: ${binding}) {`,
         ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),

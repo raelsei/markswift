@@ -34,6 +34,12 @@
     "tools/verify/visual-native.ts",
     "tools/verify/visual-fixtures.ts",
     "tools/verify/visual-metrics.ts",
-    "tools/verify/visual-checks.ts"
+    "tools/verify/visual-checks.ts",
+    "tools/verify/corpus.ts",
+    "tools/verify/corpus-interactions.ts",
+    "tools/verify/corpus-frozen.ts",
+    "tools/verify/geometry-proof.ts",
+    "tools/verify/relative-height-proof.ts",
+    "tools/verify/text-native-proof.ts"
   ]
 }

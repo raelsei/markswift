@@ -1,7 +1,7 @@
 /** Finish the text box, measured line placement, overlays and overflow policy. */
 import { type LayoutNode } from "../model/layout.ts";
 import { type TextNode, type SemBase, type SemNode } from "../model/semantic.ts";
-import { round2 } from "../css/index.ts";
+import { parseDeclared, round2 } from "../css/index.ts";
 import { type SourceTextRun } from "./context.ts";
 import { finish } from "./node-base.ts";
 import { collapseOf, noWrap } from "./text-runs.ts";
@@ -9,6 +9,7 @@ import { trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlin
 import { styleOf } from "./style.ts";
 import { inlinePresentation } from "./inline-effects.ts";
 import { type BuiltTextRuns } from "./text-run-builder.ts";
+import { measuredTextLineBox } from "./text-line-box.ts";
 
 export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: SemBase, leaf: boolean, constructed: BuiltTextRuns, note: (s: string) => void): TextNode {
   const { out, built, painted, union } = constructed;
@@ -21,6 +22,10 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
   const side = ta === "start" ? (dir === "rtl" ? "right" : "left") : ta === "end" ? (dir === "rtl" ? "left" : "right") : ta;
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
+  const declaredHeight = host.preferredSize?.height ?? parseDeclared(host.attrs.style).height;
+  const independentHeight = base.height.kind === "fixed" && declaredHeight !== undefined && declaredHeight !== "auto";
+  const actualPadding = [...base.padding] as SemBase["padding"];
+  let topPackedSurplus = false;
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
   let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
   if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
@@ -33,6 +38,7 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
     const ai = /flex|-webkit-box/.test(host.styles["display"] ?? "") ? host.styles["align-items"] : undefined;
     if (surplus > 2 && ai !== "center") {
       base.padding = ai === "flex-end" || ai === "end" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+      topPackedSurplus = ai !== "flex-end" && ai !== "end";
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -42,7 +48,7 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
   // to text: at a larger Dynamic Type size the glyphs grow and the frame does not. Hugging costs
   // nothing in fidelity, where the emitter pins the same height on the `Text` itself. A box the
   // browser clipped (`.sr-only`, `max-height`) is *shorter* than its text and keeps its frame.
-  if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
+  if (leaf && !independentHeight && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
     base.height = { kind: "hug" };
   }
   markBaselineShifts(built, host, note);
@@ -100,10 +106,21 @@ export function finishTextNode(host: LayoutNode, runs: SourceTextRun[], base: Se
     node.lineLimit = 1 + out.reduce((n, r) => n + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
   }
   if (host.styles["text-overflow"] === "ellipsis") node.truncate = true;
+  if ([host.styles, ...runs.map(run => run.styleOf.styles)].some(styles =>
+    ["break-all", "break-word"].includes(styles["word-break"] ?? "")
+    || ["anywhere", "break-word"].includes(styles["overflow-wrap"] ?? ""))) node.wrapAnywhere = true;
   // Only text needs the base writing direction: CoreText resolves neutral characters against it
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
   // so overriding the direction on a stack would mirror it a second time.
   if (dir === "rtl") node.layoutDirection = "rtl";
+  const lineBox = measuredTextLineBox(host, node, built, runs, note);
+  if (lineBox) {
+    node.lineBox = lineBox;
+    // A measured natural line box already places its first baseline at the CSS top.
+    // The authored outer height owns unused space; captured bottom slack must not grow
+    // with another wrapped line. Keep real padding/borders and the independent height.
+    if (independentHeight && topPackedSurplus) node.padding = actualPadding;
+  }
   if (ta === "justify") note("approximated: text-align: justify → ragged right (SwiftUI Text cannot justify)");
   noteUnsupportedTextFlow(host, runs, note);
   const wm = host.styles["writing-mode"];

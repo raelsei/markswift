@@ -17,6 +17,8 @@ import { inlineCapturedImages } from "./images.ts";
 import { generatedContentWarnings } from "./generated-content.ts";
 import { readKeyframeNames, readTransitionProperties, restoreTransitionProperties } from "./motion.ts";
 import { mediaWarning, readMediaConditions } from "./media.ts";
+import { readTextMetrics, attachTextMetrics } from "./text-metrics.ts";
+import { readMarkerLayouts, attachMarkerLayouts } from "./list-markers.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-h2s-root-capture";
@@ -139,6 +141,8 @@ export class BrowserCapture {
       );
       const cdp = await this.context.newCDPSession(page);
       const preferredSizes = await readPreferredSizes(page, spec.root);
+      const textMetrics = await readTextMetrics(page, spec.root);
+      const markerLayouts = await readMarkerLayouts(page, spec.root, cdp);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       const formSnapshot = await readFormSnapshot(page);
       // A: as painted (computed transform matrices, paint order).
@@ -161,6 +165,8 @@ export class BrowserCapture {
       restoreTransitionProperties(rootRaw, transitionProperties);
       errors.push(...generatedContentWarnings(rootRaw));
       attachPreferredSizes(rootRaw, preferredSizes);
+      attachTextMetrics(rootRaw, textMetrics);
+      attachMarkerLayouts(rootRaw, markerLayouts);
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
       if (!root) throw new Error(`capture root ${spec.root} has no layout`);

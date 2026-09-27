@@ -65,8 +65,8 @@ nonisolated enum MarkswiftTableAllocation {
 }
 `;
 
-export const TABLE_RUNTIME = `${TABLE_ALLOCATION_RUNTIME}
-/// Declared fixed columns, section paint and spanning cells share one native proposal.
+export const TABLE_RUNTIME = `${TABLE_ALLOCATION_RUNTIME}${TABLE_INTRINSIC_FONT_RUNTIME}${TABLE_INTRINSIC_RUNTIME}
+/// Declared or intrinsic columns, section paint and cells share one native proposal.
 struct MarkswiftTableLayout: Layout {
     struct Placement {
         var kind: Int // 0 cell, 1 row/section paint, 2 body paint, 3 caption
@@ -82,6 +82,7 @@ struct MarkswiftTableLayout: Layout {
     var captionBottom: Bool = false
     var captionMargins: [CGFloat] = [0, 0]
     var fixedRows: Bool = false
+    var intrinsic: [MarkswiftTableIntrinsic.Cell] = []
 
     private struct Geometry {
         var width: CGFloat
@@ -121,9 +122,12 @@ struct MarkswiftTableLayout: Layout {
 
     private func geometry(width: CGFloat, subviews: Subviews) -> Geometry {
         let overhead = insets.leading + insets.trailing + CGFloat(max(0, columns.count - 1)) * columnGap
-        let width = max(width, MarkswiftTableAllocation.minimum(columns) + overhead)
+        let maximums = intrinsic.isEmpty ? [] : MarkswiftTableIntrinsic.maximums(intrinsic, count: columns.count)
+        let minimum = maximums.isEmpty ? MarkswiftTableAllocation.minimum(columns) : maximums.reduce(0, +)
+        let width = max(width, minimum + overhead)
         let available = max(0, width - overhead)
-        let widths = MarkswiftTableAllocation.columns(columns, available: available)
+        let widths = maximums.isEmpty ? MarkswiftTableAllocation.columns(columns, available: available)
+            : MarkswiftTableIntrinsic.columns(maximums, available: available)
         var captionHeight: CGFloat = 0
         var cells: [MarkswiftTableAllocation.Cell] = []
         var measured: [CGFloat] = []
@@ -148,3 +152,4 @@ struct MarkswiftTableLayout: Layout {
     }
 }
 `;
+import { TABLE_INTRINSIC_FONT_RUNTIME, TABLE_INTRINSIC_RUNTIME } from "./table-intrinsic-runtime.ts";

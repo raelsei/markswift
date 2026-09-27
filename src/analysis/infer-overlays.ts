@@ -4,6 +4,7 @@ import { round2 } from "../css/index.ts";
 import type { InferenceContext } from "./context.ts";
 import { isInlineText } from "./text-runs.ts";
 import { insetsOf, renders, hangsLeading } from "./geometry.ts";
+import { flowBounds } from "./relative-position.ts";
 
 export function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNode | undefined, ctx: InferenceContext, build: (n: LayoutNode, ctx: InferenceContext) => SemNode): Overlay[] {
   const out: Overlay[] = [];
@@ -31,13 +32,15 @@ export function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: La
   // (unlike a positioned overlay, whose box the author pinned).
   const contentLeft = host.bounds.x + insetsOf(host.styles)[3];
   for (const c of host.children) {
-    if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
+    if (c.tag === "#text" || c.tag === "br" || !renders(c) || (isInlineText(c) && c.tag !== "::marker")) continue;
     const pos = c.styles["position"];
-    if (pos === "absolute" || pos === "fixed" || !hangsLeading(c.bounds, contentLeft)) continue;
+    if (pos === "absolute" || pos === "fixed" || !hangsLeading(flowBounds(c), contentLeft)) continue;
+    const flow = flowBounds(c);
     out.push({
       node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host }),
       layer: "overlay",
-      offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
+      // The node modifier applies its own relative paint shift after this flow anchor.
+      offset: [round2(flow.x - host.bounds.x), round2(flow.y - host.bounds.y)],
       covers: false,
     });
   }

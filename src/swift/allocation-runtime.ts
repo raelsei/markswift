@@ -7,6 +7,7 @@ nonisolated struct MarkswiftAllocationTrack {
     var min: CGFloat
     var max: CGFloat? = nil
     var inset: CGFloat = 0
+    var basisFraction: CGFloat? = nil
 }
 
 nonisolated enum MarkswiftAllocation {
@@ -14,7 +15,14 @@ nonisolated enum MarkswiftAllocation {
         Swift.max(track.min, Swift.min(track.max ?? .infinity, value))
     }
 
-    static func flex(_ available: CGFloat, _ tracks: [MarkswiftAllocationTrack]) -> [CGFloat] {
+    static func flex(_ available: CGFloat, _ inputTracks: [MarkswiftAllocationTrack], basisWidth: CGFloat? = nil) -> [CGFloat] {
+        let tracks = inputTracks.map { track in
+            var resolved = track
+            if let fraction = track.basisFraction {
+                resolved.basis = Swift.max(track.inset, track.basis + fraction * (basisWidth ?? available))
+            }
+            return resolved
+        }
         let growing = tracks.reduce(CGFloat(0)) { $0 + clamp($1.basis, $1) } < available
         var target = tracks.map { $0.basis }
         var frozen = tracks.map { track in
@@ -69,6 +77,12 @@ nonisolated enum MarkswiftAllocation {
 `;
 
 export const ALLOCATION_RUNTIME = ALLOCATION_CORE + `
+nonisolated struct MarkswiftGridPlacement {
+    var row: Int
+    var column: Int
+    var columnSpan: Int
+}
+
 /// Explicit flex bases/factors or fixed/fr grid tracks; row heights are measured at each proposal.
 struct MarkswiftAllocatedLayout: Layout {
     var tracks: [MarkswiftAllocationTrack]
@@ -77,10 +91,16 @@ struct MarkswiftAllocatedLayout: Layout {
     var grid: Bool = false
     var vertical: VerticalAlignment = .top
     var stretch: Bool = false
+    var placements: [MarkswiftGridPlacement]? = nil
+    var rowSizes: [CGFloat?]? = nil
+    var intrinsicHeight: Bool = false
+    var minimumHeight: CGFloat = 0
+    var maximumHeight: CGFloat? = nil
     var capturedWidth: CGFloat
 
     private struct Item {
         var index: Int
+        var x: CGFloat
         var width: CGFloat
         var height: CGFloat
     }
@@ -93,7 +113,10 @@ struct MarkswiftAllocatedLayout: Layout {
         let width = finite(proposal.width) ?? capturedWidth
         let measured = rows(width: width, subviews: subviews)
         let naturalHeight = measured.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(Swift.max(0, measured.count - 1)) * rowGap
-        return CGSize(width: width, height: grid ? naturalHeight : finite(proposal.height) ?? naturalHeight)
+        // Auto-height flex rows use their children's natural cross size, even when a VStack
+        // offers spare height. Resolve their CSS limits here so stretch sees the used height.
+        let intrinsic = Swift.max(minimumHeight, Swift.min(maximumHeight ?? .infinity, naturalHeight))
+        return CGSize(width: width, height: grid ? naturalHeight : intrinsicHeight ? intrinsic : finite(proposal.height) ?? naturalHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -101,14 +124,12 @@ struct MarkswiftAllocatedLayout: Layout {
         var y = bounds.minY
         for row in measured {
             let rowHeight = grid ? row.height : bounds.height
-            var x = bounds.minX
             for item in row.items {
                 let height = stretch ? rowHeight : item.height
                 let slack = rowHeight - height
                 let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
-                subviews[item.index].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
+                subviews[item.index].place(at: CGPoint(x: bounds.minX + item.x, y: y + dy), anchor: .topLeading,
                                           proposal: ProposedViewSize(width: item.width, height: height))
-                x += item.width + columnGap
             }
             y += rowHeight + rowGap
         }
@@ -122,7 +143,28 @@ struct MarkswiftAllocatedLayout: Layout {
     private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
         guard !tracks.isEmpty else { return [] }
         let available = width - CGFloat(Swift.max(0, tracks.count - 1)) * columnGap
-        let widths = grid ? MarkswiftAllocation.grid(available, tracks) : MarkswiftAllocation.flex(available, tracks)
+        let widths = grid ? MarkswiftAllocation.grid(available, tracks) : MarkswiftAllocation.flex(available, tracks, basisWidth: width)
+        if grid, let placements {
+            let declaredRows = rowSizes ?? []
+            let count = Swift.max(declaredRows.count, placements.map { $0.row + 1 }.max() ?? 0)
+            var result = (0..<count).map { row in Row(height: row < declaredRows.count ? declaredRows[row] ?? 0 : 0) }
+            var starts: [CGFloat] = []
+            var x: CGFloat = 0
+            for width in widths { starts.append(x); x += width + columnGap }
+            for (index, subview) in subviews.enumerated() {
+                guard index < placements.count else { continue }
+                let p = placements[index]
+                guard p.row >= 0, p.row < result.count, p.column >= 0, p.columnSpan > 0,
+                      p.column + p.columnSpan <= widths.count else { continue }
+                let childWidth = widths[p.column..<(p.column + p.columnSpan)].reduce(0, +) + CGFloat(p.columnSpan - 1) * columnGap
+                let fixedHeight = p.row < declaredRows.count ? declaredRows[p.row] : nil
+                let size = subview.sizeThatFits(ProposedViewSize(width: childWidth, height: fixedHeight))
+                let height = finite(size.height) ?? 0
+                result[p.row].items.append(Item(index: index, x: starts[p.column], width: childWidth, height: height))
+                if fixedHeight == nil { result[p.row].height = Swift.max(result[p.row].height, height) }
+            }
+            return result
+        }
         var result: [Row] = []
         var row = Row()
         for (index, subview) in subviews.enumerated() {
@@ -132,7 +174,8 @@ struct MarkswiftAllocatedLayout: Layout {
             let childWidth = widths[trackIndex]
             let size = subview.sizeThatFits(ProposedViewSize(width: childWidth, height: nil))
             let height = finite(size.height) ?? 0
-            row.items.append(Item(index: index, width: childWidth, height: height))
+            let x = row.items.reduce(CGFloat(0)) { $0 + $1.width + columnGap }
+            row.items.append(Item(index: index, x: x, width: childWidth, height: height))
             row.height = Swift.max(row.height, height)
         }
         if !row.items.isEmpty { result.append(row) }

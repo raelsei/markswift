@@ -8,6 +8,8 @@ export interface CompileOptions {
     mode?: EmitMode;
     bundledFamilies?: Record<string, BundledFamily>;
     fontMetrics?: Record<string, FaceMetrics>;
+    /** Verification-only passive SwiftUI frame observations. Omitted by default. */
+    geometryInstrumentation?: boolean;
 }
 export interface CompileResult {
     name: string;
@@ -17,11 +19,13 @@ export interface CompileResult {
     diagnostics: SwiftOutput["report"];
     /** Emitted semantic nodes by mapping confidence; does not measure visual fidelity. */
     mapping: SwiftOutput["mapping"];
+    geometry?: SwiftOutput["geometry"];
 }
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
 export declare function compileLayout(layout: LayoutDoc, options?: CompileOptions): CompileResult;
 export type { LayoutDoc } from "../model/layout.ts";
 export type { EmitMode } from "../swift/emit.ts";
+export type { GeometryManifest, GeometryManifestNode } from "../swift/geometry-observation.ts";
 export { compileLayouts } from "./batch.ts";
 export type { CompileLayoutInput, CompileBatchResult } from "./batch.ts";
 export { compileResponsiveLayouts } from "./responsive.ts";

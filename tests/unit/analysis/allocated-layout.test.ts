@@ -50,6 +50,25 @@ test("fixed and unequal fractional grid columns retain track intent", () => {
   expect(node.children.map(child => child.width.kind)).toEqual(["fill", "fill", "fill"]);
 });
 
+test("admitted auto-height stretch uses zero cross minimum and preserves authored minima", () => {
+  const input = capture("flex", [173, 173], { "align-items": "stretch" }, [
+    { "flex-grow": "1", "flex-shrink": "1", "flex-basis": "0%" },
+    { "flex-grow": "1", "flex-shrink": "1", "flex-basis": "0%", "min-height": "30px" },
+  ]);
+  for (const child of input.root.children) child.preferredSize!.height = "auto";
+  const node = inferScreen(input, "Stretch").root as StackNode;
+  expect(node.allocation).toBeDefined();
+  expect(node.children.map(child => [child.height.kind, child.minHeight])).toEqual([["fill", 0], ["fill", 30]]);
+  input.root.styles["align-items"] = "flex-start";
+  const start = inferScreen(input, "Start").root as StackNode;
+  expect(start.children.map(child => [child.height.kind, child.minHeight])).toEqual([["hug", undefined], ["hug", 30]]);
+  input.root.styles["align-items"] = "stretch";
+  input.root.children[0]!.preferredSize!.height = "40px";
+  const fixed = inferScreen(input, "Fixed").root as StackNode;
+  expect(fixed.children[0]!.height.kind).toBe("fixed");
+  expect(fixed.children[0]!.minHeight).toBeUndefined();
+});
+
 test("unproved automatic minimum and percentage flex bases retain captured allocation", () => {
   for (const constraint of [{ "min-width": "auto" }, { "flex-basis": "30%" }] as Record<string, string>[]) {
     const input = capture("flex", [115.3333, 230.6667], {}, [
@@ -82,6 +101,7 @@ test("native intrinsic centering stays bounded to one unconstrained auto-basis t
     input => { input.root.children[0]!.styles["min-width"] = "10px"; },
     input => { input.root.children[0]!.styles["max-width"] = "200px"; },
     input => { input.root.children[0]!.preferredSize!.hasAutoMargins = true; },
+    input => { input.root.children[0]!.preferredSize!.hasRelativePadding = true; },
     input => { input.root.styles["column-gap"] = "10%"; },
     input => { input.root.children[0]!.styles.position = "relative"; input.root.children[0]!.styles.left = "1px"; },
     input => { input.root.children.push(structuredClone(input.root.children[0]!)); },

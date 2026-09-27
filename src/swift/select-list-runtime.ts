@@ -47,6 +47,7 @@ nonisolated func markswiftSelectRowPaint(_ paint: MarkswiftSelectRowAppearance, 
 }
 
 struct MarkswiftSelectionList: SwiftUI.View {
+    var identifier = ""
     let choices: [MarkswiftSelectChoice]
     let selected: Set<Int>
     var appearance: [Int: MarkswiftSelectRowAppearance] = [:]
@@ -68,7 +69,9 @@ struct MarkswiftSelectionList: SwiftUI.View {
                             .opacity(choice.groupInvisible ? 0 : 1)
                             .accessibilityHidden(choice.groupInvisible)
                     }
-                    if interactive && isEnabled && !disabled && !choice.disabled && !choice.invisible {
+                    if choice.invisible {
+                        invisibleRow(choice)
+                    } else if interactive && isEnabled && !disabled && !choice.disabled {
                         SwiftUI.Button {
                             guard isEnabled && !disabled && !choice.disabled && !choice.hidden && !choice.invisible else { return }
                             activate(choice)
@@ -77,16 +80,32 @@ struct MarkswiftSelectionList: SwiftUI.View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                        .accessibilityIdentifier(identifier + "/option/" + String(choice.id))
+                        .accessibilityValue(selected.contains(choice.id) ? "selected" : "unselected")
                     } else {
                         row(choice)
-                            .opacity(choice.invisible ? 0 : 1)
-                            .accessibilityHidden(choice.invisible)
                             .accessibilityAddTraits(selected.contains(choice.id) ? .isSelected : [])
+                            .accessibilityIdentifier(identifier + "/option/" + String(choice.id))
+                            .accessibilityValue(selected.contains(choice.id) ? "selected" : "unselected")
                     }
                 }
             }
         }
         .clipped()
+    }
+
+    @SwiftUI.ViewBuilder
+    private func invisibleRow(_ choice: MarkswiftSelectChoice) -> some SwiftUI.View {
+        if let paint = appearance[choice.id] {
+            SwiftUI.Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: paint.height)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        } else {
+            // Legacy rows still reserve their native intrinsic height, without AX metadata.
+            row(choice).hidden().accessibilityHidden(true).allowsHitTesting(false)
+        }
     }
 
     @SwiftUI.ViewBuilder

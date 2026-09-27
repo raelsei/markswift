@@ -3,7 +3,10 @@ import type { AllocationTrack } from "../model/allocation.ts";
 const clamp = (value: number, track: AllocationTrack) => Math.max(track.min, Math.min(track.max ?? Infinity, value));
 
 /** CSS flex freeze/redistribute for explicit bases and numeric constraints. */
-export function flexAllocatedWidths(available: number, tracks: AllocationTrack[]): number[] {
+export function flexAllocatedWidths(available: number, tracks: AllocationTrack[], basisWidth = available): number[] {
+  // The browser floors a resolved border-box percentage basis at its padding and border.
+  tracks = tracks.map(track => track.basisFraction === undefined ? track
+    : { ...track, basis: Math.max(track.inset ?? 0, track.basis + track.basisFraction * basisWidth) });
   const growing = tracks.reduce((sum, track) => sum + clamp(track.basis, track), 0) < available;
   const target = tracks.map(track => track.basis);
   const frozen = tracks.map(track => (growing ? track.grow : track.shrink) === 0

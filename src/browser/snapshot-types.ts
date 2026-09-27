@@ -54,6 +54,7 @@ export interface Raw {
   attrs: Record<string, string>;
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
+  markerLayout?: LayoutNode["markerLayout"];
   formOwner?: LayoutNode["formOwner"];
   selectedIndex?: LayoutNode["selectedIndex"];
   option?: LayoutNode["option"];
@@ -68,8 +69,9 @@ export interface Raw {
   /** Pseudo-elements only: border box derived from `offset` (see `pseudoBox`). */
   box?: Rect;
   /** Text nodes: measured line boxes (`textBoxes`), in layout order; `start`/`length` index `text`. */
-  lines?: Array<{ bounds: Rect; start: number; length: number }>;
+  lines?: Array<{ bounds: Rect; start: number; length: number; baseline?: number }>;
   text?: string;
+  firstBaseline?: number;
   paint?: number;
   parent?: Raw;
   children: Raw[];

@@ -8,6 +8,7 @@ import { linesOf } from "./flow-layout.ts";
 import { measuredLayoutOf } from "./measured-layout.ts";
 import { equalWrappingColumns } from "./wrapping-tracks.ts";
 import { finish } from "./node-base.ts";
+import { flowFrame, relativeFallback } from "./relative-position.ts";
 
 function gap(value: string | undefined): number | undefined {
   if (!value || value === "normal") return 0;
@@ -24,6 +25,7 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
   if (columnGap === undefined || rowGap === undefined) return "relative or complex row/column gaps";
 
   for (const item of items) {
+    if (relativeFallback(item.sem)) return "unproved relative child position";
     const s = item.node.styles;
     // A capture can fit perfectly while a narrower native proposal activates CSS shrinking.
     if (!columns && (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0)) return "flex grow/shrink allocation";
@@ -44,7 +46,7 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
   }
 
   const lines = linesOf(items);
-  const rows = lines.map(line => line.map(item => item.sem.frame).reduce(unionRect));
+  const rows = lines.map(line => line.map(item => flowFrame(item.sem)).reduce(unionRect));
   const contentWidth = Math.max(0, base.frame.w - base.padding[1] - base.padding[3]);
   const nativeLines: AnalyzedChild[][] = [];
   let nativeLine: AnalyzedChild[] = [], usedWidth = 0;
@@ -76,7 +78,7 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
     let x = base.frame.x + base.padding[3] + (distribution === "center" ? (contentWidth - width) / 2 : distribution === "end" ? contentWidth - width : 0);
     for (const item of line) {
       const top = y + (align === "center" ? (row.h - item.sem.frame.h) / 2 : align === "end" ? row.h - item.sem.frame.h : 0);
-      if (Math.abs(item.sem.frame.x - x) > 1 || Math.abs(item.sem.frame.y - top) > 1) return "ambiguous child alignment";
+      if (Math.abs(flowFrame(item.sem).x - x) > 1 || Math.abs(flowFrame(item.sem).y - top) > 1) return "ambiguous child alignment";
       x += item.sem.frame.w + columnGap;
     }
     y += row.h + rowGap;

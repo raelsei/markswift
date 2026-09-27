@@ -7,8 +7,10 @@
 import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
 import type { Rect } from "./layout.ts";
 import type { AllocationTrack } from "./allocation.ts";
+import type { GridPlacement } from "./grid.ts";
 import type { TableLayout } from "./table.ts";
 export type { AllocationTrack } from "./allocation.ts";
+export type { GridPlacement } from "./grid.ts";
 export type { TableLayout } from "./table.ts";
 export type Confidence = "mapped" | "approximated" | "unmapped";
 export type Size = {
@@ -288,6 +290,8 @@ export interface SemBase extends SizeConstraints {
     /** Template path id; stable across regenerations. */
     id: string;
     frame: Rect;
+    /** Relative positioning moves paint only; frame remains the captured painted border. */
+    relativeOffset?: [number, number];
     width: Size;
     height: Size;
     /**
@@ -342,7 +346,19 @@ export interface GridNode extends SemBase {
     measured?: MeasuredLayout;
     /** Authored fixed/fractional columns, retained before Chrome resolves them to pixels. */
     tracks?: AllocationTrack[];
+    /** Numeric lines and column spans, one per child in source order. */
+    placements?: GridPlacement[];
+    /** Declared pixel rows or auto rows (null), including empty rows. */
+    rowSizes?: Array<number | null>;
     children: SemNode[];
+}
+/** Browser baseline geometry relative to the text content origin, excluding padding. */
+export interface TextLineBox {
+    firstBaseline: number;
+    baselineToBottom: number;
+    baselineStep: number;
+    /** Captured baselines validate fidelity only; app line count comes from native layout. */
+    baselines: number[];
 }
 export interface TextNode extends SemBase {
     kind: "text";
@@ -358,11 +374,19 @@ export interface TextNode extends SemBase {
      * re-flowing. Unset means normal wrapping.
      */
     noWrap?: true;
+    /** Authored character-breaking CSS must retain native Text rather than whole-word flow. */
+    wrapAnywhere?: true;
     /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
     lines: number;
+    lineBox?: TextLineBox;
 }
 export interface SvgNode extends SemBase {
     kind: "svg";
+    /** Proved UA first-summary triangle; only a surrounding disclosure supplies live state. */
+    disclosureSymbol?: {
+        capturedExpanded: boolean;
+        rect: Rect;
+    };
     viewBox: [number, number, number, number];
     /** Standalone SVG resource viewport; may differ from viewBox (for an <img> data URL). */
     intrinsicSize?: [number, number];
@@ -506,6 +530,13 @@ export interface ControlNode extends SemBase {
     action?: string;
     /** `<details open>`: initial disclosure state. */
     expanded?: boolean;
+    /** Captured summary/content separation; unavailable closed descendants remain unavailable. */
+    disclosureLayout?: {
+        gap: number;
+        labelInset: number;
+        contentInset: number;
+        contentAvailable: boolean;
+    };
     /**
      * `<input type=file>`: the element is a button that presents the system file picker, so the
      * presence of this field — not a control kind of its own — is what attaches `.fileImporter`.

@@ -2,6 +2,9 @@ import type { SemNode, StackNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { indent, num, str } from "./format.ts";
 import { modifiers } from "./modifiers.ts";
+import { tableIntrinsicExpr } from "./table-intrinsic.ts";
+import { geometryAlias } from "./geometry-observation.ts";
+import { tableTextContent } from "./table-content.ts";
 
 export function tableExpr(node: StackNode, ctx: EmitContext): string[] {
   const table = node.table!;
@@ -16,20 +19,24 @@ export function tableExpr(node: StackNode, ctx: EmitContext): string[] {
     ...placements.map(placement => `    ${placement},`),
     `], rowMinimums: [${table.rowMinimums.map(num).join(", ")}], columnGap: ${num(table.spacing[0])}, rowGap: ${num(table.spacing[1])},`,
     `    insets: EdgeInsets(top: ${num(top)}, leading: ${num(left)}, bottom: ${num(bottom)}, trailing: ${num(right)}), capturedWidth: ${num(node.frame.w)},`,
-    `    captionBottom: ${table.captionSide === "bottom"}, captionMargins: [${(table.captionMargins ?? [0, 0]).map(num).join(", ")}], fixedRows: false) {`];
+    `    captionBottom: ${table.captionSide === "bottom"}, captionMargins: [${(table.captionMargins ?? [0, 0]).map(num).join(", ")}], fixedRows: false${table.mode === "auto" ? `, intrinsic: [${table.intrinsic!.map(tableIntrinsicExpr).join(", ")}]` : ""}) {`];
   node.children.forEach((child, index) => {
     const placement = table.placements[index]!;
     let lines: string[];
     if (placement.kind === "cell") {
       // Place the padded content first, then paint the full allocated cell rectangle.
       const content: SemNode = { ...child, height: { kind: "hug" }, style: { fills: [], shadows: [] }, overlays: [] };
+      if (content.kind === "text" && placement.contentFrame) tableTextContent(content, placement.contentFrame);
+      ctx.geometry?.suppressed.add(content);
       lines = ctx.renderNode(content).split("\n");
       const horizontal = child.kind === "text" ? child.align : "leading";
       const vertical = placement.alignment ?? "center";
       const alignment = vertical === "center" ? horizontal === "center" ? ".center" : horizontal === "trailing" ? ".trailing" : ".leading"
         : `.${vertical}${horizontal === "center" ? "" : horizontal === "trailing" ? "Trailing" : "Leading"}`;
       lines.push(`.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: ${alignment})`);
-      lines.push(...modifiers({ ...child, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0] }, ctx));
+      const cellPaint: SemNode = { ...child, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0] };
+      geometryAlias(cellPaint, child, ctx.geometry);
+      lines.push(...modifiers(cellPaint, ctx));
       if (ctx.mode === "app") {
         lines.push(`.accessibilityElement(children: .${interactive(child) ? "contain" : "combine"})`);
         const section = placement.section === "thead" ? "Header section, " : placement.section === "tfoot" ? "Footer section, " : "";

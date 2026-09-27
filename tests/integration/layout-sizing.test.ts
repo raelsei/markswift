@@ -150,7 +150,7 @@ for (const width of [320, 390, 768]) {
         expect(result.diagnostics.find(item => item.id === `#${id}`)).toBeUndefined();
       }
       // A stylesheet's definite height establishes the proposal for equal native fill children.
-      expect(measured("equal-column").preferredSize).toEqual({ width: "auto", height: "120px" });
+      expect(measured("equal-column").preferredSize).toMatchObject({ width: "auto", height: "120px" });
       expect(node("equal-column").height).toEqual({ kind: "fixed", px: 120 });
       for (const id of ["equal-column-a", "equal-column-b"]) {
         expect(measured(id).bounds.h).toBe(60);
@@ -161,7 +161,7 @@ for (const width of [320, 390, 768]) {
 
       // Source syntax and selector naming must not alter browser-resolved size intent.
       for (const id of ["source-inline", "source-sheet", "source-utility"]) {
-        expect(measured(id).preferredSize).toEqual({ width: "120px", height: "40px" });
+        expect(measured(id).preferredSize).toMatchObject({ width: "120px", height: "40px" });
         expect(measured(id).bounds.w).toBe(120);
         expect(measured(id).bounds.h).toBe(40);
         expect(node(id).width).toEqual({ kind: "fixed", px: 120 });
@@ -172,7 +172,7 @@ for (const width of [320, 390, 768]) {
       // Winning auto declarations must replace stale inline px dimensions, even though the
       // original style attribute remains in the capture for debugging/legacy consumers.
       expect(measured("cascade-auto").attrs.style).toContain("width:120px;height:40px");
-      expect(measured("cascade-auto").preferredSize).toEqual({ width: "auto", height: "auto" });
+      expect(measured("cascade-auto").preferredSize).toMatchObject({ width: "auto", height: "auto" });
       expect(measured("cascade-auto").bounds.w).toBe(contentSize(measured("sizing-root")).w);
       expect(measured("cascade-auto").bounds.h).toBe(20);
       expect(node("cascade-auto").width).toEqual({ kind: "fill" });

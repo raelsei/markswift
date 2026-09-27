@@ -37,6 +37,7 @@ export interface ControlSpec {
     href?: string;
     action?: string;
     expanded?: boolean;
+    disclosureLayout?: ControlNode["disclosureLayout"];
     files?: ControlNode["files"];
     /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
     notes: string[];

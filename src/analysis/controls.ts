@@ -13,6 +13,8 @@ import { nativeExternalURL } from "./link-destination.ts";
 import { applyDateInput } from "./date-input.ts";
 import { applyRadioInput } from "./radio-input.ts";
 import { applySelectInput } from "./select-input.ts";
+import { applyDisclosureInput } from "./disclosure-input.ts";
+import { reframeText } from "./text-line-box.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode, TextTransform } from "../model/semantic.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -39,6 +41,7 @@ export interface ControlSpec {
   href?: string;
   action?: string;
   expanded?: boolean;
+  disclosureLayout?: ControlNode["disclosureLayout"];
   files?: ControlNode["files"];
   /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
   notes: string[];
@@ -92,7 +95,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     }
     case "details": {
       const spec: ControlSpec = { control: "disclosure", notes };
-      if ("open" in a) spec.expanded = true;
+      applyDisclosureInput(n, spec);
       return spec;
     }
     case "progress":
@@ -192,14 +195,15 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     return true;
   });
   // Document order is the DOM's; measured order is what the reader sees (CSS `order`, floats).
-  const content = [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const content = control === "disclosure" && state.disclosureLayout?.contentAvailable === false ? []
+    : [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
   // A control whose whole content is its own text (a button's caption, a link's label): that text
   // is the element's line box, so it inherits the measured content box. Without it the control
   // would shrink to the glyphs and lose the browser's centring inside the box.
   const only = content.length === 1 ? content[0] : undefined;
   if (only && only.kind === "text" && !parts.children.length) {
     const [pt, pr, pb, pl] = base.padding;
-    only.frame = { x: base.frame.x + pl, y: base.frame.y + pt, w: base.frame.w - pl - pr, h: base.frame.h - pt - pb };
+    reframeText(only, { x: base.frame.x + pl, y: base.frame.y + pt, w: base.frame.w - pl - pr, h: base.frame.h - pt - pb });
     if (base.width.kind !== "hug") only.width = { kind: "fill" };
   }
   const node: ControlNode = { ...base, kind: "control", control, content, ...state };

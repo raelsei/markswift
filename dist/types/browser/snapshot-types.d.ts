@@ -56,6 +56,7 @@ export interface Raw {
     attrs: Record<string, string>;
     styles: Record<string, string>;
     preferredSize?: LayoutNode["preferredSize"];
+    markerLayout?: LayoutNode["markerLayout"];
     formOwner?: LayoutNode["formOwner"];
     selectedIndex?: LayoutNode["selectedIndex"];
     option?: LayoutNode["option"];
@@ -74,8 +75,10 @@ export interface Raw {
         bounds: Rect;
         start: number;
         length: number;
+        baseline?: number;
     }>;
     text?: string;
+    firstBaseline?: number;
     paint?: number;
     parent?: Raw;
     children: Raw[];

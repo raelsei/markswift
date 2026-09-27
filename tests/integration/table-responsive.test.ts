@@ -52,11 +52,11 @@ browserTest("equal fixed-table columns emit live widths from one 390px capture",
   expect(result.diagnostics.find((item) => item.id === "#table")?.confidence).toBe("approximated");
 }, 60000);
 
-browserTest("irregular spans, irregular rows and automatic allocation keep captured widths", async () => {
+browserTest("irregular spans, irregular rows and breakable automatic cells keep captured widths", async () => {
   for (const [rule, cells] of [
     ["", rectangular.replace('<th id="a"', '<th colspan="2" id="a"')],
     ["", rectangular.replace('<td id="f">Three</td>', "")],
-    ["table { table-layout: auto; }", rectangular],
+    ["table { table-layout: auto; }", rectangular.replace("Alpha", "Alpha checks")],
     ["table { max-width: 300px; }", rectangular],
   ] as Array<[string, string]>) {
     const result = await convertHtml(page(rule, cells), { name: "GuardedTable", viewport: { width: 390, height: 600 } });

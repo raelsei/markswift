@@ -18,6 +18,7 @@ export function selectListExpr(node: ControlNode, state: string | undefined, sti
   const groupAppearance = [...groups].map(([id, row]) => `${id}: ${rowAppearance(row, false)}`);
   return [
     "MarkswiftSelectionList(",
+    `    identifier: ${str(node.id)},`,
     `    choices: [${choices.join(", ")}],`,
     `    selected: ${selected},`,
     ...(appearance.length ? [`    appearance: [${appearance.join(", ")}],`] : []),

@@ -8,6 +8,7 @@ export function clipsFirstLine(n: TextNode): boolean {
 }
 
 export function textBoxAlignment(n: TextNode, top = false): string {
+  top ||= !!n.lineBox && n.height.kind === "fixed";
   if (!top) return n.align === "center" ? ".center" : n.align === "trailing" ? ".trailing" : ".leading";
   return n.align === "center" ? ".top" : n.align === "trailing" ? ".topTrailing" : ".topLeading";
 }

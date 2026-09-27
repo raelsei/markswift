@@ -6,6 +6,9 @@ import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
 import { weightedLayoutExpr } from "./allocation-layout.ts";
 import { tableExpr } from "./table-layout.ts";
+import { geometryAlias } from "./geometry-observation.ts";
+import { note } from "./diagnostics.ts";
+import { flowFrame } from "../analysis/relative-position.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
   if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
@@ -41,7 +44,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       const lines = ctx.renderNode(c).split("\n");
       const extra: string[] = [];
       if (geometry) {
-        const dy = Math.round((c.frame.y - (n.frame.y + n.padding[0])) * 100) / 100;
+        const dy = Math.round((flowFrame(c).y - (n.frame.y + n.padding[0])) * 100) / 100;
         if (dy > 0.5) extra.push(`.padding(.top, ${num(dy)})`);
       }
       // Negative when the first child hangs outside the content box (outside markers, negative margins).
@@ -56,12 +59,30 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // discarding it collapses overlay-only Color children to their 10pt ideal height.
     if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill")) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
+  if (n.kind === "stack" && n.scroll && ctx.mode === "app") {
+    // CSS width/height and paint belong to the viewport. Padding and positioned children
+    // remain in its scrollable content; the scroll axis must measure its full natural extent.
+    const content: StackNode = { ...n, style: { fills: [], shadows: [] }, selfAlign: undefined, relativeOffset: undefined };
+    const naturalExtent = !n.measured && !n.wrap && n.distribution === "start"
+      && (n.scroll === "v" ? n.axis === "v" : n.axis === "h" && !n.allocation);
+    if (naturalExtent && n.scroll === "v") {
+      content.height = { kind: "hug" }; delete content.minHeight; delete content.maxHeight;
+    } else if (naturalExtent) {
+      content.width = { kind: "hug" }; delete content.minWidth; delete content.maxWidth;
+    } else {
+      note(n, "approximated: constrained scroll content retains captured extent; native scroll range may differ");
+    }
+    geometryAlias(content, n, ctx.geometry);
+    out.push(...modifiers(content, ctx));
+    const viewport: StackNode = { ...n, padding: [0, 0, 0, 0], overlays: [] };
+    geometryAlias(viewport, n, ctx.geometry, true);
+    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), "}", ...modifiers(viewport, ctx)];
+  }
   out.push(...modifiers(n, ctx));
   if (n.kind === "stack" && n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis.
-    if (ctx.mode === "fidelity") return [...out, `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
-    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), `}`];
+    return [...out, `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
   }
   return out;
 }

@@ -1,22 +1,26 @@
-/** A bounded fixed-table model: authored track rules must reproduce every captured cell. */
+/** Bounded table models: authored rules must reproduce every captured cell. */
 import type { LayoutNode } from "../model/layout.ts";
+import type { BundledFamilies } from "../model/fonts.ts";
 import type { TableLayout } from "../model/table.ts";
 import type { SemBase, SemNode, StackNode } from "../model/semantic.ts";
 import type { InferenceContext } from "./context.ts";
 import { px, parseDeclared } from "../css/index.ts";
-import { edgeWidth, insetsOf } from "./geometry.ts";
+import { insetsOf } from "./geometry.ts";
 import { makeBase, finish } from "./node-base.ts";
 import { allocateTableColumns } from "./table-allocation.ts";
 import { declaredTableColumns, intent, ordinary, unconstrained, spacing, close } from "./table-columns.ts";
 import { readTableStructure, type TableMember } from "./table-structure.ts";
 import { tableLayers } from "./table-layers.ts";
+import { allocateIntrinsicTableColumns, intrinsicTableCells } from "./table-intrinsic.ts";
+import { restoreTableCellFlow, tableCellInsets, tableTextContentFrame } from "./table-content.ts";
+import { reframeText } from "./text-line-box.ts";
 
 const reasons = new WeakMap<LayoutNode, string>();
 export interface NativeTableAnalysis { layout: TableLayout; members: TableMember[]; collapsed: boolean }
 
 export function buildNativeTable(table: LayoutNode, base: SemBase, ctx: InferenceContext,
   build: (node: LayoutNode, ctx: InferenceContext) => SemNode): StackNode | undefined {
-  const analysis = analyzeNativeTable(table, ctx.parent);
+  const analysis = analyzeNativeTable(table, ctx.parent, ctx.bundledFamilies);
   if (!analysis) return;
   const { fills, shadows, radius, ellipse, border, borderSides, outline, ...effects } = base.style;
   const children = analysis.members.map(({ node, placement, parent }) => {
@@ -27,19 +31,35 @@ export function buildNativeTable(table: LayoutNode, base: SemBase, ctx: Inferenc
       paint.notes = allocatedWidthNotes(paint.notes);
       return finish({ ...paint, kind: "box", padding: [0, 0, 0, 0], width: { kind: "fill" }, height: { kind: "fill" } } as SemNode);
     }
-    const child = build(node, childCtx);
+    let child = build(node, childCtx);
+    if (placement.kind === "cell") {
+      const padding = tableCellInsets(node, analysis.collapsed);
+      if (child.kind === "text") {
+        const contentFrame = tableTextContentFrame(node, child, padding);
+        if (contentFrame) {
+          // Inference must see the content's own height, so allocated rowspan slack cannot
+          // masquerade as block-flow bottom padding or a font-normal line height.
+          const capturedInsets = insetsOf(node.styles);
+          const inferenceFrame = { ...contentFrame, y: contentFrame.y + padding[0] - capturedInsets[0],
+            h: contentFrame.h - padding[0] - padding[2] + capturedInsets[0] + capturedInsets[2] };
+          child = build({ ...node, bounds: inferenceFrame }, childCtx);
+          if (child.kind === "text") {
+            placement.contentFrame = contentFrame;
+            reframeText(child, node.bounds);
+          }
+        }
+      }
+      restoreTableCellFlow(node, child, padding);
+    }
     child.width = { kind: "fill" };
     child.notes = allocatedWidthNotes(child.notes);
     if (placement.kind === "cell") child.height = { kind: "fill" };
-    // Collapsed borders occupy half of their resolved width on each side of a cell.
-    if (analysis.collapsed && placement.kind === "cell") {
-      const edges = ["top", "right", "bottom", "left"] as const;
-      child.padding = insetsOf(node.styles).map((inset, i) => inset - edgeWidth(node.styles, edges[i]!) / 2) as SemNode["padding"];
-    }
     return child;
   });
   const notes = [...base.notes,
-    "approximated: native fixed table preserves declared columns and cell spans; row heights use captured minimums and native content growth",
+    analysis.layout.mode === "auto"
+      ? "approximated: native automatic table measures nonbreaking cell strings in the emitted system font and distributes surplus by maximum-content widths; row heights use captured minimums and native content growth"
+      : "approximated: native fixed table preserves declared columns and cell spans; row heights use captured minimums and native content growth",
     "approximated: table accessibility retains cell coordinates, headers and section labels; platform table navigation and HTML headers associations are unavailable",
   ];
   if (analysis.collapsed) notes.push("approximated: collapsed table borders keep resolved cell strokes; CSS border conflict painting is not reproduced");
@@ -61,12 +81,13 @@ export function tableFallbackReason(table: LayoutNode): string | undefined {
   return reason ? `approximated: table keeps captured geometry; ${reason}` : undefined;
 }
 
-export function analyzeNativeTable(table: LayoutNode, parent?: LayoutNode): NativeTableAnalysis | undefined {
+export function analyzeNativeTable(table: LayoutNode, parent?: LayoutNode, families: BundledFamilies = {}): NativeTableAnalysis | undefined {
   const decline = (reason: string) => { reasons.set(table, reason); return undefined; };
-  if (table.styles["table-layout"] !== "fixed") return decline("automatic/intrinsic column allocation cannot be inferred from one capture");
+  const mode = table.styles["table-layout"];
+  if (mode !== "fixed" && mode !== "auto") return decline("automatic/intrinsic column allocation requires captured table-layout intent");
   if (table.styles.display !== "table" || intent(table) !== "100%" || !ordinary(table) || !unconstrained(table)
     || intent(table, "height") !== "auto" || (parent && parent.styles.display !== "block")) {
-    return decline("native allocation requires an unconstrained full-width fixed table in ordinary block flow");
+    return decline("native allocation requires an unconstrained full-width table in ordinary block flow");
   }
   if (parent) {
     const [, right, , left] = insetsOf(parent.styles);
@@ -102,22 +123,29 @@ export function analyzeNativeTable(table: LayoutNode, parent?: LayoutNode): Nati
       return decline("row geometry or positioning cannot be expressed by native table tracks");
     }
   }
-  const tracks = declaredTableColumns(structure.columns, count, placed, collapsed, gap, decline);
+  const intrinsic = mode === "auto" ? intrinsicTableCells(structure, collapsed, families, decline) : undefined;
+  if (mode === "auto" && (!intrinsic || !table.preferredSize || table.preferredSize.hasRelativePadding)) {
+    if (intrinsic) return decline("automatic/intrinsic column allocation requires constant pixel table padding");
+    return;
+  }
+  const tracks = mode === "auto" ? Array.from({ length: count }, () => ({ kind: "auto" as const }))
+    : declaredTableColumns(structure.columns, count, placed, collapsed, gap, decline);
   if (!tracks) return;
   const available = table.bounds.w - insets[1] - insets[3] - gap[0]! * (count - 1);
-  const widths = allocateTableColumns(tracks, available);
+  const widths = intrinsic ? allocateIntrinsicTableColumns(intrinsic.browserMaximums, available) : allocateTableColumns(tracks, available);
   if (!widths) return decline("overcommitted declared widths require browser-specific shrinking or overflow");
   for (const { node, placement: p } of placed) {
     const x = table.bounds.x + insets[3] + widths.slice(0, p.column).reduce((sum, width) => sum + width, 0) + p.column * gap[0]!;
     const w = widths.slice(p.column, p.column + p.columnSpan).reduce((sum, width) => sum + width, 0) + (p.columnSpan - 1) * gap[0]!;
     const h = rows.slice(p.row, p.row + p.rowSpan).reduce((sum, row) => sum + row.node.bounds.h, 0) + (p.rowSpan - 1) * gap[1]!;
     if (!close(node.bounds.x, x) || !close(node.bounds.w, w) || !close(node.bounds.y, rows[p.row]!.node.bounds.y) || !close(node.bounds.h, h)) {
-      return decline("declared column rules or cell spans do not reproduce the captured browser geometry");
+      return decline(`${intrinsic ? "intrinsic maximum-content allocation" : "declared column rules or cell spans"} do not reproduce the captured browser geometry`);
     }
   }
   const members = tableLayers(table, structure, insets, widths, gap, bodyTop, bodyBottom);
   reasons.delete(table);
   return { collapsed, members, layout: { columns: tracks, placements: members.map(member => member.placement),
+    ...(intrinsic ? { mode: "auto", intrinsic: intrinsic.cells } : {}),
     rowMinimums: rows.map(row => row.node.bounds.h), spacing: [gap[0]!, gap[1]!], insets,
     ...(caption ? { captionSide: captionSide as "top" | "bottom", captionMargins } : {}),
   } };

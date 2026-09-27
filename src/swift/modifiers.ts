@@ -7,6 +7,7 @@ import { borderSideModifiers } from "./borders.ts";
 import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "./effects.ts";
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
+import { geometryModifier } from "./geometry-observation.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
@@ -66,6 +67,10 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     const mode = swiftBlend(st.blend);
     if (mode) m.push(`.blendMode(${mode})`);
   }
+  // Anchor the border before geometric effects, so the outer reader resolves its painted
+  // transformed rectangle. Anchoring after an effect observes its unchanged layout envelope.
+  m.push(...geometryModifier(n, ctx.geometry));
+  if (ctx.mode === "fidelity" && n.kind === "stack" && n.scroll) m.push(...geometryModifier(n, ctx.geometry, true));
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
@@ -76,6 +81,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
       if (t.tx !== 0 || t.ty !== 0) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
   }
+  if (n.relativeOffset) m.push(`.offset(x: ${num(n.relativeOffset[0])}, y: ${num(n.relativeOffset[1])})`);
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${n.selfAlign === "center" ? ".center" : ".trailing"})`);

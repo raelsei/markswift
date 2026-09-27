@@ -15,8 +15,13 @@ import { partitionChildren } from "./infer-children.ts";
 import { buildFlowStack } from "./infer-flow.ts";
 import { buildOverlays } from "./infer-overlays.ts";
 import { buildNativeTable, tableFallbackReason } from "./table-layout.ts";
+import { buildListSymbol, preserveSymbolLineLeading } from "./list-symbol.ts";
 
 export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
+  if (n.tag === "::marker") {
+    const symbol = buildListSymbol(n, makeBase(n, ctx, parseDeclared(n.attrs.style)));
+    if (symbol) return finish(symbol);
+  }
   const policy = classifyElement(n.tag, n.attrs);
   if (n.tag === "table") {
     const table = buildNativeTable(n, makeBase(n, ctx, parseDeclared(n.attrs.style)), ctx, build);
@@ -119,7 +124,8 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     return finish(grid);
   }
 
-  const stack = buildFlowStack(n, base, items, axis, display);
+  const stack = buildFlowStack(n, base, items, axis, display, ctx);
+  preserveSymbolLineLeading(n, stack);
   if (n.tag === "table") {
     const reason = tableFallbackReason(n);
     if (reason) stack.notes.push(reason);

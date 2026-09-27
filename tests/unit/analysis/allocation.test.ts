@@ -22,6 +22,19 @@ test("fractional flex factor totals preserve unused free space", () => {
   expect(flexAllocatedWidths(300, [track(40, 0.25), track(60, 0.25)])).toEqual([90, 110]);
 });
 
+test("percentage bases use the inner container width before gaps and retain pixel offsets", () => {
+  const tracks = [{ ...track(0, 0), basisFraction: 0.25 }, { ...track(10, 0), basisFraction: 0.5 }];
+  expect(flexAllocatedWidths(288, tracks, 300)).toEqual([75, 160]);
+  expect(flexAllocatedWidths(488, tracks, 500)).toEqual([125, 260]);
+  expect(tracks.map(value => value.basis)).toEqual([0, 10]);
+});
+
+test("percentage bases are resolved before constrained weighted shrink", () => {
+  const tracks = [{ ...track(0, 0, 1, 200), basisFraction: 0.8 }, { ...track(0, 0, 2), basisFraction: 0.7 }];
+  expect(flexAllocatedWidths(280, tracks, 300)).toEqual([200, 80]);
+  expect(flexAllocatedWidths(480, tracks, 500)[0]).toBeCloseTo(400 - 270 * 400 / 1100, 8);
+});
+
 test("fr minimums freeze before remaining fractions are shared", () => {
   expect(gridAllocatedWidths(300, [track(80, 0, 0, 80, 80), track(0, 1, 0, 100), track(0, 2, 0)]))
     .toEqual([80, 100, 120]);

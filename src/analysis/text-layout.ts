@@ -129,6 +129,7 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
 export function markLineBreaks(built: MeasuredTextRun[]): void {
   let previousLine: Rect | undefined;
   let previousShift = 0;
+  let previousMeasuredBaseline: number | undefined;
   let explicitBreak = false;
   for (const b of built) {
     // Boundary-only runs do not have glyph geometry. Keep an explicit newline across any
@@ -137,7 +138,7 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       if (b.run.text.includes("\n")) explicitBreak = true;
       continue;
     }
-    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0 }];
+    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0, baseline: b.node.firstBaseline }];
     const ordered = [...boxes].sort((p, q) => p.bounds.y - q.bounds.y || p.bounds.x - q.bounds.x);
     const starts: typeof ordered = [];
     let lineTop = -Infinity;
@@ -155,8 +156,8 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
     // shared baseline when font sizes differ; glyph boxes can overlap across genuine lines
     // when CSS sets a tight line-height. Horizontal order is irrelevant for RTL text.
     const shift = b.run.baselineOffset ?? 0;
-    const baseline = first ? first.y + ASCENT_RATIO * first.h + shift : undefined;
-    const previousBaseline = previousLine ? previousLine.y + ASCENT_RATIO * previousLine.h + previousShift : undefined;
+    const baseline = first ? (starts[0]?.baseline ?? first.y + ASCENT_RATIO * first.h) + shift : undefined;
+    const previousBaseline = previousLine ? (previousMeasuredBaseline ?? previousLine.y + ASCENT_RATIO * previousLine.h) + previousShift : undefined;
     const tolerance = Math.max(2, (first?.h ?? 0) * 0.05, (previousLine?.h ?? 0) * 0.05);
     if (baseline !== undefined && previousBaseline !== undefined && baseline - previousBaseline >= tolerance && !explicitBreak && !/^[ \t]*\n/.test(b.run.text)) {
       // A collapsible leading space was consumed by this wrap. Replacing it with the newline
@@ -171,6 +172,7 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at) breaks.push(at);
     }
     previousLine = starts[starts.length - 1]?.bounds ?? previousLine;
+    previousMeasuredBaseline = starts.at(-1)?.baseline;
     previousShift = shift;
     explicitBreak = /\n[ \t\u200b]*$/.test(b.run.text);
     if (breaks.length) b.run.breaks = breaks;
@@ -199,7 +201,7 @@ export function markBaselineShifts(built: MeasuredTextRun[], host: LayoutNode, n
     }
     const a = ref.node.bounds;
     const s = b.node.bounds;
-    const offset = round2(a.y + ASCENT_RATIO * a.h - (s.y + ASCENT_RATIO * s.h));
+    const offset = round2((ref.node.firstBaseline ?? a.y + ASCENT_RATIO * a.h) - (b.node.firstBaseline ?? s.y + ASCENT_RATIO * s.h));
     if (Math.abs(offset) >= 0.5) b.run.baselineOffset = offset;
   }
 }

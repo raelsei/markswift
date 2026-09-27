@@ -53,7 +53,17 @@ for (const width of [320, 390, 768]) {
       expect(unequal.children.map(child => child.width.kind)).toEqual(["fill", "fill"]);
       expect(unequal.children.map(child => child.frame.w)).toEqual([100, contentBox("unequal-grid").w - 110]);
       expect(unequal.children.map(child => child.height)).toEqual([{ kind: "fixed", px: 30 }, { kind: "fixed", px: 30 }]);
-      for (const id of ["hole-grid", "aligned-grid", "span-grid", "empty-grid", "areas-grid", "overlap-grid"]) matchesCaptured(id);
+      for (const id of ["hole-grid", "span-grid", "empty-grid"]) {
+        matchesCaptured(id, false);
+        const n = node(id) as GridNode;
+        expect(n.tracks).toBeDefined();
+        expect(n.placements).toHaveLength(n.children.length);
+        expect(n.children.map(child => child.id)).toEqual(measured(id).children.map(child => child.id!));
+        expect(n.children.every(child => child.width.kind === "fill")).toBe(true);
+      }
+      expect((node("span-grid") as GridNode).placements?.[0]?.columnSpan).toBe(2);
+      expect((node("empty-grid") as GridNode).rowSizes).toEqual([30, 30, 30]);
+      for (const id of ["aligned-grid", "areas-grid", "overlap-grid"]) matchesCaptured(id);
       expect((node("hole-grid") as GridNode).columns).toBe(3);
       expect((node("aligned-grid") as GridNode).columns).toBe(2);
       expect((node("empty-grid") as GridNode).columns).toBe(3);

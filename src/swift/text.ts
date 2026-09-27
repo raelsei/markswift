@@ -5,6 +5,7 @@ import { colorExpr, fontExpr, num, str, type ColorCtx } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
+import { textLineBoxExpr, nativeTextWeight } from "./text-line-box.ts";
 /**
  * Natural line height of a face, as a multiple of `font-size`: the height SwiftUI gives one
  * `Text` line before `.lineSpacing`. Measured, not assumed — a `UIHostingController` was asked
@@ -36,9 +37,11 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   if (ctx.mode === "app" && usesGreedyWords(n)) {
     const run = runs[0]!;
     const natural = naturalLineHeight(run.font, ctx.fontMetrics);
-    const leading = run.font.lineHeight! - natural;
-    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num(run.font.size)}, lineGap: ${num(leading)})`];
-    if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * run.font.lineHeight! - 0.5) {
+    const lineHeight = run.font.lineHeight ?? n.lineBox!.baselineStep;
+    const leading = lineHeight - natural;
+    const out = [`MarkswiftGreedyText(${str(run.text)}, font: ${fontExpr(run.font, ctx)}, color: ${colorExpr(run.color, ctx, n.id)}, fontSize: ${num(run.font.size)}, lineGap: ${num(leading)}${n.lineBox ? `, baselineStep: ${num(n.lineBox.baselineStep)}, nativeWeight: UIFont.Weight.${nativeTextWeight(run.font)}.rawValue` : ""})`];
+    if (n.lineBox) return textLineBoxExpr(n, ctx.mode, out, leading, true);
+    if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * lineHeight - 0.5) {
       out.push(`.padding(.vertical, ${num(leading / 2)})`);
     }
     return out;
@@ -107,6 +110,8 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   const divided = n.noWrap === true || (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length));
   const noSoftWrap = !n.truncate && !clamped && (divided || (ctx.mode === "fidelity" && n.lines === 1));
   out.push(`.fixedSize(horizontal: ${noSoftWrap}, vertical: true)`);
+  if (n.lineBox) return textLineBoxExpr(n, ctx.mode, out, leading, false,
+    ctx.mode === "fidelity" && noSoftWrap && divided ? n.frame.w - n.padding[1] - n.padding[3] : undefined);
   // Mode difference — text box. Fidelity pins it to the browser's line box: native line heights
   // differ per font and would otherwise drift the whole vertical rhythm (HANDOFF §8.1). Once
   // soft wrapping is off the box is pinned in both axes, so glyphs that come out wider overflow
@@ -145,18 +150,22 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   return out;
 }
 
-/** Keep word layout on plain paragraphs/headings; styled or interactive text retains native Text. */
+/** Whole-word CSS flow for measured plain text; legacy paragraphs retain their previous route. */
 function usesGreedyWords(n: TextNode): boolean {
   const heading = /^h[1-6]$/.test(n.sourceTag ?? "");
-  if ((n.sourceTag !== "p" && !heading) || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate) return false;
+  if ((!n.lineBox && n.sourceTag !== "p" && !heading) || n.runs.length !== 1 || n.align !== "leading" || n.layoutDirection === "rtl" || n.noWrap || n.lineLimit || n.truncate || n.wrapAnywhere) return false;
   if (n.overlays.length || n.style.clip || n.maxHeight !== undefined || n.style.hidden) return false;
   const r = n.runs[0]!;
   if (r.href || r.gap !== undefined || r.bound || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
-  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || (!heading && r.font.weight !== 400) || r.font.lineHeight === undefined) return false;
+  const lineHeight = r.font.lineHeight ?? n.lineBox?.baselineStep;
+  if (r.font.family.kind !== "system" || r.font.family.design !== "default" || (!n.lineBox && !heading && r.font.weight !== 400) || lineHeight === undefined) return false;
+  // Whole-word advances prove placement only for tokens with no internal CSS break point.
+  // Measured hyphenated/slashed/code-like text keeps ordinary native Text wrapping instead.
+  if (n.lineBox && r.text.split(" ").some(word => !/^[A-Za-z0-9_]+(?:['.][A-Za-z0-9_]+)*[.,;:!?]*$/.test(word))) return false;
   // Headings often set a tight line-height; MarkswiftFlow can preserve its negative row gap.
-  if (!heading && r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
+  if (!n.lineBox && !heading && lineHeight < naturalLineHeight(r.font, {})) return false;
   if (n.notes.some((note) => note.includes("font-family"))) return false;
-  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)+$/.test(r.text);
+  return /^[\x21-\x7E]+(?: [\x21-\x7E]+)*$/.test(r.text) && (n.lineBox !== undefined || r.text.includes(" "));
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */

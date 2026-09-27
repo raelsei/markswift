@@ -112,7 +112,9 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
         const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
         // Only a broken text node needs its division recorded; one box is the bounds already.
-        if (c.lines && c.lines.length > 1) text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
+        if (c.firstBaseline !== undefined) text.firstBaseline = Math.round((c.firstBaseline - origin.y) * 100) / 100;
+        if (c.lines && c.lines.length > 1) text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length,
+          ...(l.baseline !== undefined ? { baseline: Math.round((l.baseline - origin.y) * 100) / 100 } : {}) }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
         out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
@@ -166,6 +168,7 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
     attrs: {},
     styles: raw.styles,
     bounds,
+    ...(raw.markerLayout ? { markerLayout: { ...raw.markerLayout, pixelOffset: { x: origin.x - Math.floor(origin.x), y: origin.y - Math.floor(origin.y) } } } : {}),
     children: imageUrl && imageBounds
       ? [{ tag: "img", attrs: { src: imageUrl, alt: "" }, styles: { display: "block", "object-fit": "fill" }, bounds: imageBounds, children: [] }]
       : text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : [],

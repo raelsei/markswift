@@ -7,6 +7,8 @@ import { styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
+import { markerPaintRect } from "./list-symbol.ts";
+import { relativePosition } from "./relative-position.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = worst(node.notes);
@@ -26,8 +28,15 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
   const notes: string[] = [];
+  // The root capture rebases its painted border to the viewport; its external flow slot is
+  // outside the converted subtree. Descendants retain separate flow and paint positions.
+  const relative = ctx.parent ? relativePosition(n) : {};
+  if (relative.reason) notes.push(`approximated: relative position ${relative.reason}; captured placement cannot recompute at another width`);
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.note) notes.push(policy.note);
+  if ([n, ...n.children.filter(child => child.tag === "::marker")].some(marker => marker.tag === "::marker" && marker.styles.content === "normal"
+    && /^(disc|circle|square|disclosure-open|disclosure-closed)$/.test(marker.styles["list-style-type"] ?? "")
+    && !markerPaintRect(marker))) notes.push("approximated: default list symbol font metrics/direction are not proved; captured marker text glyph retained instead of browser shape paint");
   for (const custom of n.flattenedCustomElements ?? []) {
     notes.push(`approximated: <${custom.tag}>${custom.id ? ` #${custom.id}` : ""} display: contents wrapper has no box; custom semantics and behavior are not translated`);
   }
@@ -38,6 +47,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   return {
     id: n.id ?? "",
     frame: n.bounds,
+    ...(relative.offset ? { relativeOffset: relative.offset } : {}),
     width,
     height,
     ...constraints,

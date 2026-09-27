@@ -1,5 +1,9 @@
 /** Fixed-item reflow and equal-column proposals; not a general CSS flex allocation algorithm. */
 export const FLOW_RUNTIME = `
+nonisolated struct MarkswiftFlowItemAdvance: LayoutValueKey {
+    static var defaultValue: CGFloat? { nil }
+}
+
 struct MarkswiftFlow: Layout {
     var columnGap: CGFloat
     var rowGap: CGFloat
@@ -7,6 +11,7 @@ struct MarkswiftFlow: Layout {
     var vertical: VerticalAlignment = .top
     var columns: Int? = nil
     var stretch: Bool = false
+    var baselineStep: CGFloat? = nil
 
     private struct Item {
         var index: Int
@@ -23,7 +28,8 @@ struct MarkswiftFlow: Layout {
         let available = finiteWidth(proposal.width) ?? idealTrackWidth(subviews)
         let rows = rows(width: available ?? .infinity, subviews: subviews)
         let width = available ?? rows.map { $0.width }.max() ?? 0
-        let height = rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowGap
+        let height = baselineStep.map { $0 * CGFloat(max(0, rows.count - 1)) + (rows.last?.height ?? 0) }
+            ?? (rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowGap)
         return CGSize(width: width, height: height)
     }
 
@@ -41,8 +47,22 @@ struct MarkswiftFlow: Layout {
                                           proposal: ProposedViewSize(width: item.size.width, height: height))
                 x += item.size.width + columnGap
             }
-            y += row.height + rowGap
+            y += baselineStep ?? (row.height + rowGap)
         }
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
+        let measured = rows(width: max(0, bounds.width), subviews: subviews)
+        let rowIndex = guide == .firstTextBaseline ? 0 : measured.count - 1
+        guard measured.indices.contains(rowIndex), let item = measured[rowIndex].items.first else { return nil }
+        let row = measured[rowIndex]
+        let height = stretch ? row.height : item.size.height
+        let slack = row.height - height
+        let dy = vertical == .center ? slack / 2 : vertical == .bottom ? slack : 0
+        let y = measured.prefix(rowIndex).reduce(CGFloat(0)) { $0 + (baselineStep ?? ($1.height + rowGap)) }
+        let dimensions = subviews[item.index].dimensions(in: ProposedViewSize(width: item.size.width, height: height))
+        return y + dy + dimensions[guide]
     }
 
     private func finiteWidth(_ value: CGFloat?) -> CGFloat? {
@@ -64,7 +84,8 @@ struct MarkswiftFlow: Layout {
         }
         for (index, subview) in subviews.enumerated() {
             let measured = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
-            let size = CGSize(width: columnWidth ?? (measured.width.isFinite ? max(0, measured.width) : 0),
+            let advance = subview[MarkswiftFlowItemAdvance.self].flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+            let size = CGSize(width: columnWidth ?? advance ?? (measured.width.isFinite ? max(0, measured.width) : 0),
                               height: measured.height.isFinite ? max(0, measured.height) : 0)
             let gap = row.items.isEmpty ? 0 : columnGap
             let full = columns.map { row.items.count >= $0 } ?? (row.width + gap + size.width > width + 0.0001)
