@@ -2,11 +2,13 @@ import type { InlineContentFlow, InlineContentToken } from "../model/inline-cont
 import type { StackNode } from "../model/semantic.ts";
 import { intrinsicSource } from "./intrinsic-min-content-source.ts";
 import { usesGreedyWords } from "./text-flow-admission.ts";
+import { inlineBaselineOf } from "./inline-baseline.ts";
 
 export function inlineContentOf(stack: StackNode): InlineContentFlow | undefined {
-  const joined = intrinsicSource(stack), baseline = stack.inlineBaseline;
-  if (joined?.kind !== "container" || !baseline || joined.items.length !== 2 || stack.children.length !== 2) return;
-  const [widget, caption] = stack.children, source = caption && intrinsicSource(caption);
+  const joined = intrinsicSource(stack);
+  if (joined?.kind !== "container" || joined.items.length !== 2 || stack.children.length !== 2) return;
+  const widget = joined.items.find(item => item.node === joined.source.children[0])?.sem;
+  const caption = stack.children.find(child => child !== widget), source = caption && intrinsicSource(caption);
   if (!widget || widget.kind !== "control" || !caption || caption.kind !== "text" || !caption.lineBox || !usesGreedyWords(caption)
     || source?.kind !== "text" || source.leaf || source.source !== joined.source || source.runs.length !== 1
     || caption.runs.length !== 1 || caption.padding.some(Boolean)) return;
@@ -23,6 +25,8 @@ export function inlineContentOf(stack: StackNode): InlineContentFlow | undefined
   });
   const margins = widgetSource?.inlineControlMargins;
   if (!margins || !margins.every(value => Number.isFinite(value) && value >= 0)) return;
-  return { widget: 0, caption: 1, raw, tokens, lineBox: caption.lineBox, strutAscent: baseline.strutAscent,
+  const baseline = stack.inlineBaseline ?? inlineBaselineOf(joined.source, joined.items, stack, joined.context, rawNode);
+  if (!baseline || !stack.children.includes(widget)) return;
+  return { widget: stack.children.indexOf(widget), caption: stack.children.indexOf(caption), raw, tokens, lineBox: caption.lineBox, strutAscent: baseline.strutAscent,
     strutDescent: baseline.strutDescent, sourceInsets: baseline.sourceInsets, widgetMargins: margins };
 }

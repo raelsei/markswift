@@ -2,13 +2,14 @@ import { expect, test } from "bun:test";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import { inlineContentFlowFixture } from "../../helpers/inline-content-flow-fixture.ts";
 
-test("app emits native word/space flow and natural parent height; captured legacy frames remain fidelity-only", () => {
+test("both modes share admitted native inline flow while fidelity retains captured heights", () => {
   const doc = inlineContentFlowFixture(), app = compileLayout(doc, { name: "InlineFlow", mode: "app", geometryInstrumentation: true, textInstrumentation: true });
   expect(app.code).toContain("MarkswiftInlineContentRow"); expect(app.code).toContain('"Include"');
   expect(app.code).not.toContain(".frame(height: 31.0"); expect(app.code).not.toContain(".frame(height: 82.0");
   expect(app.code).toContain(".padding(.bottom, 6.0)");
   const fidelity = compileLayout(doc, { name: "InlineFlow", mode: "fidelity", geometryInstrumentation: true, textInstrumentation: true });
-  expect(fidelity.code).not.toContain("MarkswiftInlineContentRow"); expect(fidelity.code).toContain(".frame(height: 31.0");
+  expect(fidelity.code).toContain("MarkswiftInlineContentRow"); expect(fidelity.code).toContain(".frame(height: 31.0");
+  expect(fidelity.code).toContain(".frame(height: 82.0");
 });
 test("claimed raw caption tokens partition source order once and replace the old leading trim account", () => {
   const doc = inlineContentFlowFixture(), raw = doc.root.children[0]!.children[1]!.children[1]!;

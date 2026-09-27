@@ -15,7 +15,7 @@ type ContentSource = {
     source: LayoutNode;
 };
 export type IntrinsicSource = ContentSource & {
-    context: Pick<InferenceContext, "parent" | "parentDisplay" | "parentAxis">;
+    context: Pick<InferenceContext, "root" | "parent" | "parentDisplay" | "parentAxis">;
 };
 export declare function intrinsicSource(node: SemNode): IntrinsicSource | undefined;
 export declare function joinIntrinsicText(source: LayoutNode, node: TextNode, runs: SourceTextRun[], leaf: boolean, context: InferenceContext): void;

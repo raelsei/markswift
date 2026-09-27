@@ -6,7 +6,7 @@ import { controlOf, buildControl } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import type { InferenceContext, AnalyzedChild, SourceTextRun } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
-import { fontOf } from "./typography.ts";
+import { fontOf, fontSelectionDiagnostic } from "./typography.ts";
 import { groupRuns } from "./text-runs.ts";
 import { buildGrid } from "./grid.ts";
 import { crossAlign } from "./alignment.ts";
@@ -44,12 +44,14 @@ export function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     const src = n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "";
     const anchor = objectPosition(position);
     const intrinsic = anchor && (anchor[0] !== 0.5 || anchor[1] !== 0.5) && (fit === "cover" || fit === "contain") ? imageSize(src) : undefined;
+    const fallbackFontDiagnostic = n.attrs.alt ? fontSelectionDiagnostic(n.styles, ctx.bundledFamilies) : undefined;
     const image = withBase(n, ctx, {
       kind: "image",
       src,
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...(intrinsic && intrinsic.w > 0 && intrinsic.h > 0 ? { intrinsicSize: [intrinsic.w, intrinsic.h] as [number, number] } : {}),
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
+      ...(fallbackFontDiagnostic ? { fallbackFontDiagnostic } : {}),
     }) as ImageNode;
     if (fit === "scale-down") image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
     if (fit === "none") image.notes.push("approximated: object-fit: none → unscaled native image; asset pixel scale may differ from browser CSS pixels");

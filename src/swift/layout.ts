@@ -14,10 +14,12 @@ import { inlineBaselineExpr } from "./inline-baseline.ts";
 import { textObservationAlias } from "./text-observation.ts";
 import { inlineContentExpr } from "./inline-content-flow.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
-  if (ctx.mode === "app" && n.kind === "stack" && (n.inlineContentFlow || n.contentAutoHeight)) {
+  if (n.kind === "stack" && (n.inlineContentFlow || (ctx.mode === "app" && n.contentAutoHeight))) {
     const original = n, height = n.contentAutoHeight;
-    n = { ...n, height: { kind: "hug" }, minHeight: undefined, maxHeight: undefined,
-      padding: n.inlineContentFlow?.sourceInsets ?? height!.sourceInsets };
+    const padding = n.inlineContentFlow?.sourceInsets ?? height!.sourceInsets;
+    n = ctx.mode === "app"
+      ? { ...n, height: { kind: "hug" }, minHeight: undefined, maxHeight: undefined, padding }
+      : { ...n, height: { kind: "fixed", px: n.frame.h }, padding };
     geometryAlias(n, original, ctx.geometry); textObservationAlias(n, original, ctx.text);
   } else if (n.kind === "stack" && n.inlineBaseline) {
     const original = n;
@@ -30,7 +32,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   }
   const out: string[] = [];
   if (n.kind === "stack" && n.table) out.push(...tableExpr(n, ctx));
-  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineContentFlow) out.push(...inlineContentExpr(n, ctx));
+  else if (n.kind === "stack" && n.inlineContentFlow) out.push(...inlineContentExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline) out.push(...inlineBaselineExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.intrinsicFlex) out.push(...intrinsicFlexExpr(n, ctx));
   else if (ctx.mode === "app" && (n.kind === "stack" ? n.allocation : n.tracks)) out.push(...weightedLayoutExpr(n, ctx));

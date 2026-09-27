@@ -14477,18 +14477,18 @@ function worst(notes) {
   return "mapped";
 }
 function withBase(n, ctx, extra) {
-  const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]));
+  const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]), extra.kind !== "image" && extra.kind !== "box");
   return finish({ ...base, ...extra });
 }
-function makeBase(n, ctx, declared) {
+function makeBase(n, ctx, declared, consumesFont = true) {
   const notes = [];
-  const fontDiagnostic = fontSelectionDiagnostic(n.styles, ctx.bundledFamilies);
+  const policy = classifyElement(n.tag, n.attrs);
+  const fontDiagnostic = consumesFont ? fontSelectionDiagnostic(n.styles, ctx.bundledFamilies) : undefined;
   if (fontDiagnostic)
     notes.push(fontDiagnostic);
   const relative = ctx.parent ? relativePosition(n) : {};
   if (relative.reason)
     notes.push(`approximated: relative position ${relative.reason}; captured placement cannot recompute at another width`);
-  const policy = classifyElement(n.tag, n.attrs);
   if (policy.note)
     notes.push(policy.note);
   if ([n, ...n.children.filter((child) => child.tag === "::marker")].some((marker) => marker.tag === "::marker" && marker.styles.content === "normal" && /^(disc|circle|square|disclosure-open|disclosure-closed)$/.test(marker.styles["list-style-type"] ?? "") && !markerPaintRect(marker)))
@@ -16250,8 +16250,21 @@ function buildWrapping(n, base, all, axis, align, distribution) {
   return stack;
 }
 
+// src/analysis/inline-caption-box.ts
+function inlineCaptionBoxHeight(text, lineHeight, source) {
+  const box = text.lineBox;
+  if (!box || !Number.isSafeInteger(text.lines) || text.lines < 1 || source.lines?.length !== text.lines)
+    return;
+  const height = box.firstBaseline + box.baselineToBottom, frame = flowFrame(text);
+  if (![height, box.baselineStep].every((value) => Number.isFinite(value) && value > 0) || ![lineHeight, frame.y, frame.h].every(Number.isFinite) || lineHeight <= 0 || Math.abs(box.baselineStep - lineHeight) > 0.5 || Math.abs(frame.h - height - (text.lines - 1) * box.baselineStep) > 0.5)
+    return;
+  if (source.lines.some((line, index) => ![line.bounds.h, line.bounds.y, line.baseline].every((value) => typeof value === "number" && Number.isFinite(value)) || Math.abs(line.bounds.h - height) > 0.5 || Math.abs(line.bounds.y - frame.y - index * box.baselineStep) > 0.5 || line.baseline === undefined || Math.abs(line.baseline - frame.y - box.firstBaseline - index * box.baselineStep) > 0.5))
+    return;
+  return height;
+}
+
 // src/analysis/inline-baseline.ts
-function inlineBaselineOf(node, items, stack, context) {
+function inlineBaselineOf(node, items, stack, context, continuation) {
   const widgets = items.filter((item) => item.node.tag === "input" && /^(checkbox|radio)$/.test(item.node.attrs.type ?? ""));
   if (!widgets.length || !items.some((item) => item.sem.kind === "text"))
     return;
@@ -16289,7 +16302,7 @@ function inlineBaselineOf(node, items, stack, context) {
   if (context && (ancestors(context.root) ?? [context.parent].filter((value) => !!value)).some((parent) => parent.styles.position && parent.styles.position !== "static" || parent.styles.transform && parent.styles.transform !== "none"))
     return decline("relative or transformed ancestor");
   const parentFont = fontOf(node.styles, {}), widget = widgets[0], text = items.find((item) => item.sem.kind === "text");
-  if (text.sem.kind !== "text" || text.sem.lines !== 1 || !text.sem.lineBox || text.sem.lineLimit !== undefined || text.sem.truncate || text.sem.runs.some((run) => JSON.stringify(run.font) !== JSON.stringify(parentFont) || run.italic || run.bound || run.baselineOffset !== undefined || run.gap !== undefined) || text.sem.padding.some(Boolean) || text.sem.overlays.length || text.sem.style.fills.length)
+  if (text.sem.kind !== "text" || !continuation && text.sem.lines !== 1 || !text.sem.lineBox || text.sem.lineLimit !== undefined || text.sem.truncate || text.sem.runs.some((run) => JSON.stringify(run.font) !== JSON.stringify(parentFont) || run.italic || run.bound || run.baselineOffset !== undefined || run.gap !== undefined) || text.sem.padding.some(Boolean) || text.sem.overlays.length || text.sem.style.fills.length)
     return decline("unproved plain single-line font box");
   if (widget.node.styles.appearance !== "auto" || widget.node.styles["vertical-align"] !== "baseline" || text.node.styles["vertical-align"] && text.node.styles["vertical-align"] !== "baseline")
     return decline("unproved native appearance or authored vertical alignment");
@@ -16302,6 +16315,9 @@ function inlineBaselineOf(node, items, stack, context) {
   if (!EDGES.every((edge) => /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(node.styles[`padding-${edge}`] ?? "") && /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(node.styles[`border-${edge}-width`] ?? "") && node.styles[`border-${edge}-style`] !== undefined))
     return decline("parent CSS content insets unavailable");
   const sourceInsets = insetsOf(node.styles);
+  const captionHeight = continuation ? inlineCaptionBoxHeight(text.sem, strut.lineHeight, continuation) : flowFrame(text.sem).h;
+  if (captionHeight === undefined)
+    return decline("captured continuation font-box union is unproved");
   const strutAscent = strut.ascent + Math.floor((strut.lineHeight - strut.ascent - strut.descent) / 2), strutDescent = strut.lineHeight - strutAscent;
   const contentTop = stack.frame.y + sourceInsets[0], textFrame = flowFrame(text.sem), baseline = textFrame.y + text.sem.lineBox.firstBaseline;
   if (Math.abs(frame.y + frame.h - baseline) > 0.5)
@@ -16309,14 +16325,15 @@ function inlineBaselineOf(node, items, stack, context) {
   const contractItems = stack.children.map((child) => {
     if (child === control)
       return { kind: "widget", baseline: frame.h, height: frame.h, top: margins[0], bottom: margins[2] };
-    return { kind: "text", baseline: text.sem.kind === "text" ? text.sem.lineBox.firstBaseline : 0, height: textFrame.h, top: 0, bottom: 0 };
+    return { kind: "text", baseline: text.sem.kind === "text" ? text.sem.lineBox.firstBaseline : 0, height: captionHeight, top: 0, bottom: 0 };
   });
   const predictedBaseline = Math.max(strutAscent, ...contractItems.map((item) => item.baseline + item.top));
   const predictedDescent = Math.max(strutDescent, ...contractItems.map((item) => item.height - item.baseline + item.bottom));
   const contentHeight = stack.frame.h - sourceInsets[0] - sourceInsets[2];
-  if (Math.abs(baseline - contentTop - predictedBaseline) > 0.5 || Math.abs(contentHeight - predictedBaseline - predictedDescent) > 0.5)
+  const continuationHeight = continuation ? (text.sem.lines - 1) * strut.lineHeight : 0;
+  if (Math.abs(baseline - contentTop - predictedBaseline) > 0.5 || Math.abs(contentHeight - predictedBaseline - predictedDescent - continuationHeight) > 0.5)
     return decline("captured source line does not satisfy the parent strut and fixed margins");
-  stack.notes.push("approximated: newly multiline inline text or a native baseline-guide mismatch is reported at runtime and uses native baseline flow; CSS inline reconstruction then unavailable");
+  stack.notes.push(continuation ? "approximated: native continuation baseline-guide or font-box mismatch is reported at runtime; original glyph drawing remains unproved" : "approximated: newly multiline inline text or a native baseline-guide mismatch is reported at runtime and uses native baseline flow; CSS inline reconstruction then unavailable");
   return { strutAscent, strutDescent, sourceInsets, items: contractItems };
 }
 
@@ -17257,10 +17274,11 @@ function inlineWordsReason(n) {
 
 // src/analysis/inline-content-flow-content.ts
 function inlineContentOf(stack) {
-  const joined = intrinsicSource(stack), baseline = stack.inlineBaseline;
-  if (joined?.kind !== "container" || !baseline || joined.items.length !== 2 || stack.children.length !== 2)
+  const joined = intrinsicSource(stack);
+  if (joined?.kind !== "container" || joined.items.length !== 2 || stack.children.length !== 2)
     return;
-  const [widget, caption] = stack.children, source = caption && intrinsicSource(caption);
+  const widget = joined.items.find((item) => item.node === joined.source.children[0])?.sem;
+  const caption = stack.children.find((child) => child !== widget), source = caption && intrinsicSource(caption);
   if (!widget || widget.kind !== "control" || !caption || caption.kind !== "text" || !caption.lineBox || !usesGreedyWords(caption) || source?.kind !== "text" || source.leaf || source.source !== joined.source || source.runs.length !== 1 || caption.runs.length !== 1 || caption.padding.some(Boolean))
     return;
   const rawNode = source.runs[0].node, raw = rawNode.text ?? "", widgetSource = intrinsicSource(widget)?.source;
@@ -17281,9 +17299,12 @@ function inlineContentOf(stack) {
   const margins = widgetSource?.inlineControlMargins;
   if (!margins || !margins.every((value) => Number.isFinite(value) && value >= 0))
     return;
+  const baseline = stack.inlineBaseline ?? inlineBaselineOf(joined.source, joined.items, stack, joined.context, rawNode);
+  if (!baseline || !stack.children.includes(widget))
+    return;
   return {
-    widget: 0,
-    caption: 1,
+    widget: stack.children.indexOf(widget),
+    caption: stack.children.indexOf(caption),
     raw,
     tokens,
     lineBox: caption.lineBox,
@@ -17387,12 +17408,14 @@ function build(n, ctx) {
     const src = n.tag === "video" ? n.attrs["poster"] ?? "" : n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "";
     const anchor = objectPosition(position);
     const intrinsic = anchor && (anchor[0] !== 0.5 || anchor[1] !== 0.5) && (fit === "cover" || fit === "contain") ? imageSize(src) : undefined;
+    const fallbackFontDiagnostic = n.attrs.alt ? fontSelectionDiagnostic(n.styles, ctx.bundledFamilies) : undefined;
     const image = withBase(n, ctx, {
       kind: "image",
       src,
       contentMode: fit === "cover" ? "fill" : fit === "contain" || fit === "scale-down" ? "fit" : fit === "none" ? "none" : "stretch",
       ...intrinsic && intrinsic.w > 0 && intrinsic.h > 0 ? { intrinsicSize: [intrinsic.w, intrinsic.h] } : {},
-      ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}
+      ...n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {} } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {},
+      ...fallbackFontDiagnostic ? { fallbackFontDiagnostic } : {}
     });
     if (fit === "scale-down")
       image.notes.push("approximated: object-fit: scale-down → contain; native intrinsic image size is unknown");
@@ -17980,6 +18003,8 @@ function imageNodeExpr(n, ctx) {
     if (!n.alt)
       return ["Color.clear", ...a11y];
     note(n, "approximated: broken image source → alt text in the measured box");
+    if (n.fallbackFontDiagnostic)
+      note(n, n.fallbackFontDiagnostic);
     return [
       `Text(verbatim: ${swiftStringLiteral(n.alt)})`,
       ...n.font ? [`.font(${fontExpr(n.font, ctx)})`] : [],
@@ -19108,7 +19133,8 @@ function frameModifier(n, ctx) {
     parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`);
   if (app && n.width.kind === "fraction")
     parts.push(`.modifier(MarkswiftRelativeWidth(fraction: ${num3(n.width.value)}, capturedWidth: ${num3(n.width.capturedPx)}))`);
-  const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
+  const fillMinimum = fillH && n.maxHeight === undefined ? 0 : undefined;
+  const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor ?? fillMinimum : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
   const intrinsic = app && n.width.kind === "fill" && n.intrinsicMinWidth?.program ? `${intrinsicWidthExpr(n.intrinsicMinWidth.program)}.value` : undefined;
   const minimum = intrinsic ?? num3(n.minWidth ?? 0);
@@ -19775,15 +19801,10 @@ function inlineContentExpr(node, ctx) {
 
 // src/swift/layout.ts
 function containerExpr(n, ctx) {
-  if (ctx.mode === "app" && n.kind === "stack" && (n.inlineContentFlow || n.contentAutoHeight)) {
+  if (n.kind === "stack" && (n.inlineContentFlow || ctx.mode === "app" && n.contentAutoHeight)) {
     const original = n, height = n.contentAutoHeight;
-    n = {
-      ...n,
-      height: { kind: "hug" },
-      minHeight: undefined,
-      maxHeight: undefined,
-      padding: n.inlineContentFlow?.sourceInsets ?? height.sourceInsets
-    };
+    const padding = n.inlineContentFlow?.sourceInsets ?? height.sourceInsets;
+    n = ctx.mode === "app" ? { ...n, height: { kind: "hug" }, minHeight: undefined, maxHeight: undefined, padding } : { ...n, height: { kind: "fixed", px: n.frame.h }, padding };
     geometryAlias(n, original, ctx.geometry);
     textObservationAlias(n, original, ctx.text);
   } else if (n.kind === "stack" && n.inlineBaseline) {
@@ -19795,7 +19816,7 @@ function containerExpr(n, ctx) {
   const out = [];
   if (n.kind === "stack" && n.table)
     out.push(...tableExpr(n, ctx));
-  else if (ctx.mode === "app" && n.kind === "stack" && n.inlineContentFlow)
+  else if (n.kind === "stack" && n.inlineContentFlow)
     out.push(...inlineContentExpr(n, ctx));
   else if (ctx.mode === "app" && n.kind === "stack" && n.inlineBaseline)
     out.push(...inlineBaselineExpr(n, ctx));

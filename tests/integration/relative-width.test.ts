@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { convertHtml } from "../../src/index.ts";
+import { inferScreen } from "../../src/analysis/infer.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
@@ -52,8 +53,11 @@ browserTest("equal calculated flex widths share the available row width in app m
   expect(wide.layout.root.children[0]?.children[0]?.preferredSize?.width).toBe("calc(50% - 6px)");
   expect(wide.layout.root.children[0]?.children[0]?.bounds.w).toBe(169);
   expect(narrow.layout.root.children[0]?.children[0]?.bounds.w).toBe(134);
+  expect(inferScreen(wide.layout, "CalculatedFlex").root).toMatchObject({
+    children: [{ children: [{ width: { kind: "fill" } }, { width: { kind: "fill" } }] }],
+  });
   expect(wide.code).not.toContain(".frame(width: 169.0");
-  expect(wide.code.match(/\.frame\(maxWidth: \.infinity/g)?.length).toBeGreaterThanOrEqual(2);
+  expect(wide.code.match(/\.frame\(minWidth: 0\.0, maxWidth: \.infinity/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   expect(wide.diagnostics.some(item => item.notes.some(note => note.includes("width: calc(50% - 6px)")))).toBe(false);
 }, 30000);
 

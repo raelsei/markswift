@@ -461,6 +461,8 @@ export interface ImageNode extends SemBase {
     alt?: string;
     /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
     font?: FontSpec;
+    /** Font provenance applies only if the emitter actually paints this image's alt fallback. */
+    fallbackFontDiagnostic?: string;
     /** Computed `color` of the element, for that same alt text. */
     color?: Color;
 }

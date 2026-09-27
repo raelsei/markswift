@@ -11,9 +11,25 @@ import { inlineContentFlowFixture } from "../helpers/inline-content-flow-fixture
 import { convertHtml } from "../../src/index.ts";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { walk, type StackNode } from "../../src/model/semantic.ts";
+import { intrinsicSource } from "../../src/analysis/intrinsic-min-content-source.ts";
 
 const sdkTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
+browserTest("a directly captured multiline caption keeps first-line widget ownership in fidelity", async () => {
+  const html = '<!doctype html><main id="proof"><fieldset><legend>Export preferences</legend><label id="row"><input type="checkbox"> Include diagnostics</label></fieldset></main>';
+  const css = 'html,body{margin:0}main{padding:16px;box-sizing:border-box;font:14px/20px system-ui}fieldset{margin:0;padding:12px;border:1px solid black;min-width:min-content}legend{padding:0 5px}label{display:block;padding:5px 0;margin-bottom:6px}input{width:13px;height:13px}';
+  for (const width of [128, 390]) {
+    const result = await convertHtml(html, { css, name: "CapturedInline", root: "#proof", mode: "fidelity", viewport: { width, height: 380 } });
+    let row: StackNode | undefined;
+    walk(inferScreen(result.layout, "CapturedInline").root, node => { if (node.kind === "stack" && node.id === "#row") row = node; });
+    expect(row?.inlineContentFlow).toBeDefined();
+    const widget = row!.children[row!.inlineContentFlow!.widget]!;
+    const joined = intrinsicSource(row!);
+    expect(widget.kind).toBe("control");
+    expect(intrinsicSource(widget)?.source).toBe(joined!.source.children[0]);
+    expect(result.code).toContain("MarkswiftInlineContentRow");
+  }
+}, 60000);
 browserTest("live captured containment defaults admit only the ordinary source auto-height contract", async () => {
   const html = `<!doctype html><main id="proof"><fieldset id="field"><legend>Export preferences</legend><label id="row"><input type="checkbox"> Include diagnostics</label></fieldset></main>`;
   const css = `html,body{margin:0}main{padding:16px;box-sizing:border-box;font:14px/20px system-ui}fieldset{margin:0;border:1px solid black;padding:12px;min-width:min-content}legend{padding:0 5px}label{display:block;padding:5px 0;margin-bottom:6px}input{width:13px;height:13px}`;

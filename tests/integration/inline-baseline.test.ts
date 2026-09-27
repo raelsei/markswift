@@ -125,7 +125,9 @@ browserTest("inline span admission uses actual CSS border/padding without changi
     expect(property(fidelity.view, "direct-bordered")).toContain("bottom: 12.0");
     expect(emitSwift(screen, "InsetProof", { mode: "app", geometryInstrumentation: true, textInstrumentation: true }).view).toBe(app.view);
     const legacy = structuredClone(screen);
-    walk(legacy.root, node => { if (node.kind === "stack") delete node.inlineBaseline; });
+    walk(legacy.root, node => {
+      if (node.kind === "stack") { delete node.inlineBaseline; delete node.inlineContentFlow; }
+    });
     const before = emitSwift(legacy, "InsetProof", { mode: "fidelity", geometryInstrumentation: true, textInstrumentation: true });
     for (const id of ["none", "negative", "percentage", "tall", "stretch", "bordered-none", "parent-percentage"]) {
       expect(rows.get("#" + id)!.inlineBaseline).toBeUndefined();

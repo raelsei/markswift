@@ -135,6 +135,7 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     if (!n.alt) return ["Color.clear", ...a11y];
     // The browser paints the alt text at the top-left of the box in the element's own font.
     note(n, "approximated: broken image source → alt text in the measured box");
+    if (n.fallbackFontDiagnostic) note(n, n.fallbackFontDiagnostic);
     return [
       `Text(verbatim: ${str(n.alt)})`,
       ...(n.font ? [`.font(${fontExpr(n.font, ctx)})`] : []),

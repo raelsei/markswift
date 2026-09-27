@@ -6,7 +6,7 @@ type ContentSource =
   | { kind: "text"; source: LayoutNode; runs: SourceTextRun[]; leaf: boolean }
   | { kind: "container"; source: LayoutNode; items: AnalyzedChild[] }
   | { kind: "control"; source: LayoutNode };
-export type IntrinsicSource = ContentSource & { context: Pick<InferenceContext, "parent" | "parentDisplay" | "parentAxis"> };
+export type IntrinsicSource = ContentSource & { context: Pick<InferenceContext, "root" | "parent" | "parentDisplay" | "parentAxis"> };
 
 // Object identity is the join. Weak keys keep this conversion-local association out of IR.
 const sources = new WeakMap<SemNode, IntrinsicSource>();

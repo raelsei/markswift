@@ -29,19 +29,20 @@ const doc: LayoutDoc = {
   },
 };
 
-test("rich inline text keeps byte-stable Swift in app and fidelity modes", () => {
+test("rich inline text retains its content and styles with bounded fill frames in both modes", () => {
   const outputs = (["app", "fidelity"] as const).map((mode) => compileLayout(doc, { name: "RichText", mode }));
   for (const result of outputs) {
     expect(result.code).toContain("\u200b");
     expect(result.diagnostics.flatMap((item) => item.notes).join("\n")).toContain("<wbr>");
     expect(result.diagnostics.flatMap((item) => item.notes).join("\n")).toContain("destination dropped");
     expect(result.code).toContain(".background(Color.markswift(1.0, 1.0, 0.0), in: Rectangle())");
+    expect(result.code).toContain("minHeight: 0.0, maxHeight: .infinity");
   }
-  // Fill frames explicitly accept narrow proposals with minWidth: 0; rich-text content,
+  // Fill frames explicitly accept smaller proposals with zero width/height minima; rich-text content,
   // break handling, styles and diagnostics remain covered by the assertions above/below.
   expect(outputs.map((result) => createHash("sha256").update(result.code).digest("hex"))).toEqual([
-    "104970114ed1554683f998d188e662099b0837f8f478b83974cff78ef38686b0",
-    "044497473e0275982bde668d9e506632861b2965425b414d66004be85ee03c23",
+    "198513c0eeddb0fa827aa82294228de09a203ded1ceea5492026000a02a4ef15",
+    "3701100604aacc3441ef2febdf8c52ded0f51a3683fb5e44cc6cc9f379385d7f",
   ]);
   expect(outputs[1]!.code).toContain('Text(verbatim: "\\nlink")');
   expect(outputs[1]!.code).not.toContain('Text(verbatim: "\\nFinish")');

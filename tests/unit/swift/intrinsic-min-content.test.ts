@@ -7,12 +7,13 @@ import { intrinsicWidthExpr } from "../../../src/swift/intrinsic-width.ts";
 import { intrinsicMinContentFixture, nestedMinContentFixture } from "../../helpers/intrinsic-min-content-fixture.ts";
 
 test.each([
-  [intrinsicMinContentFixture, "MinimumParity0", "a30578a24cb621dec4c20507d59b4cffcd8437d9e805b50473bfa91e2b6582a9"],
-  [nestedMinContentFixture, "MinimumParity1", "22961e7fcb708749ef74b04c429fdb4b2c06fa5229956622a717de0255d3bdc4"],
-] as const)("%s retains the pre-change fidelity view bytes", (fixture, name, expected) => {
+  [intrinsicMinContentFixture, "MinimumParity0", "914b3cb21168d21757e6c754b8ec391670c097f205d35834f99aa9d836590ec7"],
+  [nestedMinContentFixture, "MinimumParity1", "3908338613c7653ccec061c89a1f8aa52ea67691f0478bf04e99f7e5a5d3e1c4"],
+] as const)("%s fidelity retains captured widths while its root accepts a finite height proposal", (fixture, name, expected) => {
   const code = compileLayout(fixture(), { name, mode: "fidelity" }).code;
   expect(createHash("sha256").update(code).digest("hex")).toBe(expected);
   expect(code).not.toContain("MarkswiftIntrinsicWidth");
+  expect(code).toContain("minHeight: 0.0, maxHeight: .infinity");
 });
 
 test("optional descriptor absence retains numeric app and fidelity width constructors", () => {

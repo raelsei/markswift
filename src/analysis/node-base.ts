@@ -24,19 +24,20 @@ function worst(notes: string[]): Confidence {
 }
 
 export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: InferenceContext, extra: T): SemNode {
-  const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]));
+  const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]), extra.kind !== "image" && extra.kind !== "box");
   return finish({ ...base, ...extra } as unknown as SemNode);
 }
 
-export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
+export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>, consumesFont = true): SemBase {
   const notes: string[] = [];
-  const fontDiagnostic = fontSelectionDiagnostic(n.styles, ctx.bundledFamilies);
+  const policy = classifyElement(n.tag, n.attrs);
+  // Decorative boxes do not consume inherited fonts; image alt provenance is deferred to paint.
+  const fontDiagnostic = consumesFont ? fontSelectionDiagnostic(n.styles, ctx.bundledFamilies) : undefined;
   if (fontDiagnostic) notes.push(fontDiagnostic);
   // The root capture rebases its painted border to the viewport; its external flow slot is
   // outside the converted subtree. Descendants retain separate flow and paint positions.
   const relative = ctx.parent ? relativePosition(n) : {};
   if (relative.reason) notes.push(`approximated: relative position ${relative.reason}; captured placement cannot recompute at another width`);
-  const policy = classifyElement(n.tag, n.attrs);
   if (policy.note) notes.push(policy.note);
   if ([n, ...n.children.filter(child => child.tag === "::marker")].some(marker => marker.tag === "::marker" && marker.styles.content === "normal"
     && /^(disc|circle|square|disclosure-open|disclosure-closed)$/.test(marker.styles["list-style-type"] ?? "")

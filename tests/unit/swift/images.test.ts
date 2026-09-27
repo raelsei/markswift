@@ -21,6 +21,27 @@ function layout(fit: "cover" | "contain", width: string, position = "50% 50%", s
   };
 }
 
+test.each(["app", "fidelity"] as const)("%s font diagnostics follow painted alt text, not an image's inherited font", mode => {
+  for (const [src, alt, paintsText] of [[svg, "Picture", false], ["", "Missing picture", true], ["", "", false]] as const) {
+    const doc = layout("contain", "200px", "50% 50%", src), image = doc.root.children[0]!;
+    image.attrs.alt = alt;
+    Object.assign(image.styles, { "font-family": "Times", "font-size": "16px", "font-weight": "400" });
+    const result = compileLayout(doc, { name: "ImageFontOwnership", mode });
+    const notes = result.diagnostics.find(node => node.id === "#image")?.notes ?? [];
+    expect(notes.some(note => note.includes("concrete font-family Times"))).toBe(paintsText);
+    expect(result.code.includes('Text(verbatim: "Missing picture")')).toBe(paintsText);
+  }
+});
+
+test("a decorative background box has no font substitution diagnostic", () => {
+  const doc = layout("contain", "200px");
+  doc.root.children = [];
+  Object.assign(doc.root.styles, { "font-family": "Times", "font-size": "16px", "background-image": `url("${svg}")` });
+  const result = compileLayout(doc, { name: "BackgroundFontOwnership" });
+  expect(result.diagnostics.flatMap(node => node.notes).some(note => note.includes("font-family Times"))).toBe(false);
+  expect(result.code).not.toContain("Text(verbatim:");
+});
+
 test("flexible SVG cover and contain use the live image box in app mode", () => {
   for (const [fit, scale] of [["cover", "max"], ["contain", "min"]] as const) {
     const result = compileLayout(layout(fit, "100%"), { name: "ResponsiveVector", mode: "app" });

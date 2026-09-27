@@ -34,7 +34,10 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // a finite cap. Margin placement, when needed, is applied after paint by modifiers.ts.
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap
   // would grow a smaller explicit size to the cap instead of keeping its measured dimension.
-  const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
+  // A maximum-only fill frame retains the child's intrinsic minimum. Both bounds accept
+  // a smaller finite proposal without clipping; an unspecified proposal stays natural.
+  const fillMinimum = fillH && n.maxHeight === undefined ? 0 : undefined;
+  const minHeight = allocatedHug ? undefined : n.minHeight === undefined ? textFloor ?? fillMinimum : Math.max(n.minHeight, textFloor ?? 0);
   const maxHeight = allocatedHug ? undefined : n.maxHeight;
   const intrinsic = app && n.width.kind === "fill" && n.intrinsicMinWidth?.program
     ? `${intrinsicWidthExpr(n.intrinsicMinWidth.program)}.value` : undefined;

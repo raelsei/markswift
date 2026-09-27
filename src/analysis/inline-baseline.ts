@@ -5,9 +5,10 @@ import { flowFrame } from "./relative-position.ts";
 import { intrinsicFontSettingsReason } from "./intrinsic-font-settings.ts";
 import { fontOf } from "./typography.ts";
 import { EDGES, insetsOf } from "./geometry.ts";
+import { inlineCaptionBoxHeight } from "./inline-caption-box.ts";
 
 /** A captured widget border baseline is admitted only beside independently measured plain text. */
-export function inlineBaselineOf(node: LayoutNode, items: AnalyzedChild[], stack: StackNode, context?: InferenceContext): StackNode["inlineBaseline"] {
+export function inlineBaselineOf(node: LayoutNode, items: AnalyzedChild[], stack: StackNode, context?: Pick<InferenceContext, "root" | "parent">, continuation?: LayoutNode): StackNode["inlineBaseline"] {
   const widgets = items.filter(item => item.node.tag === "input" && /^(checkbox|radio)$/.test(item.node.attrs.type ?? ""));
   if (!widgets.length || !items.some(item => item.sem.kind === "text")) return;
   const decline = (reason: string) => {
@@ -38,7 +39,7 @@ export function inlineBaselineOf(node: LayoutNode, items: AnalyzedChild[], stack
     (parent.styles.position && parent.styles.position !== "static") || (parent.styles.transform && parent.styles.transform !== "none")))
     return decline("relative or transformed ancestor");
   const parentFont = fontOf(node.styles, {}), widget = widgets[0]!, text = items.find(item => item.sem.kind === "text")!;
-  if (text.sem.kind !== "text" || text.sem.lines !== 1 || !text.sem.lineBox || text.sem.lineLimit !== undefined || text.sem.truncate
+  if (text.sem.kind !== "text" || (!continuation && text.sem.lines !== 1) || !text.sem.lineBox || text.sem.lineLimit !== undefined || text.sem.truncate
     || text.sem.runs.some(run => JSON.stringify(run.font) !== JSON.stringify(parentFont) || run.italic || run.bound || run.baselineOffset !== undefined || run.gap !== undefined)
     || text.sem.padding.some(Boolean) || text.sem.overlays.length || text.sem.style.fills.length) return decline("unproved plain single-line font box");
   if (widget.node.styles.appearance !== "auto" || widget.node.styles["vertical-align"] !== "baseline"
@@ -53,18 +54,23 @@ export function inlineBaselineOf(node: LayoutNode, items: AnalyzedChild[], stack
     && /^(?:\d+(?:\.\d*)?|\.\d+)px$/.test(node.styles[`border-${edge}-width`] ?? "") && node.styles[`border-${edge}-style`] !== undefined))
     return decline("parent CSS content insets unavailable");
   const sourceInsets = insetsOf(node.styles);
+  const captionHeight = continuation ? inlineCaptionBoxHeight(text.sem, strut.lineHeight, continuation) : flowFrame(text.sem).h;
+  if (captionHeight === undefined) return decline("captured continuation font-box union is unproved");
   const strutAscent = strut.ascent + Math.floor((strut.lineHeight - strut.ascent - strut.descent) / 2), strutDescent = strut.lineHeight - strutAscent;
   const contentTop = stack.frame.y + sourceInsets[0], textFrame = flowFrame(text.sem), baseline = textFrame.y + text.sem.lineBox.firstBaseline;
   if (Math.abs(frame.y + frame.h - baseline) > .5) return decline("observed widget border does not share the measured text baseline");
   const contractItems = stack.children.map(child => {
     if (child === control) return { kind: "widget" as const, baseline: frame.h, height: frame.h, top: margins[0], bottom: margins[2] };
-    return { kind: "text" as const, baseline: text.sem.kind === "text" ? text.sem.lineBox!.firstBaseline : 0, height: textFrame.h, top: 0, bottom: 0 };
+    return { kind: "text" as const, baseline: text.sem.kind === "text" ? text.sem.lineBox!.firstBaseline : 0, height: captionHeight, top: 0, bottom: 0 };
   });
   const predictedBaseline = Math.max(strutAscent, ...contractItems.map(item => item.baseline + item.top));
   const predictedDescent = Math.max(strutDescent, ...contractItems.map(item => item.height - item.baseline + item.bottom));
   const contentHeight = stack.frame.h - sourceInsets[0] - sourceInsets[2];
-  if (Math.abs(baseline - contentTop - predictedBaseline) > .5 || Math.abs(contentHeight - predictedBaseline - predictedDescent) > .5)
+  const continuationHeight = continuation ? (text.sem.lines - 1) * strut.lineHeight : 0;
+  if (Math.abs(baseline - contentTop - predictedBaseline) > .5 || Math.abs(contentHeight - predictedBaseline - predictedDescent - continuationHeight) > .5)
     return decline("captured source line does not satisfy the parent strut and fixed margins");
-  stack.notes.push("approximated: newly multiline inline text or a native baseline-guide mismatch is reported at runtime and uses native baseline flow; CSS inline reconstruction then unavailable");
+  stack.notes.push(continuation
+    ? "approximated: native continuation baseline-guide or font-box mismatch is reported at runtime; original glyph drawing remains unproved"
+    : "approximated: newly multiline inline text or a native baseline-guide mismatch is reported at runtime and uses native baseline flow; CSS inline reconstruction then unavailable");
   return { strutAscent, strutDescent, sourceInsets, items: contractItems };
 }
