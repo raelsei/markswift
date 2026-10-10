@@ -40,7 +40,8 @@ CSS file and inlined as data URLs; root-relative (`/…`) URLs still resolve aga
 File inputs resolve relative assets beside the HTML;
 stdin is for self-contained markup and data-URL assets. `--width`, `--height`, `--theme`,
 `--dark-class` and `--mode` select the captured state. Normal output prints the destination; warnings and
-approximation notes go to stderr. Exit status is 0 for a completed conversion, 2 for invalid
+diagnostics go to stderr, one `Note` line per distinct loss (unmapped first) naming the nodes it
+affects. Exit status is 0 for a completed conversion, 2 for invalid
 command options, and 1 for a conversion or file error. Run `bun src/cli.ts convert --help` for
 the complete option list.
 
@@ -110,6 +111,9 @@ const result = compileLayout(savedLayout, { name: "CardView", mode: "app" });
   embedded in the captured layout so generated code does not depend on a temporary local server.
   Unavailable images are reported; a loopback image URL (`127.0.0.1`, `localhost`) is never emitted —
   the layer becomes a placeholder (or the `alt` text) with a diagnostic.
+- Each `diagnostics` entry is a node (`id`, `kind`, `confidence`) with what it lost:
+  `{ level: "approximated" | "unmapped", feature, message }`, where `feature` is a conformance
+  inventory row id (`font-family`, `display: grid`, `svg:use`, `img`), so reports group by feature.
 - `timeoutMs` (default 120000, i.e. 120 s) bounds the whole conversion: browser, network and font
   conversion. A conversion that exceeds it rejects with `conversion timed out after <n> ms`.
 - `compileLayout` accepts prepared `bundledFamilies` and `fontMetrics` for custom fonts.
@@ -184,7 +188,7 @@ policy. Its support states describe implementation strategy, **not visual verifi
 | State | Meaning |
 | --- | --- |
 | `implemented` | A compiler path exists; individual CSS combinations and native behavior need verification |
-| `approximated` | Captured content is rendered with an explicit limitation in `diagnostics` |
+| `approximated` | Captured content is rendered with an explicit limitation: an `approximated` diagnostic naming the element |
 | `unsupported` | A measured placeholder or visible object fallback is emitted with an `unmapped` diagnostic |
 | `nonvisual` | Metadata/resources are consumed by the browser rather than emitted as views |
 
@@ -214,8 +218,8 @@ does not establish responsive grid tracks or every possible shadow combination.
 
 Flex wrapping, background layers, font families, inline text and image fitting showed material
 browser/iOS differences in the same pilot and are outside the approved visual subset. A simple
-grid fixture reached 0.9546 or better in `app` mode, but its diagnostics still say responsive
-track definitions were not reconstructed. The accepted subset will grow from repeatable native
+grid fixture reached 0.9546 or better in `app` mode; equal-fill regular grids are reported exact.
+The accepted subset will grow from repeatable native
 comparisons and explicit geometry/text/paint checks, not from compiler coverage alone.
 
 A separate local seven-case text pilot completed 56 native comparisons across two widths, two themes
@@ -230,7 +234,10 @@ This scoped fix does not cover styled runs, RTL, missing fonts or arbitrary pros
 their existing text path. A local bundled webfont reached 0.9523 at worst; its presence does not
 guarantee identical glyph pixels.
 Missing webfont bytes produce resource warnings and a fallback diagnostic. Generic platform-font
-substitutions remain explicit approximations; complex text needs more native visual work.
+substitutions remain explicit approximations, including Arial/Helvetica rendered as SF Pro;
+complex text needs more native visual work. Inline-block rows pinned to the captured line
+division, gradient stops and shadows the parser cannot read, and CSS animations (captured at
+their end state) are reported too.
 
 For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
 can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
@@ -260,7 +267,8 @@ CSS constraints. Intrinsic sizing and tables remain layout work.
 Regular full-cell grids use native `Grid` when captured geometry matches the resolved tracks;
 unequal tracks retain measured widths. Holes, spans, empty tracks, aligned intrinsic items,
 overlap and RTL use captured child positions, preserving padding, borders and paint order.
-These grid paths report that responsive track definitions are not reconstructed.
+Unequal tracks and captured positions report that columns do not resize at another width;
+equal-fill regular grids reproduce `repeat(n, 1fr)` and are reported exact.
 
 Row wrapping now uses a native layout that chooses rows again at the component's available
 width. It supports captured fixed-size items with growth and shrink disabled, pixel gaps,

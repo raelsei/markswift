@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeBundle } from "../../../src/cli/output.ts";
+import { formatDiagnostics, writeBundle } from "../../../src/cli/output.ts";
 
 test("bundle writing rejects names that collide on case-insensitive filesystems", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-output-"));
@@ -33,4 +33,13 @@ test("bundle writing rejects traversal before creating an output directory", asy
     expect(await Bun.file(join(directory, "escaped.swift")).exists()).toBe(false);
     expect(await Bun.file(join(output, "Card.swift")).exists()).toBe(false);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("diagnostics print once per feature and message, unmapped first, naming the nodes", () => {
+  const float = { level: "approximated" as const, feature: "float", message: "m" };
+  expect(formatDiagnostics([
+    { id: "#a", kind: "stack", confidence: "approximated", diagnostics: [float] },
+    { id: "#b", kind: "stack", confidence: "approximated", diagnostics: [{ ...float }] },
+    { id: "#c", kind: "svg", confidence: "unmapped", diagnostics: [{ level: "unmapped", feature: "svg:use", message: "u" }] },
+  ])).toEqual(["unmapped svg:use: u [1 node: #c]", "approximated float: m [2 nodes: #a, #b]"]);
 });
