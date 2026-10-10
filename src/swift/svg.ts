@@ -4,8 +4,7 @@
  * rings become trimmed `Circle`s; `<text>` runs are `Text`s positioned where the browser
  * laid them out.
  */
-import svgpath from "svgpath";
-import type { SvgGradient, SvgNode, SvgPath, SvgText } from "../model/semantic.ts";
+import type { PathSegment, SvgGradient, SvgNode, SvgPath, SvgText } from "../model/semantic.ts";
 import type { ColorCtx } from "./context.ts";
 import { colorExpr, fontExpr, hash, indent, num, shapeStruct, str } from "./format.ts";
 
@@ -56,7 +55,7 @@ function layerLines(p: SvgPath, view: View): string[] {
     const rotate = p.ring.startAngle ? `.rotationEffect(.degrees(${Number.isInteger(p.ring.startAngle) ? p.ring.startAngle : num(p.ring.startAngle)}))` : "";
     return [`Circle().trim(from: 0, to: ${num(p.ring.to)}).stroke(${withOpacity(paint, p.strokeOpacity)}, style: StrokeStyle(lineWidth: ${num(lw)}, lineCap: .${p.lineCap ?? "butt"}))${rotate}.padding(${num(inset)})`];
   }
-  const name = shapeName(p.d, vb, view.shapes);
+  const name = shapeName(p.path, vb, view.shapes);
   const suffix = layerSuffix(p, view);
   const out: string[] = [];
   const fill = p.gradient ? gradientExpr(p.gradient, vb, view) : p.fill && p.fill.a > 0 ? colorExpr(p.fill, view.ctx, view.id) : undefined;
@@ -75,7 +74,7 @@ function layerLines(p: SvgPath, view: View): string[] {
 /** Modifiers shared by a path's fill and stroke layers: opacity, clip, mask. */
 function layerSuffix(p: SvgPath, view: View): string {
   let s = p.opacity !== undefined ? `.opacity(${num(p.opacity)})` : "";
-  if (p.clip) s += `.clipShape(${shapeName(p.clip.d, view.vb, view.shapes)}()${p.clip.eoFill ? ", style: FillStyle(eoFill: true)" : ""})`;
+  if (p.clip) s += `.clipShape(${shapeName(p.clip.path, view.vb, view.shapes)}()${p.clip.eoFill ? ", style: FillStyle(eoFill: true)" : ""})`;
   if (p.mask?.length) {
     // SVG masks are luminance masks; SwiftUI masks by alpha.
     const layers = p.mask.flatMap((m) => layerLines(m, view));
@@ -112,15 +111,15 @@ function textLine(t: SvgText, view: View): string {
 }
 
 /** One Shape struct per unique (path, viewBox); returns its name. */
-function shapeName(d: string, vb: [number, number, number, number], shapes: Record<string, string>): string {
-  return shapeStruct("MarkswiftShape_" + hash(`${vb.join(" ")}|${d}`), shapes, () => {
+function shapeName(path: PathSegment[], vb: [number, number, number, number], shapes: Record<string, string>): string {
+  return shapeStruct("MarkswiftShape_" + hash(`${vb.join(" ")}|${path.map((s) => s.join(" ")).join(" ")}`), shapes, () => {
     const [vx, vy, vw, vh] = vb;
     const out = [
       `let sx = rect.width / ${num(vw)}, sy = rect.height / ${num(vh)}`,
       `func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + (x - ${num(vx)}) * sx, y: rect.minY + (y - ${num(vy)}) * sy) }`,
       "var p = Path()",
     ];
-    svgpath(d).unshort().unarc().abs().iterate((seg: Array<string | number>) => {
+    for (const seg of path) {
       const [cmd, ...a] = seg as [string, ...number[]];
       switch (cmd) {
         case "M":
@@ -145,7 +144,7 @@ function shapeName(d: string, vb: [number, number, number, number], shapes: Reco
           out.push("p.closeSubpath()");
           break;
       }
-    });
+    }
     out.push("return p");
     return out;
   });

@@ -63,7 +63,7 @@ describe("BUG-14 SVG groups, nested viewports and object-bounding-box clips", ()
   test("a group clip-path applies to the shapes below it", () => {
     const p = draw('<svg viewBox="0 0 10 10"><defs><clipPath id="c"><rect width="5" height="5"/></clipPath></defs><g clip-path="url(#c)"><rect width="10" height="10" fill="red"/></g></svg>').paths[0]!;
     expect(p.clip).toBeDefined();
-    expect(pathBounds(p.clip!.d)).toEqual({ x: 0, y: 0, w: 5, h: 5 });
+    expect(pathBounds(p.clip!.path)).toEqual({ x: 0, y: 0, w: 5, h: 5 });
   });
   test("a group mask applies to the shapes below it", () => {
     const p = draw('<svg viewBox="0 0 10 10"><defs><mask id="m"><rect width="5" height="5" fill="white"/></mask></defs><g mask="url(#m)"><rect width="10" height="10" fill="red"/></g></svg>').paths[0]!;
@@ -77,14 +77,26 @@ describe("BUG-14 SVG groups, nested viewports and object-bounding-box clips", ()
   });
   test("a nested <svg> is its own viewport", () => {
     const p = draw('<svg viewBox="0 0 20 20"><svg x="10" width="10" height="10" viewBox="0 0 100 100"><rect width="100" height="100"/></svg></svg>').paths[0]!;
-    expect(pathBounds(p.d)).toEqual({ x: 10, y: 0, w: 10, h: 10 });
+    expect(pathBounds(p.path)).toEqual({ x: 10, y: 0, w: 10, h: 10 });
   });
   test("an objectBoundingBox clip applies the transform once", () => {
     const p = draw('<svg viewBox="0 0 20 20"><defs><clipPath id="o" clipPathUnits="objectBoundingBox"><rect width="0.5" height="1"/></clipPath></defs><g transform="translate(5,0)"><rect width="4" height="4" clip-path="url(#o)"/></g></svg>').paths[0]!;
-    const b = pathBounds(p.clip!.d);
+    const b = pathBounds(p.clip!.path);
     expect(b.x).toBeCloseTo(5, 5);
     expect(b.w).toBeCloseTo(2, 5);
   });
+});
+
+test("path data is normalised once, during analysis, into absolute segments", () => {
+  const path: LayoutNode = { tag: "path", attrs: { d: "m4 4 h16 v16 z" }, styles: {}, bounds: { x: 4, y: 4, w: 16, h: 16 }, children: [] };
+  const root: LayoutNode = { tag: "svg", attrs: { viewbox: "0 0 24 24" }, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 24, h: 24 }, children: [path] };
+  const doc: LayoutDoc = { version: 2, source: "icon", combo: { screen: "icon", theme: "light" }, size: { w: 24, h: 24 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
+  const svg = inferScreen(doc, "icon").root;
+  if (svg.kind !== "svg") throw new Error("expected an svg root");
+  expect(svg.paths[0]!.path).toEqual([["M", 4, 4], ["H", 20], ["V", 20], ["Z"]]);
+  // Each clip shape is normalised on its own: a relative `m` starts from its own origin, not the previous shape's.
+  const clipped = svgFromMarkup('<svg viewBox="0 0 100 40"><clipPath id="c"><path d="m10 10 h20 v20 h-20 z"/><path d="m60 10 h20 v20 h-20 z"/></clipPath><rect width="100" height="40" clip-path="url(#c)"/></svg>', { x: 0, y: 0, w: 100, h: 40 })!;
+  expect(pathBounds(clipped.paths[0]!.clip!.path)).toEqual({ x: 10, y: 10, w: 70, h: 20 });
 });
 
 describe("data: svg sources are parsed once, during analysis", () => {

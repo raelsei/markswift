@@ -1,6 +1,6 @@
 /** SVG affine transforms and path transformation. */
 import { type LayoutNode } from "../../model/layout.ts";
-import { type Diagnostic, addDiagnostic } from "../../model/semantic.ts";
+import { type Diagnostic, type PathSegment, addDiagnostic } from "../../model/semantic.ts";
 import { default as svgpath } from "svgpath";
 import { type SvgMatrix } from "./context.ts";
 
@@ -61,6 +61,15 @@ export function transformAttr(attr: string | undefined): SvgMatrix {
 
 export function bake(d: string, ctm: SvgMatrix): string {
   return isIdentity(ctm) ? d : svgpath(d).matrix(ctm).round(3).toString();
+}
+
+/** Path data → absolute segments, shorthands and arcs expanded: the IR's one path normalisation. */
+export function segments(d: string): PathSegment[] {
+  const out: PathSegment[] = [];
+  svgpath(d).unshort().unarc().abs().iterate((seg) => {
+    out.push([...seg] as PathSegment);
+  });
+  return out;
 }
 
 export function apply(m: SvgMatrix, x: number, y: number): [number, number] {

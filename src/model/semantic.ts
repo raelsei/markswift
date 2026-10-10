@@ -176,9 +176,17 @@ export type SvgGradient = { stops: Array<{ color: Color; pos: number }> } & (
   | { kind: "radial"; center: [number, number]; radius: [number, number] }
 );
 
+/** One absolute path command after `unshort`/`unarc`/`abs`: viewBox user units. */
+export type PathSegment =
+  | ["M" | "L", number, number]
+  | ["H" | "V", number]
+  | ["C", number, number, number, number, number, number]
+  | ["Q", number, number, number, number]
+  | ["Z"];
+
 export interface SvgPath {
-  /** Path data in viewBox user units; ancestor and own `transform`s are baked in. */
-  d: string;
+  /** Absolute segments in viewBox user units; ancestor and own `transform`s are baked in. */
+  path: PathSegment[];
   fill?: Color;
   /** Gradient fill (`fill="url(#id)"`); set instead of `fill`. */
   gradient?: SvgGradient;
@@ -207,8 +215,8 @@ export interface SvgPath {
    * 3 o'clock (the baked rotation).
    */
   ring?: { r: number; to: number; startAngle: number };
-  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `d`. */
-  clip?: { d: string; eoFill?: true };
+  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `path`. */
+  clip?: { path: PathSegment[]; eoFill?: true };
   /** `mask="url(#id)"`: the mask's painted shapes; their luminance becomes this layer's alpha. */
   mask?: SvgPath[];
 }
