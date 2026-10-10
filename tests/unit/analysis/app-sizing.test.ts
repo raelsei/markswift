@@ -159,3 +159,39 @@ describe("Step 4 viewport", () => {
     expect(inferScreen(doc(tallRoot()), "s").root.minHeight).toBe(844);
   });
 });
+
+describe("Step 5 page scroll", () => {
+  const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
+  const page = (h: number) => doc({ ...el("main", { x: 0, y: 0, w: 390, h }, { display: "block" }, [
+    { ...el("div", { x: 0, y: 0, w: 390, h: h / 2 }, { display: "block", "background-color": "rgb(255, 0, 0)" }), paint: 1 },
+    { ...el("div", { x: 0, y: h / 2, w: 390, h: h / 2 }, { display: "block", "background-color": "rgb(0, 255, 0)" }), paint: 2 },
+    { ...el("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, [], { id: "bar" }), paint: 3 },
+  ], { id: "root" }), paint: 0 }, VIEWPORT);
+
+  test("a page taller than the viewport scrolls; its fixed bar is marked", () => {
+    const root = inferScreen(page(2000), "s").root;
+    expect(root.kind).toBe("stack");
+    expect(root.kind === "stack" && root.scroll).toBe("v");
+    const bar = root.overlays.find((o) => o.node.id === "bar")!;
+    expect(bar).toMatchObject({ fixed: true, layer: "overlay" });
+  });
+
+  test("app mode hoists the fixed bar outside the ScrollView", () => {
+    const lines = code(page(2000)).split("\n");
+    const i = lines.findIndex((l) => l.includes("ScrollView(.vertical"));
+    expect(i).toBeGreaterThanOrEqual(0);
+    const k = lines[i]!.length - lines[i]!.trimStart().length;
+    const close = lines.findIndex((l, j) => j > i && l === " ".repeat(k) + "}");
+    expect(close).toBeGreaterThan(i);
+    expect(lines.slice(close + 1).some((l) => l.startsWith(" ".repeat(k) + ".overlay("))).toBe(true);
+  });
+
+  test("fidelity has no ScrollView", () => {
+    expect(code(page(2000), "fidelity")).not.toContain("ScrollView");
+  });
+
+  test("a page within the viewport does not scroll", () => {
+    const root = inferScreen(page(800), "s").root;
+    expect(root.kind === "stack" && root.scroll).toBeFalsy();
+  });
+});

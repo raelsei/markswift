@@ -19,9 +19,11 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // `object-fit: cover` overflows its box and `none` can; the browser clips both to the img box.
   if (n.kind === "image" && (n.contentMode === "cover" || n.contentMode === "none") && !st.clip) m.push(".clipped()");
   const shape = shapeExpr(st, n.frame.w, n.frame.h);
+  // App mode draws fixed overlays outside a scrolling node's ScrollView (`containerExpr`).
+  const hoisted = (o: Overlay) => o.fixed === true && ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
   // puts B behind A, so apply the front-most background first.
-  for (const o of [...n.overlays.filter((o) => o.layer === "background")].reverse()) m.push(...overlayModifier(o, "background", ctx));
+  for (const o of [...n.overlays.filter((o) => o.layer === "background" && !hoisted(o))].reverse()) m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
   m.push(...insetShadowModifiers(n, ctx));
   // Fills are bottom-most first in the IR; the same chain rule means the top-most goes first.
@@ -49,7 +51,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`);
   }
   m.push(...outerShadowModifiers(n, ctx));
-  for (const o of n.overlays.filter((o) => o.layer === "overlay")) m.push(...overlayModifier(o, "overlay", ctx));
+  for (const o of n.overlays.filter((o) => o.layer === "overlay" && !hoisted(o))) m.push(...overlayModifier(o, "overlay", ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
   if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, n, ctx));
   if (st.clipPath) m.push(clipPathModifier(st.clipPath, n, ctx));
@@ -81,7 +83,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   if (st.hidden) m.push(".hidden()");
   return m;
 }
-function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {
+export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {
   const inner = ctx.renderNode(o.node);
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`];
   return [`.${mode}(alignment: .topLeading) {`, ...indent(body, 1), `}`];

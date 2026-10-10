@@ -33,6 +33,8 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
     built = ctx.fixed.length;
     root.overlays.push(...buildOverlays(doc.root, batch, undefined, ctx));
   }
+  // The document scrolled in the browser: content past the viewport must stay reachable.
+  if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
@@ -246,6 +248,7 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
       layer: (c.paint ?? 0) < flowPaint ? "background" : "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers,
+      ...(c.styles["position"] === "fixed" ? { fixed: true as const } : {}),
     });
   }
   // Outside list markers hang in the host's padding and are dropped from the flow (`stackOf`),

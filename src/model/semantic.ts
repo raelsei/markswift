@@ -233,6 +233,8 @@ export interface Overlay {
   offset: [number, number];
   /** True when the node covers exactly the host box (inset: 0). */
   covers: boolean;
+  /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
+  fixed?: true;
 }
 
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
