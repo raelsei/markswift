@@ -17,9 +17,13 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   const seen: Record<string, number> = {};
 
   // Collect container properties depth-first so the body reads top-down.
+  const contentMinWidth = new Set<SemNode>();
   visit(screen.root, (n) => {
     if (n.kind !== "stack" && n.kind !== "grid") return;
     props.push({ name: uniqueName(`v_${identifier(n.id) || "n" + props.length}`, seen), node: n });
+    // A measured layout proposes each child its captured box, which already holds CSS's minimum.
+    if (!n.measured && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
+      for (const c of n.children) contentMinWidth.add(c);
   });
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);
@@ -29,6 +33,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   const ctx: EmitContext = {
     fontMetrics: opts.fontMetrics ?? {},
     nameOf,
+    contentMinWidth,
     shapes,
     images,
     screen,

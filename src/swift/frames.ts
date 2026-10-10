@@ -50,9 +50,10 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap
   // would grow a smaller explicit size to the cap instead of keeping its measured dimension.
   const minHeight = n.minHeight === undefined ? floor : Math.max(n.minHeight, floor ?? 0);
-  // A flexible frame without a minimum grows to content wider than the proposal; an
-  // `overflow: hidden` box keeps its parent's width and clips that content instead.
-  const minWidth = n.minWidth ?? (n.style.clip && fillW ? 0 : undefined);
+  // A flexible frame without a minimum grows to content wider than the proposal. A CSS fill box
+  // keeps its container's width and lets that content overflow (or clips it, for `overflow:
+  // hidden`), unless it is an item whose automatic minimum is its content (`contentMinWidth`).
+  const minWidth = n.minWidth ?? (fillW && (n.style.clip || !ctx.contentMinWidth.has(n)) ? 0 : undefined);
   const flex = [
     !fixedW && minWidth !== undefined ? `minWidth: ${num(minWidth)}` : "",
     !fixedW && n.maxWidth !== undefined
