@@ -5,10 +5,13 @@ import type { Page } from "playwright-core";
  * `content-visibility: auto` subtrees are forced to lay out (off-screen content
  * would otherwise be missing from the snapshot); the contents of
  * `content-visibility: hidden` elements (`hidden=until-found`) are removed from
- * layout because DOMSnapshot still reports boxes for them while nothing paints.
+ * layout because DOMSnapshot still reports boxes for them while nothing paints. Lazy images
+ * are loaded eagerly so below-the-fold pixels exist.
  */
 export async function settle(page: Page): Promise<void> {
   await page.evaluate(async () => {
+    for (const img of document.images) if (img.loading === "lazy") img.loading = "eager";
+    await Promise.all([...document.images].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
     for (const el of document.querySelectorAll("*")) {
       const cv = getComputedStyle(el).contentVisibility;

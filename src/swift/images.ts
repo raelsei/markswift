@@ -6,6 +6,8 @@ import { svgFromMarkup } from "../analysis/svg/markup.ts";
 import { svgExpr } from "./svg.ts";
 import { note } from "./diagnostics.ts";
 type ImagePaint = Extract<Paint, { kind: "image" }>;
+/** The capture's temporary static server (or any local dev server): dead once the conversion returns. */
+const LOOPBACK = /^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:\d+)?(\/|$)/i;
 
 /**
  * An image sized and placed like a CSS background layer: a box-filling `Color.clear` carries
@@ -60,6 +62,10 @@ type ImageSource =
  * `undefined` (with a note) when the payload is unusable.
  */
 function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
+  if (LOOPBACK.test(url)) {
+    note(n, `unmapped: ${prop} image ${url} was not captured (temporary local server URL); layer dropped`);
+    return undefined;
+  }
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
@@ -105,10 +111,10 @@ const RASTER_MAGIC: number[][] = [
   [0x4d, 0x4d, 0x00, 0x2a], // TIFF big-endian
 ];
 
-/** Can this source produce pixels? Only an inline payload can be judged here; anything else resolves at runtime. */
+/** Can this source produce pixels? Only an inline payload can be judged here; anything else resolves at runtime, except a loopback URL, which never will. */
 function decodable(url: string): boolean {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
-  if (!data) return url.length > 0;
+  if (!data) return url.length > 0 && !LOOPBACK.test(url);
   const [, mime = "", params = "", payload = ""] = data;
   if (mime === "image/svg+xml") return true;
   const bytes = params.split(";").includes("base64") ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload), "latin1");
@@ -124,6 +130,7 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${str(n.alt)})`];
   const src = decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
+    if (LOOPBACK.test(n.src)) note(n, `unmapped: img image ${n.src} was not captured (temporary local server URL); layer dropped`);
     if (!n.alt) return ["Color.clear", ...a11y];
     // The browser paints the alt text at the top-left of the box in the element's own font.
     note(n, "approximated: broken image source → alt text in the measured box");

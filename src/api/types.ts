@@ -24,6 +24,8 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
   waitFor?: string;
   /** Optional application-specific setup, such as opening a menu; runs before every capture. */
   prepare?: (page: Page) => Promise<void>;
+  /** Upper bound for the whole conversion (browser, network, font conversion), in ms. Default 120000. */
+  timeoutMs?: number;
 }
 
 export interface ConversionResult extends CompileResult {
