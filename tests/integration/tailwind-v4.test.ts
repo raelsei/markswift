@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { join } from "node:path";
+import { convert } from "../../src/index.ts";
 import { BrowserCapture } from "../../src/browser/capture.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
@@ -41,3 +43,22 @@ browserTest("a root inside a transformed ancestor keeps its own size and screens
   const view = new DataView(png!.buffer, png!.byteOffset);
   expect([view.getUint32(16), view.getUint32(20)]).toEqual([400, 200]);
 }, 60000);
+
+browserTest("Tailwind v4 fixtures convert without silent gradient or transform loss", async () => {
+  const dir = join(import.meta.dir, "../conformance/fixtures/tailwind-v4");
+  const [transforms, gradients] = await Promise.all(["transforms.html", "gradients.html"].map((f) => convert({ file: join(dir, f) }, { name: "TailwindV4" })));
+  for (const result of [transforms!, gradients!]) {
+    const lost = result.diagnostics.flatMap((d) => d.diagnostics).filter((d) => d.level === "unmapped" && (d.feature.startsWith("background-image") || ["transform", "translate", "rotate", "scale"].includes(d.feature)));
+    expect(lost).toEqual([]);
+  }
+
+  expect(byId(transforms!.layout.root, "arrow")!.bounds).toMatchObject({ w: 10, h: 10 });
+  expect(byId(transforms!.layout.root, "chevron")!.styles["rotate"]).toBe("180deg");
+  for (const s of [".rotationEffect(.degrees(180.0)", ".rotationEffect(.degrees(45.0)", ".scaleEffect(x: 0.95, y: 0.95", ".scaleEffect(x: -1.0, y: 1.0"]) expect(transforms!.code).toContain(s);
+
+  expect(gradients!.code.split("startPoint: UnitPoint(x: 0.0, y: 0.5), endPoint: UnitPoint(x: 1.0, y: 0.5)").length - 1).toBeGreaterThanOrEqual(2);
+  const of = (id: string) => gradients!.diagnostics.find((d) => d.id === id)?.diagnostics ?? [];
+  for (const id of ["#to-b-hex", "#deg-45"]) expect(of(id).filter((d) => d.level === "unmapped")).toEqual([]);
+  expect(of("#to-r-hex")).toContainEqual(expect.objectContaining({ level: "approximated", message: expect.stringContaining("oklab") }));
+  expect(of("#to-r").filter((d) => d.message.includes("interpolation"))).toEqual([]);
+}, 120000);

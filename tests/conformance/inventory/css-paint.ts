@@ -115,7 +115,7 @@ export default {
       ir: "Paint.linear",
       via: "style",
       impl: "yes",
-      note: "Angle and `to <side>` forms; stop positions in % (px stops are not resolved against the box). Color-space interpolation hints (`in oklab`) are not parsed — the argument is treated as a stop and the gradient falls to `unsupported`.",
+      note: "Angle, `to <side>` and magic `to <corner>` forms (the corner angle is resolved against the box); the emitter places the endpoints on the CSS gradient line (`|w·sin θ| + |h·cos θ|`) and px stops resolve against that length. An explicit `in <space>` clause is parsed and reported `approximated` (SwiftUI's default interpolation), except `srgb`. Chrome omits the default space, so most theme-colour Tailwind gradients carry no clause; arbitrary hex/rgb stops keep `in oklab`. An unknown direction is `unsupported`, never a silent 180°.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/gradient/linear-gradient",
     },
     {
@@ -1532,8 +1532,7 @@ export default {
 
     // ---------- Individual transform properties ----------
     // Chrome does NOT fold these into the computed `transform`; they are separate computed values
-    // (`rotate: 45deg`, `scale: 1.2`, `translate: 10px 0px`). The `transform: none` boxes snapshot
-    // does not cancel them either, so today the frame is the transformed bounding box with untransformed content.
+    // (`rotate: 45deg`, `scale: 1.2`, `translate: 10px 0px`). The layout snapshot cancels them like `transform`.
     {
       id: "rotate",
       group: "Individual transforms",
@@ -1541,8 +1540,8 @@ export default {
       target: ".rotationEffect(.degrees(), anchor:)",
       ir: "Style.transform.rotate (composed: translate · rotate · scale · transform)",
       via: "style",
-      impl: "no",
-      note: "Separate computed value, not part of `transform`; not whitelisted. Today the node keeps its un-rotated content inside the rotated bounding box the snapshot measured. 3D forms (`x 45deg`, `1 1 0 45deg`) fall to the matrix3d row.",
+      impl: "yes",
+      note: "Composed as translate · rotate · scale · transform about one `transform-origin` (CSS Transforms 2) and decomposed into `Style.transform`. The layout snapshot cancels it, so the frame is the untransformed box. 3D forms (`x 45deg`, `1 0 0 45deg`) are reported `unmapped` and skipped.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/rotate",
     },
     {
@@ -1552,8 +1551,8 @@ export default {
       target: ".scaleEffect(x:y:anchor:)",
       ir: "Style.transform.scaleX/scaleY (composed)",
       via: "style",
-      impl: "no",
-      note: "Separate computed value, not part of `transform`; not whitelisted. Today the node is laid out in the scaled bounding box without the scale applied to its content.",
+      impl: "yes",
+      note: "Composed as translate · rotate · scale · transform about one `transform-origin`; a negative scale stays a flip. The layout snapshot cancels it, so the frame is the untransformed box. A third (z) value is ignored (invisible on a flat element).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/scale",
     },
     {
@@ -1563,8 +1562,8 @@ export default {
       target: ".offset(x:y:)",
       ir: "Style.transform.tx/ty (composed)",
       via: "style",
-      impl: "partial",
-      note: "Separate computed value, not part of `transform`; not whitelisted. Because the measured bounds already include the translation, the node lands in the right place by accident (no `.offset` is emitted). A z component falls to the matrix3d row.",
+      impl: "yes",
+      note: "Composed as translate · rotate · scale · transform; `%` resolves against the border box, `calc(% ± px)` is summed. The layout snapshot cancels it, so the frame is the untransformed box and the `.offset` carries the translation. A z component is dropped and noted `approximated`; anything else is reported `unmapped`.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/translate",
     },
 
