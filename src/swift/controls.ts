@@ -62,7 +62,7 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     // A field showing its placeholder paints it in the prompt colour, as the browser does; in app
     // mode the live control styles its own prompt and this would colour the typed text instead.
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
-    if (prompt) out.push(".foregroundStyle(Color(uiColor: .placeholderText))");
+    if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
