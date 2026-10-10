@@ -75,8 +75,12 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   return m;
 }
 
-/** Where the finished box sits and what it is: transform, self-alignment, visibility. Never anything that changes the hit area. */
-export function placementModifiers(n: SemNode, _ctx: EmitContext): string[] {
+/**
+ * Where the finished box sits and what it is: transform, self-alignment, visibility, a `<label>`'s
+ * tap, accessibility. Nothing that paints or sizes the box: a button's box modifiers go inside its
+ * label, and these stay outside it.
+ */
+export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
   if (st.transform) {
@@ -93,6 +97,9 @@ export function placementModifiers(n: SemNode, _ctx: EmitContext): string[] {
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${n.selfAlign === "center" ? ".center" : ".trailing"})`);
   if (st.hidden) m.push(".hidden()");
+  // A `<label>` tap changes its checkbox or radio, anywhere in the label's box.
+  const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
+  if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
   const a = n.a11y;
   if (a) {
     const container = n.kind === "stack" || n.kind === "grid";

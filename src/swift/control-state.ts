@@ -43,6 +43,7 @@ export function controlMembers(root: SemNode): ControlMembers {
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const decls: string[] = [];
+  const activate = new Map<string, string>();
   const seen: Record<string, number> = {};
   walk(root, (n) => {
     if (n.kind !== "control") return;
@@ -51,6 +52,9 @@ export function controlMembers(root: SemNode): ControlMembers {
       const name = uniqueName(`s_${identifier(n.id) || "control"}${decl.suffix ?? ""}`, seen);
       stateOf.set(n, name);
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
+      // What a tap on the control's `<label>` does: a checkbox flips, a radio turns on.
+      if (!n.disabled && n.control === "toggle") activate.set(n.id, `${name}.toggle()`);
+      else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
     // A handler used by several controls is one callback: the design calls the same function.
     // Two callbacks can still mangle to one name (`#docs` and a link captioned `Docs`), so the
@@ -69,7 +73,7 @@ export function controlMembers(root: SemNode): ControlMembers {
       decls.push(`var ${name}: () -> Void = {}`);
     }
   });
-  return { decls, stateOf, actionOf };
+  return { decls, stateOf, actionOf, activate };
 }
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */

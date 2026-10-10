@@ -26,7 +26,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
-  const a11y = a11yOf(n);
+  const a11y = a11yOf(n, ctx);
+  const labelFor = ctx.labels?.activates.get(n)?.id;
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -40,14 +41,16 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     diagnostics,
     overlays: [],
     ...(a11y ? { a11y } : {}),
+    ...(labelFor ? { labelFor } : {}),
   };
 }
 
-/** ARIA attributes and heading tags; undefined when the element says nothing beyond itself. */
-function a11yOf(n: LayoutNode): SemBase["a11y"] {
+/** ARIA attributes, the `<label>` naming a control, and heading tags; undefined when the element says nothing beyond itself. */
+function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
   const a = n.attrs;
   const out: NonNullable<SemBase["a11y"]> = {};
-  const label = a["aria-label"]?.replace(/\s+/g, " ").trim();
+  // ARIA wins over the `<label>`.
+  const label = a["aria-label"]?.replace(/\s+/g, " ").trim() || ctx.labels?.text.get(n);
   if (label) out.label = label;
   if (a["aria-hidden"] === "true") out.hidden = true;
   const role = a["role"]?.trim().toLowerCase();

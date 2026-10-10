@@ -78,4 +78,6 @@ export interface ControlMembers {
   decls: string[];
   stateOf: Map<SemNode, string>;
   actionOf: Map<string, string>;
+  /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
+  activate: Map<string, string>;
 }

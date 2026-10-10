@@ -3,7 +3,7 @@ import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
 import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, type Axis, addDiagnostic } from "../model/semantic.ts";
 import { parseColor, parseDeclared, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
-import { controlOf, buildControl } from "./controls.ts";
+import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
@@ -18,7 +18,7 @@ import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis,
 import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
-  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {}, viewport: doc.viewport };
+  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {}, viewport: doc.viewport, labels: labelIndex(doc.root) };
   const root = build(doc.root, ctx);
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };

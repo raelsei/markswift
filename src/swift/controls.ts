@@ -124,7 +124,11 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // are small squares/circles, and an iOS switch would not fit their measured box.
       const ua = UA[deps.theme];
       const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
-      return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
+      // (or `aria-label`); the representation does not inherit the visible style.
+      if (n.a11y?.label) out.push(".accessibilityRepresentation {", `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`, "}");
+      return out;
     }
     case "slider": {
       const r = n.range ?? { min: 0, max: 100 };

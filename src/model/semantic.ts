@@ -281,6 +281,8 @@ export interface SemBase extends SizeConstraints {
     /** `role` = button | link | img on an element that is not already that control. */
     trait?: "isButton" | "isLink" | "isImage";
   };
+  /** `<label>`: id of the toggle/radio its tap changes. */
+  labelFor?: string;
 }
 
 export interface StackNode extends SemBase {

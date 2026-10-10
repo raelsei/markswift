@@ -104,3 +104,40 @@ test("aria-label, aria-hidden, headings and roles reach VoiceOver", () => {
   expect(img).toContain("Company logo");
   expect(img).not.toContain('.accessibilityLabel("Logo")');
 });
+
+/** The modifier lines of the view that starts on the first line containing `start`. */
+function viewOf(swiftText: string, start: string): string {
+  const lines = swiftText.split("\n");
+  const i = lines.findIndex((l) => l.includes(start));
+  const indent = lines[i]!.length - lines[i]!.trimStart().length;
+  const out = [lines[i]!];
+  for (const l of lines.slice(i + 1)) {
+    const depth = l.length - l.trimStart().length;
+    if (depth < indent || (depth === indent && !l.trimStart().startsWith(".") && !l.trimStart().startsWith("}"))) break;
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
+const checkbox = (id: string, attrs: Record<string, string>, y: number) => el("input", { id, type: "checkbox", ...attrs }, { x: 0, y, w: 13, h: 13 }, [], { display: "inline-block" });
+
+test("a <label> names its control, and tapping it toggles a checkbox", () => {
+  const page = [
+    el("label", { id: "emailLabel", for: "email" }, { x: 0, y: 0, w: 320, h: 22 }, [text("Email", 0, 0, 40, 22)]),
+    el("input", { id: "email", type: "email", placeholder: "you@example.com" }, { x: 0, y: 30, w: 320, h: 30 }, [], { display: "inline-block" }),
+    el("label", { id: "remember" }, { x: 0, y: 70, w: 320, h: 22 }, [checkbox("rememberBox", { checked: "" }, 74), text(" Remember me", 17, 70, 100, 22)]),
+    el("label", { id: "off" }, { x: 0, y: 100, w: 320, h: 22 }, [checkbox("offBox", { disabled: "" }, 104), text(" Disabled", 17, 100, 100, 22)]),
+    el("label", { id: "named", for: "work" }, { x: 0, y: 130, w: 320, h: 22 }, [text("Work", 0, 130, 40, 22)]),
+    el("input", { id: "work", type: "text", "aria-label": "Work email" }, { x: 0, y: 160, w: 320, h: 30 }, [], { display: "inline-block" }),
+  ];
+  const app = swift(page, "app");
+  expect(viewOf(app, 'TextField("you@example.com"')).toContain('.accessibilityLabel("Email")');
+  const rep = app.indexOf(".accessibilityRepresentation {");
+  expect(rep).toBeGreaterThan(-1);
+  expect(app.slice(rep)).toContain('Toggle(isOn: $s_rememberBox) { Text(verbatim: "Remember me") }');
+  expect(viewOf(app, "private var v_remember: some View")).toContain(".onTapGesture { s_rememberBox.toggle() }");
+  expect(viewOf(app, "private var v_off: some View")).not.toContain(".onTapGesture");
+  const work = viewOf(app, 'TextField("", text: $s_work)');
+  expect(work).toContain('.accessibilityLabel("Work email")');
+  expect(work).not.toContain('.accessibilityLabel("Work")');
+});
