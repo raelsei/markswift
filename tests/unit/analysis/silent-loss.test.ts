@@ -86,3 +86,19 @@ describe("BUG-01 groupRuns", () => {
     expect(texts[0]!.kind === "text" ? texts[0]!.runs.map((r) => r.text).join("") : "").toBe("Accept the terms now");
   });
 });
+
+describe("BUG-18 synthetic text item", () => {
+  // The text group between flow children used to be a copy of the host node, so it carried the
+  // host's float and margins into line and stack building.
+  test("a floated host's text group does not float", () => {
+    const host = el("div", { x: 0, y: 8, w: 200, h: 24 }, { display: "block", float: "left", "margin-top": "8px" }, [
+      el("svg", { x: 0, y: 12, w: 16, h: 16 }, {}, [], { viewbox: "0 0 16 16" }),
+      textNode("Label", { x: 20, y: 13, w: 40, h: 14 }),
+    ]);
+    host.id = "#host";
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [host])), "S");
+    const sem = flatten(screen.root).find((n) => n.id === "#host");
+    expect(sem).toBeDefined();
+    expect(sem!.diagnostics.map((d) => d.message).filter((m) => m.includes("float"))).toEqual([]);
+  });
+});

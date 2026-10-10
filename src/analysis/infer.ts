@@ -114,7 +114,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     for (const g of groups) {
       const t = buildText(n, g, childCtx);
       if (t.runs.length === 0) continue;
-      items.push({ node: { ...n, bounds: t.frame, children: [] }, sem: t });
+      // Only the text's own geometry and paint order: the host's float, margins, flex and
+      // alignment styles belong to the host box, not to one of its text groups.
+      const textItem: LayoutNode = { tag: n.tag, attrs: {}, styles: { display: "inline" }, bounds: t.frame, children: [], ...(n.paint !== undefined ? { paint: n.paint } : {}) };
+      items.push({ node: textItem, sem: t });
     }
   }
 
