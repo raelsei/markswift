@@ -9,6 +9,30 @@ import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
 
+export type DiagnosticLevel = "approximated" | "unmapped";
+
+/**
+ * One captured feature the generated view does not reproduce faithfully. `feature` is the id of a
+ * row in tests/conformance/inventory (`font-family`, `display: grid`, `svg:textPath`, `img`), so
+ * reports group by the product decision for that feature; `message` says what was lost, without a
+ * level prefix.
+ */
+export interface Diagnostic {
+  level: DiagnosticLevel;
+  feature: string;
+  message: string;
+}
+
+/** Appends the diagnostic unless an identical one is already listed. */
+export function addDiagnostic(list: Diagnostic[], level: DiagnosticLevel, feature: string, message: string): void {
+  if (!list.some((d) => d.level === level && d.feature === feature && d.message === message)) list.push({ level, feature, message });
+}
+
+/** The only confidence rule: the worst level present, `mapped` when there is none. */
+export function confidenceOf(list: readonly Diagnostic[]): Confidence {
+  return list.some((d) => d.level === "unmapped") ? "unmapped" : list.length ? "approximated" : "mapped";
+}
+
 export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
