@@ -104,6 +104,7 @@ describe("Step 1 object-fit", () => {
   test("contain letterboxes without a clip", () => {
     const swift = code(fixture("contain"));
     expect(swift).toContain(".aspectRatio(contentMode: .fit)");
+    expect(swift).toMatch(/Color\.clear\s*\n\s*\.overlay\(alignment: \.center\) \{/);
     expect(swift).not.toContain(".clipped()");
   });
 
@@ -130,6 +131,50 @@ describe("Step 1 object-fit", () => {
     const img = image(fixture("cover", "10px 20px"));
     expect(img).not.toHaveProperty("position");
     expect(features(img)).toContain("approximated:object-position");
+  });
+});
+
+describe("object-fit on an SVG source (drawn as Shapes)", () => {
+  const SVG =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160'%3E%3Crect width='100' height='160' fill='%239333ea'/%3E%3C/svg%3E";
+  const swift = (fit: string, position?: string) =>
+    code(
+      doc(
+        el("main", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
+          el(
+            "img",
+            { x: 0, y: 0, w: 200, h: 100 },
+            { display: "block", "object-fit": fit, ...(position ? { "object-position": position } : {}) },
+            [],
+            { id: "img", src: SVG },
+          ),
+        ]),
+      ),
+      "fidelity",
+    );
+  // The scaled vector sits in a box-filling Color.clear at the object-position alignment, so the
+  // img's own (top-leading) frame cannot move it.
+  const placed = (align: string, w: string, h: string) =>
+    new RegExp(
+      `Color\\.clear\\n\\s*\\.overlay\\(alignment: \\.${align}\\) \\{\\n[\\s\\S]*?\\.frame\\(width: ${w}, height: ${h}\\)\\n\\s*\\}`,
+    );
+
+  test("contain centres the letterboxed vector by default", () => {
+    expect(swift("contain")).toMatch(placed("center", "62\\.5", "100\\.0"));
+  });
+
+  test("cover centres the cropped vector by default", () => {
+    expect(swift("cover")).toMatch(placed("center", "200\\.0", "320\\.0"));
+  });
+
+  test("object-position aligns contain and cover like the raster path", () => {
+    expect(swift("contain", "100% 50%")).toMatch(placed("trailing", "62\\.5", "100\\.0"));
+    expect(swift("cover", "50% 0%")).toMatch(placed("top", "200\\.0", "320\\.0"));
+    expect(swift("cover", "0% 100%")).toMatch(placed("bottomLeading", "200\\.0", "320\\.0"));
+  });
+
+  test("fill keeps the box-sized vector unwrapped", () => {
+    expect(swift("fill")).not.toContain("Color.clear");
   });
 });
 
