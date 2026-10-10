@@ -21,6 +21,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   if (![viewport.width, viewport.height].every((n) => Number.isInteger(n) && n > 0) || !Number.isFinite(dpr) || dpr <= 0) {
     throw new Error("viewport dimensions must be positive integers and dpr must be positive and finite");
   }
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be positive and finite");
   if (["html", "file", "url"].filter((key) => key in source).length !== 1) throw new Error("provide exactly one of html, file or url");
   if (options.untrustedInput && (!("html" in source) || source.assetsDir || source.baseURL)) {
     throw new Error("untrustedInput accepts pasted HTML without assetsDir or baseURL only");
@@ -30,11 +32,16 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   if (options.darkClass !== undefined && !/^\S+$/.test(options.darkClass)) throw new Error("darkClass must be a single class name");
   const work = await mkdtemp(join(tmpdir(), "markswift-"));
   let prepared: ResolvedSource | undefined;
-  const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel, restricted: options.untrustedInput });
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel, restricted: options.untrustedInput, signal: deadline });
+  // Closing Chrome rejects whatever is pending in it (goto, evaluate, fonts.ready, image decode).
+  const stopOnTimeout = () => void renderer.stop().catch(() => {});
+  deadline.addEventListener("abort", stopOnTimeout, { once: true });
   try {
     prepared = await resolveSource(source);
     const { html, url, label } = prepared;
     await renderer.start();
+    deadline.throwIfAborted(); // the deadline fired mid-launch, before there was a browser to close
     const name = options.name ?? "ConvertedView";
     // :has is resolved by Chromium. A fragment and a full document use identical root rules.
     const root = options.root ?? DEFAULT_ROOT;
@@ -51,7 +58,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     const dark = theme === "adaptive" ? await shot("dark") : undefined;
     for (const font of [...capture.fontFiles, ...(dark?.fontFiles ?? [])]) await Bun.write(join(work, "_fonts", font.name), font.bytes);
     const fontDir = join(work, "output");
-    const fonts = await packageFonts(dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts, fontDir, work);
+    const fonts = await packageFonts(dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts, fontDir, work, deadline);
+    deadline.throwIfAborted(); // an aborted converter returns a note, not an error
     const compiled = compileLayout(capture.layout, {
       name, mode: options.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts), dark: dark?.layout,
     });
@@ -66,7 +74,11 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       ...compiled, assets, warnings: [...pageWarnings, ...fonts.notes, ...compiled.warnings], layout: capture.layout,
       ...(dark ? { darkLayout: dark.layout } : {}),
     };
+  } catch (error) {
+    if (deadline.aborted) throw new Error(`conversion timed out after ${timeoutMs} ms`, { cause: error });
+    throw error;
   } finally {
+    deadline.removeEventListener("abort", stopOnTimeout);
     try { await renderer.stop(); }
     finally { prepared?.close(); await rm(work, { recursive: true, force: true }); }
   }

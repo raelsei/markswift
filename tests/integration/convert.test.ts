@@ -169,10 +169,25 @@ browserTest("a failed preparation closes the browser and local asset server", as
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 30000);
 
+browserTest("a stalled page fails as timed out", async () => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    fetch: (req) => new URL(req.url).pathname === "/stall.png"
+      ? new Promise<Response>(() => {})
+      : new Response('<main data-markswift-root style="width:10px;height:10px"><img src="/stall.png"></main>', { headers: { "content-type": "text/html" } }),
+  });
+  try {
+    const started = performance.now();
+    await expect(convert({ url: `http://127.0.0.1:${server.port}/` }, { timeoutMs: 2000 })).rejects.toThrow(/timed out after 2000 ms/);
+    expect(performance.now() - started).toBeLessThan(10_000);
+  } finally { server.stop(true); }
+}, 15000);
+
 test("invalid API options fail before browser startup", async () => {
   await expect(convertHtml("<div/>", { name: "Text" })).rejects.toThrow();
   await expect(convertHtml("<div/>", { viewport: { width: 0, height: 100 } })).rejects.toThrow();
   await expect(convert({ url: "file:///private/file.html" })).rejects.toThrow("http");
   await expect(convert({ url: "https://example.com" }, { untrustedInput: true })).rejects.toThrow("pasted HTML");
   await expect(convert({ html: "<main>Hi</main>", assetsDir: "." }, { untrustedInput: true })).rejects.toThrow("assetsDir");
+  await expect(convertHtml("<div/>", { timeoutMs: 0 })).rejects.toThrow("timeoutMs");
 });

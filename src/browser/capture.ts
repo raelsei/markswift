@@ -53,8 +53,9 @@ export interface Capture {
 export class BrowserCapture {
   private browser!: Browser;
   private context!: BrowserContext;
+  private stopping?: Promise<void>;
 
-  constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string; restricted?: boolean }) {}
+  constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string; restricted?: boolean; signal?: AbortSignal }) {}
 
   async start(): Promise<void> {
     this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome" });
@@ -65,9 +66,17 @@ export class BrowserCapture {
     });
   }
 
-  async stop(): Promise<void> {
-    try { await this.context?.close(); }
-    finally { await this.browser?.close(); }
+  /**
+   * Safe to call more than once and concurrently (the conversion deadline and its cleanup both
+   * call it): one close runs. Before `start` has a browser it does nothing, so a later call still closes it.
+   */
+  stop(): Promise<void> {
+    if (!this.browser) return Promise.resolve();
+    this.stopping ??= (async () => {
+      try { await this.context?.close(); }
+      finally { await this.browser.close(); }
+    })();
+    return this.stopping;
   }
 
   /**
@@ -131,7 +140,7 @@ export class BrowserCapture {
       for (const text of inlineStyles) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add("inline <style>");
       for (const [url, text] of sheets) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add(url);
       for (const label of tailwind) errors.push(`Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`);
-      const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
+      const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
       const rootRect = await page.evaluate(
         ({ sel, mark }) => {
           const el = document.querySelector(sel);
