@@ -29,8 +29,10 @@ try {
   const response=await page.request.get(base+imageURL);
   await Bun.write(join(directory,"native.png"),await response.body());
   await page.locator("#html").fill("<div>Changed</div>");
-  if (!(await page.locator("#render").isDisabled()) || await page.locator("#native-frame").isVisible()) throw Error("Stale preview not invalidated");
-  console.log("Stale output invalidation passed");
+  if (!(await page.locator("#code").textContent())?.includes("struct PreviewCard")) throw Error("Edit discarded the generated Swift");
+  if (await page.evaluate(() => document.body.dataset.stale) !== "true") throw Error("Output not marked stale after an edit");
+  if (!(await page.locator("#render").isDisabled()) || !(await page.locator("#download").isDisabled())) throw Error("Stale output still offers render or download");
+  console.log("Stale output marking passed");
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:join(directory,"mobile.png"),fullPage:true});
   if (await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) throw Error("Mobile page overflows horizontally");
