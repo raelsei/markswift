@@ -1,6 +1,7 @@
 /** CSS border geometry and Chrome's 3D edge shading. */
 import { type Style, type Edge, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
-import { type Color, parseColor, parseRadiusXY, round2 } from "../css/index.ts";
+import { parseColor, parseRadiusXY, round2 } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import { EDGES, edgeWidth, type EdgeName } from "./geometry.ts";
 
 /** `nextafterf(256, 0)` — the scale Blink multiplies a shaded channel by before truncating it. */

@@ -1,17 +1,8 @@
 /** Pure shadows interpretation of browser-resolved CSS values. */
-import { type Color, parseColor, TRANSPARENT } from "./color.ts";
+import { parseColor, TRANSPARENT } from "./color.ts";
+import type { Shadow } from "../model/values.ts";
 import { splitTop } from "./syntax.ts";
 import { COLOR_TOKEN } from "./paint.ts";
-
-
-export interface Shadow {
-  color: Color;
-  x: number;
-  y: number;
-  blur: number;
-  spread: number;
-  inset: boolean;
-}
 
 
 /** Computed `box-shadow`: `rgba(…) 0px 12px 34px 0px[, …][ inset]`. `dropped` collects the shadows it could not read. */

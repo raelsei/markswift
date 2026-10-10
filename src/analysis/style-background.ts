@@ -1,7 +1,8 @@
 /** Computed background paint and text-clipped gradients. */
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { type Diagnostic, addDiagnostic } from "../model/semantic.ts";
-import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import { parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import type { Paint } from "../model/values.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
 
 /** `background-clip: text`: the element's gradient paints the glyphs of every text run below it. */

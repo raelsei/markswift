@@ -1,9 +1,6 @@
 /** Pure background interpretation of browser-resolved CSS values. */
 import { splitTop, resolveLength } from "./syntax.ts";
-
-
-/** `background-repeat` per layer; `space`/`round` collapse to `repeat`. */
-export type BackgroundRepeat = "no-repeat" | "repeat" | "repeat-x" | "repeat-y";
+import type { BackgroundRepeat, BackgroundSize } from "../model/values.ts";
 
 
 /** Computed `background-repeat` (first layer) → one of the four tile modes; `space`/`round` → `repeat`. */
@@ -40,10 +37,6 @@ export function imageSize(url: string): { w: number; h: number } | undefined {
   const vb = attr("viewBox")?.split(/[\s,]+/).map(Number);
   return vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0 ? { w: vb[2]!, h: vb[3]! } : undefined;
 }
-
-
-/** Resolved `background-size` layer: explicit px box or the `cover`/`contain` keywords. */
-export type BackgroundSize = { w: number; h: number } | "cover" | "contain";
 
 
 /**

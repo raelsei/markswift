@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { imageSize, parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize, type BackgroundRepeat, type BackgroundSize } from "../../../src/css/index.ts";
+import { imageSize, parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize } from "../../../src/css/index.ts";
+import type { BackgroundRepeat, BackgroundSize } from "../../../src/model/values.ts";
 
 
 describe("parseBackgroundSize", () => {

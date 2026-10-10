@@ -1,4 +1,5 @@
-import { parseBlendMode, type BlendMode, type Color, type Paint } from "../css/index.ts";
+import { parseBlendMode } from "../css/index.ts";
+import type { BlendMode, Color, Paint } from "../model/values.ts";
 import type { Style, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, EmitContext } from "./context.ts";
 import { colorExpr, edgeInsets, indent, num } from "./format.ts";

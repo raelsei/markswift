@@ -1,4 +1,4 @@
-import type { Color } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import type { Confidence, Diagnostic, Screen, SemNode } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {

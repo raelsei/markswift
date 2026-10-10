@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Paint } from "../css/index.ts";
+import type { Paint } from "../model/values.ts";
 import type { SemNode, ImageNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { alignment, colorExpr, fontExpr, indent, num, str } from "./format.ts";

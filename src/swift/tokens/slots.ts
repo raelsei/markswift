@@ -1,4 +1,4 @@
-import type { Color, Paint, Shadow } from "../../css/index.ts";
+import type { Color, Paint, Shadow } from "../../model/values.ts";
 import type { Screen, SemNode, Style, SvgGradient, TextRun } from "../../model/semantic.ts";
 import { walk } from "../../model/semantic.ts";
 import type { Slot, TokenRole, Usage } from "./types.ts";

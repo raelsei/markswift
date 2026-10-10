@@ -1,11 +1,5 @@
 /** Pure color interpretation of browser-resolved CSS values. */
-/** sRGB color, channels 0..1 (wide-gamut inputs are gamut-clipped). */
-export interface Color {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
+import type { Color } from "../model/values.ts";
 
 
 export const TRANSPARENT: Color = { r: 0, g: 0, b: 0, a: 0 };

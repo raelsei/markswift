@@ -7,7 +7,7 @@
  */
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
-import type { Color } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import { type ControlKind, type ControlNode, type Diagnostic, type FontSpec, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
 import { textContent } from "./text-runs.ts";
 

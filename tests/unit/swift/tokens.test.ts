@@ -9,7 +9,7 @@ import { colorExpr } from "../../../src/swift/format.ts";
 import { SWIFT_RUNTIME } from "../../../src/swift/runtime.ts";
 import type { ColorCtx } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
-import type { Color } from "../../../src/css/index.ts";
+import type { Color } from "../../../src/model/values.ts";
 import type { Screen, SemNode, StackNode, Style, TextRun } from "../../../src/model/semantic.ts";
 import { classColorHints } from "../../../src/analysis/class-hints.ts";
 

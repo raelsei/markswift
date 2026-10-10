@@ -1,4 +1,4 @@
-import type { Color } from "../../css/index.ts";
+import type { Color } from "../../model/values.ts";
 import type { Usage } from "./types.ts";
 const SWIFT_KEYWORDS: Record<string, true> = {
   associatedtype: true, class: true, deinit: true, enum: true, extension: true, fileprivate: true, func: true,

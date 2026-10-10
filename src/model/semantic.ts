@@ -4,7 +4,7 @@
  * plus a `confidence` telling emitters how faithful the mapping is.
  * No SwiftUI / Compose vocabulary here.
  */
-import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
+import type { Color, Paint, Shadow, Transform2D } from "./values.ts";
 import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
