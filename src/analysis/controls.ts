@@ -17,6 +17,7 @@ export interface ControlSpec {
   value?: string;
   placeholder?: string;
   checked?: boolean;
+  group?: string;
   disabled?: boolean;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
@@ -111,6 +112,11 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       const spec: ControlSpec = { control, diagnostics };
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
+        // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
+        if (control === "radio") {
+          if (a["name"]) spec.group = a["name"];
+          spec.value = a["value"] ?? "on";
+        }
       } else if (a["value"] !== undefined) spec.value = a["value"];
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;

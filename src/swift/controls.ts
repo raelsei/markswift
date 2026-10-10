@@ -27,6 +27,8 @@ export interface ControlDeps extends ColorCtx {
   stateOf: Map<SemNode, string>;
   /** `onclick` source → callback property name; built by `controlMembers`. */
   actionOf: Map<string, string>;
+  /** Grouped radio → its tag in the group's selection; built by `controlMembers`. */
+  radioTag: Map<SemNode, string>;
   mode: EmitMode;
   /** The screen's colour scheme (`adaptive`: both): `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
   theme: Theme | "adaptive";
@@ -72,7 +74,8 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
 
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
-  const binding = state ? `$${state}` : "";
+  const tag = deps.radioTag.get(n);
+  const binding = !state ? "" : tag !== undefined ? `$${state}.markswiftSelects(${str(tag)})` : `$${state}`;
   const still = deps.mode === "fidelity";
   switch (n.control) {
     case "button": {

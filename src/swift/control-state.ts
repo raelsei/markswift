@@ -44,15 +44,45 @@ export function controlMembers(root: SemNode): ControlMembers {
   const actionOf = new Map<string, string>();
   const decls: string[] = [];
   const activate = new Map<string, string>();
+  const radioTag = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
+  // Radios sharing a `name` hold one `String` selection: each radio's tag is its `value` when the
+  // group's values are unique, else its position. HTML: the last `checked` radio wins.
+  // ponytail: groups are keyed by `name` across the whole screen, not by form owner; split by `<form>` if a design has two forms reusing a name.
+  const groups = new Map<string, ControlNode[]>();
+  walk(root, (n) => {
+    if (n.kind !== "control" || n.control !== "radio" || n.group === undefined) return;
+    const list = groups.get(n.group);
+    if (list) list.push(n);
+    else groups.set(n.group, [n]);
+  });
+  const groupState = new Map<string, string>();
   walk(root, (n) => {
     if (n.kind !== "control") return;
+    const key = n.control === "radio" ? n.group : undefined;
+    const group = key !== undefined ? groups.get(key) : undefined;
+    if (key !== undefined && group) {
+      const values = group.map((r) => r.value ?? "on");
+      const tags = new Set(values).size === values.length ? values : group.map((_, i) => String(i));
+      let name = groupState.get(key);
+      if (name === undefined) {
+        name = uniqueName(`s_${identifier(key) || "group"}`, seen);
+        groupState.set(key, name);
+        const checked = group.findLastIndex((r) => r.checked);
+        decls.push(`@State private var ${name}: String = ${str(checked >= 0 ? tags[checked]! : "")}`);
+      }
+      const tag = tags[group.indexOf(n)]!;
+      stateOf.set(n, name);
+      radioTag.set(n, tag);
+      if (!n.disabled) activate.set(n.id, `${name} = ${str(tag)}`);
+      return;
+    }
     const decl = stateDecl(n);
     if (decl) {
       const name = uniqueName(`s_${identifier(n.id) || "control"}${decl.suffix ?? ""}`, seen);
       stateOf.set(n, name);
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
-      // What a tap on the control's `<label>` does: a checkbox flips, a radio turns on.
+      // What a tap on the control's `<label>` does: a checkbox flips, a lone radio turns on.
       if (!n.disabled && n.control === "toggle") activate.set(n.id, `${name}.toggle()`);
       else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
@@ -73,7 +103,7 @@ export function controlMembers(root: SemNode): ControlMembers {
       decls.push(`var ${name}: () -> Void = {}`);
     }
   });
-  return { decls, stateOf, actionOf, activate };
+  return { decls, stateOf, actionOf, activate, radioTag };
 }
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */

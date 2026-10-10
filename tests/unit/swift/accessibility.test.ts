@@ -141,3 +141,19 @@ test("a <label> names its control, and tapping it toggles a checkbox", () => {
   expect(work).toContain('.accessibilityLabel("Work email")');
   expect(work).not.toContain('.accessibilityLabel("Work")');
 });
+
+test("radios sharing a name hold one selection", () => {
+  const radio = (id: string, attrs: Record<string, string>, y: number) => el("input", { id, type: "radio", ...attrs }, { x: 0, y, w: 13, h: 13 }, [], { display: "inline-block" });
+  const dup = swift([radio("monthly", { name: "plan", checked: "" }, 0), radio("yearly", { name: "plan" }, 20)], "app");
+  expect(count(dup, "@State private var s_plan")).toBe(1);
+  expect(dup).toContain('@State private var s_plan: String = "0"');
+  expect(dup).toContain('$s_plan.markswiftSelects("0")');
+  expect(dup).toContain('$s_plan.markswiftSelects("1")');
+
+  const valued = swift([radio("monthly", { name: "plan", value: "monthly" }, 0), radio("yearly", { name: "plan", value: "yearly", checked: "" }, 20)], "app");
+  expect(valued).toContain('@State private var s_plan: String = "yearly"');
+  expect(valued).toContain('$s_plan.markswiftSelects("monthly")');
+  expect(valued).toContain('$s_plan.markswiftSelects("yearly")');
+
+  expect(swift([radio("lone", {}, 0)], "app")).toContain("@State private var s_lone: Bool = false");
+});

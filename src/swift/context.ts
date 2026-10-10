@@ -80,4 +80,6 @@ export interface ControlMembers {
   actionOf: Map<string, string>;
   /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
   activate: Map<string, string>;
+  /** Grouped radio → its tag in the group's `String` selection (its `stateOf` name). */
+  radioTag: Map<SemNode, string>;
 }
