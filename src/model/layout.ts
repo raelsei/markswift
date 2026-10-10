@@ -8,7 +8,12 @@ import { z } from "zod";
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
 /** CSS Typed OM preserves auto/percent/px intent before used values become measured pixels. */
-export const PreferredSize = z.object({ width: z.string(), height: z.string() });
+export const PreferredSize = z.object({
+  width: z.string(),
+  height: z.string(),
+  /** Typed-OM computed insets of an absolute/fixed box: `auto` survives here (DOMSnapshot reports used px), and says which edge the author anchored. */
+  insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
+});
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
 /**
@@ -115,6 +120,8 @@ export const LayoutDoc = z.object({
   combo: Combo,
   /** CSS px size of the capture root (the phone's content area). */
   size: z.object({ w: z.number(), h: z.number() }),
+  /** The browser viewport in capture-root coordinates (the root's top-left is 0,0): what `100vh` and `position: fixed` resolved against. Absent in hand-built docs. */
+  viewport: Rect.optional(),
   dpr: z.number(),
   /** Effective background behind the root (computed color string). */
   canvas: z.string().default("rgb(255, 255, 255)"),
@@ -200,6 +207,7 @@ export const STYLE_WHITELIST = [
   "min-width",
   "mix-blend-mode",
   "object-fit",
+  "object-position",
   "opacity",
   "order",
   "outline-color",

@@ -18,10 +18,12 @@ import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis,
 import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
-  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {} };
+  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {}, viewport: doc.viewport };
   const root = build(doc.root, ctx);
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };
+  // A root as tall as the viewport (`min-h-screen`, `100vh`) already fills the screen: the device decides, not 844px.
+  if (doc.viewport && root.minHeight !== undefined && Math.abs(root.minHeight - doc.viewport.h) <= 0.5) delete root.minHeight;
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
   // Building one can hoist fixed descendants of its own, so drain the list until it stops growing.
   // ponytail: each batch is paint-sorted on its own; a nested fixed node paints after its fixed
@@ -31,6 +33,8 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
     built = ctx.fixed.length;
     root.overlays.push(...buildOverlays(doc.root, batch, undefined, ctx));
   }
+  // The document scrolled in the browser: content past the viewport must stay reachable.
+  if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
@@ -39,13 +43,16 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
-  if (policy.route === "image")
-    return withBase(n, ctx, {
+  if (policy.route === "image") {
+    const node = withBase(n, ctx, {
       kind: "image",
       src: n.currentSrc ?? n.attrs["src"] ?? "",
-      contentMode: n.styles["object-fit"] === "contain" ? "fit" : "fill",
+      contentMode: "fill",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });
+    imageFit(n, node);
+    return node;
+  }
 
   const flow: LayoutNode[] = [];
   const abs: LayoutNode[] = [];
@@ -209,12 +216,25 @@ function scrollAxis(n: LayoutNode, content: Rect[]): Axis | undefined {
   return undefined;
 }
 
+/** `object-fit` / `object-position` → ImageNode fields. Percent positions are the browser's computed form (`top` → `50% 0%`). */
+function imageFit(n: LayoutNode, node: SemNode): void {
+  if (node.kind !== "image") return;
+  const fit = n.styles["object-fit"] ?? "fill";
+  node.contentMode = fit === "cover" || fit === "none" || fit === "contain" ? fit : fit === "scale-down" ? "contain" : "fill";
+  if (fit === "scale-down") addDiagnostic(node.diagnostics, "approximated", "object-fit", "object-fit scale-down → contain (a source smaller than its box is enlarged)");
+  const pos = n.styles["object-position"];
+  const m = pos ? /^(-?[\d.]+)% (-?[\d.]+)%$/.exec(pos) : null;
+  if (m && (m[1] !== "50" || m[2] !== "50")) node.position = [+m[1]! / 100, +m[2]! / 100];
+  else if (pos && !m) addDiagnostic(node.diagnostics, "approximated", "object-position", `object-position ${pos} → centred (only percentage/keyword positions map)`);
+  finish(node);
+}
+
 function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNode | undefined, ctx: InferenceContext): Overlay[] {
   const out: Overlay[] = [];
   const flowPaint = firstFlow?.paint ?? Number.POSITIVE_INFINITY;
   // Stacking order = global paint order (accounts for z-index), not DOM order.
   for (const c of [...abs].sort((a, b) => (a.paint ?? 0) - (b.paint ?? 0))) {
-    const sem = build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host });
+    const sem = build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport });
     const covers = Math.abs(c.bounds.x - host.bounds.x) < 0.5 && Math.abs(c.bounds.y - host.bounds.y) < 0.5 && Math.abs(c.bounds.w - host.bounds.w) < 0.5 && Math.abs(c.bounds.h - host.bounds.h) < 0.5;
     if (covers) {
       sem.width = { kind: "fill" };
@@ -223,11 +243,25 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
       sem.width = { kind: "fixed", px: round2(c.bounds.w) };
       sem.height = { kind: "fixed", px: round2(c.bounds.h) };
     }
+    const insets = c.preferredSize?.insets;
+    const trailing = insets?.left === "auto" && insets.right !== "auto";
+    const bottom = insets?.top === "auto" && insets.bottom !== "auto";
+    // Fixed boxes resolve against the viewport, not their hoisting host (the whole page).
+    const box = c.styles["position"] === "fixed" && ctx.viewport ? ctx.viewport : host.bounds;
+    const anchor = trailing || bottom ? {
+      corner: (bottom ? (trailing ? "bottomTrailing" : "bottomLeading") : "topTrailing") as NonNullable<Overlay["anchor"]>["corner"],
+      offset: [
+        round2(trailing ? c.bounds.x + c.bounds.w - (box.x + box.w) : c.bounds.x - box.x),
+        round2(bottom ? c.bounds.y + c.bounds.h - (box.y + box.h) : c.bounds.y - box.y),
+      ] as [number, number],
+    } : undefined;
     out.push({
       node: sem,
       layer: (c.paint ?? 0) < flowPaint ? "background" : "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers,
+      ...(c.styles["position"] === "fixed" ? { fixed: true as const } : {}),
+      ...(anchor && !covers ? { anchor } : {}),
     });
   }
   // Outside list markers hang in the host's padding and are dropped from the flow (`stackOf`),
@@ -238,7 +272,7 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
     if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
     out.push({
-      node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host }),
+      node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport }),
       layer: "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers: false,

@@ -2,10 +2,10 @@
 import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type Size, type Axis, type SizeConstraints, type Diagnostic } from "../model/semantic.ts";
 import { round2, px } from "../css/index.ts";
-import { insetsOf, renders, hangsLeading, EDGES, unionRect, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
+import { insetsOf, renders, hangsLeading, EDGES, unionRect, mainAxis, outOfFlow } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
 import { type InferenceContext } from "./context.ts";
-import { crossAlign, distributionOf } from "./alignment.ts";
+import { crossAlign } from "./alignment.ts";
 import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
 
@@ -14,7 +14,8 @@ import { flexGrowthSize } from "./flex-sizing.ts";
  * bottom margin when a padded box keeps it from collapsing through. A hugging box has nowhere
  * else to put that gap — a stack's spacing only lives between children — so it becomes inset.
  * Only for boxes whose children are all elements: text-node boxes are glyph areas, and their
- * line-box slack would masquerade as a margin.
+ * line-box slack would masquerade as a margin. Capped at padding + that margin: any further
+ * slack is placement (min-height, flex alignment), never padding.
  */
 export function trailingInset(n: LayoutNode, height: Size, padBottom: number): number {
   if (height.kind !== "hug" || n.children.length === 0) return padBottom;
@@ -24,19 +25,29 @@ export function trailingInset(n: LayoutNode, height: Size, padBottom: number): n
   if (n.children.some((c) => c.tag === "#text" || c.tag === "br")) return padBottom;
   const ext = contentExtent(n, false);
   if (!ext) return padBottom;
-  let inset = n.bounds.y + n.bounds.h - (ext.y + ext.h);
-  const display = n.styles["display"] ?? "block";
-  const row = mainAxis(n) === "h";
-  const verticalAlignment = row ? crossAlign(n) : distributionOf(n.styles["justify-content"], display);
-  if (isFlex(display) && (row ? verticalAlignment === "center" || verticalAlignment === "end" : verticalAlignment !== "start")) {
-    // Center/end alignment and distributed flex gaps already place the children. Turning the
-    // remaining bottom space into padding applies that placement a second time, notably on a
-    // viewport root that becomes fill-sized after inference. Only its real end margin remains.
-    const margins = contentExtent(n, true)!;
-    const free = n.bounds.y + n.bounds.h - padBottom - (margins.y + margins.h);
-    inset -= Math.max(0, free);
-  }
-  return round2(Math.max(padBottom, inset));
+  // Bottom slack beyond the last child's margin box is not a margin: a min-height, a viewport
+  // root that becomes fill-sized, flex centring, or half-leading under inline boxes. Only the
+  // uncollapsed end margin belongs in the inset; everything else is placement, and folding it
+  // into padding counted it twice (once as padding, once as minHeight) and froze it in app mode.
+  const margins = contentExtent(n, true)!;
+  const slack = n.bounds.y + n.bounds.h - (ext.y + ext.h);
+  // The children's own end margins, and those collapsing through the children flush with the content bottom.
+  const flush = n.children.filter((c) => c.tag !== "#text" && !outOfFlow(c) && renders(c) && Math.abs(c.bounds.y + c.bounds.h - (ext.y + ext.h)) <= 0.5);
+  const margin = Math.max(0, margins.y + margins.h - (ext.y + ext.h), ...flush.map(endMargin));
+  return round2(Math.max(padBottom, Math.min(slack, padBottom + margin)));
+}
+
+/**
+ * A box's bottom margin plus the end margins that collapse through it: with no bottom padding
+ * or border and its last child flush with its bottom edge, that child's margin ends up outside.
+ * ponytail: positive margins only (CSS collapses negatives by sum); the `slack` cap above bounds any over-count.
+ */
+function endMargin(c: LayoutNode): number {
+  const own = px(c.styles["margin-bottom"]);
+  if (insetsOf(c.styles)[2] !== 0) return own;
+  const bottom = c.bounds.y + c.bounds.h;
+  const flush = c.children.filter((k) => k.tag !== "#text" && !outOfFlow(k) && renders(k) && Math.abs(k.bounds.y + k.bounds.h - bottom) <= 0.5);
+  return Math.max(own, ...flush.map(endMargin));
 }
 
 /**

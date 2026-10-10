@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc } from "../../../src/model/layout.ts";
 
 function capturedText(styles: Record<string, string>): LayoutDoc {
@@ -82,4 +83,16 @@ test("a measured fallback keeps its captured height in app mode instead of accep
   screen.root.padding = [0, 0, 0, 0];
   screen.root.measured = { width: 200, height: 100, frames: [{ x: 0, y: 0, w: 200, h: 30 }] };
   expect(emitSwift(screen, "ConstraintView", { mode: "app" }).view).toContain(".frame(height: 100.0, alignment: .topLeading)");
+});
+
+test("app-mode text controls treat a measured height as a floor", () => {
+  const input: LayoutDoc = { version: 2, source: "controls.html", combo: { screen: "controls", theme: "light" }, size: { w: 200, h: 38 }, dpr: 1, canvas: "white", fonts: [],
+    root: { id: "root", tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 200, h: 38 }, children: [{
+      id: "field", tag: "input", attrs: { type: "text", value: "a" }, styles: { display: "inline-block", "font-family": "system-ui", "font-size": "14px" }, bounds: { x: 0, y: 0, w: 200, h: 38 }, children: [],
+    }] } };
+  // The `#Preview` frame is the captured screen size (`height: 38.0` here too); check the view body only.
+  const [app, fidelity] = (["app", "fidelity"] as const).map((mode) => compileLayout(input, { name: "F", mode }).code.split("#Preview")[0]!);
+  expect(app).toContain("minHeight: 38.0");
+  expect(app).not.toContain("height: 38.0");
+  expect(fidelity).toContain("height: 38.0");
 });

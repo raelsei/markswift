@@ -233,6 +233,10 @@ export interface Overlay {
   offset: [number, number];
   /** True when the node covers exactly the host box (inset: 0). */
   covers: boolean;
+  /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
+  fixed?: true;
+  /** App-mode attachment when CSS anchored the right and/or bottom edge: the host corner kept, and the node's offset from it. `offset` (top-left) stays the exact capture placement used by fidelity. */
+  anchor?: { corner: "topTrailing" | "bottomLeading" | "bottomTrailing"; offset: [number, number] };
 }
 
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
@@ -331,7 +335,10 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
   kind: "image";
   src: string;
-  contentMode: "fill" | "fit";
+  /** CSS `object-fit` (`scale-down` arrives as `contain`, noted): fill stretches, contain letterboxes, cover crops, none keeps the natural size. */
+  contentMode: "fill" | "contain" | "cover" | "none";
+  /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
+  position?: [number, number];
   /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
   alt?: string;
   /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
