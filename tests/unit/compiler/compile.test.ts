@@ -74,3 +74,28 @@ test("loopback image URLs are never emitted and are diagnosed", () => {
   expect(notes).toContain("http://127.0.0.1:5555/a.png");
   expect(notes).toContain("http://localhost:1/b.png");
 });
+
+test("raster images ship once as Images/ files", () => {
+  const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const img = (id: string, src: string, x: number, attrs: Record<string, string> = {}) => ({ id, tag: "img", attrs, currentSrc: src, styles: { display: "block" }, bounds: { x, y: 0, w: 20, h: 20 }, children: [] });
+  const input = structuredClone(layout);
+  input.root.children = [
+    img("a", png, 0), img("b", png, 20), img("c", png, 40),
+    { id: "bg", tag: "div", attrs: {}, styles: { display: "block", "background-image": `url("${png}")` }, bounds: { x: 60, y: 0, w: 20, h: 20 }, children: [] },
+    img("jpeg", "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==", 80),
+    img("logo", "logo.png", 100, { alt: "Logo" }),
+  ];
+  for (const mode of ["app", "fidelity"] as const) {
+    const result = compileLayout(input, { mode });
+    expect(compileLayout(input, { mode })).toEqual(result);
+    const files = Object.keys(result.assets).sort();
+    expect(files).toHaveLength(2);
+    for (const file of files) expect(file).toMatch(/^Images\/[0-9a-f]{12}\.(png|jpg)$/);
+    expect(files.map((f) => f.slice(-3)).sort()).toEqual(["jpg", "png"]);
+    expect(result.code.match(/Image\.markswiftAsset\(/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(result.code).not.toContain("iVBOR");
+    expect(result.code).not.toContain('Image("logo")');
+    expect(result.code).toContain('Text(verbatim: "Logo")');
+    expect(result.diagnostics.flatMap((d) => d.notes).join("\n")).toContain("logo.png");
+  }
+});

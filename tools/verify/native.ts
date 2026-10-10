@@ -29,9 +29,11 @@ export async function renderNative(result: ConversionResult, work: string, outpu
   const testSource = renderTest(result, output);
   await rm(generated, { recursive: true, force: true });
   await mkdir(join(generated, "Fonts"), { recursive: true });
+  await mkdir(join(generated, "Images"), { recursive: true });
   await mkdir(tests, { recursive: true });
   await Bun.write(join(work, "Package.swift"), packageManifest);
   await Bun.write(join(generated, "Fonts", ".keep"), "");
+  await Bun.write(join(generated, "Images", ".keep"), "");
   for (const [file, value] of Object.entries(result.files)) {
     if (file.endsWith(".swift")) await Bun.write(join(generated, file), value);
   }
