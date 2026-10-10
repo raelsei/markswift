@@ -114,3 +114,36 @@ describe("paintWithin", () => {
     expect(paintWithin(r, { x: 0, y: 0, w: 200, h: 40 }, { x: 0, y: 0, w: 100, h: 40 })).toMatchObject({ center: [1, 0.5] });
   });
 });
+
+describe("gradient direction and interpolation (Tailwind v4 computed values)", () => {
+  const stops = "rgb(239, 68, 68) 0%, rgb(59, 130, 246) 100%";
+  const parse = (s: string) => parseBackgroundImage(s)[0]!;
+  test("to <side> with an interpolation clause", () => {
+    expect(parse(`linear-gradient(to right in oklab, ${stops})`)).toMatchObject({ kind: "linear", angle: 90, space: "oklab" });
+  });
+  test("interpolation clause alone keeps the default direction", () => {
+    expect(parse(`linear-gradient(in oklab, ${stops})`)).toMatchObject({ kind: "linear", angle: 180, space: "oklab" });
+  });
+  test("angle with an interpolation clause", () => {
+    expect(parse(`linear-gradient(45deg in oklab, ${stops})`)).toMatchObject({ kind: "linear", angle: 45, space: "oklab" });
+  });
+  test("to <corner> keeps the corner for the box", () => {
+    expect(parse(`linear-gradient(to left top in oklch, ${stops})`)).toMatchObject({ kind: "linear", corner: [-1, -1], space: "oklch" });
+  });
+  test("hue interpolation method is stripped", () => {
+    expect(parse(`linear-gradient(in hsl longer hue, ${stops})`)).toMatchObject({ kind: "linear", angle: 180, space: "hsl" });
+  });
+  test("unknown direction is unsupported, never a silent 180°", () => {
+    expect(parse("linear-gradient(to sideways, red, blue)")).toMatchObject({ kind: "unsupported" });
+  });
+  test("magic corners resolve against the box", () => {
+    const p = parse(`linear-gradient(to right top, ${stops})`);
+    const wide = resolvePaint(p, 200, 100);
+    expect(wide).toMatchObject({ angle: 26.57 });
+    expect("corner" in wide).toBe(false);
+    expect(resolvePaint(p, 100, 100)).toMatchObject({ angle: 45 });
+  });
+  test("conic interpolation clause", () => {
+    expect(parse(`conic-gradient(from 180deg in oklch, ${stops})`)).toMatchObject({ kind: "conic", from: 180, space: "oklch" });
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseTransform, type Transform2D } from "../../../src/css/index.ts";
+import { cssTransform, parseTransform, type Transform2D } from "../../../src/css/index.ts";
 
 
 describe("parseTransform", () => {
@@ -64,5 +64,36 @@ describe("parseTransform", () => {
     expect(t.scaleX).toBeGreaterThan(0);
     expect(t.scaleY).toBeGreaterThan(0);
     recompose(t).forEach((v, i) => expect(v).toBeCloseTo([-1, 0, 0, -1][i]!, 2));
+  });
+});
+
+describe("cssTransform", () => {
+  const id = { rotate: 0, scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
+  test("rotate about the transform-origin", () => {
+    expect(cssTransform({ rotate: "45deg", "transform-origin": "20px 20px" }, 40, 40)).toEqual({ transform: { rotate: 45, scaleX: 1, scaleY: 1, tx: 0, ty: 0, origin: [20, 20] }, losses: [] });
+  });
+  test("% translate resolves against the border box", () => {
+    expect(cssTransform({ translate: "-50% 8px" }, 40, 40)).toEqual({ transform: { ...id, tx: -20, ty: 8 }, losses: [] });
+  });
+  test("calc() translate component", () => {
+    expect(cssTransform({ translate: "0px calc(-50% - 2px)" }, 10, 10)).toEqual({ transform: { ...id, ty: -7 }, losses: [] });
+  });
+  test("translate · rotate · scale compose in CSS order", () => {
+    expect(cssTransform({ translate: "0px -50%", rotate: "180deg", scale: "0.5 1" }, 40, 40).transform).toEqual({ rotate: 180, scaleX: 0.5, scaleY: 1, tx: 0, ty: -20 });
+  });
+  test("translate composes with transform", () => {
+    expect(cssTransform({ translate: "10px", transform: "matrix(1, 0, 0, 1, 5, 0)" }, 40, 40).transform).toEqual({ ...id, tx: 15 });
+  });
+  test("negative scale is a flip, not a rotation", () => {
+    expect(cssTransform({ scale: "-1 1" }, 24, 24).transform).toEqual({ ...id, scaleX: -1 });
+  });
+  test("3D rotate is reported and skipped", () => {
+    expect(cssTransform({ rotate: "x 45deg" }, 40, 40)).toEqual({ losses: [{ level: "unmapped", feature: "rotate", message: "rotate x 45deg (3D)" }] });
+  });
+  test("translate z is dropped and reported", () => {
+    expect(cssTransform({ translate: "10px 20px 30px" }, 40, 40)).toEqual({ transform: { ...id, tx: 10, ty: 20 }, losses: [{ level: "approximated", feature: "translate", message: "translate z dropped" }] });
+  });
+  test("all none is no transform", () => {
+    expect(cssTransform({ scale: "none", rotate: "none", translate: "none", transform: "none" }, 40, 40)).toEqual({ losses: [] });
   });
 });

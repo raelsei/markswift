@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="rotate; scale; translate; transform">
+<meta name="markswift-themes" content="light,dark">
+<title>tailwind-v4 transforms</title>
+<!-- tailwind-v4 -->
+</head>
+<body>
+<main data-markswift-root class="w-[393px] space-y-4 bg-white p-4 font-sans text-sm text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+  <section id="tw-rotate" class="flex items-center gap-6">
+    <svg id="chevron" class="size-6 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+    <div id="arrow" class="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-neutral-900 dark:bg-neutral-100"></div>
+    <div id="tilt" class="h-10 w-24 rotate-12 rounded-md bg-sky-500"></div>
+  </section>
+  <section id="tw-scale" class="flex items-center gap-6">
+    <div id="pressed" class="scale-95 rounded-md bg-neutral-900 px-4 py-2 text-white dark:bg-neutral-100 dark:text-neutral-900">Pressed</div>
+    <div id="squash" class="h-10 w-24 scale-x-50 rounded-md bg-emerald-500"></div>
+    <svg id="flip" class="size-6 -scale-x-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+  </section>
+  <section id="tw-translate" class="relative h-24 rounded-lg border border-neutral-200 dark:border-neutral-800">
+    <span id="dot" class="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-rose-500"></span>
+    <div id="badge" class="absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-2 py-0.5 text-xs text-neutral-900">Centered</div>
+  </section>
+  <section id="tw-composed" class="flex">
+    <div id="composed" class="h-10 w-24 translate-x-4 rotate-6 scale-110 skew-x-6 bg-violet-500"></div>
+  </section>
+</main>
+</body>
+</html>

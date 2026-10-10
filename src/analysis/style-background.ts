@@ -67,6 +67,7 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
     else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h));
     else {
       if (p.kind !== "solid" && p.repeating) addDiagnostic(diagnostics, "approximated", p.kind === "linear" ? "background-image: repeating-linear-gradient()" : "background-image", `repeating ${p.kind} gradient tiled from its first period`);
+      if (p.kind !== "solid" && p.space && p.space !== "srgb") addDiagnostic(diagnostics, "approximated", `background-image: ${p.kind}-gradient()`, `gradient interpolation in ${p.space} → SwiftUI default interpolation`);
       fills.push(resolvePaint(p, w, h));
     }
   }

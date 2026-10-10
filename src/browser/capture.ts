@@ -16,6 +16,10 @@ import { inlineCapturedImages } from "./images.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
+/** Stamped (after snapshot A) on every element whose `transform`/`translate`/`rotate`/`scale` is not `none`. */
+const TRANSFORMED_MARK = "data-markswift-transformed";
+/** Every property that moves paint without moving layout. */
+const NO_TRANSFORM = "transform: none !important; translate: none !important; rotate: none !important; scale: none !important;";
 
 /** The final URL of a response and every URL it was redirected from. */
 const requestURLs = (r: Response) => {
@@ -146,12 +150,11 @@ export class BrowserCapture {
       for (const [url, text] of sheets) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add(url);
       for (const label of tailwind) errors.push(`Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
-      const rootRect = await page.evaluate(
+      const canvas = await page.evaluate(
         ({ sel, mark }) => {
           const el = document.querySelector(sel);
           if (!el) throw new Error(`capture root ${sel} not found`);
           el.setAttribute(mark, "1");
-          const r = el.getBoundingClientRect();
           // Effective backdrop behind the captured root: nearest ancestor with an opaque-ish
           // background. Chromium serialises modern colour functions verbatim (`oklch(…)`,
           // `color(display-p3 …)`), so opacity comes from the legacy 4th component or from the
@@ -168,7 +171,7 @@ export class BrowserCapture {
               break;
             }
           }
-          return { x: r.x + window.scrollX, y: r.y + window.scrollY, w: r.width, h: r.height, canvas };
+          return canvas;
         },
         { sel: spec.root, mark: ROOT_MARK },
       );
@@ -177,14 +180,24 @@ export class BrowserCapture {
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
+      // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
+      await page.evaluate((mark) => {
+        for (const el of document.querySelectorAll("*")) {
+          const cs = getComputedStyle(el);
+          if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none") el.setAttribute(mark, "");
+        }
+      }, TRANSFORMED_MARK);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
-      // <style> is appended last so node indices of everything else are unchanged.
-      await page.evaluate(() => {
+      // <style> is appended last so node indices of everything else are unchanged. The individual
+      // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
+      // `will-change: transform` keeps the containing block a transform gave to fixed/absolute
+      // descendants, without transforming anything.
+      await page.evaluate((css) => {
         const s = document.createElement("style");
         s.id = "__markswift_notransform";
-        s.textContent = "* { transform: none !important; }";
+        s.textContent = css;
         document.body.appendChild(s);
-      });
+      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       await cdp.detach();
@@ -193,12 +206,22 @@ export class BrowserCapture {
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, preferredSizes);
       delete rootRaw.attrs[ROOT_MARK];
-      const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
-      if (!root) throw new Error(`capture root ${spec.root} has no layout`);
+      // Origin, size and screenshot come from the root's untransformed (snapshot B) box, the same
+      // space as every child's bounds; `rootRect` would include an ancestor's transform.
+      const box = rootRaw.bounds;
+      const root = box && toLayout(rootRaw, { x: box.x, y: box.y }, identity);
+      if (!box || !root) throw new Error(`capture root ${spec.root} has no layout`);
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
-        const { x, y, w, h } = rootRect;
+        const { x, y, w, h } = box;
         if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0) throw new Error(`capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`);
+        // The reference shows the component at its layout box: ancestors' transforms are cancelled
+        // (keeping their containing blocks), the root's own transform stays painted.
+        await page.evaluate((css) => {
+          const s = document.createElement("style");
+          s.textContent = css;
+          document.body.appendChild(s);
+        }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }`);
         png = await page.screenshot({
           clip: { x, y, width: w, height: h },
           scale: "device",
@@ -215,11 +238,11 @@ export class BrowserCapture {
           version: 2,
           source,
           combo: { screen: spec.screen, theme: spec.theme },
-          size: { w: Math.round(rootRect.w), h: Math.round(rootRect.h) },
+          size: { w: Math.round(box.w), h: Math.round(box.h) },
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
-          viewport: { x: -rootRect.x || 0, y: -rootRect.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
+          viewport: { x: -box.x || 0, y: -box.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
           dpr: this.opts.dpr,
-          canvas: rootRect.canvas,
+          canvas,
           fonts,
           root,
         },
