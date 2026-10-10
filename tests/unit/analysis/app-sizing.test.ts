@@ -112,6 +112,15 @@ describe("Step 3 trailing inset", () => {
     expect(inferScreen(doc(root), "s").root.padding[2]).toBe(24);
   });
 
+  test("a grandchild end margin collapsing through its parent stays in the inset", () => {
+    const root = el("main", { x: 0, y: 0, w: 390, h: 140 }, { display: "block", "padding-top": "16px", "padding-bottom": "16px" }, [
+      el("section", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "0px" }, [
+        el("div", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "8px", ...RED }),
+      ]),
+    ]);
+    expect(inferScreen(doc(root), "s").root.padding[2]).toBe(24);
+  });
+
   test("a centred flex column adds no bottom padding", () => {
     const root = el("main", { x: 0, y: 0, w: 390, h: 400 }, { display: "flex", "flex-direction": "column", "justify-content": "center" }, [
       el("div", { x: 0, y: 150, w: 390, h: 100 }, { display: "block", ...RED }),

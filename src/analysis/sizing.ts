@@ -31,8 +31,23 @@ export function trailingInset(n: LayoutNode, height: Size, padBottom: number): n
   // into padding counted it twice (once as padding, once as minHeight) and froze it in app mode.
   const margins = contentExtent(n, true)!;
   const slack = n.bounds.y + n.bounds.h - (ext.y + ext.h);
-  const margin = Math.max(0, margins.y + margins.h - (ext.y + ext.h));
+  // The children's own end margins, and those collapsing through the children flush with the content bottom.
+  const flush = n.children.filter((c) => c.tag !== "#text" && !outOfFlow(c) && renders(c) && Math.abs(c.bounds.y + c.bounds.h - (ext.y + ext.h)) <= 0.5);
+  const margin = Math.max(0, margins.y + margins.h - (ext.y + ext.h), ...flush.map(endMargin));
   return round2(Math.max(padBottom, Math.min(slack, padBottom + margin)));
+}
+
+/**
+ * A box's bottom margin plus the end margins that collapse through it: with no bottom padding
+ * or border and its last child flush with its bottom edge, that child's margin ends up outside.
+ * ponytail: positive margins only (CSS collapses negatives by sum); the `slack` cap above bounds any over-count.
+ */
+function endMargin(c: LayoutNode): number {
+  const own = px(c.styles["margin-bottom"]);
+  if (insetsOf(c.styles)[2] !== 0) return own;
+  const bottom = c.bounds.y + c.bounds.h;
+  const flush = c.children.filter((k) => k.tag !== "#text" && !outOfFlow(k) && renders(k) && Math.abs(k.bounds.y + k.bounds.h - bottom) <= 0.5);
+  return Math.max(own, ...flush.map(endMargin));
 }
 
 /**
