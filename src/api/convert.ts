@@ -64,7 +64,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     const compiled = compileLayout(capture.layout, {
       name, mode: options.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts), dark: dark?.layout,
     });
-    const assets: Record<string, Uint8Array> = {};
+    const assets: Record<string, Uint8Array> = { ...compiled.assets };
     for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(fontDir, "Fonts", face.file)).arrayBuffer());
     if (fonts.faces.length) {
       compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
