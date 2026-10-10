@@ -195,3 +195,38 @@ describe("Step 5 page scroll", () => {
     expect(root.kind === "stack" && root.scroll).toBeFalsy();
   });
 });
+
+describe("Step 6 overlay anchoring", () => {
+  const RED = { "background-color": "rgb(255, 0, 0)" };
+  const card = (y: number, insets: { top: string; right: string; bottom: string; left: string }) => doc({ ...el("main", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", position: "relative" }, [
+    { ...el("div", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", ...RED }), paint: 1 },
+    { ...el("div", { x: 264, y, w: 20, h: 20 }, { display: "block", position: "absolute", "background-color": "rgb(0, 0, 255)" }, [], { id: "x" }), paint: 2, preferredSize: { width: "20px", height: "20px", insets } },
+  ]), paint: 0 });
+  const overlay = (d: LayoutDoc, id: string) => inferScreen(d, "s").root.overlays.find((o) => o.node.id === id)!;
+
+  test("a right-anchored box keeps its trailing corner in app mode only", () => {
+    const d = card(8, { top: "8px", right: "16px", bottom: "auto", left: "auto" });
+    expect(overlay(d, "x")).toMatchObject({ anchor: { corner: "topTrailing", offset: [-16, 8] }, offset: [264, 8] });
+    const app = code(d);
+    expect(app).toContain(".overlay(alignment: .topTrailing) {");
+    expect(app).toContain(".offset(x: -16.0, y: 8.0)");
+    const fidelity = code(d, "fidelity");
+    expect(fidelity).toContain(".overlay(alignment: .topLeading) {");
+    expect(fidelity).toContain(".offset(x: 264.0, y: 8.0)");
+  });
+
+  test("a bottom-right-anchored box keeps the bottom trailing corner", () => {
+    const d = card(168, { top: "auto", right: "16px", bottom: "12px", left: "auto" });
+    expect(overlay(d, "x").anchor).toEqual({ corner: "bottomTrailing", offset: [-16, -12] });
+  });
+
+  test("a fixed bottom bar anchors to the viewport, not the page", () => {
+    const d = doc({ ...el("main", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block" }, [
+      { ...el("div", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block", ...RED }), paint: 1 },
+      { ...el("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, [], { id: "bar" }), paint: 3, preferredSize: { width: "390px", height: "60px", insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" } } },
+    ]), paint: 0 }, { x: 0, y: 0, w: 390, h: 844 });
+    const anchor = overlay(d, "bar").anchor!;
+    expect(anchor.corner).toBe("bottomLeading");
+    expect(anchor.offset[1]).toBe(0);
+  });
+});

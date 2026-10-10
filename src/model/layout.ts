@@ -8,7 +8,12 @@ import { z } from "zod";
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
 /** CSS Typed OM preserves auto/percent/px intent before used values become measured pixels. */
-export const PreferredSize = z.object({ width: z.string(), height: z.string() });
+export const PreferredSize = z.object({
+  width: z.string(),
+  height: z.string(),
+  /** Typed-OM computed insets of an absolute/fixed box: `auto` survives here (DOMSnapshot reports used px), and says which edge the author anchored. */
+  insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
+});
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
 /**

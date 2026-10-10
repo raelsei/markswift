@@ -235,6 +235,8 @@ export interface Overlay {
   covers: boolean;
   /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
   fixed?: true;
+  /** App-mode attachment when CSS anchored the right and/or bottom edge: the host corner kept, and the node's offset from it. `offset` (top-left) stays the exact capture placement used by fidelity. */
+  anchor?: { corner: "topTrailing" | "bottomLeading" | "bottomTrailing"; offset: [number, number] };
 }
 
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */

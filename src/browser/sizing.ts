@@ -9,13 +9,21 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
   return page.evaluate((selector) => {
     const root = document.querySelector(selector);
     if (!root) throw new Error(`capture root ${selector} not found`);
-    const out: Record<string, { width: string; height: string }> = {};
+    const out: Record<string, { width: string; height: string; insets?: { top: string; right: string; bottom: string; left: string } }> = {};
     const walk = (el: Element, path: string) => {
       const typed = el as Element & { computedStyleMap?: () => { get(property: string): { toString(): string } | undefined } };
       const map = typed.computedStyleMap?.();
       const width = map?.get("width")?.toString();
       const height = map?.get("height")?.toString();
-      if (width !== undefined && height !== undefined) out[path] = { width, height };
+      if (width !== undefined && height !== undefined) {
+        const entry: (typeof out)[string] = { width, height };
+        const position = map?.get("position")?.toString();
+        if (position === "absolute" || position === "fixed") {
+          const inset = (k: string) => map?.get(k)?.toString() ?? "auto";
+          entry.insets = { top: inset("top"), right: inset("right"), bottom: inset("bottom"), left: inset("left") };
+        }
+        out[path] = entry;
+      }
       Array.from(el.children).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
     };
     walk(root, "");

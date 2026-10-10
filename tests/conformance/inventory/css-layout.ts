@@ -277,7 +277,7 @@ export default {
       ir: "Overlay.layer, Overlay.offset, StackNode.children",
       via: "style",
       impl: "partial",
-      note: "absolute/fixed become overlays ordered by paint order; sticky stays in flow and is reported as unmapped instead of pinned; fixed overlays hoist to the screen root; in app mode they sit outside the page ScrollView.",
+      note: "absolute/fixed become overlays ordered by paint order; sticky stays in flow and is reported as unmapped instead of pinned; fixed overlays hoist to the screen root; in app mode they sit outside the page ScrollView. Non-auto right/bottom insets anchor app-mode overlays to that corner.",
       spec: mdn("position"),
     },
     {

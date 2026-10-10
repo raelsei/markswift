@@ -243,12 +243,25 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
       sem.width = { kind: "fixed", px: round2(c.bounds.w) };
       sem.height = { kind: "fixed", px: round2(c.bounds.h) };
     }
+    const insets = c.preferredSize?.insets;
+    const trailing = insets?.left === "auto" && insets.right !== "auto";
+    const bottom = insets?.top === "auto" && insets.bottom !== "auto";
+    // Fixed boxes resolve against the viewport, not their hoisting host (the whole page).
+    const box = c.styles["position"] === "fixed" && ctx.viewport ? ctx.viewport : host.bounds;
+    const anchor = trailing || bottom ? {
+      corner: (bottom ? (trailing ? "bottomTrailing" : "bottomLeading") : "topTrailing") as NonNullable<Overlay["anchor"]>["corner"],
+      offset: [
+        round2(trailing ? c.bounds.x + c.bounds.w - (box.x + box.w) : c.bounds.x - box.x),
+        round2(bottom ? c.bounds.y + c.bounds.h - (box.y + box.h) : c.bounds.y - box.y),
+      ] as [number, number],
+    } : undefined;
     out.push({
       node: sem,
       layer: (c.paint ?? 0) < flowPaint ? "background" : "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers,
       ...(c.styles["position"] === "fixed" ? { fixed: true as const } : {}),
+      ...(anchor && !covers ? { anchor } : {}),
     });
   }
   // Outside list markers hang in the host's padding and are dropped from the flow (`stackOf`),

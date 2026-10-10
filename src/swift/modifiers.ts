@@ -85,6 +85,9 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
 }
 export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {
   const inner = ctx.renderNode(o.node);
-  const body = o.covers ? inner : [...inner, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`];
-  return [`.${mode}(alignment: .topLeading) {`, ...indent(body, 1), `}`];
+  // App mode keeps the corner CSS anchored; fidelity reproduces the capture from the top-left.
+  const anchored = ctx.mode === "app" ? o.anchor : undefined;
+  const [x, y] = anchored ? anchored.offset : o.offset;
+  const body = o.covers ? inner : [...inner, `.offset(x: ${num(x)}, y: ${num(y)})`];
+  return [`.${mode}(alignment: .${anchored ? anchored.corner : "topLeading"}) {`, ...indent(body, 1), `}`];
 }
