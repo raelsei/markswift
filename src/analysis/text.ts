@@ -9,7 +9,8 @@ import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, in
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
-import { EDGES, edgeWidth, unionRect, isFlex } from "./geometry.ts";
+import { EDGES, edgeWidth, unionRect, isFlex, mainAxis } from "./geometry.ts";
+import { crossAlign, distributionOf } from "./alignment.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -160,7 +161,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
-  const ta = host.styles["text-align"] ?? "start";
+  // `<center>`, `align=center` and friends compute to `-webkit-center/-left/-right`; the side is the same.
+  const ta = (host.styles["text-align"] ?? "start").replace(/^-(webkit|internal)-/, "");
   const side = ta === "start" ? (dir === "rtl" ? "right" : "left") : ta === "end" ? (dir === "rtl" ? "left" : "right") : ta;
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
@@ -168,14 +170,18 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
   if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
   if (leaf) {
-    // A box taller than its line boxes: the browser keeps the text at the top (block flow) or
-    // where the flex container aligns it. The surplus becomes padding so the text lands there
-    // in both modes; a centred host stays as is (the emitter centres text in its box).
+    // A box taller than its line boxes. The surplus becomes padding so the text lands where the
+    // browser put it in both modes; a centred text stays as is (the emitter centres text in its box).
     const [pt, pr, pb, pl] = base.padding;
     const surplus = round2(frame.h - pt - pb - lines * lh);
-    const ai = /flex|-webkit-box/.test(host.styles["display"] ?? "") ? host.styles["align-items"] : undefined;
-    if (surplus > 2 && ai !== "center") {
-      base.padding = ai === "flex-end" || ai === "end" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+    // Where the browser put the line boxes inside a taller box: measured, not derived from keywords
+    // — `td` vertical-align: middle, a flex column's justify-content, grid place-items all land
+    // here. The glyph union's distance to each content edge says top, centre (the emitter's
+    // default) or bottom; without measured glyphs the text stays at the top.
+    if (surplus > 2) {
+      const above = union ? union.y - (frame.y + pt) : 0;
+      const below = union ? frame.y + frame.h - pb - (union.y + union.h) : surplus;
+      if (Math.abs(above - below) > 2) base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -222,11 +228,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
     align:
-      ta === "center" || (isFlex(host.styles["display"]) && host.styles["justify-content"] === "center")
+      ta === "center" || (isFlex(host.styles["display"]) && (mainAxis(host) === "h" ? distributionOf(host) : crossAlign(host)) === "center")
         ? "center"
-        : side === "right"
-          ? "trailing"
-          : "leading",
+        : side === "right" ? "trailing" : "leading",
     lines,
     ...(substituted ? { fontSubstituted: true as const } : {}),
   };

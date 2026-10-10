@@ -6,12 +6,16 @@ import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { crossAlign, distributionOf } from "../../../src/analysis/alignment.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
-import type { SemNode } from "../../../src/model/semantic.ts";
+import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
 function el(tag: string, bounds: Rect, styles: Record<string, string>, children: LayoutNode[] = [], attrs: Record<string, string> = {}): LayoutNode {
   return { tag, attrs, styles: { ...INHERITED, ...styles }, bounds, children, ...(attrs["id"] ? { id: attrs["id"] } : {}) };
+}
+
+function textNode(text: string, bounds: Rect): LayoutNode {
+  return { tag: "#text", attrs: {}, styles: { ...INHERITED }, bounds, text, children: [] };
 }
 
 function doc(root: LayoutNode): LayoutDoc {
@@ -79,5 +83,52 @@ describe("Step 1 direction", () => {
     if (stack?.kind !== "stack") throw new Error("expected #r stack");
     expect(stack.distribution).toBe("start");
     expect(stack.leadInset ?? 0).toBe(0);
+  });
+});
+
+/** The TextNode a leaf host becomes, inside a block `main` as wide as it. */
+function leafText(host: LayoutNode): TextNode {
+  const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: host.bounds.w, h: host.bounds.h }, { display: "block" }, [host])), "t");
+  const t = flatten(screen.root).find((n) => n.kind === "text");
+  if (t?.kind !== "text") throw new Error("expected a text node");
+  return t;
+}
+
+describe("Step 2 text alignment", () => {
+  test("-webkit-center (<center>, align=center) centres the text", () => {
+    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, [textNode("Hi", { x: 90, y: 3, w: 20, h: 14 })]));
+    expect(t.align).toBe("center");
+  });
+
+  test("-webkit-right aligns trailing", () => {
+    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-right" }, [textNode("Hi", { x: 180, y: 3, w: 20, h: 14 })]));
+    expect(t.align).toBe("trailing");
+  });
+
+  test("a flex column's justify-content centres vertically, not horizontally", () => {
+    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "flex", "flex-direction": "column", "justify-content": "center" }, [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })]));
+    expect(t.align).toBe("leading");
+    expect(t.padding).toEqual([0, 0, 0, 0]);
+  });
+
+  test("a flex column's align-items centres horizontally; the text stays at the top", () => {
+    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "center" }, [textNode("Hi", { x: 90, y: 0, w: 20, h: 14 })]));
+    expect(t.align).toBe("center");
+    expect(t.padding).toEqual([0, 0, 80, 0]);
+  });
+
+  test("a td with vertical-align: middle keeps its text vertically centred", () => {
+    const t = leafText(el("td", { x: 0, y: 0, w: 200, h: 60 }, { display: "table-cell", "vertical-align": "middle" }, [textNode("Hi", { x: 0, y: 23, w: 20, h: 14 })]));
+    expect(t.padding).toEqual([0, 0, 0, 0]);
+  });
+
+  test("block text in a taller box stays at the top", () => {
+    const t = leafText(el("p", { x: 0, y: 0, w: 200, h: 30 }, { display: "block", "min-height": "30px" }, [textNode("Hi", { x: 0, y: 3, w: 20, h: 14 })]));
+    expect(t.padding).toEqual([0, 0, 10, 0]);
+  });
+
+  test("a flex row aligned to flex-end puts the surplus above the text", () => {
+    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 60 }, { display: "flex", "align-items": "flex-end" }, [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })]));
+    expect(t.padding).toEqual([40, 0, 0, 0]);
   });
 });
