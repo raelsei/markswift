@@ -136,3 +136,39 @@ describe("BUG-17 hidden runs", () => {
     for (const r of runs) if (!r.text.includes("secret") && r.text.trim()) expect(r.color.a).toBe(1);
   });
 });
+
+describe("BUG-06 nested background-clip text", () => {
+  // The gradient of a `background-clip: text` element paints every glyph below it; only runs whose
+  // own element carried the clip got it, so nested spans and block children rendered invisible.
+  const CLIP = { "background-clip": "text", "background-image": "linear-gradient(to right, rgb(255, 0, 0), rgb(0, 0, 255))", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" };
+  const glyphRuns = (n: SemNode) => (n.kind === "text" ? n.runs.filter((r) => r.text.trim()) : []);
+
+  test("an inline span inside the clipped heading is painted", () => {
+    const h1 = el("h1", { x: 0, y: 0, w: 300, h: 40 }, { display: "block", ...CLIP }, [
+      textNode("Build ", { x: 0, y: 10, w: 60, h: 20 }),
+      el("span", { x: 60, y: 10, w: 70, h: 20 }, { "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [textNode("faster", { x: 60, y: 10, w: 70, h: 20 })]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [h1])), "S");
+    const t = flatten(screen.root).find((n) => n.kind === "text")!;
+    expect(glyphRuns(t).length).toBe(2);
+    for (const r of glyphRuns(t)) expect(r.paint).toBeDefined();
+  });
+
+  test("block descendants of the clipped heading are painted", () => {
+    const h1 = el("h1", { x: 0, y: 0, w: 300, h: 80 }, { display: "block", ...CLIP }, [
+      el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "block", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [textNode("Build", { x: 0, y: 10, w: 50, h: 20 })]),
+      el("div", { x: 0, y: 40, w: 300, h: 40 }, { display: "block", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [textNode("faster", { x: 0, y: 50, w: 60, h: 20 })]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 80 }, { display: "block" }, [h1])), "S");
+    const texts = flatten(screen.root).filter((n) => n.kind === "text");
+    expect(texts.length).toBe(2);
+    for (const t of texts) expect(t.kind === "text" ? t.runs[0]?.paint : undefined).toBeDefined();
+  });
+
+  test("a text clip without a gradient layer is reported", () => {
+    const h1 = el("h1", { x: 0, y: 0, w: 300, h: 40 }, { display: "block", ...CLIP, "background-image": "none" }, [textNode("Build", { x: 0, y: 10, w: 50, h: 20 })]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [h1])), "S");
+    const diags = flatten(screen.root).flatMap((n) => n.diagnostics);
+    expect(diags).toContainEqual(expect.objectContaining({ level: "unmapped", feature: "background-clip" }));
+  });
+});

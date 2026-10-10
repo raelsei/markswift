@@ -47,6 +47,7 @@ const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: 
   { feature: "fill", level: "unmapped", node: svgOf(el("g", { id: "notpaint" }), rect({ fill: "url(#notpaint)" })) },
   { feature: "svg", level: "unmapped", node: svgOf(rect({ "clip-path": "url(#absent)" })) },
   { feature: "text-shadow", level: "unmapped", node: paragraph({ "text-shadow": "garbage" }) },
+  { feature: "background-clip", level: "unmapped", node: paragraph({ "background-clip": "text", "background-image": "none", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }) },
   { feature: "img", level: "unmapped", node: IMG },
 ];
 

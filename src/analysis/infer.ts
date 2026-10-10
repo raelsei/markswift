@@ -15,6 +15,7 @@ import { buildWrapping } from "./wrapping.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
+import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {} };
@@ -75,7 +76,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const spec = policy.route === "control" ? controlOf(n) : undefined;
   if (spec) {
     const childAxis = mainAxis(n);
-    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n) };
+    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
@@ -113,7 +114,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
   // Children in measured order (handles CSS `order`), text runs grouped between flow children.
   const items: AnalyzedChild[] = [];
-  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n) };
+  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
   for (const c of flow) items.push({ node: c, sem: build(c, childCtx) });
   if (runs.length) {
     // Text interleaved with flow children (icon + label). Group consecutive runs into one text node.

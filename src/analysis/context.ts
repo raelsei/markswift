@@ -29,6 +29,8 @@ export interface InferenceContext {
   parentAxis?: Axis;
   parentDisplay?: string;
   parentAlign?: CrossAlign;
+  /** Nearest ancestor with `background-clip: text`: its gradient is the glyph fill of block descendants' text. */
+  textClip?: LayoutNode;
 }
 
 /** A run under construction: the emitted run plus, per character, its index in the raw text node. */

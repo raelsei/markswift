@@ -8,7 +8,7 @@ import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColor
 import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlineGaps } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
-import { textPaintOf } from "./style-background.ts";
+import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex } from "./geometry.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
@@ -133,7 +133,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
     for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
-    const paint = textPaintOf(r.styleOf, r.node.bounds);
+    const clipEl = [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
+    const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
+    if (clipEl && !paint && !hidden) note("unmapped", "background-clip", "background-clip: text without a gradient layer; the glyphs keep their own (often transparent) fill");
     if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
