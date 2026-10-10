@@ -174,13 +174,18 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // browser put it in both modes; a centred text stays as is (the emitter centres text in its box).
     const [pt, pr, pb, pl] = base.padding;
     const surplus = round2(frame.h - pt - pb - lines * lh);
-    // Where the browser put the line boxes inside a taller box: measured, not derived from keywords
-    // — `td` vertical-align: middle, a flex column's justify-content, grid place-items all land
-    // here. The glyph union's distance to each content edge says top, centre (the emitter's
-    // default) or bottom; without measured glyphs the text stays at the top.
+    // Where a flex/grid/table-cell host put the line boxes inside a taller box: measured, not
+    // derived from keywords — `td` vertical-align: middle, a flex column's justify-content, grid
+    // place-items all land here. The glyph union's distance to each content edge says top, centre
+    // (the emitter's default) or bottom; without measured glyphs the text stays at the top.
+    // Block flow always starts its line boxes at the top.
+    // ponytail: block hosts keep the keyword rule; a line box grown by sub/sup or a fallback font
+    // (emoji) reads as off-centre glyphs. Measure block hosts too (sub/sup paragraphs look better
+    // centred) once the visual gate can tell which is right.
     if (surplus > 2) {
-      const above = union ? union.y - (frame.y + pt) : 0;
-      const below = union ? frame.y + frame.h - pb - (union.y + union.h) : surplus;
+      const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
+      const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
+      const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
       if (Math.abs(above - below) > 2) base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
     }
   }
