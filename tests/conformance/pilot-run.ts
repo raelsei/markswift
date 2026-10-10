@@ -225,7 +225,8 @@ async function run() {
   } finally {
     await Promise.all([...browsers.values()].map(browser => browser.stop()));
     server.stop();
-    await Bun.write(join(out, "run.json"), JSON.stringify(report, null, 2));
+    // A failure before the environment is known (no browser, dirty src/, no simulator) leaves no run.json.
+    if (report) await Bun.write(join(out, "run.json"), JSON.stringify(report, null, 2));
   }
   if (report!.completed !== report!.expected || report!.errors.length) throw new Error(`pilot incomplete: ${report!.completed}/${report!.expected}; ${report!.errors.join("; ")}`);
 }
