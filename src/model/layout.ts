@@ -97,8 +97,8 @@ export const FontFace = z.object({
    * byte-identical across renders. `local()` entries are dropped: a face that only names an
    * installed font has nothing to bundle.
    *
-   * `file` is an out-dir-relative path to the bytes, written once per out dir under `_fonts/`
-   * and named by content hash. It exists because `url` alone is not a durable reference: a
+   * `file` keys the face's bytes in the capture's `fontFiles` (content-hash name under the
+   * `_fonts/` prefix). It exists because `url` alone is not a durable reference: a
    * design whose fonts are local files is served from an ephemeral port, so the URL is dead the
    * moment the capture outlives the run. Absent for a `data:` URL (the URL *is* the bytes) and
    * for a remote face that could not be read at capture time.

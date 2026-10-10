@@ -1,7 +1,7 @@
 import type { FaceMetrics } from "../model/fonts.ts";
 
 
-/** A face that was written next to the generated Swift. */
+/** A face bundled with the generated Swift; its bytes are `FontPackage.assets["Fonts/<file>"]`. */
 export interface PackagedFace {
   /** CSS family name — what `font-family` declarations say and what the emitter emits. */
   family: string;
@@ -22,6 +22,8 @@ export interface PackagedFace {
 
 export interface FontPackage {
   faces: PackagedFace[];
+  /** `Fonts/<file>` → bytes to ship; exactly one entry per packaged face. */
+  assets: Record<string, Uint8Array>;
   /** `Info.plist` `UIAppFonts` fragment; empty when nothing was packaged. */
   plist: string;
   /** What the design asked for and did not get, one line each. */

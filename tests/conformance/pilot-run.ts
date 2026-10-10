@@ -72,7 +72,7 @@ async function saveSource(entry: PilotEntry, captured: Awaited<ReturnType<Browse
     Bun.write(join(dir, "layout.json"), JSON.stringify(captured.layout, null, 2)),
     Bun.write(join(dir, "warnings.json"), JSON.stringify(captured.warnings, null, 2)),
   ]);
-  for (const font of captured.fontFiles) await Bun.write(join(dir, "_fonts", font.name), font.bytes);
+  for (const font of captured.fontFiles) await Bun.write(join(dir, font.file), font.bytes);
   return dir;
 }
 
@@ -133,12 +133,11 @@ async function run() {
               const dir = await saveSource(entry, captured, out);
               const name = "Pilot" + item.id.split("-").filter(Boolean).map(part => part[0]!.toUpperCase() + part.slice(1)).join("");
               const swiftDir = join(dir, "swift");
-              const fonts = await packageFonts(captured.layout.fonts, swiftDir, dir);
+              const fonts = await packageFonts(captured.layout.fonts, new Map(captured.fontFiles.map((f) => [f.file, f.bytes])));
               const compiled = compileLayout(captured.layout, {
                 name, mode: entry.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts),
               });
-              const assets: Record<string, Uint8Array> = { ...compiled.assets };
-              for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(swiftDir, "Fonts", face.file)).arrayBuffer());
+              const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
               if (fonts.faces.length) {
                 compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
                 compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
@@ -151,7 +150,7 @@ async function run() {
               if (textMetrics) {
                 textMetrics.browserInk = await imageInkMetrics(join(dir, "browser.png"), captured.layout.dpr);
                 textMetrics.fonts = { faces: fonts.faces, notes: fonts.notes,
-                  sources: await Promise.all(captured.fontFiles.map(async font => ({ name: font.name, sha256: createHash("sha256").update(font.bytes).digest("hex") }))) };
+                  sources: await Promise.all(captured.fontFiles.map(async font => ({ name: font.file.replace(/^_fonts\//, ""), sha256: createHash("sha256").update(font.bytes).digest("hex") }))) };
                 textMetrics.expectedLines = item.expectedLines?.[String(width) as "320" | "390"] ?? null;
                 if (!textMetrics.contentMatches) throw new Error(`captured text content differs from manifest: ${JSON.stringify(textMetrics.content)}`);
                 if (textMetrics.expectedLines !== textMetrics.lineCount || textMetrics.browserInk.lineCount !== textMetrics.lineCount) {

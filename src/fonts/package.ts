@@ -1,27 +1,24 @@
-import { mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
 import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
-import { runFontTool } from "./converter.ts";
+import { type FontConverter, pythonFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
 
 
 /**
- * Packages every bundleable face into `<swiftDir>/Fonts/` and returns what was written.
+ * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
  *
- * `outDir` resolves `src[].file` (the capture's `_fonts/`). Faces are grouped by (family,
- * style): within a group the Basic-Latin subset wins, the rest are reported. A face whose bytes
- * cannot be read, or whose format iOS cannot load and `fontTools` cannot convert, is noted and
- * left out of the package; nothing is written for it.
+ * `sources` holds the capture's font bytes keyed by `src[].file`; `data:` sources carry their
+ * own. Faces are grouped by (family, style): within a group the Basic-Latin subset wins, the
+ * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
+ * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
  */
-export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: string, signal?: AbortSignal): Promise<FontPackage> {
-  const fontsDir = join(swiftDir, "Fonts");
-  await rm(fontsDir, { recursive: true, force: true });
+export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<string, Uint8Array>, convert: FontConverter = pythonFontConverter, signal?: AbortSignal): Promise<FontPackage> {
   const notes: string[] = [];
   const packaged: PackagedFace[] = [];
-  if (!faces.length) return { faces: [], plist: "", notes };
+  const assets: Record<string, Uint8Array> = {};
+  if (!faces.length) return { faces: [], assets, plist: "", notes };
 
   // (family, style, weight range) is one bundled face; several `unicode-range` subsets of the
   // same key are the same font cut up, and iOS can only hold one of them.
@@ -30,7 +27,6 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const k = `${f.family}|${f.style}|${f.weight.join("-")}`;
     (groups[k] ??= []).push(f);
   }
-  await mkdir(fontsDir, { recursive: true });
   const claimed = new Map<string, string>();
   for (const k of Object.keys(groups).sort()) {
     const group = groups[k]!;
@@ -46,7 +42,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     let bytes: Uint8Array | undefined;
     let usedSrc: FontFace["src"][number] | undefined;
     for (const src of chosen.src) {
-      bytes = await srcBytes(src, outDir);
+      bytes = srcBytes(src, sources);
       if (bytes?.length) {
         usedSrc = src;
         break;
@@ -70,13 +66,9 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
       continue;
     }
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
-    const dst = join(fontsDir, file);
-    const tmp = join(fontsDir, `.${stem}.src`);
-    await Bun.write(tmp, bytes);
-    const tool = await runFontTool(tmp, dst, chosen.family, subfamily, true, signal);
+    const tool = await convert(bytes, chosen.family, subfamily, signal);
     if (typeof tool === "string") {
       // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
-      await rm(tmp, { force: true });
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
       notes.push(
         `unmapped: font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
@@ -84,8 +76,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
       );
       continue;
     }
-    if (!tool.wrote) await Bun.write(dst, bytes); // Already an sfnt with a matching name: copy verbatim.
-    await rm(tmp, { force: true });
+    assets[`Fonts/${file}`] = tool.bytes ?? bytes; // No rewritten bytes: already an sfnt with a matching name, shipped verbatim.
     const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
     packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
     claimed.set(stem.toLowerCase(), chosen.family);
@@ -101,5 +92,5 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     }
   }
   const files = packaged.map((f) => f.file).sort();
-  return { faces: packaged, plist: plistFragment(files), notes };
+  return { faces: packaged, assets, plist: plistFragment(files), notes };
 }
