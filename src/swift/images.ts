@@ -218,8 +218,9 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     ];
   }
   // CSS object-fit. `fill` stretches to the box (plain `.resizable()`); contain/cover keep the
-  // aspect ratio; `none` keeps the natural size. A non-centred object-position places the
-  // picture inside a box-filling `Color.clear` (the `imageLayer` pattern).
+  // aspect ratio; `none` keeps the natural size. Every non-`fill` picture sits in a box-filling
+  // `Color.clear` at its object-position (default centred, as in CSS), so the img's own frame
+  // alignment (top-leading) never places it.
   const fit = n.contentMode;
   let view: string[];
   if (src.kind === "raster") {
@@ -246,15 +247,10 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
       view = src.view(vw * s, vh * s);
     }
   }
-  if (!n.position || fit === "fill") return [...view, ...a11y];
+  if (fit === "fill") return [...view, ...a11y];
+  const [px, py] = n.position ?? [0.5, 0.5];
   const third = (f: number) => (f < 1 / 3 ? "start" : f > 2 / 3 ? "end" : "center");
-  if (n.position.some((f) => f !== 0 && f !== 0.5 && f !== 1))
+  if ([px, py].some((f) => f !== 0 && f !== 0.5 && f !== 1))
     note(n, "approximated", "object-position", "object-position → nearest edge/centre alignment");
-  return [
-    "Color.clear",
-    `.overlay(alignment: ${alignment(third(n.position[0]), third(n.position[1]))}) {`,
-    ...indent(view, 1),
-    "}",
-    ...a11y,
-  ];
+  return ["Color.clear", `.overlay(alignment: ${alignment(third(px), third(py))}) {`, ...indent(view, 1), "}", ...a11y];
 }
