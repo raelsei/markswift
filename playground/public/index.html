@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#f6f8fb">
   <meta name="description" content="Turn rendered HTML and CSS into SwiftUI source, inspect the output, and download a complete component bundle.">
   <title>Markswift — HTML to SwiftUI</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body data-native="false">
@@ -13,6 +14,7 @@
     <div class="brand"><h1>Markswift</h1><span>HTML → SwiftUI</span></div>
     <div class="top-actions">
       <span id="connection-status" class="connection-status" role="status"><i aria-hidden="true"></i>Connecting to converter</span>
+      <button id="retry" class="button button-quiet button-small" type="button" hidden>Retry</button>
       <button id="sample" class="button button-quiet" type="button">Load sample</button>
     </div>
   </header>
@@ -25,11 +27,13 @@
       <label class="field">Height<input id="height" type="number" min="100" max="2000" value="520" required></label>
     </div>
     <label class="field select-field">Theme<select id="theme"><option value="adaptive">Adaptive</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-    <label class="field select-field">Mode<select id="mode"><option value="app">App layout</option><option value="fidelity">Captured layout</option></select></label>
+    <label class="field select-field">Mode<select id="mode" aria-describedby="mode-help"><option value="app">App layout</option><option value="fidelity">Captured layout</option></select></label>
     <button id="convert" class="button button-primary" type="submit" disabled>Convert to SwiftUI <kbd>⌘↵</kbd></button>
   </form>
+  <p id="mode-help" class="field-help"></p>
 
   <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <div id="stale" class="notice stale" role="status" hidden>Source changed — convert again to update the output.</div>
 
   <main class="workspace">
     <section class="panel input-panel" aria-labelledby="input-title">
@@ -46,10 +50,18 @@
     </section>
 
     <section class="panel code-panel" aria-labelledby="code-title">
-      <div class="panel-heading"><h2 id="code-title">SwiftUI output</h2><button id="copy" class="button button-quiet button-small" type="button" disabled>Copy file</button></div>
-      <div class="file-bar"><select id="files" aria-label="Generated Swift file" disabled><option>No generated files</option></select></div>
+      <div class="panel-heading">
+        <h2 id="code-title">SwiftUI output</h2>
+        <div class="panel-actions">
+          <button id="fidelity" class="badge" type="button" hidden aria-controls="diagnostics"></button>
+          <button id="copy" class="button button-quiet button-small" type="button" disabled>Copy file</button>
+          <button id="copy-all" class="button button-quiet button-small" type="button" disabled>Copy all</button>
+          <button id="wrap" class="button button-quiet button-small" type="button" aria-pressed="false" disabled>Wrap</button>
+        </div>
+      </div>
+      <div class="file-bar" id="file-tabs" role="tablist" aria-label="Generated files"></div>
       <div id="code-empty" class="empty-state"><strong>Your component appears here</strong><p>Paste HTML, add any CSS, then convert. You can inspect every generated Swift file before downloading.</p></div>
-      <pre id="code-view" tabindex="0" aria-label="Generated Swift code" hidden><code id="code"></code></pre>
+      <pre id="code-view" role="tabpanel" tabindex="0" aria-label="Generated Swift code" hidden><code id="code"></code></pre>
       <div class="code-footer"><span id="file-count">No output yet</span><button id="download" class="button button-quiet button-small" type="button" disabled>Download bundle</button></div>
     </section>
 
@@ -65,8 +77,8 @@
     </section>
   </main>
 
-  <details id="diagnostics" class="diagnostics"><summary><span>Conversion notes</span><span id="diagnostic-count">No conversion yet</span></summary><ul id="diagnostic-list"><li>Unsupported or approximate mappings will appear here.</li></ul></details>
-  <footer class="page-footer"><span>HTML/CSS is measured in a browser before SwiftUI is generated.</span><span>Scripts and remote assets are not loaded by the hosted converter.</span></footer>
+  <details id="diagnostics" class="diagnostics"><summary><span>Fidelity notes</span><span id="diagnostic-count">No conversion yet</span></summary><ul id="diagnostic-list"><li>Approximated and unmapped elements will appear here after conversion.</li></ul></details>
+  <footer class="page-footer"><span>HTML/CSS is measured in a browser before SwiftUI is generated.</span><span>Scripts and remote assets are never loaded; use the CLI for local files and live URLs.</span></footer>
   <script src="./config.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
