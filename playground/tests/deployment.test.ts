@@ -14,6 +14,7 @@ test("static bundle works below a Pages project path and names its conversion AP
     const config = await Bun.file(join(directory, "config.js")).text();
     expect(html).toContain('href="./styles.css"');
     expect(html).toContain('src="./app.js"');
+    expect(html).toContain("connect-src 'self' https://api.example.com");
     expect(config).toContain("https://api.example.com");
     expect(config).toContain('nativePreview:false');
     expect(await Bun.file(join(directory, "app.js")).exists()).toBe(true);
