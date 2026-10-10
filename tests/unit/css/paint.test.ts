@@ -1,6 +1,7 @@
 import { expectClose } from "../../helpers/color.ts";
 import { describe, expect, test } from "bun:test";
-import { paintWithin, parseBackgroundImage, resolvePaint, type Color, type Paint } from "../../../src/css/index.ts";
+import { paintWithin, parseBackgroundImage, resolvePaint } from "../../../src/css/index.ts";
+import type { Color, Paint } from "../../../src/model/values.ts";
 
 
 describe("parseBackgroundImage", () => {

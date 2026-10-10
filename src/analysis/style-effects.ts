@@ -29,8 +29,9 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
   // the spec's list is reported rather than silently painted `normal`.
   const blend = s["mix-blend-mode"];
   if (blend && blend !== "normal") {
-    if (parseBlendMode(blend)) style.blend = blend;
-    else addDiagnostic(diagnostics, "unmapped", "mix-blend-mode", `mix-blend-mode ${blend}`);
+    const mode = parseBlendMode(blend);
+    if (!mode) addDiagnostic(diagnostics, "unmapped", "mix-blend-mode", `mix-blend-mode ${blend}`);
+    else if (mode !== "normal") style.blend = mode;
   }
 
   const cp = s["clip-path"];
@@ -47,7 +48,7 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
     const first = masks[masks.length - 1]!;
     if (masks.length > 1) addDiagnostic(diagnostics, "approximated", "mask-image", "mask-image first layer only");
     if (first.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "mask-image", `mask-image ${first.raw.slice(0, 40)}`);
-    else if (first.kind === "image") style.mask = imagePaint(first.url, s, "mask", 0, w, h);
+    else if (first.kind === "image") style.mask = imagePaint(first.url, s, "mask", 0, w, h, diagnostics);
     else {
       if (first.kind !== "solid" && first.space && first.space !== "srgb") addDiagnostic(diagnostics, "approximated", "mask-image: linear-gradient()", `gradient interpolation in ${first.space} → SwiftUI default interpolation`);
       style.mask = resolvePaint(first, w, h);

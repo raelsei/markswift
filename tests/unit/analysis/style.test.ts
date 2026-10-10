@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { styleOf } from "../../../src/analysis/style.ts";
-import { shapeExpr } from "../../../src/swift/paint.ts";
+import { shapeExpr, swiftBlend } from "../../../src/swift/paint.ts";
 import type { LayoutNode } from "../../../src/model/layout.ts";
 import type { Diagnostic } from "../../../src/model/semantic.ts";
 
@@ -50,4 +50,18 @@ test("an individual rotate property becomes the node's transform", () => {
   const style = styleOf({ tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 40, h: 40 }, children: [], styles: { rotate: "45deg", "transform-origin": "20px 20px" } }, diagnostics);
   expect(style.transform).toEqual({ rotate: 45, scaleX: 1, scaleY: 1, tx: 0, ty: 0, origin: [20, 20] });
   expect(diagnostics).toEqual([]);
+});
+
+test("mix-blend-mode is parsed once, in analysis; the emitter only names it", () => {
+  const blendOf = (mode: string) => {
+    const diagnostics: Diagnostic[] = [];
+    const style = styleOf({ tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 40, h: 40 }, children: [], styles: { "mix-blend-mode": mode } }, diagnostics);
+    return { blend: style.blend, diagnostics };
+  };
+  expect(blendOf("multiply")).toEqual({ blend: "multiply", diagnostics: [] });
+  const bogus = blendOf("bogus");
+  expect(bogus.blend).toBeUndefined();
+  expect(bogus.diagnostics).toEqual([{ level: "unmapped", feature: "mix-blend-mode", message: "mix-blend-mode bogus" }]);
+  expect(swiftBlend("color-dodge")).toBe(".colorDodge");
+  expect(swiftBlend("normal")).toBeUndefined();
 });

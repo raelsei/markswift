@@ -11,7 +11,6 @@
  * `Toggle` with a drawn style, `ProgressView`/`Gauge` with a drawn style, `DisclosureGroup`) is
  * identical in both modes.
  */
-import { parseColor } from "../css/index.ts";
 import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
@@ -168,7 +167,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (still) return painted(n.value ?? "", ".leading");
       return [`DatePicker(selection: ${binding}, displayedComponents: .date) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
     case "colorPicker": {
-      const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
+      const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
       if (still) return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];
       return [`ColorPicker(selection: ${binding}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
     }

@@ -1,9 +1,6 @@
 /** Pure background interpretation of browser-resolved CSS values. */
 import { splitTop, resolveLength } from "./syntax.ts";
-
-
-/** `background-repeat` per layer; `space`/`round` collapse to `repeat`. */
-export type BackgroundRepeat = "no-repeat" | "repeat" | "repeat-x" | "repeat-y";
+import type { BackgroundRepeat, BackgroundSize } from "../model/values.ts";
 
 
 /** Computed `background-repeat` (first layer) → one of the four tile modes; `space`/`round` → `repeat`. */
@@ -18,32 +15,6 @@ export function parseBackgroundRepeat(s: string | undefined): BackgroundRepeat |
   }
   return undefined;
 }
-
-
-/**
- * Intrinsic size of a `data:image/svg+xml` URL from its `width`/`height` (or `viewBox`)
- * attributes; undefined for raster or external images (the browser knows, we do not).
- */
-export function imageSize(url: string): { w: number; h: number } | undefined {
-  if (!/^data:image\/svg\+xml/i.test(url)) return undefined;
-  const comma = url.indexOf(",");
-  let svg = url.slice(comma + 1);
-  if (/;base64/i.test(url.slice(0, comma))) svg = Buffer.from(svg, "base64").toString("utf8");
-  else svg = decodeURIComponent(svg);
-  const open = /<svg\b[^>]*>/i.exec(svg)?.[0] ?? "";
-  const attr = (n: string) => {
-    const m = new RegExp(`\\b${n}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(open);
-    return m ? (m[1] ?? m[2] ?? m[3])!.trim() : undefined;
-  };
-  const w = attr("width"), h = attr("height");
-  if (w && h && /^[\d.]+(px)?$/.test(w) && /^[\d.]+(px)?$/.test(h)) return { w: parseFloat(w), h: parseFloat(h) };
-  const vb = attr("viewBox")?.split(/[\s,]+/).map(Number);
-  return vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0 ? { w: vb[2]!, h: vb[3]! } : undefined;
-}
-
-
-/** Resolved `background-size` layer: explicit px box or the `cover`/`contain` keywords. */
-export type BackgroundSize = { w: number; h: number } | "cover" | "contain";
 
 
 /**

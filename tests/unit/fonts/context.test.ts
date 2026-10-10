@@ -21,7 +21,7 @@ function fontPackage(ascent: number): FontPackage {
     faces: [{ family: "Test Face", file: "test.ttf", style: "normal", weight: [100, 900], axes: {},
       metrics: { upem: 1000, ascent, descent: 200, lineGap: 0, useTypoMetrics: false },
       converted: false, renamed: false }],
-    plist: "", notes: [],
+    assets: {}, plist: "", notes: [],
   };
 }
 

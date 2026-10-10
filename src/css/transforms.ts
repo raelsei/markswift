@@ -1,24 +1,7 @@
 /** Pure transforms interpretation of browser-resolved CSS values. */
 import { round2 } from "./syntax.ts";
 import { hue } from "./color.ts";
-
-
-/**
- * 2D affine transform decomposed as `translate(tx, ty) · rotate(rotate) · skewX(skewX) ·
- * skewY(skewY) · scale(scaleX, scaleY)`. Angles in degrees; `skewX`/`skewY` are present
- * only when the matrix has shear (a pure Y shear reports `skewY`, any other shear `skewX`).
- * `flattened` marks a 3D matrix reduced to its x/y projection (depth and perspective lost).
- */
-export interface Transform2D {
-  rotate: number;
-  scaleX: number;
-  scaleY: number;
-  tx: number;
-  ty: number;
-  skewX?: number;
-  skewY?: number;
-  flattened?: true;
-}
+import type { Transform2D } from "../model/values.ts";
 
 
 /**

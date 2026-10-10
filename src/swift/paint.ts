@@ -1,4 +1,4 @@
-import { parseBlendMode, type BlendMode, type Color, type Paint } from "../css/index.ts";
+import type { BlendMode, Color, Paint } from "../model/values.ts";
 import type { Style, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, EmitContext } from "./context.ts";
 import { colorExpr, edgeInsets, indent, num } from "./format.ts";
@@ -101,9 +101,8 @@ const SWIFT_BLEND: Record<BlendMode, string | undefined> = {
   "plus-darker": ".plusDarker",
 };
 
-export function swiftBlend(css: string): string | undefined {
-  const mode = parseBlendMode(css);
-  return mode ? SWIFT_BLEND[mode] : undefined;
+export function swiftBlend(mode: BlendMode): string | undefined {
+  return SWIFT_BLEND[mode];
 }
 
 /**

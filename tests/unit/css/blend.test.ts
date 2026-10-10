@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseBlendMode, parseBlendModes, type BlendMode } from "../../../src/css/index.ts";
+import { parseBlendMode, parseBlendModes } from "../../../src/css/index.ts";
+import type { BlendMode } from "../../../src/model/values.ts";
 
 
 describe("parseBlendMode", () => {

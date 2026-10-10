@@ -114,17 +114,18 @@ const MAX_FONT_BYTES = 25 * 1024 * 1024;
 
 /**
  * Reads the bytes behind every non-inline `@font-face` source and names each blob by content
- * hash, mutating the faces to point at the file. Runs in-process while the source's static
- * server is still up: that server is the only thing that can answer its own ephemeral-port URL,
- * and it stops when the conversion returns.
+ * hash, mutating the faces to point at it: each returned `file` is exactly the value written to
+ * `src.file`, so the bytes are keyed by `FontFace.src[].file`; the conversion never writes them to disk. Runs
+ * in-process while the source's static server is still up: that server is the only thing that
+ * can answer its own ephemeral-port URL, and it stops when the conversion returns.
  *
  * Only `http:`/`https:` URLs are fetched (what the capture browser itself could request; never
  * `file:`, `s3:`, `blob:`), and a response over 25 MB is skipped. `signal` aborts the fetch.
  * A source that cannot be read keeps its `url` and gets no `file` — packaging reports it rather
  * than guessing.
  */
-export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true, signal?: AbortSignal): Promise<Array<{ name: string; bytes: Uint8Array }>> {
-  const files: Array<{ name: string; bytes: Uint8Array }> = [];
+export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true, signal?: AbortSignal): Promise<Array<{ file: string; bytes: Uint8Array }>> {
+  const files: Array<{ file: string; bytes: Uint8Array }> = [];
   const byHash: Record<string, string> = {};
   for (const face of faces) {
     for (const src of face.src) {
@@ -146,10 +147,10 @@ export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true,
       if (!byHash[hash]) {
         const sig = new TextDecoder("latin1").decode(bytes.subarray(0, 4));
         const ext = sig === "wOF2" ? "woff2" : sig === "wOFF" ? "woff" : sig === "OTTO" ? "otf" : "ttf";
-        byHash[hash] = `${hash}.${ext}`;
-        files.push({ name: byHash[hash]!, bytes });
+        byHash[hash] = `_fonts/${hash}.${ext}`;
+        files.push({ file: byHash[hash]!, bytes });
       }
-      src.file = `_fonts/${byHash[hash]}`;
+      src.file = byHash[hash];
       // The source's own server listens on an ephemeral port, so the absolute URL differs on
       // every render; the path identifies the source and keeps the capture byte-deterministic.
       if (/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/)/.test(src.url)) src.url = new URL(src.url).pathname;

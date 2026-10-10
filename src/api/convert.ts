@@ -1,8 +1,5 @@
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
 import { compileLayout } from "../compiler/index.ts";
@@ -31,7 +28,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   const theme = options.theme ?? "adaptive";
   if (theme !== "light" && theme !== "dark" && theme !== "adaptive") throw new Error("theme must be light, dark or adaptive");
   if (options.darkClass !== undefined && !/^\S+$/.test(options.darkClass)) throw new Error("darkClass must be a single class name");
-  const work = await mkdtemp(join(tmpdir(), "markswift-"));
   let prepared: ResolvedSource | undefined;
   const deadline = AbortSignal.timeout(timeoutMs);
   const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel, restricted: options.untrustedInput, signal: deadline });
@@ -57,15 +53,13 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     // Adaptive: two captures in one browser session; the light one is emitted, the dark one pairs its colours.
     const capture = await shot(theme === "dark" ? "dark" : "light");
     const dark = theme === "adaptive" ? await shot("dark") : undefined;
-    for (const font of [...capture.fontFiles, ...(dark?.fontFiles ?? [])]) await Bun.write(join(work, "_fonts", font.name), font.bytes);
-    const fontDir = join(work, "output");
-    const fonts = await packageFonts(dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts, fontDir, work, deadline);
+    const sources = new Map([...capture.fontFiles, ...(dark?.fontFiles ?? [])].map((f) => [f.file, f.bytes]));
+    const fonts = await packageFonts(dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts, sources, undefined, deadline);
     deadline.throwIfAborted(); // an aborted converter returns a note, not an error
     const compiled = compileLayout(capture.layout, {
       name, mode: options.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts), dark: dark?.layout,
     });
-    const assets: Record<string, Uint8Array> = { ...compiled.assets };
-    for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(fontDir, "Fonts", face.file)).arrayBuffer());
+    const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
     if (fonts.faces.length) {
       compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
       compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
@@ -81,7 +75,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   } finally {
     deadline.removeEventListener("abort", stopOnTimeout);
     try { await renderer.stop(); }
-    finally { prepared?.close(); await rm(work, { recursive: true, force: true }); }
+    finally { prepared?.close(); }
   }
 }
 

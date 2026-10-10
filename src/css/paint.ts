@@ -1,43 +1,7 @@
 /** Pure paint interpretation of browser-resolved CSS values. */
-import { type Color, hue, parseColor, TRANSPARENT } from "./color.ts";
-import { type BlendMode } from "./blend.ts";
-import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
+import { hue, parseColor, TRANSPARENT } from "./color.ts";
+import type { Color, GradientStop, Paint } from "../model/values.ts";
 import { splitTop, round2 } from "./syntax.ts";
-
-
-export interface GradientStop {
-  color: Color;
-  /** 0..1 along the gradient line, undefined = evenly distributed. */
-  pos?: number;
-  /** Absolute px along the gradient line; `resolvePaint` turns it into `pos` once the box is known. */
-  px?: number;
-}
-
-
-/** Px from the node's border-box edge to a fill's painting area (top, right, bottom, left). */
-export type PaintInset = {
-  inset?: [number, number, number, number];
-  /** `background-blend-mode` for this layer, against the layers below it. Absent = `normal`. */
-  blend?: BlendMode;
-};
-
-
-/**
- * One `background-image` layer (or a solid `background-color`). Gradient variants carry
- * `repeating: true` for `repeating-*-gradient`; `center` is a 0..1 fraction of the box;
- * `space` is the colour space of an explicit `in <space>` clause. A linear `corner`
- * (`to right top` = [1, -1]) keeps the square-box `angle` until `resolvePaint` knows the box.
- * Image layers carry the resolved `background-size`/`position`/`repeat` (px, box-relative)
- * when the producer knows the box; absent = fill the box. `inset` (any fill) is set for
- * `background-clip: padding-box | content-box`.
- */
-export type Paint =
-  | ({ kind: "solid"; color: Color } & PaintInset)
-  | ({ kind: "linear"; angle: number; corner?: [x: 1 | -1, y: 1 | -1]; stops: GradientStop[]; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "image"; url: string; size?: BackgroundSize; position?: [number, number]; repeat?: BackgroundRepeat } & PaintInset)
-  | { kind: "unsupported"; raw: string };
 
 
 /**

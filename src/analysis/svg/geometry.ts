@@ -1,8 +1,7 @@
 /** Exact SVG path bounds and circular stroke geometry. */
-import { type SvgPath } from "../../model/semantic.ts";
+import { type PathSegment, type SvgPath } from "../../model/semantic.ts";
 import { round2 } from "../../css/index.ts";
 import { type Rect } from "../../model/layout.ts";
-import { default as svgpath } from "svgpath";
 import { type SvgMatrix } from "./context.ts";
 
 export function ringOf(
@@ -24,7 +23,7 @@ export function ringOf(
 // ---------- geometry ----------
 
 /** Bounding box of the path's geometry (exact for lines and Bézier curves). */
-export function pathBounds(d: string): Rect {
+export function pathBounds(path: PathSegment[]): Rect {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const add = (x: number, y: number) => {
     if (x < minX) minX = x;
@@ -33,7 +32,7 @@ export function pathBounds(d: string): Rect {
     if (y > maxY) maxY = y;
   };
   let cx = 0, cy = 0;
-  svgpath(d).unshort().unarc().abs().iterate((seg) => {
+  for (const seg of path) {
     const [cmd, ...a] = seg as [string, ...number[]];
     switch (cmd) {
       case "M":
@@ -65,7 +64,7 @@ export function pathBounds(d: string): Rect {
         add(cx, cy);
         break;
     }
-  });
+  }
   if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 };
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }

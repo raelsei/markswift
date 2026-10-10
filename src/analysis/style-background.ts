@@ -1,8 +1,10 @@
 /** Computed background paint and text-clipped gradients. */
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { type Diagnostic, addDiagnostic } from "../model/semantic.ts";
-import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import { parseBackgroundImage, paintWithin, resolvePaint, splitTop, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import type { Paint } from "../model/values.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
+import { svgFromDataUrl } from "./svg/markup.ts";
 
 /** `background-clip: text`: the element's gradient paints the glyphs of every text run below it. */
 export function clipsText(el: LayoutNode): boolean {
@@ -31,12 +33,18 @@ function layerValue(list: string | undefined, i: number): string | undefined {
  * `url()` layer `i` of `background-*` / `mask-*` → image paint with its size, top-left
  * position and repeat resolved in px. The position needs the drawn size: explicit
  * `background-size`, the intrinsic size of a data: svg, or the cover/contain scaling of
- * that; unknown (raster files) → only a `0% 0%` position is certain.
+ * that; unknown (raster files) → only a `0% 0%` position is certain. A data: svg is parsed
+ * here into the paint's `vector`; one that cannot be drawn is reported to `diagnostics`.
  */
-export function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number): Paint {
-  const img = imageSize(url);
+export function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number, diagnostics: Diagnostic[]): Paint {
+  const svg = svgFromDataUrl(url);
+  const img = svg?.intrinsic;
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
   const paint: Paint = { kind: "image", url };
+  if (svg?.vector) {
+    paint.vector = svg.vector;
+    for (const d of svg.vector.diagnostics) addDiagnostic(diagnostics, d.level, d.feature, d.message);
+  } else if (svg) addDiagnostic(diagnostics, "unmapped", `${prop}-image: url()`, `${prop}-image svg data: URL has no viewBox; layer dropped`);
   if (size !== undefined) paint.size = size;
   let drawn: { w: number; h: number } | undefined;
   if (size === "cover" || size === "contain") {
@@ -64,7 +72,7 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
     const p = layers[i]!;
     const top = layers.length - 1 - i;
     if (p.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "background-image", `background-image ${p.raw.slice(0, 40)}`);
-    else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h));
+    else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h, diagnostics));
     else {
       if (p.kind !== "solid" && p.repeating) addDiagnostic(diagnostics, "approximated", p.kind === "linear" ? "background-image: repeating-linear-gradient()" : "background-image", `repeating ${p.kind} gradient tiled from its first period`);
       if (p.kind !== "solid" && p.space && p.space !== "srgb") addDiagnostic(diagnostics, "approximated", `background-image: ${p.kind}-gradient()`, `gradient interpolation in ${p.space} → SwiftUI default interpolation`);
