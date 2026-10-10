@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { cssTransform, parseTransform, type Transform2D } from "../../../src/css/index.ts";
+import { cssTransform, parseTransform } from "../../../src/css/index.ts";
+import type { Transform2D } from "../../../src/model/values.ts";
 
 
 describe("parseTransform", () => {

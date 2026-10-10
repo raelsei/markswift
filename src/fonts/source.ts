@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 
 
@@ -16,14 +15,12 @@ export function coversLatin(range: string | undefined): boolean {
 }
 
 
-/** Bytes behind one `src` entry: the `data:` URL itself, or the file the capture saved. */
-export async function srcBytes(src: FontFace["src"][number], outDir: string): Promise<Uint8Array | undefined> {
+/** Bytes behind one `src` entry: the `data:` URL itself, or the captured bytes keyed by `src.file`. */
+export function srcBytes(src: FontFace["src"][number], sources: ReadonlyMap<string, Uint8Array>): Uint8Array | undefined {
   const data = /^data:[^,]*;base64,(.*)$/s.exec(src.url);
   if (data) return Uint8Array.from(Buffer.from(data[1]!, "base64"));
   if (src.url.startsWith("data:")) return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
-  if (!src.file) return undefined;
-  const f = Bun.file(resolve(outDir, src.file));
-  return (await f.exists()) ? new Uint8Array(await f.arrayBuffer()) : undefined;
+  return src.file ? sources.get(src.file) : undefined;
 }
 
 

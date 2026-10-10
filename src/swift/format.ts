@@ -1,7 +1,7 @@
 /**
  * Swift source helpers shared by the emitters (views, SVG shapes, harness registry).
  */
-import type { Color } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import type { FontSpec } from "../model/semantic.ts";
 import type { ColorCtx } from "./context.ts";
 

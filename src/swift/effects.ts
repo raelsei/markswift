@@ -1,4 +1,4 @@
-import type { Paint, Transform2D } from "../css/index.ts";
+import type { Paint, Transform2D } from "../model/values.ts";
 import type { SemNode, Filter, ClipShape } from "../model/semantic.ts";
 import type { ColorCtx, EmitContext } from "./context.ts";
 import { colorExpr, hash, indent, num, shapeStruct } from "./format.ts";

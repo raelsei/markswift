@@ -1,6 +1,7 @@
 /** Inline run collection, whitespace normalization and text decoration. */
 import { type LayoutNode } from "../model/layout.ts";
-import { type Color, parseColor } from "../css/index.ts";
+import { parseColor } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
 import { classifyElement } from "../html/policy.ts";

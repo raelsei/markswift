@@ -1,4 +1,4 @@
-import type { Color } from "../../css/index.ts";
+import type { Color } from "../../model/values.ts";
 import type { Theme } from "../../model/layout.ts";
 /** What a colour paints; drives the fallback name and the token-hint consistency check. */
 export type TokenRole = "canvas" | "fill" | "border" | "text" | "shadow" | "icon";

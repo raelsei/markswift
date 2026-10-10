@@ -1,4 +1,4 @@
-import type { Color } from "../../css/index.ts";
+import type { Color } from "../../model/values.ts";
 import type { Screen } from "../../model/semantic.ts";
 import type { ScreenTokens } from "../context.ts";
 import type { Usage, TokenSet, TokenRole, ColorToken, TokenIndex } from "./types.ts";

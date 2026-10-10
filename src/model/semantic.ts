@@ -4,7 +4,7 @@
  * plus a `confidence` telling emitters how faithful the mapping is.
  * No SwiftUI / Compose vocabulary here.
  */
-import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
+import type { BlendMode, Color, Paint, Shadow, Transform2D } from "./values.ts";
 import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
@@ -97,7 +97,8 @@ export interface Style {
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
   transform?: Transform2D & { origin?: [number, number] };
-  blend?: string;
+  /** `mix-blend-mode`, never `normal`. */
+  blend?: BlendMode;
   /** `clip-path` basic shape. */
   clipPath?: ClipShape;
   /** `mask-image` gradient (luminance/alpha mask). */
@@ -175,9 +176,17 @@ export type SvgGradient = { stops: Array<{ color: Color; pos: number }> } & (
   | { kind: "radial"; center: [number, number]; radius: [number, number] }
 );
 
+/** One absolute path command after `unshort`/`unarc`/`abs`: viewBox user units. */
+export type PathSegment =
+  | ["M" | "L", number, number]
+  | ["H" | "V", number]
+  | ["C", number, number, number, number, number, number]
+  | ["Q", number, number, number, number]
+  | ["Z"];
+
 export interface SvgPath {
-  /** Path data in viewBox user units; ancestor and own `transform`s are baked in. */
-  d: string;
+  /** Absolute segments in viewBox user units; ancestor and own `transform`s are baked in. */
+  path: PathSegment[];
   fill?: Color;
   /** Gradient fill (`fill="url(#id)"`); set instead of `fill`. */
   gradient?: SvgGradient;
@@ -206,8 +215,8 @@ export interface SvgPath {
    * 3 o'clock (the baked rotation).
    */
   ring?: { r: number; to: number; startAngle: number };
-  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `d`. */
-  clip?: { d: string; eoFill?: true };
+  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `path`. */
+  clip?: { path: PathSegment[]; eoFill?: true };
   /** `mask="url(#id)"`: the mask's painted shapes; their luminance becomes this layer's alpha. */
   mask?: SvgPath[];
 }
@@ -354,6 +363,8 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
   kind: "image";
   src: string;
+  /** A `data:image/svg+xml` source, parsed during analysis. */
+  vector?: SvgNode;
   /** CSS `object-fit` (`scale-down` arrives as `contain`, noted): fill stretches, contain letterboxes, cover crops, none keeps the natural size. */
   contentMode: "fill" | "contain" | "cover" | "none";
   /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
@@ -409,6 +420,8 @@ export interface ControlNode extends SemBase {
   content: SemNode[];
   /** Initial text/number the design shows (`@value`, `<textarea>` text, the selected `<option>`). */
   value?: string;
+  /** `colorPicker` only: the initial colour (`@value`; HTML's default for a missing/invalid value is black). */
+  swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */

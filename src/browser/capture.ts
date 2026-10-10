@@ -46,12 +46,12 @@ export interface Capture {
   /** Set only when `CaptureRequest.screenshot` is true. */
   png?: Uint8Array;
   /**
-   * Bytes of every `@font-face` source that was not already inline, named by content hash.
-   * The caller writes them to `<outDir>/_fonts/<name>`, which is what
-   * `LayoutDoc.fonts[].src[].file` points at; identical faces across screens or inputs collapse
-   * onto one file.
+   * Bytes of every `@font-face` source that was not already inline, keyed by `file`: exactly
+   * the `LayoutDoc.fonts[].src[].file` value (`_fonts/<content hash>.<ext>`) that points at
+   * them. Packaging reads them from here; the conversion never writes them to disk. Identical
+   * faces collapse onto one entry.
    */
-  fontFiles: Array<{ name: string; bytes: Uint8Array }>;
+  fontFiles: Array<{ file: string; bytes: Uint8Array }>;
 }
 
 export class BrowserCapture {

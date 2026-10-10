@@ -7,7 +7,8 @@
  */
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
-import type { Color } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
+import { parseColor } from "../css/index.ts";
 import { type ControlKind, type ControlNode, type Diagnostic, type FontSpec, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
 import { textContent } from "./text-runs.ts";
 
@@ -15,6 +16,7 @@ import { textContent } from "./text-runs.ts";
 export interface ControlSpec {
   control: ControlKind;
   value?: string;
+  swatch?: Color;
   placeholder?: string;
   inputType?: ControlNode["inputType"];
   checked?: boolean;
@@ -120,6 +122,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
           spec.value = a["value"] ?? "on";
         }
       } else if (a["value"] !== undefined) spec.value = a["value"];
+      if (control === "colorPicker") spec.swatch = parseColor(a["value"]) ?? { r: 0, g: 0, b: 0, a: 1 };
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;
         const max = num(a["max"]) ?? 100;

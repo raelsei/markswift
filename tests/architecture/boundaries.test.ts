@@ -90,6 +90,41 @@ test("source modules have no runtime import cycles", () => {
   expect([...cycles]).toEqual([]);
 });
 
+/**
+ * Directory layering of the pipeline, type-only imports included: a layer may import itself
+ * and the layers listed here, nothing else. `model` is the IR vocabulary every stage shares;
+ * `swift` prints the IR and must not parse CSS or run analysis.
+ */
+const ALLOWED: Record<string, readonly string[]> = {
+  model: [],
+  css: ["model"],
+  html: ["model"],
+  analysis: ["model", "css", "html"],
+  swift: ["model"],
+  compiler: ["model", "analysis", "swift"],
+  fonts: ["model"],
+  input: ["model"],
+  browser: ["model", "css", "input"],
+  api: ["model", "input", "browser", "compiler", "fonts"],
+  cli: ["model", "api", "compiler", "input"],
+  index: ["api", "compiler", "html"],
+};
+const layerOf = (file: string) => /^src\/([^/.]+)/.exec(display(file))?.[1];
+
+test("each source layer imports only the layers the pipeline allows, type-only imports included", () => {
+  const layers = [...new Set([...graph.keys()].map((file) => layerOf(file)!))].sort();
+  expect(Object.keys(ALLOWED).sort()).toEqual(layers);
+  const violations: string[] = [];
+  for (const [file, dependencies] of graph) {
+    const from = layerOf(file)!;
+    for (const edge of dependencies) {
+      const to = edge.target && graph.has(edge.target) ? layerOf(edge.target) : undefined;
+      if (to && to !== from && !ALLOWED[from]!.includes(to)) violations.push(`${display(file)} -> ${display(edge.target!)}`);
+    }
+  }
+  expect(violations).toEqual([]);
+});
+
 test("the compiler cannot load browser capture or filesystem font packaging", () => {
   const violations: string[] = [];
   const seen = new Set<string>();

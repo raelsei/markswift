@@ -1,5 +1,5 @@
 import { basename, dirname, resolve } from "node:path";
-import { serveDir } from "../browser/server.ts";
+import { serveDir } from "./server.ts";
 import type { HtmlSource } from "./types.ts";
 
 export interface ResolvedSource {

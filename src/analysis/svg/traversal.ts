@@ -1,9 +1,9 @@
 /** Traverse SVG groups, instances and shapes with recursive clipping and masks. */
 import { type LayoutNode, type Rect } from "../../model/layout.ts";
-import { type SvgPath, addDiagnostic } from "../../model/semantic.ts";
+import { type PathSegment, type SvgPath, addDiagnostic } from "../../model/semantic.ts";
 import { parseColor, round2, px } from "../../css/index.ts";
 import { type SvgScope, type SvgContext, type SvgMatrix } from "./context.ts";
-import { IDENTITY, multiply, ownTransform, bake } from "./transforms.ts";
+import { IDENTITY, multiply, ownTransform, bake, segments } from "./transforms.ts";
 import { inherit, num, styleProp, parseDash, reference } from "./attributes.ts";
 import { collectText } from "./text.ts";
 import { pathBounds, ringOf } from "./geometry.ts";
@@ -154,9 +154,9 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
     }
   }
   if (!d) return undefined;
-  const p: SvgPath = { d: bake(d, scope.ctm) };
+  const p: SvgPath = { path: segments(bake(d, scope.ctm)) };
   const prop = (k: string) => styleProp(c, attrs, k, scope);
-  const bbox = pathBounds(p.d);
+  const bbox = pathBounds(p.path);
 
   // A `<line>` has no interior: the browser's default `fill: black` paints nothing.
   const fillRaw = c.tag === "line" ? undefined : prop("fill");
@@ -229,7 +229,7 @@ function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): S
   // bbox comes from the baked path: already in viewBox space, so scope.ctm must not apply again.
   const units: SvgMatrix = el.attrs["clippathunits"] === "objectBoundingBox" ? [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y] : scope.ctm;
   const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs), clip: undefined, mask: undefined };
-  const parts: string[] = [];
+  const parts: PathSegment[] = [];
   let eoFill: true | undefined;
   for (const c of el.children) {
     if (!SVG_SHAPE_TAGS[c.tag] && c.tag !== "use") continue;
@@ -239,11 +239,11 @@ function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): S
       const p = shapeToPath(c, childScope(c, inner, ctx), ctx, false);
       if (p) ctx.paths.push(p);
     }
-    for (const p of ctx.paths.splice(before)) parts.push(p.d);
+    for (const p of ctx.paths.splice(before)) parts.push(...p.path);
     if ((c.attrs["clip-rule"] ?? el.attrs["clip-rule"]) === "evenodd") eoFill = true;
   }
   if (!parts.length) return undefined;
-  const clip: SvgPath["clip"] = { d: parts.join(" ") };
+  const clip: SvgPath["clip"] = { path: parts };
   if (eoFill) clip.eoFill = true;
   return clip;
 }

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serveDir } from "../../../src/browser/server.ts";
+import { serveDir } from "../../../src/input/server.ts";
 
 test("static server refuses foreign hosts, dotfiles and malformed paths", async () => {
   const dir = await mkdtemp(join(tmpdir(), "markswift-server-"));
