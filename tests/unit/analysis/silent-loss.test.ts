@@ -102,3 +102,18 @@ describe("BUG-18 synthetic text item", () => {
     expect(sem!.diagnostics.map((d) => d.message).filter((m) => m.includes("float"))).toEqual([]);
   });
 });
+
+describe("BUG-11 nested fixed", () => {
+  // Building a fixed layer hoists its own fixed descendants after the overlay list was copied.
+  test("a fixed node inside a fixed layer is built", () => {
+    const inner = el("div", { x: 300, y: 20, w: 60, h: 40 }, { display: "block", position: "fixed", "background-color": "rgb(255, 0, 0)" });
+    inner.id = "#inner";
+    const outer = el("div", { x: 0, y: 700, w: 390, h: 100 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, [inner]);
+    outer.id = "#outer";
+    const section = el("section", { x: 0, y: 0, w: 390, h: 100 }, { display: "block" }, [outer]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 390, h: 800 }, { display: "block" }, [section])), "S");
+    const ids = flatten(screen.root).map((n) => n.id);
+    expect(ids).toContain("#outer");
+    expect(ids).toContain("#inner");
+  });
+});

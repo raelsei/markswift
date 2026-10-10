@@ -22,7 +22,14 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
-  if (ctx.fixed.length) root.overlays.push(...buildOverlays(doc.root, ctx.fixed, undefined, ctx));
+  // Building one can hoist fixed descendants of its own, so drain the list until it stops growing.
+  // ponytail: each batch is paint-sorted on its own; a nested fixed node paints after its fixed
+  // ancestor, so batch order matches paint order except for negative z-index inside a fixed layer.
+  for (let built = 0; built < ctx.fixed.length; ) {
+    const batch = ctx.fixed.slice(built);
+    built = ctx.fixed.length;
+    root.overlays.push(...buildOverlays(doc.root, batch, undefined, ctx));
+  }
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
