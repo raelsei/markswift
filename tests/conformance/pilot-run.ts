@@ -2,6 +2,7 @@
 import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { BrowserCapture } from "../../src/browser/capture.ts";
 import { serveDir } from "../../src/input/server.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
@@ -42,10 +43,6 @@ export function assertCleanSource(status: string) {
   if (status.trim()) throw new Error(`converter source is dirty; commit or restore src/ before a named-revision pilot: ${status.trim()}`);
 }
 
-function argument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index < 0 ? undefined : process.argv[index + 1];
-}
 async function outputOf(command: string[]): Promise<string> {
   const run = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text()]);
@@ -96,14 +93,16 @@ async function saveSource(entry: PilotEntry, captured: Awaited<ReturnType<Browse
 }
 
 async function run() {
-  if (process.argv.includes("--help")) return console.log(USAGE);
-  const only = argument("--only");
-  const group = argument("--group");
-  const out = resolve(argument("--out") ?? join(import.meta.dir, "out", new Date().toISOString().replace(/[:.]/g, "-")));
-  const renderer = (argument("--renderer") ?? "mac") as Renderer;
+  const flags = parseArgs({ args: process.argv.slice(2), options: {
+    all: { type: "boolean" }, help: { type: "boolean" }, only: { type: "string" }, group: { type: "string" }, renderer: { type: "string" }, out: { type: "string" },
+  } }).values;
+  if (flags.help) return console.log(USAGE);
+  const { only, group } = flags;
+  const out = resolve(flags.out ?? join(import.meta.dir, "out", new Date().toISOString().replace(/[:.]/g, "-")));
+  const renderer = (flags.renderer ?? "mac") as Renderer;
   if (!["none", "mac", "ios"].includes(renderer)) throw new Error(`unknown renderer: ${renderer}\n${USAGE}`);
   const pilot = await loadPilot();
-  const cases = process.argv.includes("--all") ? await loadFixtureSet(pilot) : pilot;
+  const cases = flags.all ? await loadFixtureSet(pilot) : pilot;
   if (only && !cases.some(item => item.id === only)) throw new Error(`unknown pilot case: ${only}`);
   if (group && group !== "text") throw new Error(`unknown pilot group: ${group}`);
   const selected = only ? cases.filter(item => item.id === only) : group === "text" ? cases.filter(item => item.expectedText !== undefined) : cases;
@@ -230,4 +229,10 @@ async function run() {
   if (report!.completed !== report!.expected || report!.errors.length) throw new Error(`pilot incomplete: ${report!.completed}/${report!.expected}; ${report!.errors.join("; ")}`);
 }
 
-if (import.meta.main) run().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+if (import.meta.main) run().catch(error => {
+  // Bad flags (unknown, missing value, stray positional) are usage errors: print usage and exit 2.
+  const usage = String((error as NodeJS.ErrnoException).code ?? "").startsWith("ERR_PARSE_ARGS");
+  console.error(error instanceof Error ? error.message : String(error));
+  if (usage) console.error(USAGE);
+  process.exitCode = usage ? 2 : 1;
+});

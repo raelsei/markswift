@@ -6,6 +6,15 @@ import { join } from "node:path";
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const swiftTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
+test("pilot rejects an unknown flag with a usage error instead of running the default renderer", async () => {
+  const run = Bun.spawn([process.execPath, join(import.meta.dir, "pilot-run.ts"), "--no-sim"], { stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text()]);
+  expect(await run.exited).toBe(2);
+  expect(stdout).toBe("");
+  expect(stderr).toContain("--no-sim");
+  expect(stderr).toContain("usage: bun tests/conformance/pilot-run.ts");
+});
+
 browserTest("render-free pilot captures every expected mode, theme and width with typed Swift", async () => {
   const parent = await mkdtemp(join(tmpdir(), "markswift-pilot-test-"));
   const out = join(parent, "run");
