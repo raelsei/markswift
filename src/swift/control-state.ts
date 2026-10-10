@@ -1,4 +1,3 @@
-import { parseColor } from "../css/index.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers } from "./context.ts";
@@ -27,7 +26,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "datePicker":
       return { type: "Date", value: ".now" };
     case "colorPicker": {
-      const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
+      const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
       return { type: "Color", value: `.markswift(${colorArgs(c)})` };
     }
     default:

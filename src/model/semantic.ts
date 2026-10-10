@@ -410,6 +410,8 @@ export interface ControlNode extends SemBase {
   content: SemNode[];
   /** Initial text/number the design shows (`@value`, `<textarea>` text, the selected `<option>`). */
   value?: string;
+  /** `colorPicker` only: the initial colour (`@value`; HTML's default for a missing/invalid value is black). */
+  swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */

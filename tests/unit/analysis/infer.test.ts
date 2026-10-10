@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
-import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
+import type { ControlNode, SemNode, TextNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
@@ -88,4 +88,19 @@ describe("line height", () => {
     const text = flatten(inferScreen(doc(root), "s").root).find((n): n is TextNode => n.kind === "text");
     expect(text?.runs[0]?.font.lineHeight).toBeUndefined();
   });
+});
+
+test("a colour picker's swatch is resolved during analysis; a missing or invalid value is black", () => {
+  const swatch = (value: string) => {
+    const root = el("main", { x: 0, y: 0, w: 100, h: 40 }, { display: "block" }, [el("input", { x: 0, y: 0, w: 50, h: 27 }, {}, [], { type: "color", value })]);
+    const control = flatten(inferScreen(doc(root), "s").root).find((n): n is ControlNode => n.kind === "control");
+    expect(control?.control).toBe("colorPicker");
+    return control!.swatch!;
+  };
+  const orange = swatch("#ff8800");
+  expect(orange.r).toBeCloseTo(1, 4);
+  expect(orange.g).toBeCloseTo(0.5333, 4);
+  expect(orange.b).toBeCloseTo(0, 4);
+  expect(orange.a).toBeCloseTo(1, 4);
+  expect(swatch("nope")).toEqual({ r: 0, g: 0, b: 0, a: 1 });
 });
