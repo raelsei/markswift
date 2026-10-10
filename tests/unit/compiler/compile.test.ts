@@ -47,3 +47,19 @@ test("HTML metadata containing newlines remains inside generated comments", () =
   expect(output.code).not.toMatch(/^injected/m);
   expect(output.code).toContain("Source: part injected");
 });
+
+test("loopback image URLs are never emitted and are diagnosed", () => {
+  const input = structuredClone(layout);
+  input.root.children = [
+    { id: "pic", tag: "img", attrs: { alt: "A" }, currentSrc: "http://127.0.0.1:5555/a.png", styles: { display: "block" }, bounds: { x: 0, y: 0, w: 20, h: 20 }, children: [] },
+    { id: "bg", tag: "div", attrs: {}, styles: { display: "block", "background-image": 'url("http://localhost:1/b.png")' }, bounds: { x: 0, y: 20, w: 20, h: 20 }, children: [] },
+  ];
+  const output = compileLayout(input);
+  expect(output.code).not.toContain("127.0.0.1");
+  expect(output.code).not.toContain("localhost");
+  expect(output.code).not.toContain("AsyncImage");
+  expect(output.code).toContain('Text(verbatim: "A")');
+  const notes = output.diagnostics.flatMap((d) => d.notes).join("\n");
+  expect(notes).toContain("http://127.0.0.1:5555/a.png");
+  expect(notes).toContain("http://localhost:1/b.png");
+});

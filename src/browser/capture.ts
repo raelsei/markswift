@@ -26,6 +26,15 @@ const requestURLs = (r: Response) => {
 
 const UNCOMPILED_TAILWIND = /@tailwind\s+(base|components|utilities|variants)\b|@import\s+(url\(\s*)?["']tailwindcss["']|@apply\s/;
 
+/** Raster type of an image response served without an `image/*` content type, from its magic bytes. */
+function sniffImage(b: Buffer): string | undefined {
+  if (b[0] === 0x89 && b.toString("latin1", 1, 4) === "PNG") return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.toString("latin1", 0, 4) === "GIF8") return "image/gif";
+  if (b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") return "image/webp";
+  return undefined;
+}
+
 export interface Capture {
   /** Resource failures and page errors observed while preparing this capture. */
   warnings: string[];
@@ -82,9 +91,12 @@ export class BrowserCapture {
     page.on("response", (r) => {
       if (r.status() >= 400 && !favicon(r.url())) errors.push(`${r.status()} ${r.url()}`);
       const mime = r.headers()["content-type"]?.split(";")[0];
-      if (r.ok() && mime?.startsWith("image/")) {
-        imageReads.push(r.body().then((bytes) => { images.set(r.url(), `data:${mime};base64,${bytes.toString("base64")}`); })
-          .catch(() => { errors.push(`Could not capture image bytes: ${r.url()}`); }));
+      if (r.ok() && (mime?.startsWith("image/") || r.request().resourceType() === "image")) {
+        imageReads.push(r.body().then((bytes) => {
+          const type = mime?.startsWith("image/") ? mime : sniffImage(bytes);
+          if (!type) { errors.push(`Image response is not an image: ${r.url()}`); return; }
+          for (const u of requestURLs(r)) images.set(u, `data:${type};base64,${bytes.toString("base64")}`);
+        }).catch(() => { errors.push(`Could not capture image bytes: ${r.url()}`); }));
       }
       if (r.ok() && r.request().resourceType() === "stylesheet") {
         sheetReads.push(r.text().then((text) => { for (const u of requestURLs(r)) sheets.set(u, text); })

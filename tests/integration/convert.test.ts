@@ -116,6 +116,26 @@ browserTest("uncompiled Tailwind directives are reported", async () => {
   expect(result.warnings.filter((w) => w.includes("uncompiled Tailwind"))).toHaveLength(1);
 }, 30000);
 
+browserTest("redirected, mistyped and lazy images are embedded", async () => {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    fetch(req) {
+      switch (new URL(req.url).pathname) {
+        case "/old.png": return new Response(null, { status: 302, headers: { location: "/new.png" } });
+        case "/new.png": case "/lazy.png": return new Response(png, { headers: { "content-type": "image/png" } });
+        case "/typed.bin": return new Response(png, { headers: { "content-type": "application/octet-stream" } });
+        default: return new Response('<main data-markswift-root style="width:100px"><img src="/old.png" width=10 height=10><img src="/typed.bin" width=10 height=10><img loading="lazy" src="/lazy.png" width=10 height=10 style="margin-top:3000px"></main>', { headers: { "content-type": "text/html" } });
+      }
+    },
+  });
+  try {
+    const result = await convert({ url: `http://127.0.0.1:${server.port}/` });
+    expect(result.warnings.filter((w) => w.includes("Image could not be embedded"))).toEqual([]);
+    expect(JSON.stringify(result.layout).match(/data:image\/png/g)).toHaveLength(3);
+  } finally { server.stop(true); }
+}, 60000);
+
 browserTest("restricted pasted HTML cannot run scripts or request server-side resources", async () => {
   let requests = 0;
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => { requests++; return new Response("blocked"); } });
