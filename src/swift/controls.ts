@@ -17,6 +17,7 @@ import type { ControlNode, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
+import { shapeExpr } from "./paint.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
 export interface ControlDeps extends ColorCtx {
@@ -32,6 +33,8 @@ export interface ControlDeps extends ColorCtx {
   /** This screen's colour → token lookup, and the control node its colours belong to. */
   tokens?: ScreenTokens;
   id?: string;
+  /** The node's box modifiers, emitted inside a pressable control's label. */
+  box?: string[];
 }
 
 /**
@@ -83,14 +86,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "Button {",
           `    ${state} = true`,
           "} label: {",
-          ...indent(body(n, deps), 1),
+          ...indent(pressable(n, deps), 1),
           "}",
           ".buttonStyle(.plain)",
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+      return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -100,9 +103,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       const href = n.href ?? "";
       if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
         const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
-        return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+        return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
-      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, body(n, deps), ["}"]);
+      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, pressable(n, deps), ["}"]);
     }
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
@@ -226,6 +229,18 @@ function barHeight(n: ControlNode): number {
 function body(n: ControlNode, deps: ControlDeps): string[] {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
   return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
+}
+
+/**
+ * A button's or link's label with the node's box inside it, closed by the box shape: the whole box
+ * is the hit and press area, not only the glyphs. `EmptyView` takes no padding or frame, so an
+ * empty label with a box becomes `Color.clear`.
+ */
+function pressable(n: ControlNode, deps: ControlDeps): string[] {
+  const label = body(n, deps);
+  if (!deps.box) return label;
+  const lines = deps.box.length && label.length === 1 && label[0] === "EmptyView()" ? ["Color.clear"] : label;
+  return [...lines, ...deps.box, `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`];
 }
 
 function wrap(open: string, inner: string[], close: string[]): string[] {

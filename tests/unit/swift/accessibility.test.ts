@@ -45,3 +45,32 @@ test("app-mode system fonts scale with Dynamic Type; fidelity and SVG text stay 
   expect(svg).toContain(".system(size: 12.0");
   expect(svg).not.toContain("@ScaledMetric");
 });
+
+const radius = (r: string) => ({ "border-top-left-radius": r, "border-top-right-radius": r, "border-bottom-right-radius": r, "border-bottom-left-radius": r });
+const padding = (v: number, h: number) => ({ "padding-top": `${v}px`, "padding-right": `${h}px`, "padding-bottom": `${v}px`, "padding-left": `${h}px` });
+
+test("a button's and a link's box is inside the label, so it is the hit and press area", () => {
+  const button: LayoutNode = {
+    tag: "button", id: "save", attrs: {}, styles: { ...FONT, display: "inline-block", ...padding(8, 16), "background-color": "rgb(37, 99, 235)", ...radius("8px") },
+    bounds: { x: 0, y: 0, w: 70, h: 38 }, children: [text("Save", 16, 8, 38, 22)],
+  };
+  const link: LayoutNode = {
+    tag: "a", id: "open", attrs: { href: "https://example.com" }, styles: { ...FONT, display: "block", ...padding(8, 8) },
+    bounds: { x: 0, y: 50, w: 320, h: 38 }, children: [text("Open", 8, 58, 40, 22)],
+  };
+  for (const mode of ["app", "fidelity"] as const) {
+    const out = swift([button], mode);
+    expect(out.indexOf(".background(")).toBeGreaterThan(-1);
+    expect(out.indexOf(".background(")).toBeLessThan(out.indexOf(".buttonStyle(.plain)"));
+    const shape = out.indexOf(".contentShape(RoundedRectangle(cornerRadius: 8.0, style: .circular))");
+    expect(shape).toBeGreaterThan(-1);
+    expect(shape).toBeLessThan(out.indexOf(".buttonStyle(.plain)"));
+
+    const a = swift([link], mode);
+    const dest = a.indexOf("Link(destination:");
+    const pad = a.indexOf(".padding(8.0)");
+    expect(dest).toBeGreaterThan(-1);
+    expect(dest).toBeLessThan(pad);
+    expect(pad).toBeLessThan(a.indexOf(".contentShape(Rectangle())"));
+  }
+});

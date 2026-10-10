@@ -8,6 +8,11 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
+  return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
+}
+
+/** The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area. */
+export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
   const [pt, pr, pb, pl] = n.padding;
@@ -67,6 +72,13 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     const mode = swiftBlend(st.blend);
     if (mode) m.push(`.blendMode(${mode})`);
   }
+  return m;
+}
+
+/** Where the finished box sits and what it is: transform, self-alignment, visibility. Never anything that changes the hit area. */
+export function placementModifiers(n: SemNode, _ctx: EmitContext): string[] {
+  const m: string[] = [];
+  const st = n.style;
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
