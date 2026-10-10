@@ -45,7 +45,7 @@ test("loads existing comparison directories and manifests, ignoring harness outp
     const loaded = await loadComparisons(dir) as Record<string, Record<string, unknown>>;
     expect(Object.keys(loaded)).toEqual(["card-light"]);
     expect(loaded["card-light"]?.ssim).toBe(0.95);
-    expect((loaded["card-light"]?._files as Record<string, boolean>)["ios.png"]).toBe(false);
+    expect((loaded["card-light"]?._files as Record<string, boolean>)["native.png"]).toBe(false);
     const manifest = join(dir, "manifest.json");
     await Bun.write(manifest, JSON.stringify(baseline));
     expect(await loadComparisons(manifest)).toEqual(baseline);
@@ -69,23 +69,23 @@ test("CLI rejects incomplete capture artifacts and exits nonzero for regression"
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-const files = { "browser.png": true, "ios.png": true, "diff.png": true, "layout.json": true, "diagnostics.json": true, "warnings.json": true, "typecheck.json": true };
+const files = { "browser.png": true, "native.png": true, "diff.png": true, "layout.json": true, "diagnostics.json": true, "warnings.json": true, "typecheck.json": true };
 const artifactHashes = Object.fromEntries(Object.keys(files).map(name => [name, "a".repeat(64)]));
 const evidence = (overrides: Record<string, unknown> = {}) => ({
   ssim: 0.98, mismatch: 0.03, width: 640, height: 200, caseId: "display-flex", mode: "app", theme: "light",
   viewportWidth: 320, viewportHeight: 2000, dpr: 2, loadedFonts: 0, rootWidthOverride: "[data-markswift-root] { width:100% !important }",
-  sourceRevision: "a".repeat(40), capturedAt: "2026-09-23T04:00:00.000Z", chrome: "Chrome 140", xcode: "Xcode 26", simulator: "iPhone iOS-26",
+  sourceRevision: "a".repeat(40), capturedAt: "2026-09-23T04:00:00.000Z", chrome: "Chrome 140", xcode: "Xcode 26", renderer: "iPhone iOS-26",
   fixtureHash: "c".repeat(64), harnessHash: "d".repeat(64),
   artifactHashes: { ...artifactHashes }, _hashes: { ...artifactHashes }, _files: { ...files },
-  _images: { "browser.png": { width: 640, height: 200 }, "ios.png": { width: 640, height: 200 }, "diff.png": { width: 640, height: 200 } },
+  _images: { "browser.png": { width: 640, height: 200 }, "native.png": { width: 640, height: 200 }, "diff.png": { width: 640, height: 200 } },
   ...overrides,
 });
 
 test("strict evidence gate rejects missing render, wrong dimensions and invalid mismatch", () => {
   const before = { a: evidence() };
   const policy = { requireEvidence: true };
-  expect(assessQuality(before, { a: evidence({ _files: { ...files, "ios.png": false } }) }, policy).issues.some(i => i.code === "artifact")).toBe(true);
-  expect(assessQuality(before, { a: evidence({ _images: { "browser.png": { width: 640, height: 200 }, "ios.png": { width: 639, height: 200 }, "diff.png": { width: 640, height: 200 } } }) }, policy).issues.some(i => i.code === "dimensions")).toBe(true);
+  expect(assessQuality(before, { a: evidence({ _files: { ...files, "native.png": false } }) }, policy).issues.some(i => i.code === "artifact")).toBe(true);
+  expect(assessQuality(before, { a: evidence({ _images: { "browser.png": { width: 640, height: 200 }, "native.png": { width: 639, height: 200 }, "diff.png": { width: 640, height: 200 } } }) }, policy).issues.some(i => i.code === "dimensions")).toBe(true);
   expect(assessQuality(before, { a: evidence({ width: 600 }) }, policy).issues.some(i => i.code === "dimensions")).toBe(true);
   for (const mismatch of [-0.1, 1.1, NaN, "0.03"]) {
     expect(assessQuality(before, { a: evidence({ mismatch }) }, policy).issues.some(i => i.code === "invalid")).toBe(true);
@@ -107,15 +107,15 @@ test("strict gate rejects missing provenance, stale revision and changed capture
 
 test("strict gate binds comparison scores to exact artifact contents", () => {
   const before = { a: evidence() };
-  const altered = evidence({ _hashes: { ...artifactHashes, "ios.png": "b".repeat(64) } });
+  const altered = evidence({ _hashes: { ...artifactHashes, "native.png": "b".repeat(64) } });
   expect(assessQuality(before, { a: altered }, { requireEvidence: true }).issues.some(i => i.code === "artifact")).toBe(true);
 });
 
 test("feature floors reject an unchanged but unacceptable score", () => {
   const low = { a: evidence({ ssim: 0.92 }) };
-  const result = assessQuality(low, low, { requireEvidence: true, features: { "display-flex": { minSsim: 0.95 } } });
+  const result = assessQuality(low, low, { requireEvidence: true, features: { "display-flex@app": { minSsim: 0.95 } } });
   expect(result.issues.some(i => i.code === "floor")).toBe(true);
-  const separateDropAllowance = assessQuality(low, low, { requireEvidence: true, features: { "display-flex": { minSsim: 0.95 } }, cases: { a: { maxDrop: 0.01 } } });
+  const separateDropAllowance = assessQuality(low, low, { requireEvidence: true, features: { "display-flex@app": { minSsim: 0.95 } }, cases: { a: { maxDrop: 0.01 } } });
   expect(separateDropAllowance.issues.some(i => i.code === "floor")).toBe(true);
   expect(assessQuality(low, low, { requireEvidence: true, minSsim: 0.9 }).ok).toBe(true);
 });
@@ -128,7 +128,7 @@ test("directory loader records required artifacts and actual PNG dimensions", as
     await Bun.write(join(capture, "compare.json"), JSON.stringify(evidence()));
     for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"]) await Bun.write(join(capture, file), "{}");
     const loaded = await loadComparisons(dir) as Record<string, Record<string, unknown>>;
-    expect((loaded.a?._files as Record<string, boolean>)["ios.png"]).toBe(false);
+    expect((loaded.a?._files as Record<string, boolean>)["native.png"]).toBe(false);
     expect(assessQuality(loaded, loaded, { requireEvidence: true }).issues.some(i => i.code === "artifact")).toBe(true);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -145,7 +145,7 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
     await mkdir(capture, { recursive: true });
     await Bun.write(join(capture, "compare.json"), JSON.stringify(comparison));
     for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"]) await Bun.write(join(capture, file), "{}");
-    for (const file of ["browser.png", "ios.png", "diff.png"]) await Bun.write(join(capture, file), png);
+    for (const file of ["browser.png", "native.png", "diff.png"]) await Bun.write(join(capture, file), png);
     const hashes = Object.fromEntries(await Promise.all(Object.keys(files).map(async name => [name, createHash("sha256").update(Buffer.from(await Bun.file(join(capture, name)).arrayBuffer())).digest("hex")])));
     await Bun.write(join(capture, "compare.json"), JSON.stringify({ ...comparison, artifactHashes: hashes }));
     return hashes;
@@ -158,17 +158,78 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
   try {
     await create(before, evidence());
     afterHashes = await create(after, evidence({ sourceRevision: revision }));
-    await Bun.write(policy, JSON.stringify({ requireEvidence: true, expectedSourceRevision: revision, features: { "display-flex": { minSsim: 0.95 } } }));
+    await Bun.write(policy, JSON.stringify({ requireEvidence: true, expectedSourceRevision: revision, features: { "display-flex@app": { minSsim: 0.95 } } }));
     expect((await invoke()).exit).toBe(0);
-    await Bun.write(join(after, "a", "ios.png"), replacement);
+    await Bun.write(join(after, "a", "native.png"), replacement);
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "artifact")).toBe(true);
-    await Bun.write(join(after, "a", "ios.png"), png);
-    await rm(join(after, "a", "ios.png"));
+    await Bun.write(join(after, "a", "native.png"), png);
+    await rm(join(after, "a", "native.png"));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "artifact")).toBe(true);
-    await Bun.write(join(after, "a", "ios.png"), png);
+    await Bun.write(join(after, "a", "native.png"), png);
     await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, ssim: 0.90, artifactHashes: afterHashes })));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "floor")).toBe(true);
     await Bun.write(join(after, "a", "compare.json"), JSON.stringify(evidence({ sourceRevision: revision, chrome: "Chrome 141", artifactHashes: afterHashes })));
     expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("a tracked manifest is a strict baseline, never a strict current", () => {
+  const { _files, _images, _hashes, ...manifestEntry } = evidence();
+  const policy = { requireEvidence: true };
+  expect(assessQuality({ a: manifestEntry }, { a: evidence() }, policy)).toMatchObject({ ok: true, checked: 1 });
+  expect(assessQuality({ a: evidence() }, { a: manifestEntry }, policy).issues.some(i => i.code === "artifact")).toBe(true);
+});
+
+test("feature rules are keyed <caseId>@<mode>; a bare case id is a policy error", () => {
+  const a = { a: evidence() };
+  expect(assessQuality(a, a, { requireEvidence: true, features: { "display-flex": { minSsim: 0.5 } } }).issues.map(i => i.code)).toEqual(["policy"]);
+  expect(assessQuality(a, a, { requireEvidence: true, features: { "display-flex@fidelity": { minSsim: 0.5 } } }).issues.map(i => i.code)).toEqual(["policy"]);
+  expect(assessQuality(a, a, { requireEvidence: true, features: { "display-flex@app": { minSsim: 0.5 } } }).ok).toBe(true);
+});
+
+test("maxMismatch caps pixel mismatch as a floor", () => {
+  const a = { a: evidence({ mismatch: 0.06 }) };
+  expect(assessQuality(a, a, { features: { "display-flex@app": { maxMismatch: 0.05 } } }).issues.map(i => i.code)).toEqual(["floor"]);
+  expect(assessQuality(a, a, { cases: { a: { maxMismatch: 0.06 } } }).ok).toBe(true);
+});
+
+test("anchor regions catch regressions, changed anchor lists and failing approved features", () => {
+  const at = (...mismatch: number[]) => evidence({ anchors: mismatch.map((m, i) => ({ id: `#anchor-${i}`, mismatch: m })) });
+  const codes = (before: object, after: object, policy: object = {}) => assessQuality({ a: before }, { a: after }, policy).issues.map(i => i.code);
+  expect(codes(at(0.05, 0.3), at(0.09, 0.4))).toEqual([]);
+  expect(codes(at(0.05), at(0.2))).toEqual(["geometry"]);
+  expect(codes(at(0.05), at(0.2), { anchorMaxMismatch: 0.25 })).toEqual([]);
+  expect(codes(at(0.05, 0.05), at(0.05))).toEqual(["geometry"]);
+  expect(codes(at(0.3), at(0.3), { features: { "display-flex@app": {} } })).toEqual(["geometry"]);
+  expect(codes(at(0.3), at(0.3), { features: { "display-flex@app": {} }, anchorMaxMismatch: 0.5 })).toEqual([]);
+});
+
+test("CLI --write-baseline refuses an incomplete run and --summary prints domain × mode rows", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "markswift-quality-baseline-"));
+  const cli = async (...args: string[]) => {
+    const run = Bun.spawn([process.execPath, join(import.meta.dir, "../../../tools/quality.ts"), ...args], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text()]);
+    return { exit: await run.exited, stdout, stderr };
+  };
+  try {
+    await Bun.write(join(dir, "run", "run.json"), JSON.stringify({ expected: 8, completed: 7, errors: ["x: capture failed"] }));
+    const refused = await cli("--write-baseline", join(dir, "run"), join(dir, "manifest.json"));
+    expect(refused.exit).toBe(1);
+    expect(refused.stderr).toContain("incomplete run: 7/8");
+    expect(await Bun.file(join(dir, "manifest.json")).exists()).toBe(false);
+    const manifest = {
+      "display-flex-320-light-app": evidence({ fixture: "css-layout/display--flex.html", anchors: [{ id: "#flex-row", mismatch: 0.02 }] }),
+      "display-flex-320-light-fidelity": evidence({ fixture: "css-layout/display--flex.html", mode: "fidelity" }),
+      "img-320-light-app": evidence({ fixture: "html/img.html", caseId: "image", ssim: 0.9 }),
+    };
+    await Bun.write(join(dir, "summary.json"), JSON.stringify(manifest));
+    const summary = await cli("--summary", join(dir, "summary.json"));
+    expect(summary.exit).toBe(0);
+    const rows = summary.stdout.split("\n").filter(line => /^\| (css-layout|html) /.test(line));
+    expect(rows).toEqual([
+      "| css-layout | app | 1 | 0.9800 | 0.9800 (display-flex-320-light-app) | 0.0300 | 1/1 |",
+      "| html | app | 1 | 0.9000 | 0.9000 (img-320-light-app) | 0.0300 | 0/0 |",
+      "| css-layout | fidelity | 1 | 0.9800 | 0.9800 (display-flex-320-light-fidelity) | 0.0300 | 0/0 |",
+    ]);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
