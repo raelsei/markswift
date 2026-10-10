@@ -83,7 +83,7 @@ function parseGradient(s: string, dropped?: string[]): Paint {
       if (deg === undefined) return { kind: "unsupported", raw: s };
       angle = deg;
     } else if (prelude) {
-      const words = /^to\s+(.+)$/.exec(prelude)?.[1]!.split(/\s+/) ?? [];
+      const words = /^to\s+(.+)$/.exec(prelude)?.[1]?.split(/\s+/) ?? [];
       const side: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 };
       const x = words.find((w) => w === "left" || w === "right"), y = words.find((w) => w === "top" || w === "bottom");
       if (words.length === 1 && side[words[0]!] !== undefined) angle = side[words[0]!]!;

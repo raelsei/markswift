@@ -58,13 +58,13 @@ describe("parseTransform", () => {
   ])("negative determinant keeps its flip: matrix(%d, %d, %d, %d)", (a, b, c, d) => {
     const t = parseTransform(`matrix(${a}, ${b}, ${c}, ${d}, 4, 5)`)!;
     expect(t.scaleX * t.scaleY).toBeLessThan(0);
-    recompose(t).forEach((v, i) => expect(v).toBeCloseTo([a, b, c, d][i]!, 2));
+    recompose(t).forEach((v, i) => { expect(v).toBeCloseTo([a, b, c, d][i]!, 2); });
   });
   test("rotate 180° (positive determinant) is not a flip", () => {
     const t = parseTransform("matrix(-1, 0, 0, -1, 0, 0)")!;
     expect(t.scaleX).toBeGreaterThan(0);
     expect(t.scaleY).toBeGreaterThan(0);
-    recompose(t).forEach((v, i) => expect(v).toBeCloseTo([-1, 0, 0, -1][i]!, 2));
+    recompose(t).forEach((v, i) => { expect(v).toBeCloseTo([-1, 0, 0, -1][i]!, 2); });
   });
 });
 

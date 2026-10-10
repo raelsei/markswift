@@ -26,7 +26,7 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
         if (autoMargins.length) entry.autoMargins = autoMargins;
         out[path] = entry;
       }
-      Array.from(el.children).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
+      Array.from(el.children).forEach((child, i) => { walk(child, path ? `${path}/${i}` : String(i)); });
     };
     walk(root, "");
     return out;

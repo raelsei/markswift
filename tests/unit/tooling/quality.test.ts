@@ -45,7 +45,7 @@ test("loads existing comparison directories and manifests, ignoring harness outp
     const loaded = await loadComparisons(dir) as Record<string, Record<string, unknown>>;
     expect(Object.keys(loaded)).toEqual(["card-light"]);
     expect(loaded["card-light"]?.ssim).toBe(0.95);
-    expect((loaded["card-light"]?._files as Record<string, boolean>)["native.png"]).toBe(false);
+    expect((loaded["card-light"]!._files as Record<string, boolean>)["native.png"]).toBe(false);
     const manifest = join(dir, "manifest.json");
     await Bun.write(manifest, JSON.stringify(baseline));
     expect(await loadComparisons(manifest)).toEqual(baseline);
@@ -128,7 +128,7 @@ test("directory loader records required artifacts and actual PNG dimensions", as
     await Bun.write(join(capture, "compare.json"), JSON.stringify(evidence()));
     for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"]) await Bun.write(join(capture, file), "{}");
     const loaded = await loadComparisons(dir) as Record<string, Record<string, unknown>>;
-    expect((loaded.a?._files as Record<string, boolean>)["native.png"]).toBe(false);
+    expect((loaded.a!._files as Record<string, boolean>)["native.png"]).toBe(false);
     expect(assessQuality(loaded, loaded, { requireEvidence: true }).issues.some(i => i.code === "artifact")).toBe(true);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

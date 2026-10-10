@@ -35,7 +35,7 @@ function pushGradient(out: Slot[], g: SvgGradient, key: string): void {
 }
 
 function pushStyle(out: Slot[], st: Style): void {
-  st.fills.forEach((p, i) => pushPaint(out, p, `fill${i}`, "fill"));
+  st.fills.forEach((p, i) => { pushPaint(out, p, `fill${i}`, "fill"); });
   if (st.border && st.border.width > 0) {
     if (visible(st.border.color)) out.push({ key: "border", role: "border", color: st.border.color });
   }
@@ -44,7 +44,7 @@ function pushStyle(out: Slot[], st: Style): void {
     if (e && e.width > 0 && visible(e.color)) out.push({ key: `border.${edge}`, role: "border", color: e.color });
   }
   if (st.outline && st.outline.width > 0 && visible(st.outline.color)) out.push({ key: "outline", role: "border", color: st.outline.color });
-  st.shadows.forEach((s, i) => pushShadow(out, s, `shadow${i}`));
+  st.shadows.forEach((s, i) => { pushShadow(out, s, `shadow${i}`); });
   st.filters?.forEach((f, i) => {
     if (f.kind === "drop-shadow") pushShadow(out, f.shadow, `filter${i}`);
   });
@@ -64,7 +64,7 @@ function pushRun(out: Slot[], r: TextRun, i: number): void {
 function colorSlots(n: SemNode): Slot[] {
   const out: Slot[] = [];
   pushStyle(out, n.style);
-  if (n.kind === "text") n.runs.forEach((r, i) => pushRun(out, r, i));
+  if (n.kind === "text") n.runs.forEach((r, i) => { pushRun(out, r, i); });
   if (n.kind === "svg") {
     n.paths.forEach((p, i) => {
       if (p.gradient) pushGradient(out, p.gradient, `path${i}.fill`);
