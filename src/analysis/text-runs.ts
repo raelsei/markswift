@@ -32,7 +32,9 @@ export function groupRuns(host: LayoutNode, runs: SourceTextRun[]): SourceTextRu
   for (const r of runs) {
     const top = r.styleOf === host ? r.node : ancestorChildOf(host, r.styleOf);
     const idx = order.indexOf(top);
-    if (cur.length && idx !== lastIdx + 1) {
+    // Runs from one inline element share its top-level child (`idx === lastIdx`); only a flow
+    // child between them (a gap in the index) ends the group.
+    if (cur.length && idx !== lastIdx && idx !== lastIdx + 1) {
       groups.push(cur);
       cur = [];
     }
@@ -68,7 +70,7 @@ export function collapseOf(s: Record<string, string>): Collapse {
  * into the laid-out run text.
  */
 export function normalizeWhitespace(text: string, mode: Collapse): { text: string; src: number[] } {
-  if (mode === "preserve") return { text, src: Array.from(text, (_, i) => i) };
+  if (mode === "preserve") return { text, src: Array.from({ length: text.length }, (_, i) => i) };
   let out = "";
   const src: number[] = [];
   for (let i = 0; i < text.length; ) {
@@ -91,7 +93,8 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
   return { text: out, src };
 }
 
-const WS = /\s/;
+/** CSS collapsible white space (space, tab, segment breaks, form feed). NBSP, U+202F, U+3000 and U+2000–200A are content: they never collapse or break. */
+const WS = /[ \t\n\r\f]/;
 
 /** The colour glyphs paint in: `-webkit-text-fill-color` overrides `color`; black when neither parses. */
 export function textColorOf(s: Record<string, string>): Color {

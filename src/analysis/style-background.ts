@@ -4,6 +4,11 @@ import { type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
 
+/** `background-clip: text`: the element's gradient paints the glyphs of every text run below it. */
+export function clipsText(el: LayoutNode): boolean {
+  return /\btext\b/.test(el.styles["background-clip"] ?? "");
+}
+
 /**
  * `background-clip: text` — the box's first gradient layer becomes the glyph fill of `run`
  * (a text-node box inside `el`), re-expressed over that box since native text fills span the
@@ -11,7 +16,7 @@ import { EDGES, edgeWidth } from "./geometry.ts";
  * the run; `styleOf` drops the box fills in return.
  */
 export function textPaintOf(el: LayoutNode, run: Rect): Paint | undefined {
-  if (!/\btext\b/.test(el.styles["background-clip"] ?? "")) return undefined;
+  if (!clipsText(el)) return undefined;
   const p = parseBackgroundImage(el.styles["background-image"]).find((p) => p.kind === "linear" || p.kind === "radial" || p.kind === "conic");
   return p && paintWithin(resolvePaint(p, el.bounds.w, el.bounds.h), el.bounds, run);
 }

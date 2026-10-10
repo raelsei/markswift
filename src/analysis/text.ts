@@ -8,7 +8,7 @@ import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColor
 import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlineGaps } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
-import { textPaintOf } from "./style-background.ts";
+import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex } from "./geometry.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
@@ -42,26 +42,29 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       // Collapsible whitespace merges across run boundaries; a whitespace-only run is just the
       // separator between its neighbours.
       const prev = out[out.length - 1];
-      if (!text.trim()) {
-        if (prev && !/\s$/.test(prev.text)) pendingSpace = true;
+      if (!/[^ \t\n\r\f]/.test(text)) {
+        if (prev && !/[ \t\n\r\f]$/.test(prev.text)) pendingSpace = true;
         continue;
       }
-      if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+      if (text.startsWith(" ") && (!prev || /[ \t\n\r\f]$/.test(prev.text))) {
         text = text.slice(1);
         src = src.slice(1);
       }
       // Snapshots may omit a whitespace-only text node between two inline elements; the laid-out
       // boxes (the inline element's, so its padding does not count) still show it as a gap on the
       // line, or as a break opportunity that wrapped.
-      if (prev && prevRun && r.node.tag !== "br" && !/\s$/.test(prev.text) && !text.startsWith(" ")) {
+      if (prev && prevRun && r.node.tag !== "br" && !/[ \t\n\r\f]$/.test(prev.text) && !text.startsWith(" ")) {
         const a = (prevRun.styleOf === host ? prevRun.node : prevRun.styleOf).bounds;
         const b = (r.styleOf === host ? r.node : r.styleOf).bounds;
         const sameLine = b.y < a.y + a.h - 1;
         if (!sameLine || b.x - (a.x + a.w) > 1.5) pendingSpace = true;
       }
     } else if (!text) continue;
-    const color = textColorOf(s);
-    const deco = decorationOf(s, color);
+    // `visibility: hidden` on an inline element keeps its advance but paints nothing: no glyphs,
+    // decoration, shadow, clip paint or box.
+    const hidden = s["visibility"] === "hidden" || s["visibility"] === "collapse";
+    const color = hidden ? { ...textColorOf(s), a: 0 } : textColorOf(s);
+    const deco = hidden ? undefined : decorationOf(s, color);
     // A collapsed space between two inline elements belongs to the text around them, not to
     // whichever element follows it: the browser does not underline the space between
     // `<del>…</del>` and `<ins>…</ins>`. It rides inside the next run's literal when that run
@@ -125,17 +128,19 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const droppedShadows: string[] = [];
     const shadows = parseShadows(s["text-shadow"], droppedShadows);
     for (const x of droppedShadows) note("unmapped", "text-shadow", `shadow ${x} could not be parsed; dropped`);
-    if (shadows[0]) run.shadow = shadows[0];
+    if (shadows[0] && !hidden) run.shadow = shadows[0];
     if (shadows.length > 1) note("approximated", "text-shadow", "multiple text-shadows → first only");
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
     for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
-    const paint = textPaintOf(r.styleOf, r.node.bounds);
-    if (paint) run.paint = paint;
+    const clipEl = [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
+    const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
+    if (clipEl && !paint && !hidden) note("unmapped", "background-clip", "background-clip: text without a gradient layer; the glyphs keep their own (often transparent) fill");
+    if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
     // carried by a run: SwiftUI has no per-run box. Collected for a background layer below.
-    if (el !== host && !painted.includes(el)) {
+    if (el !== host && !hidden && !painted.includes(el)) {
       const bg = parseColor(el.styles["background-color"]);
       if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
     }
@@ -150,8 +155,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
   }
-  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^\s+/);
-  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /\s+$/);
+  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
+  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";

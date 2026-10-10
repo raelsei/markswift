@@ -22,7 +22,42 @@ function childScope(c: LayoutNode, scope: SvgScope, ctx: SvgContext, extra: SvgM
     opacity: scope.opacity * (Number.isFinite(own) ? own : 1),
     useColor: scope.useColor,
     depth: scope.depth,
+    clip: scope.clip,
+    mask: scope.mask,
   };
+}
+
+/** viewBox fitted into a w×h viewport, `meet`, centred (the SVG default preserveAspectRatio). */
+function viewBoxFit(viewBox: string | undefined, w: number, h: number): SvgMatrix {
+  const vb = viewBox?.split(/[\s,]+/).map(Number);
+  if (!vb || vb.length !== 4 || !(vb[2]! > 0) || !(vb[3]! > 0)) return IDENTITY;
+  const s = Math.min(w / vb[2]!, h / vb[3]!);
+  return [s, 0, 0, s, (w - vb[2]! * s) / 2 - vb[0]! * s, (h - vb[3]! * s) / 2 - vb[1]! * s];
+}
+
+/** A nested <svg> is a new viewport: x/y offset, width/height (default 100% of the root viewBox), its own viewBox fitted. */
+function nestedViewport(c: LayoutNode, scope: SvgScope, ctx: SvgContext): SvgScope {
+  const inner = childScope(c, scope, ctx);
+  const [, , vw, vh] = ctx.vb;
+  // ponytail: percentages resolve against the root viewBox, not the parent viewport (wrong only for 3-level nesting with %).
+  const len = (v: string | undefined, span: number, def: number) => (v?.trim().endsWith("%") ? (parseFloat(v) / 100) * span : num(v, def));
+  const w = len(c.attrs["width"], vw, vw), h = len(c.attrs["height"], vh, vh);
+  inner.ctm = multiply(multiply(inner.ctm, [1, 0, 0, 1, len(c.attrs["x"], vw, 0), len(c.attrs["y"], vh, 0)]), viewBoxFit(c.attrs["viewbox"], w, h));
+  return inner;
+}
+
+/** `<g clip-path|mask>`: resolved once in the group's user space, inherited by every shape below. */
+function groupEffects(c: LayoutNode, inner: SvgScope, ctx: SvgContext): void {
+  const clip = reference(c, c.attrs, "clip-path", ctx);
+  if (clip?.attrs["clippathunits"] === "objectBoundingBox") addDiagnostic(ctx.diagnostics, "unmapped", "svg:clipPath", "svg objectBoundingBox clip-path on a group is not applied");
+  else if (clip) {
+    const own = clipOf(clip, inner, { x: 0, y: 0, w: 0, h: 0 }, ctx);
+    if (own && inner.clip) addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
+    if (own) inner.clip = own;
+  }
+  const mask = reference(c, c.attrs, "mask", ctx);
+  const ownMask = mask ? maskOf(mask, inner, ctx) : undefined;
+  if (ownMask) inner.mask = ownMask;
 }
 
 export function visitChildren(el: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
@@ -30,6 +65,10 @@ export function visitChildren(el: LayoutNode, scope: SvgScope, ctx: SvgContext):
 }
 
 function visitOne(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
+  const filter = c.styles["filter"] ?? c.attrs["filter"];
+  if (filter && filter !== "none") addDiagnostic(ctx.diagnostics, "unmapped", "svg:filter", `svg filter ${filter.slice(0, 40)} is not drawn`);
+  if (["marker-start", "marker-mid", "marker-end", "marker"].some((k) => c.attrs[k] && c.attrs[k] !== "none")) addDiagnostic(ctx.diagnostics, "unmapped", "svg:marker", "svg markers (marker-start/mid/end) are not drawn");
+  if (c.tag === "foreignobject") addDiagnostic(ctx.diagnostics, "unmapped", "svg:foreignObject", "svg foreignObject content is not drawn");
   if (SVG_SHAPE_TAGS[c.tag]) {
     const p = shapeToPath(c, childScope(c, scope, ctx), ctx, true);
     if (p) ctx.paths.push(p);
@@ -39,7 +78,9 @@ function visitOne(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
     for (const k of c.children) if (k.bounds.w > 0 || k.bounds.h > 0) visitOne(k, inner, ctx);
   } else if (GROUP_TAGS[c.tag]) {
     if (c.tag === "a") addDiagnostic(ctx.diagnostics, "approximated", "svg:a", "svg <a> link → shapes only");
-    visitChildren(c, childScope(c, scope, ctx), ctx);
+    const inner = c.tag === "svg" ? nestedViewport(c, scope, ctx) : childScope(c, scope, ctx);
+    groupEffects(c, inner, ctx);
+    visitChildren(c, inner, ctx);
   } else if (c.tag === "use") instantiate(c, scope, ctx);
   else if (c.tag === "text") collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
   else if (c.tag === "image") addDiagnostic(ctx.diagnostics, "unmapped", "svg:image", "svg image");
@@ -67,11 +108,7 @@ function instantiate(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
     // A symbol instance is a nested viewport: use/symbol width+height (default 100% of ours) with the symbol's viewBox fitted `meet`, centred.
     const [, , vw, vh] = ctx.vb;
     const w = num(c.attrs["width"] ?? target.attrs["width"], vw), h = num(c.attrs["height"] ?? target.attrs["height"], vh);
-    const svb = target.attrs["viewbox"]?.split(/[\s,]+/).map(Number);
-    if (svb && svb.length === 4 && svb[2]! > 0 && svb[3]! > 0) {
-      const s = Math.min(w / svb[2]!, h / svb[3]!);
-      inner.ctm = multiply(inner.ctm, [s, 0, 0, s, (w - svb[2]! * s) / 2 - svb[0]! * s, (h - svb[3]! * s) / 2 - svb[1]! * s]);
-    }
+    inner.ctm = multiply(inner.ctm, viewBoxFit(target.attrs["viewbox"], w, h));
     visitChildren(target, { ...inner, attrs: inherit(inner.attrs, target.attrs) }, ctx);
   } else visitOne(target, inner, ctx);
 }
@@ -168,10 +205,15 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
   if (opacity < 1) p.opacity = round2(opacity);
 
   if (decorate) {
+    // A shape's own clip or mask wins over the one inherited from a group.
     const clip = reference(c, attrs, "clip-path", ctx);
-    if (clip) p.clip = clipOf(clip, scope, bbox, ctx);
+    const own = clip ? clipOf(clip, scope, bbox, ctx) : undefined;
+    if (own && scope.clip) addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
+    const clipped = own ?? scope.clip;
+    if (clipped) p.clip = clipped;
     const mask = reference(c, attrs, "mask", ctx);
-    if (mask) p.mask = maskOf(mask, scope, ctx);
+    const masked = (mask ? maskOf(mask, scope, ctx) : undefined) ?? scope.mask;
+    if (masked) p.mask = masked;
   }
   return p;
 }
@@ -184,8 +226,9 @@ function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): S
     return undefined;
   }
   // clipPathUnits="objectBoundingBox": the clip's user space is the clipped shape's box.
-  const units = el.attrs["clippathunits"] === "objectBoundingBox" ? multiply(scope.ctm, [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y]) : scope.ctm;
-  const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs) };
+  // bbox comes from the baked path: already in viewBox space, so scope.ctm must not apply again.
+  const units: SvgMatrix = el.attrs["clippathunits"] === "objectBoundingBox" ? [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y] : scope.ctm;
+  const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs), clip: undefined, mask: undefined };
   const parts: string[] = [];
   let eoFill: true | undefined;
   for (const c of el.children) {
@@ -211,7 +254,7 @@ function maskOf(el: LayoutNode, scope: SvgScope, ctx: SvgContext): SvgPath[] | u
     return undefined;
   }
   addDiagnostic(ctx.diagnostics, "approximated", "svg:mask", "svg mask → luminance mask");
-  const inner: SvgScope = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs) };
+  const inner: SvgScope = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs), clip: undefined, mask: undefined };
   const before = ctx.paths.length;
   visitChildren(el, inner, ctx);
   const paths = ctx.paths.splice(before);

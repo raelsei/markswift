@@ -54,6 +54,14 @@ function decompose(a: number, b: number, c: number, d: number, tx: number, ty: n
     out.skewY = round2((Math.atan(b) * 180) / Math.PI);
     return out;
   }
+  // A negative determinant is a reflection. Unmatrix (CSS Transforms §decomposing) folds it into
+  // the x scale: negate the first column, decompose the rotation-only remainder, then report a
+  // negative scaleX. Without this, scaleX(-1) came out as a 180° rotation and scaleY(-1) as identity.
+  const flip = a * d - b * c < 0;
+  if (flip) {
+    a = -a;
+    b = -b;
+  }
   // Unmatrix (CSS Transforms §decomposing): rotate · skewX · scale. Shear below 1e-6 is
   // float noise from Chrome's 6-decimal serialisation, not a skew.
   const scaleX = Math.hypot(a, b);
@@ -63,6 +71,7 @@ function decompose(a: number, b: number, c: number, d: number, tx: number, ty: n
   const scaleY = sheared ? Math.hypot(c - (a / scaleX) * shear, d - (b / scaleX) * shear) : Math.hypot(c, d);
   out.rotate = round2((Math.atan2(b, a) * 180) / Math.PI);
   out.scaleX = round2(scaleX);
+  if (flip) out.scaleX = -out.scaleX;
   out.scaleY = round2(scaleY);
   if (sheared) out.skewX = round2((Math.atan(shear / scaleY) * 180) / Math.PI);
   return out;

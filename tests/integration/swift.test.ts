@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convert, convertHtml } from "../../src/index.ts";
+import { compileLayout } from "../../src/compiler/index.ts";
+import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
@@ -41,6 +43,40 @@ nativeTest("adaptive light/dark conversion compiles", async () => {
     for (const [file, content] of Object.entries(result.files)) await Bun.write(join(directory, file), content);
     const check = await typecheck(directory);
     if (!check.ok) throw new Error(check.output);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 120000);
+
+nativeTest("009: silent-loss fixes emit compilable Swift in both modes", async () => {
+  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, children: LayoutNode[] = [], attrs: Record<string, string> = {}): LayoutNode => ({ tag, attrs, styles: { ...BASE, ...styles }, bounds, children });
+  const text = (s: string, bounds: LayoutNode["bounds"]): LayoutNode => ({ tag: "#text", attrs: {}, styles: { ...BASE }, bounds, text: s, children: [] });
+  const CLIP = { "background-clip": "text", "background-image": "linear-gradient(to right, rgb(255, 0, 0), rgb(0, 0, 255))", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" };
+  const root = node("main", { x: 0, y: 0, w: 300, h: 380 }, { display: "block" }, [
+    node("div", { x: 0, y: 0, w: 40, h: 40 }, { display: "block", transform: "matrix(-1, 0, 0, 1, 0, 0)", "background-color": "rgb(255, 0, 0)" }),
+    node("div", { x: 0, y: 40, w: 300, h: 50 }, { display: "grid", "grid-template-columns": "300px", "grid-template-rows": "30px 30px 30px", "row-gap": "0px", "overflow-y": "auto" }, [0, 30, 60].map((y) => node("div", { x: 0, y: 40 + y, w: 300, h: 30 }, { display: "block", "background-color": "rgb(0, 0, 255)" }))),
+    node("td", { x: 0, y: 90, w: 300, h: 20 }, { display: "table-cell" }, [text("\u00A0", { x: 0, y: 93, w: 4, h: 14 })]),
+    node("p", { x: 0, y: 110, w: 300, h: 20 }, { display: "block" }, [
+      text("Hello ", { x: 0, y: 113, w: 40, h: 14 }),
+      node("span", { x: 40, y: 113, w: 45, h: 14 }, { visibility: "hidden" }, [text("secret", { x: 40, y: 113, w: 45, h: 14 })]),
+      text(" world", { x: 85, y: 113, w: 40, h: 14 }),
+    ]),
+    node("h1", { x: 0, y: 130, w: 300, h: 40 }, { display: "block", ...CLIP }, [
+      text("Build ", { x: 0, y: 140, w: 60, h: 20 }),
+      node("span", { x: 60, y: 140, w: 70, h: 20 }, { "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [text("faster", { x: 60, y: 140, w: 70, h: 20 })]),
+    ]),
+    { ...node("img", { x: 0, y: 170, w: 40, h: 40 }, { display: "inline" }), currentSrc: "data:image/svg+xml," + encodeURIComponent('<svg viewBox="0 0 10 10"><path d="M0 0H10V10Z"/></svg>') },
+  ]);
+  const doc: LayoutDoc = { version: 2, source: "silent-loss", combo: { screen: "s", theme: "light" }, size: { w: 300, h: 380 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
+  const directory = await mkdtemp(join(tmpdir(), "markswift-native-009-"));
+  try {
+    for (const mode of ["app", "fidelity"] as const) {
+      const result = compileLayout(doc, { name: "SilentLoss", mode });
+      if (mode === "app") expect(result.code).toContain(".scaleEffect(x: -1.0");
+      const output = join(directory, mode);
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+      const check = await typecheck(output);
+      if (!check.ok) throw new Error(check.output);
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
 

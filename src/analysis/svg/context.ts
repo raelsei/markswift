@@ -17,6 +17,10 @@ export interface SvgScope {
   useColor?: string;
   /** `<use>` nesting depth (cycle guard). */
   depth: number;
+  /** Inherited from an ancestor group (<g clip-path|mask>): applied to every shape below that has none of its own. */
+  clip?: SvgPath["clip"];
+  /** Inherited from an ancestor group (<g clip-path|mask>): applied to every shape below that has none of its own. */
+  mask?: SvgPath[];
 }
 
 export interface SvgContext {

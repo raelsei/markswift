@@ -62,6 +62,11 @@ describe("parseColor", () => {
     expect(parseColor("color(srgb 1.2 -0.1 0.5)")).toEqual({ r: 1, g: 0, b: 0.5, a: 1 });
   });
 
+  test("CSS named colours (attribute-only SVG markup uses them)", () => {
+    expect(parseColor("white")).toEqual({ r: 1, g: 1, b: 1, a: 1 });
+    expect(parseColor("RebeccaPurple")).toEqual({ r: 0x66 / 255, g: 0x33 / 255, b: 0x99 / 255, a: 1 });
+  });
+
   test.each(["", "none", "currentcolor", "oklch(1 2)", "color(foo 0 0 0)", "hsl(1 2 3 4)", "#abcde", "rgb(1 2 3 / 0.5 / 1)", "lab(50 40 -20 0.5)"])(
     "rejects %s",
     (input) => expect(parseColor(input)).toBeUndefined(),

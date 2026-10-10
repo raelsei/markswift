@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseTransform } from "../../../src/css/index.ts";
+import { parseTransform, type Transform2D } from "../../../src/css/index.ts";
 
 
 describe("parseTransform", () => {
@@ -41,4 +41,28 @@ describe("parseTransform", () => {
     expect(parseTransform("matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -0.001, 0, 0, 0, 1)")).toMatchObject({ flattened: true });
   });
   test.each(["none", "translate(10px)"])("unknown → undefined: %s", (input) => expect(parseTransform(input)).toBeUndefined());
+  // `R(rotate)·Kx(skewX)·Ky(skewY)·S(scaleX, scaleY)` as `[a, b, c, d]`, composed exactly like `affineModifier`.
+  const recompose = (t: Transform2D): number[] => {
+    const rad = Math.PI / 180;
+    const cos = Math.cos(t.rotate * rad), sin = Math.sin(t.rotate * rad);
+    const kx = Math.tan((t.skewX ?? 0) * rad), ky = Math.tan((t.skewY ?? 0) * rad);
+    const mul = (p: number[], q: number[]) => [p[0]! * q[0]! + p[2]! * q[1]!, p[1]! * q[0]! + p[3]! * q[1]!, p[0]! * q[2]! + p[2]! * q[3]!, p[1]! * q[2]! + p[3]! * q[3]!];
+    return mul(mul(mul([cos, sin, -sin, cos], [1, 0, kx, 1]), [1, ky, 0, 1]), [t.scaleX, 0, 0, t.scaleY]);
+  };
+  test.each([
+    [-1, 0, 0, 1],
+    [1, 0, 0, -1],
+    [-2, 0, 0, 3],
+    [0, -1, -1, 0],
+  ])("negative determinant keeps its flip: matrix(%d, %d, %d, %d)", (a, b, c, d) => {
+    const t = parseTransform(`matrix(${a}, ${b}, ${c}, ${d}, 4, 5)`)!;
+    expect(t.scaleX * t.scaleY).toBeLessThan(0);
+    recompose(t).forEach((v, i) => expect(v).toBeCloseTo([a, b, c, d][i]!, 2));
+  });
+  test("rotate 180° (positive determinant) is not a flip", () => {
+    const t = parseTransform("matrix(-1, 0, 0, -1, 0, 0)")!;
+    expect(t.scaleX).toBeGreaterThan(0);
+    expect(t.scaleY).toBeGreaterThan(0);
+    recompose(t).forEach((v, i) => expect(v).toBeCloseTo([-1, 0, 0, -1][i]!, 2));
+  });
 });

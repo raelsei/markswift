@@ -1,6 +1,6 @@
 /** Layout tree traversal and semantic node dispatch. */
-import { type LayoutDoc, type LayoutNode } from "../model/layout.ts";
-import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, addDiagnostic } from "../model/semantic.ts";
+import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
+import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, type Axis, addDiagnostic } from "../model/semantic.ts";
 import { parseColor, parseDeclared, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { controlOf, buildControl } from "./controls.ts";
@@ -15,6 +15,7 @@ import { buildWrapping } from "./wrapping.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
+import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {} };
@@ -22,7 +23,14 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
-  if (ctx.fixed.length) root.overlays.push(...buildOverlays(doc.root, ctx.fixed, undefined, ctx));
+  // Building one can hoist fixed descendants of its own, so drain the list until it stops growing.
+  // ponytail: each batch is paint-sorted on its own; a nested fixed node paints after its fixed
+  // ancestor, so batch order matches paint order except for negative z-index inside a fixed layer.
+  for (let built = 0; built < ctx.fixed.length; ) {
+    const batch = ctx.fixed.slice(built);
+    built = ctx.fixed.length;
+    root.overlays.push(...buildOverlays(doc.root, batch, undefined, ctx));
+  }
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
@@ -68,7 +76,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const spec = policy.route === "control" ? controlOf(n) : undefined;
   if (spec) {
     const childAxis = mainAxis(n);
-    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n) };
+    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
@@ -91,6 +99,14 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       // `buildText` may already have added background layers for inline runs that paint their own
       // box (`mark`, `kbd`); absolutely positioned children come on top of those.
       t.overlays.push(...buildOverlays(n, abs, undefined, ctx));
+      // A TextNode cannot host a ScrollView: report and clip, so the overflow at least stays inside its box.
+      const axis = scrollAxis(n, runs.map((r) => r.node.bounds).filter((b) => b.w > 0 || b.h > 0));
+      if (axis) {
+        const prop = axis === "v" ? "overflow-y" : "overflow-x";
+        t.style.clip = true;
+        addDiagnostic(t.diagnostics, "approximated", prop, `${prop} ${n.styles[prop]} on a text-only box → clipped; the text does not scroll`);
+        finish(t);
+      }
       return t;
     }
   }
@@ -106,7 +122,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
   // Children in measured order (handles CSS `order`), text runs grouped between flow children.
   const items: AnalyzedChild[] = [];
-  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n) };
+  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
   for (const c of flow) items.push({ node: c, sem: build(c, childCtx) });
   if (runs.length) {
     // Text interleaved with flow children (icon + label). Group consecutive runs into one text node.
@@ -114,7 +130,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     for (const g of groups) {
       const t = buildText(n, g, childCtx);
       if (t.runs.length === 0) continue;
-      items.push({ node: { ...n, bounds: t.frame, children: [] }, sem: t });
+      // Only the text's own geometry and paint order: the host's float, margins, flex and
+      // alignment styles belong to the host box, not to one of its text groups.
+      const textItem: LayoutNode = { tag: n.tag, attrs: {}, styles: { display: "inline" }, bounds: t.frame, children: [], ...(n.paint !== undefined ? { paint: n.paint } : {}) };
+      items.push({ node: textItem, sem: t });
     }
   }
 
@@ -123,6 +142,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
   if (display === "grid" || display === "inline-grid") {
     const grid = buildGrid(n, base, items);
+    const scroll = scrollAxis(n, grid.children.map((c) => c.frame));
+    if (scroll) grid.scroll = scroll;
     grid.overlays = buildOverlays(n, abs, flow[0], ctx);
     return finish(grid);
   }
@@ -168,19 +189,24 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, axis, lines.flat(), align, distribution);
   }
 
-  const items2 = stack.children;
-  const oy = n.styles["overflow-y"];
-  const ox = n.styles["overflow-x"];
-  if (oy === "auto" || oy === "scroll") {
-    const contentBottom = Math.max(...items2.map((i) => i.frame.y + i.frame.h), n.bounds.y);
-    if (contentBottom > n.bounds.y + n.bounds.h + 0.5 || oy === "scroll") stack.scroll = "v";
-  }
-  if (!stack.scroll && (ox === "auto" || ox === "scroll")) {
-    const contentRight = Math.max(...items2.map((i) => i.frame.x + i.frame.w), n.bounds.x);
-    if (contentRight > n.bounds.x + n.bounds.w + 0.5 || ox === "scroll") stack.scroll = "h";
-  }
+  const scroll = scrollAxis(n, stack.children.map((c) => c.frame));
+  if (scroll) stack.scroll = scroll;
   stack.overlays = buildOverlays(n, abs, flow[0], ctx);
   return finish(stack);
+}
+
+/** `overflow: auto/scroll` the content needs (`scroll` always scrolls): the axis a ScrollView covers. Vertical wins. */
+function scrollAxis(n: LayoutNode, content: Rect[]): Axis | undefined {
+  const oy = n.styles["overflow-y"], ox = n.styles["overflow-x"];
+  if (oy === "auto" || oy === "scroll") {
+    const bottom = Math.max(...content.map((f) => f.y + f.h), n.bounds.y);
+    if (bottom > n.bounds.y + n.bounds.h + 0.5 || oy === "scroll") return "v";
+  }
+  if (ox === "auto" || ox === "scroll") {
+    const right = Math.max(...content.map((f) => f.x + f.w), n.bounds.x);
+    if (right > n.bounds.x + n.bounds.w + 0.5 || ox === "scroll") return "h";
+  }
+  return undefined;
 }
 
 function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNode | undefined, ctx: InferenceContext): Overlay[] {
