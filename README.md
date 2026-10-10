@@ -207,10 +207,11 @@ capture. Element classification alone does not cover all CSS, accessibility or J
 
 ```sh
 bun run test:browser           # actual Chrome integration tests
-bun run test:native            # Chrome + Xcode; compile public API output in both modes
+bun run test:native            # Chrome, pinned Chromium + Xcode; compile and macOS-render output in both modes
 bun run test:conformance       # conformance runner and manifest checks
-bun run pilot -- --help        # browser vs iOS Simulator comparison (needs a committed src/ and a simulator)
-bun run quality baseline.json current.json
+bun run pilot --renderer mac --out tests/conformance/out/<dir>   # browser vs macOS SwiftUI render, both modes
+bun run quality tests/conformance/baselines/visual-pilot-mac.json tests/conformance/out/<dir> tests/conformance/visual-policy-mac.json
+bun run quality --summary tests/conformance/baselines/visual-all-mac.json
 ```
 
 A fresh local iOS Simulator pilot on 2026-09-23 compared 64 captures: eight small HTML/CSS
@@ -239,12 +240,12 @@ complex text needs more native visual work. Inline-block rows pinned to the capt
 division, gradient stops and shadows the parser cannot read, and CSS animations (captured at
 their end state) are reported too.
 
-For a reviewed visual baseline, `bun run quality <baseline-directory> <current-directory> <policy.json>`
-can additionally require complete browser/iOS/diff images, matching dimensions and file hashes,
-valid mismatch and source/runtime metadata, an expected source revision, a per-feature absolute
-SSIM floor and a maximum regression from the baseline. A strict policy uses `requireEvidence`,
-`expectedSourceRevision`, `features.<feature>.minSsim`, and `maxDrop`. Keep the reviewed baseline
-separate from new output; the quality command never updates it.
+The visual gate scores colour SSIM (minimum per channel at 1×), pixel mismatch and element-region
+anchors. Baselines are tracked JSON manifests under `tests/conformance/baselines/`, written only by
+`bun run quality --write-baseline <run-dir> <manifest.json>`. Every PR renders with macOS ImageRenderer;
+releases render on an iOS Simulator. Feature floors are per mode (`<case>@<app|fidelity>`) in
+`tests/conformance/visual-policy-*.json`. Captures use Playwright's pinned Chromium
+(`./node_modules/.bin/playwright-core install --no-shell chromium`).
 
 Portable tests assert that no standard element lacks a policy, that input routing stays consistent,
 and that unsupported inline content cannot silently disappear. Chrome tests exercise nine semantic

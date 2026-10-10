@@ -62,8 +62,8 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
-        let face = on ? tint : Color(uiColor: .systemBackground)
-        let line = on ? tint : Color(uiColor: .systemGray2)
+        let face = on ? tint : Color.markswiftSystemBackground
+        let line = on ? tint : Color.markswiftSystemGray2
         switch mark {
         case .check:
             RoundedRectangle(cornerRadius: 2, style: .circular)
@@ -83,7 +83,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
                 .resizable()
                 .scaledToFit()
                 .fontWeight(.bold)
-                .foregroundStyle(Color(uiColor: .systemBackground))
+                .foregroundStyle(Color.markswiftSystemBackground)
                 .padding(2)
         case .dot:
             Circle().fill(tint).padding(3)

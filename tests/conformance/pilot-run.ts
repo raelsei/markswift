@@ -1,4 +1,4 @@
-/** Local visual pilot: capture browser references, compile both modes, optionally render iOS. */
+/** Local visual pilot: capture browser references with pinned Chromium, compile both modes, render natively and score. */
 import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -10,19 +10,29 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { renderNative, selectSimulator, type SimulatorInventory } from "../../tools/verify/native.ts";
-import { compare } from "../../tools/verify/compare.ts";
+import { renderMac, renderNative, selectSimulator, type SimulatorInventory } from "../../tools/verify/native.ts";
+import { compare, regionMismatch } from "../../tools/verify/compare.ts";
+import type { LayoutNode } from "../../src/model/layout.ts";
 import { buildMatrix, loadFixtureSet, loadPilot, type PilotEntry, type RunCase } from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
-const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--no-sim] [--out <dir>]
-  --all      every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
-  --only     one case id
-  --group    text: only cases with expected text
-  --no-sim   capture, compile and typecheck only; skip the iOS render and comparison
-  --out      fresh output directory (default tests/conformance/out/<timestamp>)`;
+const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--renderer none|mac|ios] [--out <dir>]
+  --all       every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
+  --only      one case id
+  --group     text: only cases with expected text
+  --renderer  mac (default): macOS ImageRenderer, the per-PR gate; ios: iOS Simulator, the release gate;
+              none: capture, compile and typecheck only, no render or comparison
+  --out       fresh output directory (default tests/conformance/out/<timestamp>)
+Captures use Playwright's pinned Chromium: ./node_modules/.bin/playwright-core install --no-shell chromium`;
+type Renderer = "none" | "mac" | "ios";
 type RunEntry = { key: string; caseId: string; viewportWidth: number; theme: string; mode: string; size?: { w: number; h: number }; loadedFonts?: number; warnings?: number; diagnostics?: number; typecheck?: boolean; ssim?: number; mismatch?: number };
-const artifactFiles = ["browser.png", "ios.png", "diff.png", "layout.json", "diagnostics.json", "warnings.json", "typecheck.json"] as const;
+/** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid` stays in `run.json` only. */
+interface RunEnvironment {
+  sourceRevision: string; fixtureHashes: Record<string, string>; harnessHash: string; chrome: string; xcode: string;
+  renderer: string; simulatorUdid: string | null; capturedAt: string; dpr: number; viewportHeight: number; rootWidthOverride: string;
+}
+interface RunReport { expected: number; completed: number; errors: string[]; environment: RunEnvironment; entries: RunEntry[] }
+const artifactFiles = ["browser.png", "native.png", "diff.png", "layout.json", "diagnostics.json", "warnings.json", "typecheck.json"] as const;
 const harnessFiles = ["tests/conformance/pilot-run.ts", "tests/conformance/pilot.ts", "tests/conformance/pilot.json", "tests/conformance/text-metrics.ts", "tools/verify/native.ts", "tools/verify/native-template.ts", "tools/verify/process.ts", "tools/verify/typecheck.ts", "tools/verify/compare.ts"];
 
 async function hashFile(path: string) {
@@ -42,27 +52,36 @@ async function outputOf(command: string[]): Promise<string> {
   if (await run.exited !== 0) throw new Error(`${command[0]} failed: ${stderr.trim()}`);
   return stdout.trim();
 }
-async function environment(cases: RunCase[], noSim: boolean) {
-  const [sourceRevision, sourceStatus, xcode, simulators, chrome] = await Promise.all([
+async function environment(cases: RunCase[], renderer: Renderer, chrome: string): Promise<RunEnvironment> {
+  const [sourceRevision, sourceStatus, xcode] = await Promise.all([
     outputOf(["git", "rev-parse", "HEAD"]),
     outputOf(["git", "status", "--porcelain", "--", "src"]),
     outputOf(["xcodebuild", "-version"]),
-    outputOf(["xcrun", "simctl", "list", "devices", "available", "-j"]),
-    outputOf(["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"]),
   ]);
   assertCleanSource(sourceStatus);
-  const inventory = JSON.parse(simulators) as SimulatorInventory;
-  let selected: ReturnType<typeof selectSimulator> | null = null;
-  try { selected = selectSimulator(inventory, process.env.MARKSWIFT_SIMULATOR); }
-  catch (error) { if (!noSim) throw error; }
+  const selected = renderer === "ios"
+    ? selectSimulator(JSON.parse(await outputOf(["xcrun", "simctl", "list", "devices", "available", "-j"])) as SimulatorInventory, process.env.MARKSWIFT_SIMULATOR)
+    : null;
   const fixtureHashes = Object.fromEntries(await Promise.all(cases.map(async item => [item.id, await hashFile(join(import.meta.dir, "fixtures", item.fixture))])));
   const harness = createHash("sha256");
   for (const file of harnessFiles) {
     harness.update(file).update("\0").update(Buffer.from(await Bun.file(resolve(import.meta.dir, "../..", file)).arrayBuffer())).update("\0");
   }
+  // The UDID stays out of `renderer` so runs on different machines with the same device and runtime compare.
+  const rendererName = selected ? `${selected.name} ${selected.runtime}`
+    : renderer === "mac" ? `macOS ${await outputOf(["sw_vers", "-productVersion"])} ImageRenderer` : "none";
   return { sourceRevision, fixtureHashes, harnessHash: harness.digest("hex"), chrome, xcode,
-    simulator: selected ? `${selected.name} ${selected.runtime} (${selected.udid})` : "none", simulatorUdid: selected?.udid ?? null,
+    renderer: rendererName, simulatorUdid: selected?.udid ?? null,
     capturedAt: new Date().toISOString(), dpr: 2, viewportHeight: 2000, rootWidthOverride: "[data-markswift-root] { width:100% !important }" };
+}
+
+function findNode(node: LayoutNode, id: string): LayoutNode | undefined {
+  if (node.id === id) return node;
+  for (const child of node.children) {
+    const hit = findNode(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 async function saveSource(entry: PilotEntry, captured: Awaited<ReturnType<BrowserCapture["capture"]>>, out: string) {
   const dir = join(out, entry.key);
@@ -81,7 +100,8 @@ async function run() {
   const only = argument("--only");
   const group = argument("--group");
   const out = resolve(argument("--out") ?? join(import.meta.dir, "out", new Date().toISOString().replace(/[:.]/g, "-")));
-  const noSim = process.argv.includes("--no-sim");
+  const renderer = (argument("--renderer") ?? "mac") as Renderer;
+  if (!["none", "mac", "ios"].includes(renderer)) throw new Error(`unknown renderer: ${renderer}\n${USAGE}`);
   const pilot = await loadPilot();
   const cases = process.argv.includes("--all") ? await loadFixtureSet(pilot) : pilot;
   if (only && !cases.some(item => item.id === only)) throw new Error(`unknown pilot case: ${only}`);
@@ -94,19 +114,19 @@ async function run() {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`output already exists: ${out}; choose a fresh --out directory`);
     throw error;
   }
-  const env = await environment(cases, noSim);
-  const report: { expected: number; completed: number; errors: string[]; environment: Awaited<ReturnType<typeof environment>>; entries: RunEntry[] } = {
-    expected: matrix.length, completed: 0, errors: [], environment: env, entries: [],
-  };
-  console.log(`expected ${matrix.length} ${noSim ? "capture/typecheck" : "native comparison"} outputs`);
   const server = serveDir(join(import.meta.dir, "fixtures"));
   const browsers = new Map<number, BrowserCapture>();
+  let report: RunReport | undefined;
   try {
     for (const width of [320, 390]) {
-      const browser = new BrowserCapture({ dpr: 2, viewport: { width, height: 2000 } });
+      // Lockfile-pinned Chromium, never the auto-updating Chrome channel, so references reproduce on any machine.
+      const browser = new BrowserCapture({ dpr: 2, viewport: { width, height: 2000 }, channel: "chromium" });
       await browser.start();
       browsers.set(width, browser);
     }
+    const env = await environment(cases, renderer, `Chromium ${browsers.get(320)!.version}`);
+    report = { expected: matrix.length, completed: 0, errors: [], environment: env, entries: [] };
+    console.log(`expected ${matrix.length} ${renderer === "none" ? "capture/typecheck" : `${env.renderer} comparison`} outputs`);
     for (const item of selected) {
       for (const width of [320, 390]) {
         for (const theme of item.themes) {
@@ -163,24 +183,36 @@ async function run() {
               result.typecheck = check.ok;
               await Bun.write(join(dir, "typecheck.json"), JSON.stringify(check, null, 2));
               if (!check.ok) throw new Error(`Swift typecheck failed: ${check.output.slice(0, 500)}`);
-              if (!noSim) {
-                await renderNative({ ...compiled, layout: captured.layout, assets, warnings: [...captured.warnings, ...fonts.notes] }, join(out, "_native-work"), join(dir, "ios.png"), () => {}, env.simulatorUdid ?? undefined);
+              let status = "typed";
+              if (renderer !== "none") {
+                const browserPng = join(dir, "browser.png"), nativePng = join(dir, "native.png");
+                const conversion = { ...compiled, layout: captured.layout, assets, warnings: [...captured.warnings, ...fonts.notes] };
+                if (renderer === "mac") await renderMac(conversion, join(out, "_mac-work"), nativePng);
+                else await renderNative(conversion, join(out, "_native-work"), nativePng, () => {}, env.simulatorUdid ?? undefined);
                 if (textMetrics) {
-                  textMetrics.nativeInk = await imageInkMetrics(join(dir, "ios.png"), captured.layout.dpr);
+                  textMetrics.nativeInk = await imageInkMetrics(nativePng, captured.layout.dpr);
                   await Bun.write(join(dir, "text.json"), JSON.stringify(textMetrics, null, 2));
                 }
-                const score = await compare(join(dir, "browser.png"), join(dir, "ios.png"), join(dir, "diff.png"));
+                const score = await compare(browserPng, nativePng, join(dir, "diff.png"), captured.layout.dpr);
                 result.ssim = score.ssim;
                 result.mismatch = score.mismatch;
+                const anchors: Array<{ id: string; mismatch: number }> = [];
+                for (const id of item.anchors ?? []) {
+                  const node = findNode(captured.layout.root, id);
+                  if (!node) throw new Error(`anchor ${id} not found`);
+                  anchors.push({ id, mismatch: await regionMismatch(browserPng, nativePng, node.bounds, captured.layout.dpr) });
+                }
                 const artifactHashes = Object.fromEntries(await Promise.all(artifactFiles.map(async file => [file, await hashFile(join(dir, file))])));
                 if (textMetrics) artifactHashes["text.json"] = await hashFile(join(dir, "text.json"));
-                await Bun.write(join(dir, "compare.json"), JSON.stringify({ ...score, ...result, sourceRevision: env.sourceRevision,
+                await Bun.write(join(dir, "compare.json"), JSON.stringify({ ...score, ...result, fixture: item.fixture, anchors, sourceRevision: env.sourceRevision,
                   fixtureHash: env.fixtureHashes[item.id], harnessHash: env.harnessHash, artifactHashes,
-                  capturedAt: env.capturedAt, chrome: env.chrome, xcode: env.xcode, simulator: env.simulator,
+                  capturedAt: env.capturedAt, chrome: env.chrome, xcode: env.xcode, renderer: env.renderer,
                   dpr: env.dpr, viewportHeight: env.viewportHeight, rootWidthOverride: env.rootWidthOverride }, null, 2));
+                // Anchor values for review; the gate's threshold (`anchorMaxMismatch`) lives in the policy.
+                status = `SSIM ${score.ssim.toFixed(4)} mismatch ${score.mismatch.toFixed(4)}${anchors.map(a => ` ${a.id} ${a.mismatch.toFixed(3)}`).join("")}`;
               }
               report.completed++;
-              console.log(`${entry.key}: ${noSim ? "typed" : `SSIM ${result.ssim?.toFixed(4)}`} (${report.completed}/${report.expected})`);
+              console.log(`${entry.key}: ${status} (${report.completed}/${report.expected})`);
             } catch (error) {
               report.errors.push(`${entry.key}: ${String(error)}`);
               console.error(`${entry.key}: ${String(error)}`);
@@ -192,9 +224,10 @@ async function run() {
   } finally {
     await Promise.all([...browsers.values()].map(browser => browser.stop()));
     server.stop();
-    await Bun.write(join(out, "run.json"), JSON.stringify(report, null, 2));
+    // A failure before the environment is known (no browser, dirty src/, no simulator) leaves no run.json.
+    if (report) await Bun.write(join(out, "run.json"), JSON.stringify(report, null, 2));
   }
-  if (report.completed !== report.expected || report.errors.length) throw new Error(`pilot incomplete: ${report.completed}/${report.expected}; ${report.errors.join("; ")}`);
+  if (report!.completed !== report!.expected || report!.errors.length) throw new Error(`pilot incomplete: ${report!.completed}/${report!.expected}; ${report!.errors.join("; ")}`);
 }
 
 if (import.meta.main) run().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });

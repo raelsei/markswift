@@ -6,17 +6,19 @@ import { convert, convertHtml } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
+import { renderMac } from "../../tools/verify/native.ts";
+import sharp from "sharp";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
+
+const PUBLIC_HTML = '<main data-markswift-root><h2>Hello</h2><label>Name<input value="Ada"></label><button>Save</button><p>Visit <a href="https://example.com">our site</a> today.</p><a style="display:block" href="https://example.com">Open site</a><section style="max-width:50%;padding:4px"><p style="min-height:30px">Floor</p><p style="max-height:10px;overflow:hidden">Clipped</p><span style="display:inline-block;max-width:200px">Hi</span></section><svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="8" fill="red"/></svg></main>';
+const PUBLIC_CSS = "body{margin:0} main{width:300px;padding:20px;font:16px system-ui;background:#eee} h2{font-size:24px}label{display:block}";
 
 nativeTest("public conversion produces complete Swift compilable in both modes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-native-api-"));
   try {
     for (const mode of ["app", "fidelity"] as const) {
-      const result = await convertHtml('<main data-markswift-root><h2>Hello</h2><label>Name<input value="Ada"></label><button>Save</button><p>Visit <a href="https://example.com">our site</a> today.</p><a style="display:block" href="https://example.com">Open site</a><section style="max-width:50%;padding:4px"><p style="min-height:30px">Floor</p><p style="max-height:10px;overflow:hidden">Clipped</p><span style="display:inline-block;max-width:200px">Hi</span></section><svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="8" fill="red"/></svg></main>', {
-        name: "ExampleCard", mode,
-        css: "body{margin:0} main{width:300px;padding:20px;font:16px system-ui;background:#eee} h2{font-size:24px}label{display:block}",
-      });
+      const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
       expect(result.code).toContain("Link(destination:");
       expect(result.code).toContain("minHeight: 30.0");
       expect(result.code).toContain("height: 10.0, alignment: .topLeading");
@@ -30,6 +32,19 @@ nativeTest("public conversion produces complete Swift compilable in both modes",
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
+
+nativeTest("public conversion renders on macOS in both modes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-native-mac-"));
+  try {
+    for (const mode of ["app", "fidelity"] as const) {
+      const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
+      const png = join(directory, `${mode}.png`);
+      await renderMac(result, join(directory, mode, "mac"), png);
+      const meta = await sharp(png).metadata();
+      expect([meta.width, meta.height]).toEqual([result.layout.size.w * 2, result.layout.size.h * 2]);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 240000);
 
 nativeTest("accessible forms compile in both modes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-native-a11y-"));

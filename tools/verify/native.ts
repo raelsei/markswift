@@ -2,7 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { ConversionResult } from "../../src/index.ts";
 import { command } from "./process.ts";
-import { packageManifest, renderTest } from "./native-template.ts";
+import { macRenderMain, packageManifest, renderTest } from "./native-template.ts";
 
 export interface SimulatorInventory {
   devices: Record<string, Array<{ udid: string; name: string; state: string; isAvailable: boolean }>>;
@@ -49,4 +49,32 @@ export async function renderNative(result: ConversionResult, work: string, outpu
   ], work, 240_000);
   if (!(await Bun.file(output).exists())) throw new Error("Build finished but no native image was produced.");
   stage("Native image ready.");
+}
+
+/**
+ * Simulator-free render: the generated Swift plus a `main.swift` built for macOS with `swiftc` and
+ * run once. ImageRenderer on macOS matches the iOS runtime closely except for text line heights,
+ * which macOS rounds to whole points.
+ */
+// ponytail: one swiftc build per capture (≈ 3–5 s); batch captures per build if the per-PR job outgrows ~20 min.
+export async function renderMac(result: ConversionResult, work: string, output: string): Promise<void> {
+  await rm(work, { recursive: true, force: true });
+  await mkdir(work, { recursive: true });
+  const sources: string[] = [];
+  for (const [file, value] of Object.entries(result.files)) {
+    if (!file.endsWith(".swift")) continue;
+    await Bun.write(join(work, file), value);
+    sources.push(join(work, file));
+  }
+  for (const [file, value] of Object.entries(result.assets)) await Bun.write(join(work, file), value);
+  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output));
+  sources.push(join(work, "main.swift"));
+  const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
+  await command([
+    "xcrun", "swiftc", "-sdk", sdk, "-target", "arm64-apple-macos15.0", "-swift-version", "6", "-strict-concurrency=complete",
+    "-default-isolation", "MainActor", "-o", join(work, "render"), ...sources,
+  ], work, 240_000);
+  await rm(output, { force: true });
+  await command([join(work, "render")], work, 60_000);
+  if (!(await Bun.file(output).exists())) throw new Error("macOS render produced no image");
 }
