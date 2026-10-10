@@ -32,7 +32,9 @@ export function groupRuns(host: LayoutNode, runs: SourceTextRun[]): SourceTextRu
   for (const r of runs) {
     const top = r.styleOf === host ? r.node : ancestorChildOf(host, r.styleOf);
     const idx = order.indexOf(top);
-    if (cur.length && idx !== lastIdx + 1) {
+    // Runs from one inline element share its top-level child (`idx === lastIdx`); only a flow
+    // child between them (a gap in the index) ends the group.
+    if (cur.length && idx !== lastIdx && idx !== lastIdx + 1) {
       groups.push(cur);
       cur = [];
     }

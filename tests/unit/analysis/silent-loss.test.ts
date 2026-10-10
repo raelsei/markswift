@@ -4,7 +4,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
-import { normalizeWhitespace } from "../../../src/analysis/text-runs.ts";
+import { normalizeWhitespace, collectRuns, groupRuns } from "../../../src/analysis/text-runs.ts";
+import type { SourceTextRun } from "../../../src/analysis/context.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
 import type { SemNode } from "../../../src/model/semantic.ts";
 
@@ -52,5 +53,36 @@ describe("BUG-05 non-collapsible spaces", () => {
     const sem = flatten(screen.root).find((n) => n.frame.w === 200 && n !== screen.root);
     expect(sem?.kind).toBe("text");
     expect(sem?.kind === "text" ? sem.runs[0]?.text : undefined).toBe("\u00A0");
+  });
+});
+
+describe("BUG-01 groupRuns", () => {
+  // Every run of one inline element shares its top-level child, so the second run of `<b>` must
+  // not open a new group: only a flow child between runs does.
+  test("runs under one inline ancestor stay one group", () => {
+    const b = el("b", { x: 70, y: 3, w: 60, h: 14 }, { "font-weight": "700" }, [textNode("the ", { x: 70, y: 3, w: 25, h: 14 }), el("i", { x: 95, y: 3, w: 35, h: 14 }, { "font-style": "italic" }, [textNode("terms", { x: 95, y: 3, w: 35, h: 14 })])]);
+    const host = el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [el("img", { x: 0, y: 0, w: 16, h: 16 }, {}), textNode(" Accept ", { x: 16, y: 3, w: 54, h: 14 }), b, textNode(" now", { x: 130, y: 3, w: 30, h: 14 })]);
+    const runs: SourceTextRun[] = [];
+    for (const c of host.children) {
+      if (c.tag === "#text") runs.push({ node: c, styleOf: host });
+      else if (c === b) collectRuns(b, runs);
+    }
+    const groups = groupRuns(host, runs);
+    expect(groups.length).toBe(1);
+    expect(groups[0]!.length).toBe(4);
+  });
+
+  test("a checkbox label with nested inline markup is one text node", () => {
+    const b = el("b", { x: 70, y: 3, w: 60, h: 14 }, { "font-weight": "700" }, [textNode("the ", { x: 70, y: 3, w: 25, h: 14 }), el("i", { x: 95, y: 3, w: 35, h: 14 }, { "font-style": "italic" }, [textNode("terms", { x: 95, y: 3, w: 35, h: 14 })])]);
+    const li = el("li", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [
+      el("input", { x: 0, y: 2, w: 16, h: 16 }, { display: "inline-block" }, [], { type: "checkbox" }),
+      textNode(" Accept ", { x: 16, y: 3, w: 54, h: 14 }),
+      b,
+      textNode(" now", { x: 130, y: 3, w: 30, h: 14 }),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [li])), "S");
+    const texts = flatten(screen.root).filter((n) => n.kind === "text");
+    expect(texts.length).toBe(1);
+    expect(texts[0]!.kind === "text" ? texts[0]!.runs.map((r) => r.text).join("") : "").toBe("Accept the terms now");
   });
 });
