@@ -314,8 +314,6 @@ export interface TextNode extends SemBase {
    * re-flowing. Unset means normal wrapping.
    */
   noWrap?: true;
-  /** A font-family of this text resolved to a face other than the one the reference painted. */
-  fontSubstituted?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
 }

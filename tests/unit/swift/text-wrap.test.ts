@@ -16,10 +16,10 @@ function paragraph(): LayoutDoc {
   };
 }
 
-test("ordinary app paragraph keeps its words together while reflowing at runtime", () => {
+test("app paragraph uses native Text in both modes", () => {
   const screen = inferScreen(paragraph(), "Paragraph");
   const app = emitSwift(screen, "ParagraphView", { mode: "app" }).view;
   const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity" }).view;
-  expect(app).toContain('MarkswiftGreedyText("Measured text shifts nearby layout."');
+  expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
   expect(fidelity).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
 });

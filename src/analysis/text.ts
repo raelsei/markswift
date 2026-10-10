@@ -31,7 +31,6 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   let union: Rect | undefined;
   let pendingSpace = false;
   let prevRun: SourceTextRun | undefined;
-  let substituted = false;
   for (const r of runs) {
     const s = r.styleOf.styles;
     const mode: Collapse = r.node.tag === "br" ? "preserve" : collapseOf(s);
@@ -92,14 +91,12 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // `ui-sans-serif`, three fallbacks down, while the reference pixels are Geist.
     const first = families[0];
     if (first !== undefined && !ctx.bundledFamilies[first] && !SYSTEM_DESIGNS[first.toLowerCase()]) {
-      substituted = true;
       note(
         "approximated",
         "font-family: <unbundled family>",
         `font-family ${first} is a web font this run did not bundle → ${resolved === undefined ? "system default design" : `the fallback ${resolved} it names next`}; glyph advances differ from the reference`,
       );
     } else if (resolved !== undefined && /^(cursive|fantasy)$/i.test(resolved)) {
-      substituted = true;
       note("approximated", "font-family", `generic font-family ${resolved.toLowerCase()} has no system design → default`);
     } else if (resolved !== undefined) {
       // A non-default design is a substitution, not a match: `.monospaced`/`.serif`/`.rounded` are
@@ -109,7 +106,6 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       // and different from the reference, so every comparison against one has to know.
       const design = SYSTEM_DESIGNS[resolved.toLowerCase()];
       if (design && design !== "default") {
-        substituted = true;
         note(
           "approximated",
           /^ui-(monospace|rounded|serif)$/i.test(resolved) ? `font-family: ${resolved.toLowerCase()}` : "font-family",
@@ -228,7 +224,6 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           ? "trailing"
           : "leading",
     lines,
-    ...(substituted ? { fontSubstituted: true as const } : {}),
   };
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
