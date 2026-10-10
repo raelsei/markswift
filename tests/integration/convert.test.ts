@@ -38,7 +38,7 @@ browserTest("file and inline assetsDir inputs embed local image resources before
       expect(result.warnings).toEqual([]);
       expect(result.code).not.toContain("127.0.0.1");
       expect(JSON.stringify(result.layout)).toContain("data:image/svg+xml;base64,");
-      expect(result.files["MarkswiftShapes.swift"]).toContain("Shape");
+      expect(result.files["LocalCard+Shapes.swift"]).toContain("Shape");
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 60000);
