@@ -1,0 +1,39 @@
+# Changelog
+
+All notable changes to Markswift. Versions use SemVer pre-release tags; the package is not published to npm.
+
+## [Unreleased]
+
+## [0.1.0-alpha.1] — 2026-10-10
+
+First alpha: visually faithful SwiftUI starting code for one captured component (iOS 18+, Swift 6, `app` mode by default).
+
+### Added
+- Adaptive light/dark conversion: two captures, one view, `Color.markswift(light:dark:)` tokens; `--theme`, `--dark-class`.
+- Generated Swift always compiles: escaped string literals, iOS 18 / Swift 6 strict-concurrency compile matrix, macOS builds via `canImport` branches.
+- Typed diagnostics: every approximation or omission names a conformance inventory feature; the CLI prints one `Note` line per distinct loss.
+- Silent inference losses fixed or reported (fonts, rows, paint, animations, whitespace, SVG defaults, clips, filters, markers, `foreignObject`).
+- App-mode sizing follows CSS intent: min-height and alignment slack, viewport-high roots, control height floors, scrolling pages with fixed overlays outside the scroll view, `object-fit`/`object-position`, overlays anchored to their right/bottom CSS corner.
+- Flex: `align-self`, reverse and RTL packing, auto margins as `Spacer`s, native reflow of intrinsic `flex-wrap` items with the default `flex-shrink`.
+- Tailwind v4: individual `translate`/`rotate`/`scale` transforms, gradient interpolation clauses and magic-corner directions.
+- Dynamic Type for system and custom fonts in `app` mode; native `Text` line breaking for paragraphs; VoiceOver labels, headings, hidden elements and role traits; labels that name and toggle their controls; one selection per radio group; keyboard and content type from the input type.
+- Capture robustness and security: `timeoutMs` bounds a whole conversion; font bytes fetched over `http(s)` only, size-capped; `untrustedInput` also blocks DNS and stray navigations; the asset server refuses foreign hosts, dotfiles and malformed paths; redirected, mistyped and lazy images are embedded; a missing `python3` is reported.
+- Raster images ship as deduplicated `Images/<hash>.<ext>` bundle files.
+- Reproducible visual gate: colour SSIM with mismatch and anchor checks, tracked macOS baselines (`tests/conformance/baselines/`), per-renderer policies, `bun run quality --summary`.
+- Playground (`playground/`) tracked: non-destructive workbench with stale-output marking, fidelity summary, file tabs and offline recovery; restricted capture policy for every paste.
+- CI workflows (`.github/workflows/ci.yml`, `visual.yml`) and the Biome formatter/linter (`bun run lint`).
+- Resolved IR with model-owned value types and an architecture layering test.
+
+### Changed (breaking)
+- Legacy `h2s` compatibility removed: `data-h2s-root`/`data-h2s` markers, `H2S_*` env variables and LayoutDoc version 1. LayoutDoc is version 2.
+- `theme` defaults to `adaptive` (light + dark capture, adaptive colour tokens).
+- Per-view namespacing: colour tokens live in `<View>.Palette` (`<View>+Tokens.swift`), shapes are nested in the view type (`<View>+Shapes.swift`) and bundled fonts register through `<View>.BundledFonts.register(in:)` (`<View>+Fonts.swift`, `<View>+UIAppFonts.plist.fragment`).
+- `app` mode emits native `Text` for paragraphs; `MarkswiftGreedyText` is removed.
+
+### Known limitations
+- Not a reusable component: no parameters, `ForEach` or meaningful names.
+- Pinned geometry in `app` mode: flex-wrap outside the native subset, non-trivial grids, inline-block rows, tables, unequal flex growth.
+- One viewport and state per capture; JavaScript behaviour is not translated.
+- No feature is approved at an absolute visual floor; box-shadow is not re-approved in `app` mode. The iOS-runtime visual baseline does not exist yet (needs an iOS Simulator runtime); macOS `ImageRenderer` numbers understate `app`-mode text and cannot rasterise native controls.
+- VoiceOver, hit-testing and runtime image loading are verified by typecheck only, not on a simulator.
+- The CI workflows have not run on GitHub yet.
