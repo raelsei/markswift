@@ -355,6 +355,8 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
   kind: "image";
   src: string;
+  /** A `data:image/svg+xml` source, parsed during analysis. */
+  vector?: SvgNode;
   /** CSS `object-fit` (`scale-down` arrives as `contain`, noted): fill stretches, contain letterboxes, cover crops, none keeps the natural size. */
   contentMode: "fill" | "contain" | "cover" | "none";
   /** `object-position` as fractions of the free space (0 = left/top), when not centred. */

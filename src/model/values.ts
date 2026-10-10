@@ -1,4 +1,5 @@
 /** IR value types: what the parsers in css/ produce and the emitters consume. No parsing here. */
+import type { SvgNode } from "./semantic.ts";
 
 /** sRGB color, channels 0..1 (wide-gamut inputs are gamut-clipped). */
 export interface Color {
@@ -66,7 +67,15 @@ export type Paint =
   | ({ kind: "linear"; angle: number; corner?: [x: 1 | -1, y: 1 | -1]; stops: GradientStop[]; repeating?: true; space?: string } & PaintInset)
   | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true; space?: string } & PaintInset)
   | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "image"; url: string; size?: BackgroundSize; position?: [number, number]; repeat?: BackgroundRepeat } & PaintInset)
+  | ({
+      kind: "image";
+      url: string;
+      size?: BackgroundSize;
+      position?: [number, number];
+      repeat?: BackgroundRepeat;
+      /** A `data:image/svg+xml` source, parsed during analysis. */
+      vector?: SvgNode;
+    } & PaintInset)
   | { kind: "unsupported"; raw: string };
 
 /** `background-repeat` per layer; `space`/`round` collapse to `repeat`. */

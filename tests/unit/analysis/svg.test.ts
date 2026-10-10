@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
-import { svgFromMarkup } from "../../../src/analysis/svg/markup.ts";
+import { svgFromDataUrl, svgFromMarkup } from "../../../src/analysis/svg/markup.ts";
 import { pathBounds } from "../../../src/analysis/svg/geometry.ts";
 
 test("SVG chart labels and nested tspans use the conversion's bundled fonts", () => {
@@ -84,5 +84,46 @@ describe("BUG-14 SVG groups, nested viewports and object-bounding-box clips", ()
     const b = pathBounds(p.clip!.d);
     expect(b.x).toBeCloseTo(5, 5);
     expect(b.w).toBeCloseTo(2, 5);
+  });
+});
+
+describe("data: svg sources are parsed once, during analysis", () => {
+  const doc = (root: LayoutNode): LayoutDoc => ({ version: 2, source: "t", combo: { screen: "t", theme: "light" }, size: { w: root.bounds.w, h: root.bounds.h }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root });
+
+  test("intrinsic size: px width/height, else the viewBox; nothing for rasters or remote files", () => {
+    const svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
+    expect(svgFromDataUrl(svg)!.intrinsic).toEqual({ w: 160, h: 100 });
+    expect(svgFromDataUrl("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")!.intrinsic).toEqual({ w: 20, h: 10 });
+    expect(svgFromDataUrl(`data:image/svg+xml;base64,${Buffer.from('<svg width="8px" height="4px"/>').toString("base64")}`)!.intrinsic).toEqual({ w: 8, h: 4 });
+    expect(svgFromDataUrl("data:image/png;base64,AAAA")).toBeUndefined();
+    expect(svgFromDataUrl("https://example.com/a.svg")).toBeUndefined();
+  });
+
+  const BG = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' width='40' height='20'%3E%3Crect width='10' height='10' fill='%2322aa55'/%3E%3C/svg%3E\")";
+  const background = () =>
+    inferScreen(doc({ tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 100, h: 60 }, children: [], styles: { display: "block", "background-image": BG, "background-repeat": "no-repeat", "background-position": "50% 50%", "background-size": "auto" } }), "t");
+
+  test("a background svg carries its vector, placed by the width/height intrinsic size", () => {
+    const fill = background().root.style.fills[0]!;
+    expect(fill.kind).toBe("image");
+    if (fill.kind !== "image") throw new Error("expected an image fill");
+    expect(fill.vector?.viewBox).toEqual([0, 0, 10, 10]);
+    expect(fill.size).toEqual({ w: 40, h: 20 });
+    expect(fill.position).toEqual([30, 20]);
+  });
+
+  test("an <img> svg with neither viewBox nor size has no vector and says so", () => {
+    const img: LayoutNode = { tag: "img", attrs: { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" }, styles: {}, bounds: { x: 0, y: 0, w: 48, h: 48 }, children: [] };
+    const root = inferScreen(doc({ tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 48, h: 48 }, children: [img] }), "t").root;
+    const node = root.kind === "image" ? root : "children" in root ? root.children.find((c) => c.kind === "image") : undefined;
+    if (node?.kind !== "image") throw new Error("expected an image node");
+    expect(node.vector).toBeUndefined();
+    expect(node.diagnostics).toContainEqual(expect.objectContaining({ level: "unmapped", message: expect.stringContaining("svg data: URL has no viewBox") }));
+  });
+
+  test("the emitter draws the parsed vector as Shapes, not as an image file", () => {
+    const view = emitSwift(background(), "BgView", { mode: "app" }).view;
+    expect(view).toContain(".frame(width:");
+    expect(view).not.toContain("Image.markswift");
   });
 });

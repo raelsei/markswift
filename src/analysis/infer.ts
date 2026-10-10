@@ -3,6 +3,7 @@ import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
 import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, type Axis, addDiagnostic } from "../model/semantic.ts";
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
+import { svgFromDataUrl } from "./svg/markup.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -43,13 +44,19 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
+  // A data: svg source is parsed here; the emitter draws its vector.
   if (policy.route === "image") {
+    const src = n.currentSrc ?? n.attrs["src"] ?? "";
+    const svg = svgFromDataUrl(src);
     const node = withBase(n, ctx, {
       kind: "image",
-      src: n.currentSrc ?? n.attrs["src"] ?? "",
+      src,
+      ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });
+    if (svg?.vector) for (const d of svg.vector.diagnostics) addDiagnostic(node.diagnostics, d.level, d.feature, d.message);
+    else if (svg) addDiagnostic(node.diagnostics, "unmapped", "img", "img svg data: URL has no viewBox; layer dropped");
     imageFit(n, node);
     return node;
   }

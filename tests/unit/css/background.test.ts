@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { imageSize, parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize } from "../../../src/css/index.ts";
+import { parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize } from "../../../src/css/index.ts";
 import type { BackgroundRepeat, BackgroundSize } from "../../../src/model/values.ts";
 
 
@@ -66,16 +66,4 @@ describe("parseBackgroundRepeat", () => {
     ["repeat, no-repeat", "repeat"],
     ["", undefined],
   ])("%s", (input, want) => expect(parseBackgroundRepeat(input)).toEqual(want));
-});
-
-
-describe("imageSize", () => {
-  test("reads width/height or viewBox from a data: svg, nothing from rasters", () => {
-    const svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
-    expect(imageSize(svg)).toEqual({ w: 160, h: 100 });
-    expect(imageSize("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")).toEqual({ w: 20, h: 10 });
-    expect(imageSize(`data:image/svg+xml;base64,${Buffer.from('<svg width="8px" height="4px"/>').toString("base64")}`)).toEqual({ w: 8, h: 4 });
-    expect(imageSize("data:image/png;base64,AAAA")).toBeUndefined();
-    expect(imageSize("https://example.com/a.svg")).toBeUndefined();
-  });
 });
