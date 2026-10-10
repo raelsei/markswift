@@ -53,9 +53,12 @@ const NOT_A_COLOR_FAMILY = ["bg-clip-", "bg-blend-", "bg-origin-", "bg-gradient-
 
 /**
  * Token-hint channel for the emit pass: the *semantic* part of a node's colour utilities, in
- * the same shape `Style.tokens` already carries CSS custom-property names (`bg-card` → `card`,
- * `text-muted-foreground` → `muted-foreground`, `bg-blue-500` → `blue-500`, which `tokens.ts`
- * camelizes into `Palette.blue500`).
+ * the same `Style.tokens` list that carries CSS custom-property names, qualified by the utility
+ * that painted it (`bg-card` → `bg:card`, `text-muted-foreground` → `text:muted-foreground`,
+ * `from-sky-500` → `from:sky-500`). The qualifier is what lets the token pass match a name to
+ * the slot its utility paints — one node's `bg-white text-black` are two names for two slots,
+ * not two candidates for either — and `tokens.ts` camelizes the name (`Palette.sky500`).
+ * A custom-property name never contains `:`, so the two kinds cannot collide.
  *
  * Every variant (`dark:`, `hover:`, `md:`, `focus:`) is dropped. `hover:`/`md:` name states the
  * static capture never sees; a `dark:` utility names the *dark* value of the slot, and one hint
@@ -78,7 +81,7 @@ export function classColorHints(attrs: Record<string, string>): string[] {
   return out;
 }
 
-/** `bg-blue-500` → `blue-500`; `text-sm` → undefined. */
+/** `bg-blue-500` → `bg:blue-500`; `text-sm` → undefined. */
 function colorHint(util: string): string | undefined {
   if (NOT_A_COLOR_FAMILY.some((p) => util.startsWith(p))) return undefined;
   // Longest prefix first so `border-t-red-500` is not read as `border` → `t-red-500`.
@@ -86,5 +89,5 @@ function colorHint(util: string): string | undefined {
   if (!prefix) return undefined;
   const value = util.slice(prefix.length + 1).split("/")[0]!;
   if (!value || NOT_A_COLOR[value] || /^\d+(?:\.\d+)?(?:px|rem|em|%)?$/.test(value)) return undefined;
-  return value;
+  return `${prefix}:${value}`;
 }

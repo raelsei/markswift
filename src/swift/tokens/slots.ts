@@ -17,7 +17,9 @@ function pushPaint(out: Slot[], p: Paint, key: string, role: TokenRole): void {
   }
   if (p.kind === "linear" || p.kind === "radial" || p.kind === "conic") {
     p.stops.forEach((s, j) => {
-      if (visible(s.color)) out.push({ key: `${key}.s${j}`, role, color: s.color });
+      if (!visible(s.color)) return;
+      const stop = j === 0 ? "from" : j === p.stops.length - 1 ? "to" : p.stops.length === 3 ? "via" : undefined;
+      out.push({ key: `${key}.s${j}`, role, color: s.color, ...(stop ? { stop } : {}) });
     });
   }
 }
@@ -126,7 +128,7 @@ export function pairUsages(screens: Screen[]): Usage[] {
     for (const n of screenSlots(primary)) {
       const counterpart = other.get(n.id);
       for (const s of n.slots) {
-        usages.push({ base, theme: primary.theme, nodeId: n.id, slot: s.key, role: s.role, light: s.color, dark: counterpart?.get(s.key), hints: n.hints, order: order++ });
+        usages.push({ base, theme: primary.theme, nodeId: n.id, slot: s.key, role: s.role, light: s.color, dark: counterpart?.get(s.key), hints: n.hints, order: order++, ...(s.stop ? { stop: s.stop } : {}) });
       }
     }
   }

@@ -104,7 +104,7 @@ export interface Style {
   mask?: Paint;
   /** `visibility: hidden` — occupies space, paints nothing. */
   hidden?: boolean;
-  /** Names of CSS custom properties the declared style referenced (token hints). */
+  /** Token hints: CSS custom properties the declared style referenced, plus role-qualified class hints (`bg:white`). */
   tokens?: string[];
 }
 

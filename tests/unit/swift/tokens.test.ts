@@ -11,6 +11,7 @@ import type { ColorCtx } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import type { Color } from "../../../src/css/index.ts";
 import type { Screen, SemNode, StackNode, Style, TextRun } from "../../../src/model/semantic.ts";
+import { classColorHints } from "../../../src/analysis/class-hints.ts";
 
 const rgb = (r: number, g: number, b: number, a = 1): Color => ({ r, g, b, a });
 
@@ -190,6 +191,67 @@ describe("naming helpers", () => {
     const [light, dark] = pair();
     expect(screenBase(light!)).toBe("home");
     expect(screenBase(dark!)).toBe(screenBase(light!));
+  });
+});
+
+/** Light-only screen of identical nodes built by `make`, each carrying `classes`' colour hints. */
+function classScreen(classes: string, make: (id: string) => SemNode, count = 2): Screen {
+  const nodes = Array.from({ length: count }, (_, i) => make(`n${i}`));
+  for (const n of nodes) n.style.tokens = [...(n.style.tokens ?? []), ...classColorHints({ class: classes })];
+  return screen("light", nodes, rgb(0.5, 0.5, 0.5));
+}
+
+/** Token name → its light value. */
+function names(s: Screen): Record<string, Color> {
+  return Object.fromEntries(extractTokens([s]).tokens.map((t) => [t.name, t.light]));
+}
+
+describe("class hints name the slot their utility paints", () => {
+  const SKY = rgb(0.05, 0.65, 0.91);
+  const INDIGO500 = rgb(0.39, 0.4, 0.95);
+  const gradient = (...colors: Color[]) => (id: string) =>
+    box({ id, style: style({ fills: [{ kind: "linear", angle: 90, stops: colors.map((color, i) => ({ color, pos: i / (colors.length - 1) })) }] }) });
+
+  test("from-/to- name the first and last stop: sky → indigo", () => {
+    const t = names(classScreen("bg-gradient-to-r from-sky-500 to-indigo-500", gradient(SKY, INDIGO500)));
+    expect(t.sky500).toEqual(SKY);
+    expect(t.indigo500).toEqual(INDIGO500);
+  });
+
+  test("from-/to- name the first and last stop: indigo → sky (Tailwind v4 spelling)", () => {
+    const t = names(classScreen("bg-linear-to-r from-indigo-500 to-sky-500", gradient(INDIGO500, SKY)));
+    expect(t.sky500).toEqual(SKY);
+    expect(t.indigo500).toEqual(INDIGO500);
+  });
+
+  test("via- names the middle stop", () => {
+    const t = names(classScreen("bg-linear-to-r from-sky-500 via-white to-indigo-500", gradient(SKY, WHITE, INDIGO500)));
+    expect(t.sky500).toEqual(SKY);
+    expect(t.white).toEqual(WHITE);
+    expect(t.indigo500).toEqual(INDIGO500);
+  });
+
+  test("bg- names the fill and text- the run on one node", () => {
+    const t = names(classScreen("bg-white text-black", (id) => ({ ...text(id, rgb(0, 0, 0)), style: style({ fills: [{ kind: "solid", color: WHITE }] }) }) as SemNode));
+    expect(t.white).toEqual(WHITE);
+    expect(t.black).toEqual(rgb(0, 0, 0));
+  });
+
+  test("a hint whose role paints two different colours on its node names nothing", () => {
+    const twoRuns = (id: string) => {
+      const n = text(id, NEAR_BLACK) as SemNode & { runs: TextRun[] };
+      n.runs.push({ ...n.runs[0]!, color: INDIGO });
+      return n;
+    };
+    const t = names(classScreen("text-gray-700", twoRuns));
+    expect(t.gray700).toBeUndefined();
+  });
+
+  test("two custom properties tied on one slot name nothing rather than the alphabetically first", () => {
+    const s = classScreen("", (id) => ({ ...text(id, NEAR_BLACK), style: style({ fills: [{ kind: "solid", color: WHITE }], tokens: ["surface", "ink"] }) }) as SemNode);
+    const t = names(s);
+    expect(t.ink).toBeUndefined();
+    expect(t.surface).toBeUndefined();
   });
 });
 
