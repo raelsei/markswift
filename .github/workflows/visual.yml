@@ -1,0 +1,57 @@
+name: Visual
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+    inputs:
+      renderer: { type: choice, options: [mac, ios], default: mac }
+      scope: { type: choice, options: [pilot, all], default: pilot }
+      rebaseline: { type: boolean, default: false }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      RENDERER: ${{ inputs.renderer || (startsWith(github.ref, 'refs/tags/v') && 'ios') || 'mac' }}
+      SCOPE: ${{ inputs.scope || (github.event_name == 'schedule' && 'all') || 'pilot' }}
+      MARKSWIFT_SIMULATOR: iPhone 17
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install fonttools==4.60.2 brotli==1.2.0
+      - run: bun install --frozen-lockfile
+      - run: ./node_modules/.bin/playwright-core install --no-shell chromium
+      - name: Toolchain
+        run: sw_vers -productVersion && xcodebuild -version
+      - name: Render
+        run: bun run pilot --renderer "$RENDERER" $([ "$SCOPE" = all ] && echo --all) --out "$RUNNER_TEMP/visual"
+      - name: Gate
+        if: ${{ !inputs.rebaseline }}
+        run: bun run quality "tests/conformance/baselines/visual-$SCOPE-$RENDERER.json" "$RUNNER_TEMP/visual" "tests/conformance/visual-policy-$RENDERER.json"
+      - name: Candidate baseline (review, then commit by hand)
+        if: ${{ inputs.rebaseline }}
+        run: bun run quality --write-baseline "$RUNNER_TEMP/visual" "$RUNNER_TEMP/visual-$SCOPE-$RENDERER.json"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-${{ env.SCOPE }}-${{ env.RENDERER }}
+          path: ${{ runner.temp }}/visual*
+          retention-days: 30

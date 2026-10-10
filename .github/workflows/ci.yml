@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install font tooling
+        run: python -m pip install fonttools==4.60.2 brotli==1.2.0
+      - name: Toolchain
+        run: |
+          bun --version
+          xcodebuild -version
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
+          python3 -c "import fontTools, brotli; print('fontTools', fontTools.version)"
+      - run: bun install --frozen-lockfile
+      - run: ./node_modules/.bin/playwright-core install --no-shell chromium
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run test:browser
+      - run: bun run test:native
+      - name: Conformance pilot (capture, both modes, iOS typecheck)
+        run: bun run pilot --renderer none --out "$RUNNER_TEMP/pilot"
