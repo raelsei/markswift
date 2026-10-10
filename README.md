@@ -35,7 +35,9 @@ You can also capture a running site with
 Choose a new output directory for each run.
 
 The source can be a full HTML document, a fragment, stdin (`-`), or a running HTTP(S) page.
-`--css` is optional and takes a **compiled** CSS file. File inputs resolve relative assets beside the HTML;
+`--css` is optional and takes a **compiled** CSS file. Its relative `url()`s are resolved against the
+CSS file and inlined as data URLs; root-relative (`/…`) URLs still resolve against the page.
+File inputs resolve relative assets beside the HTML;
 stdin is for self-contained markup and data-URL assets. `--width`, `--height`, `--theme`,
 `--dark-class` and `--mode` select the captured state. Normal output prints the destination; warnings and
 approximation notes go to stderr. Exit status is 0 for a completed conversion, 2 for invalid
@@ -104,7 +106,10 @@ const result = compileLayout(savedLayout, { name: "CardView", mode: "app" });
 - The result contains `code`, `files`, font `assets`, node `diagnostics`, resource/font
   `warnings`, the measured `layout` and, for adaptive conversions, `darkLayout`. Loaded images are
   embedded in the captured layout so generated code does not depend on a temporary local server.
-  Unavailable images are reported.
+  Unavailable images are reported; a loopback image URL (`127.0.0.1`, `localhost`) is never emitted —
+  the layer becomes a placeholder (or the `alt` text) with a diagnostic.
+- `timeoutMs` (default 120000, i.e. 120 s) bounds the whole conversion: browser, network and font
+  conversion. A conversion that exceeds it rejects with `conversion timed out after <n> ms`.
 - `compileLayout` accepts prepared `bundledFamilies` and `fontMetrics` for custom fonts.
   Without them it uses native system fonts and reports substitutions. It does not package assets.
   Saved layouts must be `LayoutDoc` version 2; recapture older files.
@@ -126,9 +131,10 @@ isolation boundary for hosting arbitrary uploads. Source JavaScript and navigati
 logic are not translated into Swift application logic.
 
 For a hosted paste-only converter, `convertHtml(html, { untrustedInput: true })` blocks page
-scripts and outbound resource requests during capture. It rejects file/URL sources and
+scripts, outbound requests and DNS resolution in the capture browser. It rejects file/URL sources and
 `assetsDir`/`baseURL`; inline CSS and data-URL assets remain usable. Host the browser process
-in an isolated environment as well. The preview playground (`playground/`) uses this mode for its
+in an isolated environment as well. Outside this mode, `@font-face` bytes are fetched by the host
+over `http(s)` only, up to 25 MB per file. The preview playground (`playground/`) uses this mode for its
 hosted conversion service; see `playground/README.md`.
 
 ## Repository map
