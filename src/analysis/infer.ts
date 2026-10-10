@@ -156,7 +156,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   const align = crossAlign(n);
-  const distribution = distributionOf(n.styles["justify-content"], display);
+  const distribution = distributionOf(n);
   // Ordinary float/inline-block lines become measured rows. Flex wrapping has its own native
   // reflow path and a captured-position fallback, including column and reverse wrapping.
   const wraps = isFlex(display) && /^(wrap|wrap-reverse)$/.test(n.styles["flex-wrap"] ?? "");
