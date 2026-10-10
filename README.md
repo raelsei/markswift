@@ -70,11 +70,13 @@ for (const [path, bytes] of Object.entries(result.assets)) {
 ```
 
 Add **all generated `.swift` files** to the same iOS target, not just `result.code`.
-When fonts are returned, add `Fonts/` resources and merge `UIAppFonts.plist.fragment` into
-the app's Info.plist, or call `MarkswiftBundledFonts.register(in:)` with the resource bundle before rendering.
-One conversion returns one standalone set of shared helper/token definitions. Combining
-independent conversion results into the same target needs shared-file/token merging; do not
-blindly copy duplicate helpers. Multi-component bundle generation remains a roadmap item.
+When fonts are returned, add `Fonts/` resources and merge `<View>+UIAppFonts.plist.fragment` into
+the app's Info.plist, or call `<View>.BundledFonts.register(in:)` with the resource bundle before rendering.
+Every per-view declaration (tokens in `<View>.Palette`, shapes, bundled-font registration) is
+nested in the view's type and its files are prefixed with the view name, so several conversions
+can share one target. `MarkswiftRuntime.swift` is identical for every conversion made by the same
+Markswift version: add it to a target once, and replace it (re-converting older screens) when you
+upgrade. Add each `Fonts/` file once.
 
 ## Inputs and output
 
@@ -112,7 +114,7 @@ const result = compileLayout(savedLayout, { name: "CardView", mode: "app" });
 **Light and dark.** By default (`theme: "adaptive"`, CLI `--theme adaptive`) Markswift captures the
 page twice in the same browser session, with `prefers-color-scheme: light` and then `dark`, and emits
 one view from the light capture. Every colour that differs between the two captures becomes a
-`Color(light:dark:)` token in `MarkswiftTokens.swift` (even a colour used once), so the view follows the
+`Color.markswift(light:dark:)` token in `<View>.Palette` (`<View>+Tokens.swift`; even a colour used once), so the view follows the
 system appearance. Colours identical in both captures stay static tokens or inline literals.
 Class-based themes (for example shadcn's `.dark`) need `darkClass: "dark"` (CLI `--dark-class dark`),
 which adds that class to `<html>` for the dark capture; it is not auto-detected. Nodes or colour slots
@@ -158,7 +160,8 @@ inputs. Small utilities stay with their domain (`css/syntax`, `analysis/geometry
 `swift/format`) rather than a global miscellaneous utilities folder.
 
 The HTML marker is `data-markswift-root`; generated helper names use `Markswift` and `.markswift`.
-Older `data-h2s-*` markers and version-1 layouts are no longer accepted.
+Older `data-h2s-*` markers and version-1 layouts are no longer accepted. When replacing an older
+bundle, remove its `MarkswiftTokens.swift`, `MarkswiftShapes.swift` and `Font+Markswift.swift`.
 
 ## Quality and next steps
 
@@ -275,8 +278,7 @@ scope will follow that verified matrix rather than claiming every HTML/CSS combi
 
 Successful compilation is not proof of visual correctness. Complex layout, rich inline text,
 font metrics, native resizing and accessibility still need improvement. Capture observes one
-viewport and state; it does not infer all responsive or interactive behavior. A multi-component
-bundle linker remains planned work.
+viewport and state; it does not infer all responsive or interactive behavior.
 
 Research corpora, simulator screenshots, generated outputs and development notes are intentionally
 excluded from this repository; the conformance fixtures and their runner are included. The

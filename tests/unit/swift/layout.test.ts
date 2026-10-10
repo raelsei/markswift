@@ -54,3 +54,13 @@ test("a fill-height row keeps its parent's height proposal", () => {
     expect(emitSwift(screen, "RowView", { mode }).view).not.toContain(".fixedSize(horizontal: false, vertical: true)");
   }
 });
+
+test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecated showsIndicators:", () => {
+  const root = element("main", 0, 0, 100, 50, { display: "block", "overflow-y": "auto" }, [
+    element("div", 0, 0, 100, 200, { display: "block", "background-color": "rgb(255, 0, 0)" }),
+  ]);
+  const doc: LayoutDoc = { version: 2, source: "layout-test", combo: { screen: "s", theme: "light" }, size: { w: 100, h: 50 }, dpr: 3, canvas: "rgb(255,255,255)", fonts: [], root };
+  const view = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view;
+  expect(view).toContain("ScrollView(.vertical) {");
+  expect(view).not.toContain("showsIndicators");
+});

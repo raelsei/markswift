@@ -6,7 +6,7 @@ import type { Inventory } from "./schema.ts";
  * attributes Chrome never exposes as properties.
  *
  * Decision already made: one `Shape` struct per unique (d, viewBox) in
- * MarkswiftShapes.swift (`shapeName` in src/swift/svg.ts), fill and stroke as
+ * <View>+Shapes.swift, nested in the view type (`shapeName` in src/swift/svg.ts), fill and stroke as
  * separate ZStack layers. SF Symbol substitution is NOT done by the tool: it
  * is the agent's/user's call after generation (noted on `svg:svg`).
  *

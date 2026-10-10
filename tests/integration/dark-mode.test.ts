@@ -7,15 +7,15 @@ const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.sk
 const HTML = '<main data-markswift-root><h2>Account</h2><p class="note">Signed in</p><span class="badge">Pro</span><span class="badge">Beta</span></main>';
 const BASE = "body{margin:0} main{width:280px;padding:16px;font:16px system-ui;background:#fff;color:#111} .note{color:#555} .badge{display:inline-block;padding:2px 6px;background:rgb(0,122,255);color:#fff}";
 
-/** Names of `Color(light:dark:)` tokens in MarkswiftTokens.swift. */
+/** Names of `Color.markswift(light:dark:)` tokens in `<View>+Tokens.swift`. */
 function adaptiveTokens(result: ConversionResult): string[] {
-  return [...result.files["MarkswiftTokens.swift"]!.matchAll(/static let (\w+) = Color\(light:/g)].map((m) => m[1]!);
+  return [...result.files[`${result.name}+Tokens.swift`]!.matchAll(/static let (\w+) = Color\.markswift\(light:/g)].map((m) => m[1]!);
 }
 
 function expectAdaptive(result: ConversionResult) {
   const names = adaptiveTokens(result);
   expect(names.length).toBeGreaterThan(0);
-  for (const name of names) expect(result.code).toContain(`Color.${name}`);
+  for (const name of names) expect(result.code).toContain(`Palette.${name}`);
   // The light literals the dark styles change are gone from the view.
   expect(result.code).not.toContain("Color.markswift(1.0, 1.0, 1.0))");
   expect(result.darkLayout?.combo.theme).toBe("dark");
@@ -37,6 +37,6 @@ browserTest("class-based dark themes need darkClass and then become adaptive tok
 browserTest("a page without dark styles produces only static tokens", async () => {
   const result = await convertHtml(HTML, { name: "Account", css: BASE });
   expect(adaptiveTokens(result)).toEqual([]);
-  expect(result.files["MarkswiftTokens.swift"]).toMatch(/\/\/ \d+ tokens: 0 adaptive \(light\/dark pairs\), \d+ static\./);
+  expect(result.files[`${result.name}+Tokens.swift`]).toMatch(/\/\/ \d+ tokens: 0 adaptive \(light\/dark pairs\), \d+ static\./);
   expect(result.warnings).toEqual([]);
 }, 60000);

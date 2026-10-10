@@ -69,7 +69,7 @@ export function applyEffects(n: LayoutNode, style: Style, notes: string[]): void
   }
   // Colour-name hints: `var(--x)` from an inline style, plus the semantic part of any colour
   // utility on the class list. Both are names the design gave a colour, and `swift/tokens`
-  // promotes a consistent hint to the token's name (`bg-blue-500` → `Color.blue500`).
+  // promotes a consistent hint to the token's name (`bg-blue-500` → `Palette.blue500`).
   const tokens = [...[...(n.attrs["style"] ?? "").matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]!), ...classColorHints(n.attrs)];
   if (tokens.length) style.tokens = [...new Set(tokens)];
 }

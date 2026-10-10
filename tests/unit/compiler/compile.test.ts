@@ -14,7 +14,18 @@ test("captured-layout compilation is deterministic and does not mutate the input
   expect(layout).toEqual(before);
   expect(first.files["CardView.swift"]).toBe(first.code);
   expect(first.code).toContain("struct CardView: View");
-  expect(Object.keys(first.files)).toEqual(["CardView.swift", "MarkswiftRuntime.swift", "MarkswiftTokens.swift"]);
+  expect(Object.keys(first.files)).toEqual(["CardView.swift", "MarkswiftRuntime.swift", "CardView+Tokens.swift"]);
+});
+
+test("two conversions share only the identical runtime file", () => {
+  const a = compileLayout(layout, { name: "CardA" }), b = compileLayout(layout, { name: "CardB" });
+  const shared = Object.keys(a.files).filter((f) => f in b.files);
+  expect(shared).toEqual(["MarkswiftRuntime.swift"]);
+  expect(a.files["MarkswiftRuntime.swift"]).toBe(b.files["MarkswiftRuntime.swift"]!);
+  for (const [file, src] of Object.entries(a.files)) {
+    if (file !== "MarkswiftRuntime.swift") expect(src).toMatch(/\b(struct|extension) CardA\b/);
+    expect(src).not.toMatch(/^extension Color \{\n\s+static let /m);
+  }
 });
 
 test("serialized CSS sizing intent survives public compilation", () => {

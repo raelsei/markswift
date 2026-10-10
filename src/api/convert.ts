@@ -7,6 +7,7 @@ import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
 import { compileLayout } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
+import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import { htmlIdentity } from "../input/identity.ts";
 import type { HtmlSource } from "../input/types.ts";
@@ -58,8 +59,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     const assets: Record<string, Uint8Array> = {};
     for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(fontDir, "Fonts", face.file)).arrayBuffer());
     if (fonts.faces.length) {
-      compiled.files["Font+Markswift.swift"] = fonts.swift;
-      compiled.files["UIAppFonts.plist.fragment"] = fonts.plist;
+      compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
+      compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
     }
     const pageWarnings = dark ? [...new Set([...capture.warnings, ...dark.warnings])] : capture.warnings;
     return {

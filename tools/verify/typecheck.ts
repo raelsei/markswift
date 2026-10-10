@@ -17,6 +17,7 @@ const SOFT_DEPRECATED: Array<[RegExp, string]> = [
   [/\.disableAutocorrection\(/, "disableAutocorrection → autocorrectionDisabled"],
   [/\.mask\(\s*[A-Z]/, "mask(_:) → mask(alignment:_:)"],
   [/\.animation\([^)]*\)\s*$/m, "animation(_:) without value → animation(_:value:)"],
+  [/showsIndicators:/, "ScrollView(_:showsIndicators:) → ScrollView(_:) + .scrollIndicators(_:)"],
 ];
 
 async function softDeprecations(swiftDir: string): Promise<string[]> {
