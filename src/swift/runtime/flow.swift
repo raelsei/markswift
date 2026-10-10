@@ -1,5 +1,3 @@
-/** Reflows fixed-size items into rows; deliberately does not implement CSS flex allocation. */
-export const FLOW_RUNTIME = `
 struct MarkswiftFlow: Layout {
     var columnGap: CGFloat
     var rowGap: CGFloat
@@ -67,4 +65,3 @@ struct MarkswiftFlow: Layout {
         return result
     }
 }
-`;

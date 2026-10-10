@@ -9,6 +9,7 @@ import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
 import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
+import { textContent } from "./text-runs.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
 export interface ControlSpec {
@@ -59,7 +60,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     }
     case "textarea": {
       const spec: ControlSpec = { control: "textEditor", notes };
-      const text = textOf(n).trim();
+      const text = textContent(n).trim();
       if (text) spec.value = text;
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (disabled) spec.disabled = true;
@@ -70,7 +71,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       let selected: string | undefined;
       for (const o of optionsOf(n)) {
         // `@label` overrides the element's text; the text itself may be missing from the snapshot.
-        const label = (o.attrs["label"] ?? textOf(o)).trim();
+        const label = (o.attrs["label"] ?? textContent(o)).trim();
         if (label) options.push(label);
         if ("selected" in o.attrs) selected = label;
       }
@@ -198,7 +199,7 @@ function targetName(href: string, n: LayoutNode): string {
   const hash = href.indexOf("#");
   const fragment = hash < 0 ? "" : href.slice(hash + 1);
   const path = (hash < 0 ? href : href.slice(0, hash)).split("?")[0]!.split("/").filter(Boolean).pop() ?? "";
-  const name = fragment || path || textOf(n).trim() || n.id || "link";
+  const name = fragment || path || textContent(n).trim() || n.id || "link";
   return name.slice(0, 40);
 }
 
@@ -218,12 +219,6 @@ function meterLevel(value: number, min: number, max: number, low?: number, high?
 
 /** Controls that paint text of their own (from `value`/`placeholder`) rather than child nodes. */
 const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = { textField: true, secureField: true, textEditor: true, picker: true, datePicker: true, stepper: true };
-
-/** Concatenated text of an element's subtree, as the snapshot laid it out. */
-function textOf(n: LayoutNode): string {
-  if (n.tag === "#text") return n.text ?? "";
-  return n.children.map(textOf).join("");
-}
 
 /** `<option>` children, including those inside `<optgroup>`. */
 function optionsOf(n: LayoutNode): LayoutNode[] {

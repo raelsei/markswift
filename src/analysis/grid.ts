@@ -2,10 +2,9 @@
 import type { LayoutNode } from "../model/layout.ts";
 import type { GridNode, SemBase } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
-import { px, round2 } from "../css/index.ts";
-import { resolvedGridTracks } from "../css/grid.ts";
+import { px, round2, resolvedGridTracks } from "../css/index.ts";
 import { renders, insetsOf } from "./geometry.ts";
-import { measuredLayoutOf } from "./measured-layout.ts";
+import { measuredLayoutOf, paintOrder } from "./measured-layout.ts";
 
 function starts(tracks: number[], gap: number, origin: number): number[] {
   let at = origin;
@@ -33,7 +32,7 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
       return near(f.x, xs[column]!) && near(f.y, ys[row]!) && near(f.w, widths[column]!) && near(f.h, heights[row]!);
     });
   if (!regular || n.styles.direction === "rtl") {
-    const children = [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0)).map(item => item.sem);
+    const children = paintOrder(items).map(item => item.sem);
     for (const child of children) {
       child.width = { kind: "fixed", px: round2(child.frame.w) };
       child.height = { kind: "fixed", px: round2(child.frame.h) };

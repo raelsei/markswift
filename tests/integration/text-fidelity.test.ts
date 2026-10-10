@@ -3,7 +3,7 @@ import { convertHtml } from "../../src/index.ts";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { visit } from "../../src/swift/traversal.ts";
 
-const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
+const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
 browserTest("pre preserves whitespace and reports monospace font substitution", async () => {
   const html = '<main data-markswift-root><pre id="sample">one    two\n  indented line</pre></main>';

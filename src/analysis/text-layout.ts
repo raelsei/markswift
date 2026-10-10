@@ -2,10 +2,10 @@
 import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type TextRun } from "../model/semantic.ts";
 import { type BundledFamilies } from "../model/fonts.ts";
-import { parseColor, round2, px } from "../css/index.ts";
+import { round2, px } from "../css/index.ts";
 import { type MeasuredTextRun } from "./context.ts";
 import { fontOf } from "./typography.ts";
-import { decorationOf, contains } from "./text-runs.ts";
+import { decorationOf, contains, textColorOf } from "./text-runs.ts";
 import { edgeWidth, unionRect, insetsOf } from "./geometry.ts";
 
 /**
@@ -43,7 +43,7 @@ export function withInlineGaps(built: MeasuredTextRun[], host: LayoutNode): Text
  */
 export function hostSpace(host: LayoutNode, families: BundledFamilies): MeasuredTextRun {
   const s = host.styles;
-  const color = parseColor(s["-webkit-text-fill-color"]) ?? parseColor(s["color"]) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const color = textColorOf(s);
   const run: TextRun = { text: " ", font: fontOf(s, families), color };
   const deco = decorationOf(s, color);
   if (deco) run.decoration = deco;

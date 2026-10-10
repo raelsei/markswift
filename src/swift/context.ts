@@ -23,14 +23,16 @@ export interface EmitOptions {
   mode: EmitMode;
   /** Design tokens of the run, bound to this screen; absent = every colour stays a literal. */
   tokens?: ScreenTokens;
+  /** The light screen of a light/dark pair: the view must look right in both colour schemes. */
+  adaptive?: boolean;
 }
 
 /** Everything the recursive emitters need; built once per screen. */
 export interface EmitContext {
-  /** Recursive child expression; supplied by the screen emitter. */
-  renderNode: (node: SemNode) => string;
+  /** Recursive child lines; supplied by the screen emitter. */
+  renderNode: (node: SemNode) => string[];
   fontMetrics: FontMetrics;
-  /** Container node → Swift property name (keyed by identity: sc-for repeats share an id). */
+  /** Container node → Swift property name. */
   nameOf: Map<SemNode, string>;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
@@ -40,8 +42,8 @@ export interface EmitContext {
   control: ControlMembers;
   /** This screen's colour → token lookup; see `colorExpr`. */
   tokens?: ScreenTokens;
+  adaptive?: boolean;
 }
-
 
 /**
  * Resolves a colour one node paints to a design-token name. Implemented by `tokens/extract.ts`
@@ -49,8 +51,8 @@ export interface EmitContext {
  * emitters depend on the lookup and not on the extractor.
  */
 export interface ScreenTokens {
-  /** Token for the colour `id` paints, or undefined when the colour must stay a literal. */
-  name(c: Color, id: string | undefined): string | undefined;
+  /** Token for the colour `id` paints (at `slot`, when the call site knows it), or undefined when the colour must stay a literal. */
+  name(c: Color, id: string | undefined, slot?: string): string | undefined;
 }
 
 /**
@@ -63,7 +65,6 @@ export interface ColorCtx {
   /** Which output is being written; `fontExpr` emits a different font expression per mode. */
   mode: EmitMode;
 }
-
 
 /** The view-level members a screen's controls need, in emission order. */
 export interface ControlMembers {

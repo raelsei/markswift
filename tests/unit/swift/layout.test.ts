@@ -16,7 +16,7 @@ function measuredRow(intrinsic: boolean) {
       element("p", 0, 0, 174, 90, { display: "block", "font-size": "16px", "line-height": "90px" }, [text]), tile(186),
     ] : [tile(0), tile(186)]),
   ]);
-  const doc: LayoutDoc = { version: 1, source: "layout-test", combo: { screen: "row", theme: "light", demoState: "normal" }, size: { w: 393, h: 90 }, dpr: 3, canvas: "rgb(255,255,255)", root };
+  const doc: LayoutDoc = { version: 2, source: "layout-test", combo: { screen: "row", theme: "light" }, size: { w: 393, h: 90 }, dpr: 3, canvas: "rgb(255,255,255)", fonts: [], root };
   return inferScreen(doc, "row");
 }
 

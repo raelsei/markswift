@@ -9,8 +9,7 @@ import type { FontFace as FontFaceRecord } from "../model/layout.ts";
  * the reference pixels are its glyphs or a fallback's. Runs after `settle`, so
  * `document.fonts.ready` has already resolved.
  *
- * Same-origin sheets only: a cross-origin stylesheet throws on `cssRules` and is skipped, which
- * costs nothing here — every adapter serves the design from its own origin.
+ * Cross-origin stylesheets throw on `cssRules`, so their `@font-face` rules are not collected.
  */
 export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
   return await page.evaluate(() => {
@@ -73,7 +72,7 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
       }
     };
     for (const sheet of document.styleSheets) {
-      if ((sheet.ownerNode as Element | null)?.hasAttribute?.("data-h2s-harness")) continue;
+      if ((sheet.ownerNode as Element | null)?.hasAttribute?.("data-markswift-harness")) continue;
       let rules: CSSRuleList;
       try {
         rules = sheet.cssRules;
@@ -105,7 +104,7 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
  * Reads the bytes behind every non-inline `@font-face` source and names each blob by content
  * hash, mutating the faces to point at the file. Runs in-process while the source's static
  * server is still up: that server is the only thing that can answer its own ephemeral-port URL,
- * and `generate` runs long after it is gone.
+ * and it stops when the conversion returns.
  *
  * A source that cannot be read keeps its `url` and gets no `file` — packaging reports it rather
  * than guessing.

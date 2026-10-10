@@ -1,5 +1,4 @@
-import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 
 
@@ -45,15 +44,4 @@ export const WEIGHT_SUBFAMILY: Record<number, string> = {
 /** `Geist Variable` → `GeistVariable`; a file name and a PostScript name stem. */
 export function sanitize(family: string): string {
   return family.replace(/[^A-Za-z0-9]/g, "") || "Font";
-}
-
-
-/** Font files of a generated Swift dir, for the harness to bundle. */
-export async function packagedFontFiles(swiftDir: string): Promise<string[]> {
-  const dir = join(swiftDir, "Fonts");
-  try {
-    return (await readdir(dir)).filter((f) => /\.(ttf|otf)$/.test(f)).sort().map((f) => join(dir, f));
-  } catch {
-    return [];
-  }
 }

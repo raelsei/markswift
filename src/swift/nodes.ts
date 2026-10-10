@@ -5,10 +5,10 @@ import { svgExpr } from "./svg.ts";
 import { imageNodeExpr } from "./images.ts";
 import { controlExpr } from "./controls.ts";
 import { modifiers } from "./modifiers.ts";
-/** Expression for a node: container → property reference; leaf → inline expression (with modifiers). */
-export function refOf(n: SemNode, ctx: EmitContext): string {
-  if (n.kind === "stack" || n.kind === "grid") return ctx.nameOf.get(n)!;
-  return leafExpr(n, ctx).join("\n");
+/** Lines for a node: container → property reference; leaf → inline expression (with modifiers). */
+export function refOf(n: SemNode, ctx: EmitContext): string[] {
+  if (n.kind === "stack" || n.kind === "grid") return [ctx.nameOf.get(n)!];
+  return leafExpr(n, ctx);
 }
 
 function leafExpr(n: SemNode, ctx: EmitContext): string[] {
@@ -24,7 +24,7 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
       core = imageNodeExpr(n, ctx);
       break;
     case "control":
-      core = controlExpr(n, { child: (c) => ctx.renderNode(c).split("\n"), stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
+      core = controlExpr(n, { child: ctx.renderNode, stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.adaptive ? "adaptive" : ctx.screen.theme, tokens: ctx.tokens, id: n.id });
       break;
     case "box":
       core = ["Color.clear"];

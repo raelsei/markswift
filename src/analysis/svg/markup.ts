@@ -6,6 +6,7 @@ import { Parser } from "htmlparser2";
 import { round2 } from "../../css/index.ts";
 import { num } from "./attributes.ts";
 import { buildSvg } from "./build.ts";
+import { finish } from "../node-base.ts";
 
 /**
  * Standalone SVG markup (a `data:image/svg+xml` URL, an inline asset) → SvgNode drawn in
@@ -43,8 +44,5 @@ export function svgFromMarkup(markup: string, frame: Rect): SvgNode | undefined 
     notes: [],
     overlays: [],
   };
-  const node = buildSvg(root, base);
-  if (node.notes.some((s) => s.startsWith("unmapped"))) node.confidence = "unmapped";
-  else if (node.notes.some((s) => s.startsWith("approximated"))) node.confidence = "approximated";
-  return node;
+  return finish(buildSvg(root, base));
 }

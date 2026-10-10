@@ -1,4 +1,3 @@
-import { numericValue } from "./control-state.ts";
 /**
  * `ControlNode` → SwiftUI. The node's box (fill, border, radius, padding, frame) is painted by
  * the shared modifier chain in `modifiers.ts`; this file emits only the interactive core that goes
@@ -13,9 +12,11 @@ import { numericValue } from "./control-state.ts";
  * identical in both modes.
  */
 import { parseColor } from "../css/index.ts";
+import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
-import type { EmitMode } from "./context.ts";
-import { colorArgs, colorExpr, fontExpr, indent, num, str, type ScreenTokens } from "./format.ts";
+import type { EmitMode, ScreenTokens } from "./context.ts";
+import { numericValue } from "./control-state.ts";
+import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
 export interface ControlDeps {
@@ -26,8 +27,8 @@ export interface ControlDeps {
   /** `onclick` source → callback property name; built by `controlMembers`. */
   actionOf: Map<string, string>;
   mode: EmitMode;
-  /** The screen's colour scheme: `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
-  theme: "light" | "dark";
+  /** The screen's colour scheme (`adaptive`: both): `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
+  theme: Theme | "adaptive";
   /** This screen's colour → token lookup, and the control node its colours belong to. */
   tokens?: ScreenTokens;
   id?: string;
@@ -36,11 +37,17 @@ export interface ControlDeps {
 /**
  * Chrome's palette for the widgets it paints itself. The page's CSS never mentions these colours
  * yet they are part of the design's pixels, so the generated view carries them the same way it
- * carries every other measured colour: resolved for the screen's theme. Measured from Chrome 152.
+ * carries every other measured colour: resolved for the screen's theme, or as a light/dark pair
+ * (`Color(light:dark:)` from MarkswiftTokens.swift) for an adaptive view. Measured from Chrome 152.
  */
-const UA: Record<"light" | "dark", { accent: string; track: string; edge: string }> = {
+const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
   light: { accent: "Color.markswift(0.0, 0.459, 1.0)", track: "Color.markswift(0.937, 0.937, 0.937)", edge: "Color.markswift(0.698, 0.698, 0.698)" },
   dark: { accent: "Color.markswift(0.6, 0.784, 1.0)", track: "Color.markswift(0.231, 0.231, 0.231)", edge: "Color.markswift(0.522, 0.522, 0.522)" },
+  adaptive: {
+    accent: "Color(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
+    track: "Color(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
+    edge: "Color(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
+  },
 };
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
@@ -242,6 +249,3 @@ function stackOfNodes(nodes: SemNode[], deps: ControlDeps): string[] {
   const open = horizontal ? `HStack(alignment: .center, spacing: ${num(gap)}) {` : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
   return [open, ...indent(nodes.flatMap((c) => deps.child(c)), 1), "}"];
 }
-
-export { controlMembers, type ControlMembers } from "./control-state.ts";
-export { CONTROL_RUNTIME } from "./control-runtime.ts";

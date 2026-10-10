@@ -3,7 +3,7 @@ import { convertHtml } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../src/model/layout.ts";
 
-const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
+const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const CONTAINERS = ["article", "section", "nav", "main", "aside", "header", "footer", "search", "div"] as const;
 const FAMILY_STYLES = {
   block: "display:block",

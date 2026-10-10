@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseClipPath, parseFilters } from "../../../src/css/effects.ts";
+import { parseClipPath, parseFilters } from "../../../src/css/index.ts";
 import type { ClipShape, Filter } from "../../../src/model/semantic.ts";
 
 

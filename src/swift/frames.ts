@@ -1,6 +1,6 @@
 import type { SemNode } from "../model/semantic.ts";
 import type { EmitContext, EmitMode } from "./context.ts";
-import { num } from "./format.ts";
+import { alignment, num } from "./format.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
@@ -52,10 +52,7 @@ function fillAlignment(n: SemNode, mode: EmitMode): string {
     // because their children carry measured top offsets (see `containerExpr`).
     const h = n.axis === "v" ? n.align : n.distribution;
     const v = n.axis === "v" ? n.distribution : mode === "app" ? n.align : "start";
-    const hs = h === "center" ? "" : h === "end" ? "Trailing" : "Leading";
-    const vs = v === "center" ? "center" : v === "end" ? "bottom" : "top";
-    if (vs === "center") return hs === "" ? ".center" : hs === "Leading" ? ".leading" : ".trailing";
-    return `.${vs}${hs}`;
+    return alignment(h, v);
   }
   return ".topLeading";
 }

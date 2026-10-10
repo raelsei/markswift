@@ -1,6 +1,6 @@
 import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { indent, num } from "./format.ts";
+import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
 import { modifiers } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
@@ -12,7 +12,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     out.push(`Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`);
     for (let i = 0; i < n.children.length; i += n.columns) {
       out.push("    GridRow {");
-      for (const c of n.children.slice(i, i + n.columns)) out.push(...indent(ctx.renderNode(c).split("\n"), 2));
+      for (const c of n.children.slice(i, i + n.columns)) out.push(...indent(ctx.renderNode(c), 2));
       out.push("    }");
     }
     out.push("}");
@@ -23,9 +23,10 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     const spacing = spacers ? 0 : uniform ? (n.spacing as number) : 0;
     // Mode difference — HStack cross alignment. Fidelity: `.top` plus a per-child top padding
     // taken from the measured geometry, so placement does not depend on native text metrics.
-    // App: the IR's cross alignment (`hAlign`) and no geometric padding; SwiftUI aligns natively.
+    // App: the IR's cross alignment and no geometric padding; SwiftUI aligns natively.
     const geometry = ctx.mode === "fidelity" && n.axis === "h" && n.align !== "stretch";
-    const align = n.axis === "v" ? vAlign(n.align) : geometry ? ".top" : hAlign(n.align);
+    // `stretch` (the CSS default) puts a fixed-cross-size item at flex-start; filling ones stretch anyway.
+    const align = n.axis === "v" ? horizontalAlignment(n.align) : geometry ? ".top" : n.align === "baseline" ? ".firstTextBaseline" : verticalAlignment(n.align);
     const ctor = n.axis === "v" ? `VStack(alignment: ${align}, spacing: ${num(spacing)})` : `HStack(alignment: ${align}, spacing: ${num(spacing)})`;
     out.push(`${ctor} {`);
     // Distribution as flexible spacers: `between` only between children; `around` one on each
@@ -34,7 +35,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     const around = n.distribution === "around", evenly = n.distribution === "evenly";
     kids.forEach((c, i) => {
       if ((i > 0 && n.distribution === "between") || around || evenly) out.push("    Spacer(minLength: 0)");
-      const lines = ctx.renderNode(c).split("\n");
+      const lines = ctx.renderNode(c);
       const extra: string[] = [];
       if (geometry) {
         const dy = Math.round((c.frame.y - (n.frame.y + n.padding[0])) * 100) / 100;
@@ -60,12 +61,4 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), `}`];
   }
   return out;
-}
-
-function vAlign(a: StackNode["align"]): string {
-  return a === "center" ? ".center" : a === "end" ? ".trailing" : ".leading";
-}
-function hAlign(a: StackNode["align"]): string {
-  // `stretch` (the CSS default) puts a fixed-cross-size item at flex-start; filling ones stretch anyway.
-  return a === "center" ? ".center" : a === "end" ? ".bottom" : a === "baseline" ? ".firstTextBaseline" : ".top";
 }

@@ -9,7 +9,7 @@
       "DOM.Iterable"
     ],
     "types": [
-      "bun-types"
+      "bun"
     ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -24,11 +24,16 @@
   },
   "include": [
     "src/**/*.ts",
-    "tests/unit/**/*.ts",
-    "tests/helpers/**/*.ts",
-    "tests/architecture/**/*.ts",
-    "tests/integration/**/*.ts",
-    "tools/quality.ts",
-    "tools/verify/typecheck.ts"
+    "tests/**/*.ts",
+    "tools/**/*.ts",
+    "playground/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests/local",
+    "tests/conformance/out",
+    "playground/.cache",
+    "playground/dist",
+    "playground/dist-service"
   ]
 }

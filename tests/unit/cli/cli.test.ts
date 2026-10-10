@@ -89,3 +89,18 @@ test("invalid Swift names are usage errors before Chrome starts", async () => {
   expect(result.stderr).toContain("Swift type identifier");
   expect(result.stderr).toContain("markswift convert --help");
 });
+
+test("CLI theme defaults to adaptive and passes the dark class through", async () => {
+  const { parseArgs } = await import("../../../src/cli/args.ts");
+  const parsed = (...args: string[]) => {
+    const command = parseArgs(["convert", "card.html", "--out", "generated", ...args]);
+    if (command.kind !== "convert") throw new Error("expected a conversion");
+    return command.options;
+  };
+  expect(parsed().theme).toBe("adaptive");
+  expect(parsed("--theme", "light").theme).toBe("light");
+  expect(parsed("--dark-class", "dark").darkClass).toBe("dark");
+  const result = await invoke("convert", "card.html", "--theme", "both", "--out", "generated");
+  expect(result.code).toBe(2);
+  expect(result.stderr).toContain("--theme must be adaptive, light or dark");
+});

@@ -4,11 +4,12 @@ import { type TextNode, type SemBase, type TextRun, type SemNode } from "../mode
 import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
-import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, noWrap } from "./text-runs.ts";
+import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
 import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlineGaps } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
-import { textPaintOf, styleOf } from "./style.ts";
-import { EDGES, edgeWidth, unionRect } from "./geometry.ts";
+import { styleOf } from "./style.ts";
+import { textPaintOf } from "./style-background.ts";
+import { EDGES, edgeWidth, unionRect, isFlex } from "./geometry.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -63,7 +64,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         if (!sameLine || b.x - (a.x + a.w) > 1.5) pendingSpace = true;
       }
     } else if (!text) continue;
-    const color = parseColor(s["-webkit-text-fill-color"]) ?? parseColor(s["color"]) ?? { r: 0, g: 0, b: 0, a: 1 };
+    const color = textColorOf(s);
     const deco = decorationOf(s, color);
     // A collapsed space between two inline elements belongs to the text around them, not to
     // whichever element follows it: the browser does not underline the space between
@@ -118,7 +119,6 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
     for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note(`approximated: font-variant-numeric ${v} has no SwiftUI API → default figures`);
-    if (r.styleOf.attrs["class"]?.includes("sc-interp")) run.bound = true;
     const paint = textPaintOf(r.styleOf, r.node.bounds);
     if (paint) run.paint = paint;
     const el = r.styleOf;
@@ -206,7 +206,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
     align:
-      ta === "center" || (/flex/.test(host.styles["display"] ?? "") && host.styles["justify-content"] === "center")
+      ta === "center" || (isFlex(host.styles["display"]) && host.styles["justify-content"] === "center")
         ? "center"
         : side === "right"
           ? "trailing"
@@ -217,7 +217,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
   if (Number.isFinite(clamp)) node.lineLimit = clamp;
-  else if (noWrap(host.styles)) {
+  else if (host.styles["text-wrap-mode"] === "nowrap") {
     node.noWrap = true;
     node.lineLimit = 1 + out.reduce((n, r) => n + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
   }

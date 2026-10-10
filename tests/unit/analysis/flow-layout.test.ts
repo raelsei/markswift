@@ -9,12 +9,13 @@ function element(bounds: Rect, styles: Record<string, string>, children: LayoutN
 
 function screen(root: LayoutNode): StackNode {
   const doc: LayoutDoc = {
-    version: 1,
+    version: 2,
     source: "flow-layout-test",
-    combo: { screen: "s", theme: "light", demoState: "normal" },
+    combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
+    fonts: [],
     root,
   };
   const node = inferScreen(doc, "s").root;

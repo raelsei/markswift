@@ -18,7 +18,7 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 }
 
 function doc(root: LayoutNode): LayoutDoc {
-  return { version: 1, source: "test", combo: { screen: "s", theme: "light", demoState: "normal" }, size: { w: root.bounds.w, h: root.bounds.h }, dpr: 3, canvas: "rgb(255, 255, 255)", root };
+  return { version: 2, source: "test", combo: { screen: "s", theme: "light" }, size: { w: root.bounds.w, h: root.bounds.h }, dpr: 3, canvas: "rgb(255, 255, 255)", fonts: [], root };
 }
 
 function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
@@ -32,7 +32,7 @@ function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
 describe("text groups", () => {
   // Two inline controls on separate source lines: the whitespace between them is a text node the
   // browser collapsed away entirely. It used to become a `TextNode` with zero runs, which the
-  // emitter wrote as `Text.h2sRuns([\n    ,\n])` — invalid Swift in both modes.
+  // emitter wrote as an empty run array — invalid Swift in both modes.
   test("a run group that is nothing but collapsed whitespace does not become a text node", () => {
     const section = el(
       "section",

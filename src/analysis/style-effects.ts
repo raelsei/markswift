@@ -19,11 +19,7 @@ export function applyEffects(n: LayoutNode, style: Style, notes: string[]): void
   else if (filters.length) style.filters = filters;
   for (const f of filters) if (f.kind === "drop-shadow" || f.kind === "sepia") notes.push(`approximated: filter ${f.kind}`);
   const bf = s["backdrop-filter"];
-  if (bf && bf !== "none") {
-    const m = /blur\(([\d.]+)px\)/.exec(bf);
-    style.backdropBlur = m ? +m[1]! : 0;
-    notes.push("approximated: backdrop-filter → translucent fill only (no blur)");
-  }
+  if (bf && bf !== "none") notes.push("approximated: backdrop-filter → translucent fill only (no blur)");
   const tf = parseTransform(s["transform"]);
   if (tf?.flattened) notes.push("approximated: transform matrix3d flattened to its x/y projection");
   if (tf && (tf.rotate !== 0 || tf.scaleX !== 1 || tf.scaleY !== 1 || tf.tx !== 0 || tf.ty !== 0 || tf.skewX !== undefined || tf.skewY !== undefined)) {
@@ -72,7 +68,7 @@ export function applyEffects(n: LayoutNode, style: Style, notes: string[]): void
     style.outline = { width: ow, color: oc, style: known ? os : "solid", offset: px(s["outline-offset"]) };
   }
   // Colour-name hints: `var(--x)` from an inline style, plus the semantic part of any colour
-  // utility on the class list. Both are names the design gave a colour, and `emit/tokens.ts`
+  // utility on the class list. Both are names the design gave a colour, and `swift/tokens`
   // promotes a consistent hint to the token's name (`bg-blue-500` → `Color.blue500`).
   const tokens = [...[...(n.attrs["style"] ?? "").matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]!), ...classColorHints(n.attrs)];
   if (tokens.length) style.tokens = [...new Set(tokens)];

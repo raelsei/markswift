@@ -17,7 +17,7 @@ function root(children: LayoutNode[], styles: Record<string, string> = {}, bound
   };
   const nested = screenHeight !== bounds.h;
   const page: LayoutNode = nested ? { tag: "main", attrs: {}, bounds: { x: 0, y: 0, w: bounds.w, h: screenHeight }, children: [element], styles: { display: "block" } } : element;
-  const doc: LayoutDoc = { version: 1, source: "wrap-test", combo: { screen: "s", theme: "light", demoState: "normal" }, size: { w: bounds.w, h: screenHeight }, dpr: 1, canvas: "rgb(255,255,255)", root: page };
+  const doc: LayoutDoc = { version: 2, source: "wrap-test", combo: { screen: "s", theme: "light" }, size: { w: bounds.w, h: screenHeight }, dpr: 1, canvas: "rgb(255,255,255)", fonts: [], root: page };
   const screen = inferScreen(doc, "s");
   const node = nested && screen.root.kind === "stack" ? screen.root.children[0]! : screen.root;
   if (node.kind !== "stack") throw new Error("Expected wrapping stack");

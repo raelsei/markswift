@@ -59,7 +59,7 @@ function pushRun(out: Slot[], r: TextRun, i: number): void {
  * Every colour one node paints, in a deterministic order. Keys are stable across themes so
  * the same slot of the same node can be paired: that pairing is what makes a token semantic.
  */
-export function colorSlots(n: SemNode): Slot[] {
+function colorSlots(n: SemNode): Slot[] {
   const out: Slot[] = [];
   pushStyle(out, n.style);
   if (n.kind === "text") n.runs.forEach((r, i) => pushRun(out, r, i));
@@ -101,9 +101,10 @@ function screenSlots(s: Screen): Array<{ id: string; hints: string[]; slots: Slo
 
 /**
  * Pair the themes slot by slot. Screens are grouped by {@link screenBase}; inside a group the
- * light screen drives document order and the dark screen supplies the second value. Slots that
- * exist in one theme only stay unpaired — they can still make a static token, never a semantic
- * one, because there is no counterpart to prove the colour changes.
+ * light screen drives document order and the dark screen supplies the second value. Only the
+ * light screen is emitted, so a slot the dark screen alone paints makes no usage at all; a light
+ * slot without a dark counterpart stays unpaired — it can still make a static token, never a
+ * semantic one. {@link themeDrift} reports both.
  */
 export function pairUsages(screens: Screen[]): Usage[] {
   const groups = new Map<string, Screen[]>();
@@ -122,22 +123,35 @@ export function pairUsages(screens: Screen[]): Usage[] {
     const secondary = primary === light ? dark : undefined;
     const other = new Map<string, Map<string, Color>>();
     if (secondary) for (const n of screenSlots(secondary)) other.set(n.id, new Map(n.slots.map((s) => [s.key, s.color])));
-    const seen = new Set<string>();
     for (const n of screenSlots(primary)) {
       const counterpart = other.get(n.id);
       for (const s of n.slots) {
-        seen.add(`${n.id}\u0000${s.key}`);
         usages.push({ base, theme: primary.theme, nodeId: n.id, slot: s.key, role: s.role, light: s.color, dark: counterpart?.get(s.key), hints: n.hints, order: order++ });
-      }
-    }
-    if (secondary) {
-      for (const n of screenSlots(secondary)) {
-        for (const s of n.slots) {
-          if (seen.has(`${n.id}\u0000${s.key}`)) continue;
-          usages.push({ base, theme: secondary.theme, nodeId: n.id, slot: s.key, role: s.role, light: s.color, hints: n.hints, order: order++ });
-        }
       }
     }
   }
   return usages;
+}
+
+/**
+ * Node ids where the dark screen differs from the light one in more than colour: a node or a
+ * colour slot present in one theme only, or a frame that moved or resized by more than 0.5px.
+ * An adaptive view is the light layout with paired colours, so these keep their light values.
+ */
+export function themeDrift(light: Screen, dark: Screen): string[] {
+  type Entry = { frame: { x: number; y: number; w: number; h: number }; slots: string };
+  const entries = (s: Screen) => {
+    const out = new Map<string, Entry>();
+    for (const n of screenSlots(s)) out.set(n.id, { frame: { x: 0, y: 0, ...s.size }, slots: n.slots.map((x) => x.key).join() });
+    walk(s.root, (n) => { out.get(n.id)!.frame = n.frame; });
+    return out;
+  };
+  const l = entries(light), d = entries(dark);
+  const drift = new Set<string>();
+  for (const [id, a] of l) {
+    const b = d.get(id);
+    if (!b || a.slots !== b.slots || (["x", "y", "w", "h"] as const).some((k) => Math.abs(a.frame[k] - b.frame[k]) > 0.5)) drift.add(id);
+  }
+  for (const id of d.keys()) if (!l.has(id)) drift.add(id);
+  return [...drift];
 }

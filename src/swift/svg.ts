@@ -6,7 +6,8 @@
  */
 import svgpath from "svgpath";
 import type { SvgGradient, SvgNode, SvgPath, SvgText } from "../model/semantic.ts";
-import { Writer, colorExpr, fontExpr, hash, indent, num, str, type ColorCtx } from "./format.ts";
+import type { ColorCtx } from "./context.ts";
+import { colorExpr, fontExpr, hash, indent, num, shapeStruct, str } from "./format.ts";
 
 /** Viewport mapping shared by every layer of one svg: viewBox, uniform scale, content offset. */
 interface View {
@@ -111,48 +112,40 @@ function textLine(t: SvgText, view: View): string {
 
 /** One Shape struct per unique (path, viewBox); returns its name. */
 function shapeName(d: string, vb: [number, number, number, number], shapes: Record<string, string>): string {
-  const key = `${vb.join(" ")}|${d}`;
-  const name = "MarkswiftShape_" + hash(key);
-  if (shapes[name]) return name;
-  const norm = svgpath(d).unshort().unarc().abs();
-  const [vx, vy, vw, vh] = vb;
-  const w = new Writer();
-  // `nonisolated`: Shape's requirements are nonisolated; under a MainActor default-isolation
-  // build (SE-0466) an unannotated struct would fail to conform in Swift 6 mode.
-  w.block(`nonisolated struct ${name}: Shape {`, () => {
-    w.block("func path(in rect: CGRect) -> Path {", () => {
-      w.line(`let sx = rect.width / ${num(vw)}, sy = rect.height / ${num(vh)}`);
-      w.line(`func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + (x - ${num(vx)}) * sx, y: rect.minY + (y - ${num(vy)}) * sy) }`);
-      w.line("var p = Path()");
-      norm.iterate((seg: Array<string | number>) => {
-        const [cmd, ...a] = seg as [string, ...number[]];
-        switch (cmd) {
-          case "M":
-            w.line(`p.move(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-            break;
-          case "L":
-            w.line(`p.addLine(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-            break;
-          case "H":
-            w.line(`p.addLine(to: CGPoint(x: P(${num(a[0]!)}, 0).x, y: p.currentPoint?.y ?? 0))`);
-            break;
-          case "V":
-            w.line(`p.addLine(to: CGPoint(x: p.currentPoint?.x ?? 0, y: P(0, ${num(a[0]!)}).y))`);
-            break;
-          case "C":
-            w.line(`p.addCurve(to: P(${num(a[4]!)}, ${num(a[5]!)}), control1: P(${num(a[0]!)}, ${num(a[1]!)}), control2: P(${num(a[2]!)}, ${num(a[3]!)}))`);
-            break;
-          case "Q":
-            w.line(`p.addQuadCurve(to: P(${num(a[2]!)}, ${num(a[3]!)}), control: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-            break;
-          case "Z":
-            w.line("p.closeSubpath()");
-            break;
-        }
-      });
-      w.line("return p");
+  return shapeStruct("MarkswiftShape_" + hash(`${vb.join(" ")}|${d}`), shapes, () => {
+    const [vx, vy, vw, vh] = vb;
+    const out = [
+      `let sx = rect.width / ${num(vw)}, sy = rect.height / ${num(vh)}`,
+      `func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + (x - ${num(vx)}) * sx, y: rect.minY + (y - ${num(vy)}) * sy) }`,
+      "var p = Path()",
+    ];
+    svgpath(d).unshort().unarc().abs().iterate((seg: Array<string | number>) => {
+      const [cmd, ...a] = seg as [string, ...number[]];
+      switch (cmd) {
+        case "M":
+          out.push(`p.move(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+          break;
+        case "L":
+          out.push(`p.addLine(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+          break;
+        case "H":
+          out.push(`p.addLine(to: CGPoint(x: P(${num(a[0]!)}, 0).x, y: p.currentPoint?.y ?? 0))`);
+          break;
+        case "V":
+          out.push(`p.addLine(to: CGPoint(x: p.currentPoint?.x ?? 0, y: P(0, ${num(a[0]!)}).y))`);
+          break;
+        case "C":
+          out.push(`p.addCurve(to: P(${num(a[4]!)}, ${num(a[5]!)}), control1: P(${num(a[0]!)}, ${num(a[1]!)}), control2: P(${num(a[2]!)}, ${num(a[3]!)}))`);
+          break;
+        case "Q":
+          out.push(`p.addQuadCurve(to: P(${num(a[2]!)}, ${num(a[3]!)}), control: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+          break;
+        case "Z":
+          out.push("p.closeSubpath()");
+          break;
+      }
     });
+    out.push("return p");
+    return out;
   });
-  shapes[name] = w.toString();
-  return name;
 }

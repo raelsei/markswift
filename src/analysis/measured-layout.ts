@@ -1,6 +1,12 @@
 /** A shared coordinate contract for captured grid and wrapping fallbacks. */
 import type { MeasuredLayout, SemBase, SemNode } from "../model/semantic.ts";
+import type { AnalyzedChild } from "./context.ts";
 import { round2 } from "../css/index.ts";
+
+/** Captured fallbacks stack their children in global paint order (z-index), not DOM order. */
+export function paintOrder(items: AnalyzedChild[]): AnalyzedChild[] {
+  return [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0));
+}
 
 export function measuredLayoutOf(base: SemBase, children: SemNode[]): MeasuredLayout {
   const [pt, pr, pb, pl] = base.padding;

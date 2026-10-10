@@ -1,6 +1,6 @@
 /**
  * Layout IR — what the browser measured. Target-agnostic, one tree per
- * (screen, theme, state) combination. Produced from CDP DOMSnapshot; consumed
+ * (screen, theme) combination. Produced from CDP DOMSnapshot; consumed
  * by the semantic inference pass. Nothing here knows about SwiftUI.
  */
 import { z } from "zod";
@@ -17,7 +17,7 @@ export type PreferredSize = z.infer<typeof PreferredSize>;
  * are lost). `visibility: hidden` nodes are present with their box.
  */
 export interface LayoutNode {
-  /** Stable node identity (`#id`, `data-markswift`, legacy `data-h2s`, other identity attributes, or element-index path); absent for text nodes. */
+  /** Stable node identity (`#id`, `data-markswift`, other identity attributes, or element-index path); absent for text nodes. */
   id?: string;
   /**
    * Lower-case tag name, `#text`, or a pseudo-element: `::before` / `::after` /
@@ -26,15 +26,17 @@ export interface LayoutNode {
    * quotes, list markers). `::after` follows the element's real children.
    */
   tag: string;
-  /**
-   * Raw attributes. `<img>` additionally carries `data-h2s-src` when the browser
-   * loaded a `srcset`/`<picture>` candidate other than `src`, spelled as
-   * authored; consumers read `attrs["data-h2s-src"] ?? attrs["src"]`.
-   */
+  /** Raw attributes. */
   attrs: Record<string, string>;
+  /**
+   * `<img>` only: the source the browser loaded when it chose a `srcset`/`<picture>` candidate
+   * other than `src` (spelled as authored), or the inlined data URL. Consumers read
+   * `currentSrc ?? attrs["src"]`.
+   */
+  currentSrc?: string;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
-  /** Optional in legacy captures. Authored/cascaded size intent, independent of measured bounds. */
+  /** Authored/cascaded size intent, independent of measured bounds; absent for text and pseudo-element nodes. */
   preferredSize?: PreferredSize;
   /** Box relative to the capture root, CSS px. */
   bounds: Rect;
@@ -57,6 +59,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     id: z.string().optional(),
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
+    currentSrc: z.string().optional(),
     styles: z.record(z.string(), z.string()),
     preferredSize: PreferredSize.optional(),
     bounds: Rect,
@@ -69,9 +72,9 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
 
 /**
  * One `@font-face` rule the captured page declared, as the browser resolved it. Collected at
- * capture time (`render/browser.ts`): the CSS rules give family, axis ranges and `src`, and
+ * capture time (`browser/fonts.ts`): the CSS rules give family, axis ranges and `src`, and
  * `document.fonts` says which of them actually loaded. Target-agnostic — a webfont is an input
- * fact, not a SwiftUI decision; `emit/fonts.ts` turns these into bundled font files.
+ * fact, not a SwiftUI decision; `fonts/package.ts` turns these into bundled font files.
  */
 export const FontFace = z.object({
   /** Family name as authored, unquoted — the name `font-family` declarations refer to. */
@@ -102,12 +105,12 @@ export type FontFace = z.infer<typeof FontFace>;
 export const Combo = z.object({
   screen: z.string(),
   theme: z.enum(["light", "dark"]),
-  demoState: z.string().default("normal"),
 });
 export type Combo = z.infer<typeof Combo>;
+export type Theme = Combo["theme"];
 
 export const LayoutDoc = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   source: z.string(),
   combo: Combo,
   /** CSS px size of the capture root (the phone's content area). */
@@ -115,21 +118,8 @@ export const LayoutDoc = z.object({
   dpr: z.number(),
   /** Effective background behind the root (computed color string). */
   canvas: z.string().default("rgb(255, 255, 255)"),
-  /**
-   * `@font-face` rules of the page, deduplicated — the faces the browser resolved, in
-   * declaration order. Three states, and they are **not** interchangeable; `undefined` must
-   * never be allowed to collapse into `[]`:
-   *
-   * - **absent** — a capture taken before this field existed. Nobody looked, so nothing may be
-   *   concluded: consumers must reproduce their pre-field behaviour. The committed Vacu corpus
-   *   is the regression gate and `research/output/vacu-v1` the re-sync corpus, so a stored capture has to
-   *   keep producing the output it was measured with. Treating absent as "no webfonts" silently
-   *   swapped every custom face in Vacu for a system design once already.
-   * - **`[]`** — the capture looked and the document declared no `@font-face`. A named family is
-   *   then genuinely unbundled and the substitution is reported.
-   * - **non-empty** — decide per face, from the bytes behind its `src`.
-   */
-  fonts: z.array(FontFace).optional(),
+  /** `@font-face` rules of the page, deduplicated — the faces the browser resolved, in declaration order. */
+  fonts: z.array(FontFace),
   root: LayoutNode,
 });
 export type LayoutDoc = z.infer<typeof LayoutDoc>;

@@ -1,10 +1,8 @@
 import { parseColor } from "../css/index.ts";
-import { colorArgs } from "./format.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
-import { num, str } from "./format.ts";
-export type { ControlMembers } from "./context.ts";
 import type { ControlMembers } from "./context.ts";
+import { colorArgs, identifier, num, str, uniqueName } from "./format.ts";
 /**
  * Controls whose value the user changes, and the Swift type and seed of that value. `suffix`
  * names storage that is not the control's value (a file button's presentation flag).
@@ -50,9 +48,7 @@ export function controlMembers(root: SemNode): ControlMembers {
     if (n.kind !== "control") return;
     const decl = stateDecl(n);
     if (decl) {
-      const base = `s_${n.id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "control"}${decl.suffix ?? ""}`;
-      const k = (seen[base] = (seen[base] ?? 0) + 1);
-      const name = k === 1 ? base : `${base}_r${k}`;
+      const name = uniqueName(`s_${identifier(n.id) || "control"}${decl.suffix ?? ""}`, seen);
       stateOf.set(n, name);
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
     }
@@ -60,9 +56,7 @@ export function controlMembers(root: SemNode): ControlMembers {
     // Two callbacks can still mangle to one name (`#docs` and a link captioned `Docs`), so the
     // property names are deduplicated the same way the state names are.
     if (n.action !== undefined && !actionOf.has(n.action)) {
-      const base = `on_${n.action.replace(/\(.*$/s, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "action"}`;
-      const k = (seen[base] = (seen[base] ?? 0) + 1);
-      const name = k === 1 ? base : `${base}_r${k}`;
+      const name = uniqueName(`on_${identifier(n.action.replace(/\(.*$/s, "")) || "action"}`, seen);
       actionOf.set(n.action, name);
       // A destination-less `<a>` carries `#<target>` rather than a handler's source: the design
       // named a place, and the developer supplies the navigation that goes there.
@@ -77,8 +71,6 @@ export function controlMembers(root: SemNode): ControlMembers {
   });
   return { decls, stateOf, actionOf };
 }
-
-/** The SwiftUI control itself; the caller appends the node's box modifiers. */
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */
 export function numericValue(n: ControlNode): number {

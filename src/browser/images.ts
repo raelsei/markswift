@@ -15,10 +15,10 @@ export function inlineCapturedImages(root: LayoutNode, baseURL: string, images: 
   };
   const visit = (node: LayoutNode) => {
     if (node.tag === "img") {
-      const source = node.attrs["data-h2s-src"] ?? node.attrs.src;
-      if (source) node.attrs["data-h2s-src"] = resolve(source);
+      const source = node.currentSrc ?? node.attrs.src;
+      if (source) node.currentSrc = resolve(source);
     }
-    for (const property of ["background-image", "mask-image", "-webkit-mask-image", "border-image-source", "list-style-image"]) {
+    for (const property of ["background-image", "mask-image"]) {
       const value = node.styles[property];
       if (value) node.styles[property] = value.replace(/url\(\s*(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|([^)]*))\s*\)/g,
         (match, double: string | undefined, single: string | undefined, bare: string | undefined) => {

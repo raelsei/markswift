@@ -15,14 +15,12 @@ export async function ensureVacant(directory: string): Promise<void> {
 /** Write the complete conversion bundle without replacing an existing directory. */
 export async function writeBundle(result: Pick<ConversionResult, "files" | "assets">, directory: string): Promise<string[]> {
   const entries = [...Object.entries(result.files), ...Object.entries(result.assets)];
-  const names = new Set<string>();
   const folded = new Set<string>();
   for (const [name] of entries) {
     if (!name || isAbsolute(name) || win32.isAbsolute(name) || name.includes("\\") || name.split("/").some(part => !part || part === "." || part === "..")) {
       throw new Error(`Unsafe output path: ${name}`);
     }
     if (folded.has(name.toLowerCase())) throw new Error(`Duplicate output path: ${name}`);
-    names.add(name);
     folded.add(name.toLowerCase());
   }
   const output = resolve(directory);
@@ -44,5 +42,5 @@ export async function writeBundle(result: Pick<ConversionResult, "files" | "asse
     await rm(output, { recursive: true, force: true });
     throw error;
   }
-  return [...names].sort();
+  return entries.map(([name]) => name).sort();
 }

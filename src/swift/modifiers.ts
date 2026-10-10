@@ -1,6 +1,6 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, indent, num } from "./format.ts";
+import { colorExpr, edgeInsets, indent, num, strokeStyle } from "./format.ts";
 import { frameModifier } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
@@ -13,7 +13,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const [pt, pr, pb, pl] = n.padding;
   if (pt || pr || pb || pl) {
     if (pt === pr && pr === pb && pb === pl) m.push(`.padding(${num(pt)})`);
-    else m.push(`.padding(EdgeInsets(top: ${num(pt)}, leading: ${num(pl)}, bottom: ${num(pb)}, trailing: ${num(pr)}))`);
+    else m.push(`.padding(${edgeInsets(n.padding)})`);
   }
   m.push(...frameModifier(n, ctx));
   // `object-fit: cover` overflows its box; the browser clips it to the img box.
@@ -38,7 +38,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     const b = st.border;
     m.push(
       b.dashed
-        ? `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, style: StrokeStyle(lineWidth: ${num(b.width)}, dash: [${num(b.width * 3)}, ${num(b.width * 2)}])))`
+        ? `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, style: ${strokeStyle(b.width, "dashed")}))`
         : `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, lineWidth: ${num(b.width)}))`,
     );
   } else if (st.borderSides) m.push(...borderSideModifiers(n, ctx));
@@ -46,8 +46,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     // A ring `offset` outside the border edge: the box shape grown by offset + half the stroke.
     const o = st.outline;
     if (o.style === "double") note(n, "approximated: outline-style double drawn solid");
-    const dash = o.style === "dashed" ? `, dash: [${num(o.width * 3)}, ${num(o.width * 2)}]` : o.style === "dotted" ? `, lineCap: .round, dash: [0.01, ${num(o.width * 2)}]` : "";
-    m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: StrokeStyle(lineWidth: ${num(o.width)}${dash})))`);
+    m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`);
   }
   m.push(...outerShadowModifiers(n, ctx));
   for (const o of n.overlays.filter((o) => o.layer === "overlay")) m.push(...overlayModifier(o, "overlay", ctx));
@@ -83,7 +82,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return m;
 }
 function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {
-  const inner = ctx.renderNode(o.node).split("\n");
+  const inner = ctx.renderNode(o.node);
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`];
   return [`.${mode}(alignment: .topLeading) {`, ...indent(body, 1), `}`];
 }

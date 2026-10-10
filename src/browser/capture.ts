@@ -1,12 +1,12 @@
-import { settle } from "./settle.ts";
-import { collectFontFaces, readFontBytes } from "./fonts.ts";
 /**
  * Drives headless Chromium: loads a prepared page, settles fonts/animations,
- * hides chrome that is not part of the captured screen, then captures a
- * DOMSnapshot and a device-scale screenshot clipped to the capture root.
+ * then captures a DOMSnapshot and, on request, a device-scale screenshot
+ * clipped to the capture root.
  * Knows nothing about where the page came from: the source's CaptureRequest
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
+import { settle } from "./settle.ts";
+import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
 import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
@@ -15,20 +15,17 @@ import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import { inlineCapturedImages } from "./images.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
-const ROOT_MARK = "data-h2s-root-capture";
+const ROOT_MARK = "data-markswift-root-capture";
 
 export interface Capture {
   /** Resource failures and page errors observed while preparing this capture. */
   warnings: string[];
   layout: LayoutDoc;
-  png: Buffer;
-  /** outerHTML of the captured root with all template values resolved. */
-  domHtml: string;
-  /** Every <style> on the page (theme variables, keyframes). */
-  themeCss: string;
+  /** Set only when `CaptureRequest.screenshot` is true. */
+  png?: Uint8Array;
   /**
    * Bytes of every `@font-face` source that was not already inline, named by content hash.
-   * Written by `captureInput` to `<outDir>/_fonts/<name>`, which is what
+   * The caller writes them to `<outDir>/_fonts/<name>`, which is what
    * `LayoutDoc.fonts[].src[].file` points at; identical faces across screens or inputs collapse
    * onto one file.
    */
@@ -74,7 +71,7 @@ export class BrowserCapture {
     page.on("response", (r) => {
       if (r.status() >= 400 && !favicon(r.url())) errors.push(`${r.status()} ${r.url()}`);
       const mime = r.headers()["content-type"]?.split(";")[0];
-      if (spec.inlineImages && r.ok() && mime?.startsWith("image/")) {
+      if (r.ok() && mime?.startsWith("image/")) {
         imageReads.push(r.body().then((bytes) => { images.set(r.url(), `data:${mime};base64,${bytes.toString("base64")}`); })
           .catch(() => { errors.push(`Could not capture image bytes: ${r.url()}`); }));
       }
@@ -97,8 +94,8 @@ export class BrowserCapture {
       // Static capture: transitions only interpolate towards the same end state, but a
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
-      await noTransition.evaluate((s) => (s as Element).setAttribute("data-h2s-harness", ""));
-      await settle(page, spec.hide ?? []);
+      await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
+      await settle(page);
       const fonts = await collectFontFaces(page);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(
@@ -136,12 +133,12 @@ export class BrowserCapture {
       // <style> is appended last so node indices of everything else are unchanged.
       await page.evaluate(() => {
         const s = document.createElement("style");
-        s.id = "__h2s_notransform";
+        s.id = "__markswift_notransform";
         s.textContent = "* { transform: none !important; }";
         document.body.appendChild(s);
       });
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
-      await page.evaluate(() => document.getElementById("__h2s_notransform")?.remove());
+      await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       await cdp.detach();
       const tree = snapshotToTree(snapA, snapB);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
@@ -150,48 +147,33 @@ export class BrowserCapture {
       delete rootRaw.attrs[ROOT_MARK];
       const root = toLayout(rootRaw, { x: rootRect.x, y: rootRect.y }, identity);
       if (!root) throw new Error(`capture root ${spec.root} has no layout`);
-      // Resolved DOM of the captured root (for LLM baselines and debugging).
-      const domHtml = await page.evaluate(
-        ({ sel, mark }) => {
-          const el = document.querySelector(sel)!;
-          el.removeAttribute(mark);
-          return el.outerHTML;
-        },
-        { sel: spec.root, mark: ROOT_MARK },
-      );
-      // The page's own <style>s only; harness-injected rules are not part of the design.
-      const themeCss = await page.evaluate(() =>
-        [...document.querySelectorAll("style:not([data-h2s-harness])")].map((s) => s.textContent ?? "").join("\n"),
-      );
-      const png = await page.screenshot({
-        clip: { x: rootRect.x, y: rootRect.y, width: rootRect.w, height: rootRect.h },
-        scale: "device",
-        animations: "disabled",
-        caret: "hide",
-        type: "png",
-      });
-      if (spec.inlineImages) {
-        await Promise.all(imageReads);
-        errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
+      let png: Uint8Array | undefined;
+      if (spec.screenshot) {
+        const { x, y, w, h } = rootRect;
+        if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0) throw new Error(`capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`);
+        png = await page.screenshot({
+          clip: { x, y, width: w, height: h },
+          scale: "device",
+          animations: "disabled",
+          caret: "hide",
+          type: "png",
+        });
       }
-      if (errors.length && !spec.inlineImages) console.warn(`[render] ${spec.screen}/${spec.theme}: page errors:\n  ${errors.join("\n  ")}`);
+      await Promise.all(imageReads);
+      errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
       return {
         warnings: errors,
         layout: {
-          version: 1,
+          version: 2,
           source,
-          combo: { screen: spec.screen, theme: spec.theme, demoState: spec.demoState ?? "normal" },
+          combo: { screen: spec.screen, theme: spec.theme },
           size: { w: Math.round(rootRect.w), h: Math.round(rootRect.h) },
           dpr: this.opts.dpr,
           canvas: rootRect.canvas,
-          // Always present, empty included: "this page declared no @font-face" and "nobody
-          // looked" are different facts, and only a capture that looked may claim the first.
           fonts,
           root,
         },
         png,
-        domHtml,
-        themeCss,
         fontFiles,
       };
     } finally {

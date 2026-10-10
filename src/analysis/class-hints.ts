@@ -2,9 +2,6 @@
  * Colour names a design put in a class list — the utility-framework counterpart of
  * `var(--token)` in an inline style. Pure and input-agnostic: a page with no colour
  * utilities yields nothing, so the inference pass can always ask.
- *
- * Lives in `ir/` rather than in the Tailwind preparation because the inference pass must not
- * depend on an adapter; the adapter re-exports it for its own reporting.
  */
 
 /** Utility prefixes whose value is a colour. */

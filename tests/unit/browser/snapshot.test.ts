@@ -160,7 +160,7 @@ describe("toLayout", () => {
     expect(node.children.map((c) => c.tag)).toEqual(["#text"]);
   });
 
-  test("img data-h2s-src names the loaded srcset or <picture> candidate as authored", () => {
+  test("img currentSrc names the loaded srcset or <picture> candidate as authored", () => {
     const snap = synth([
       "html", {}, { b: [0, 0, 100, 100] }, [
         ["body", { id: "root" }, { b: [0, 0, 100, 100] }, [
@@ -178,6 +178,6 @@ describe("toLayout", () => {
     doc.nodes.currentSourceURL = { index: [2, 5, 6], value: [S("http://x/b.png"), S("http://x/d.webp"), S("http://x/a.png")] };
     const node = toLayout(snapshotToTree(snap).children[0]!, { x: 0, y: 0 }, pathIdentity)!;
     const imgs = node.children.flatMap((c) => (c.tag === "img" ? [c] : c.children));
-    expect(imgs.map((i) => i.attrs["data-h2s-src"])).toEqual(["b.png", "d.webp", undefined]);
+    expect(imgs.map((i) => i.currentSrc)).toEqual(["b.png", "d.webp", undefined]);
   });
 });

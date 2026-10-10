@@ -1,5 +1,3 @@
-/** Native placement for geometry that cannot be represented by ordinary stacks or Grid. */
-export const MEASURED_LAYOUT_RUNTIME = `
 struct MarkswiftMeasuredLayout: Layout {
     var width: CGFloat
     var height: CGFloat
@@ -17,4 +15,3 @@ struct MarkswiftMeasuredLayout: Layout {
         }
     }
 }
-`;

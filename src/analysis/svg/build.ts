@@ -7,7 +7,7 @@ import { type SvgContext } from "./context.ts";
 import { visitChildren } from "./traversal.ts";
 import { inherit } from "./attributes.ts";
 import { IDENTITY } from "./transforms.ts";
-import { textContent } from "./text.ts";
+import { textContent } from "../text-runs.ts";
 
 /** Build the SvgNode for `n` on top of an already-measured `base` (frame, style, padding). `doc` is the document root used to resolve `#id` references. */
 export function buildSvg(n: LayoutNode, base: SemBase, doc: LayoutNode = n, bundledFamilies: BundledFamilies = {}): SvgNode {

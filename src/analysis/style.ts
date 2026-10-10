@@ -5,7 +5,6 @@ import { parseShadows } from "../css/index.ts";
 import { backgroundFills } from "./style-background.ts";
 import { borderStyle } from "./style-border.ts";
 import { applyEffects } from "./style-effects.ts";
-export { textPaintOf } from "./style-background.ts";
 
 export function styleOf(n: LayoutNode, notes: string[]): Style {
   const s = n.styles;

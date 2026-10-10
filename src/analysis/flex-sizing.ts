@@ -1,16 +1,17 @@
 import type { LayoutNode } from "../model/layout.ts";
 import type { Axis, Size } from "../model/semantic.ts";
 import type { InferenceContext } from "./context.ts";
-import { px, round2 } from "../css/syntax.ts";
+import { px, round2 } from "../css/index.ts";
+import { isFlex, outOfFlow } from "./geometry.ts";
 
 function inFlow(node: LayoutNode): boolean {
-  return node.tag !== "#text" && node.styles.display !== "none" && node.styles.position !== "absolute" && node.styles.position !== "fixed";
+  return node.tag !== "#text" && node.styles.display !== "none" && !outOfFlow(node);
 }
 
 /** Native stacks can share equal leftover space, but cannot reproduce arbitrary CSS allocation. */
 export function flexGrowthSize(n: LayoutNode, axis: Axis, ctx: InferenceContext, notes: string[]): Size | undefined {
   const parent = ctx.parent;
-  if (!parent || ctx.parentAxis !== axis || !/flex/.test(ctx.parentDisplay ?? parent.styles.display ?? "")) return undefined;
+  if (!parent || ctx.parentAxis !== axis || !isFlex(ctx.parentDisplay ?? parent.styles.display)) return undefined;
   if (!inFlow(n) || px(n.styles["flex-grow"]) <= 0) return undefined;
   const growers = parent.children.filter(child => inFlow(child) && px(child.styles["flex-grow"]) > 0);
   if (!growers.length) return undefined;

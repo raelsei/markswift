@@ -8,7 +8,7 @@ export interface ConversionCommand {
   source: { file: string } | { url: string } | { stdin: true };
   outDir: string;
   cssPath?: string;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "mode" | "viewport">;
+  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport">;
 }
 
 export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand;
@@ -32,7 +32,10 @@ Options:
   --root <selector> Capture only this CSS selector
   --width <px>      Viewport width (default: 390)
   --height <px>     Viewport height (default: 844)
-  --theme <value>   light or dark (default: light)
+  --theme <value>   adaptive, light or dark (default: adaptive). adaptive captures the page in
+                    light and dark (prefers-color-scheme) and emits one view that follows both
+  --dark-class <name>
+                    Class added to <html> for the dark capture (class-based themes, e.g. dark)
   --mode <value>    app or fidelity (default: app)
   -h, --help        Show this help
   -v, --version     Show version
@@ -40,7 +43,7 @@ Options:
 Requires Bun and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
-const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--mode"]);
+const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--dark-class", "--mode"]);
 
 export function parseArgs(args: string[]): Command {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) return { kind: "help" };
@@ -77,18 +80,20 @@ export function parseArgs(args: string[]): Command {
   const source = url ? { url } : positional[0] === "-" ? { stdin: true as const } : { file: positional[0]! };
   const width = dimension(values.get("--width"), "--width", 390);
   const height = dimension(values.get("--height"), "--height", 844);
-  const theme = values.get("--theme") ?? "light";
+  const theme = values.get("--theme") ?? "adaptive";
   const mode = values.get("--mode") ?? "app";
   const name = values.get("--name");
   if (name !== undefined) {
     try { validateName(name); }
     catch (error) { throw new UsageError(error instanceof Error ? error.message : String(error)); }
   }
-  if (theme !== "light" && theme !== "dark") throw new UsageError("--theme must be light or dark");
+  if (theme !== "light" && theme !== "dark" && theme !== "adaptive") throw new UsageError("--theme must be adaptive, light or dark");
+  const darkClass = values.get("--dark-class");
+  if (darkClass !== undefined && !/^\S+$/.test(darkClass)) throw new UsageError("--dark-class must be a single class name");
   if (mode !== "app" && mode !== "fidelity") throw new UsageError("--mode must be app or fidelity");
   return {
     kind: "convert", source, outDir, cssPath: values.get("--css"),
-    options: { name, root: values.get("--root"), theme, mode, viewport: { width, height } },
+    options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },
   };
 }
 

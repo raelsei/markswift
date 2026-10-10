@@ -10,8 +10,8 @@ function capture(columns: string, rows: string, boxes: Array<[number, number, nu
     styles: { display: "block", "box-sizing": "border-box", "background-color": "rgb(220, 80, 60)" }, children: [],
   }));
   return {
-    version: 1, source: "grid.html", combo: { screen: "grid", theme: "light", demoState: "normal" },
-    size: { w: 360, h: 200 }, dpr: 1, canvas: "white",
+    version: 2, source: "grid.html", combo: { screen: "grid", theme: "light" },
+    size: { w: 360, h: 200 }, dpr: 1, canvas: "white", fonts: [],
     root: {
       id: "root", tag: "main", attrs: {}, preferredSize: { width: "360px", height: "200px" },
       bounds: { x: 0, y: 0, w: 360, h: 200 }, children,

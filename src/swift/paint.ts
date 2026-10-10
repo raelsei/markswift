@@ -1,7 +1,7 @@
 import { parseBlendMode, type BlendMode, type Color, type Paint } from "../css/index.ts";
 import type { Style, SemNode } from "../model/semantic.ts";
-import type { EmitContext } from "./context.ts";
-import { colorExpr, indent, num, type ColorCtx } from "./format.ts";
+import type { ColorCtx, EmitContext } from "./context.ts";
+import { colorExpr, edgeInsets, indent, num } from "./format.ts";
 import { imageLayer } from "./images.ts";
 export function shapeExpr(st: Style, w: number, h: number): string {
   if (st.ellipse) return "Ellipse()";
@@ -62,7 +62,7 @@ function stops(p: Gradient, ctx: ColorCtx, id?: string): string {
  * inside the box; the corner radius shrinks with it, close to how Chrome insets the corners.
  */
 export function fillModifier(p: Paint, n: SemNode, shape: string, ctx: EmitContext): string[] {
-  const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num(p.inset[0])}, leading: ${num(p.inset[3])}, bottom: ${num(p.inset[2])}, trailing: ${num(p.inset[1])}))` : "";
+  const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(${edgeInsets(p.inset)})` : "";
   if (p.kind !== "image") {
     const paint = paintExpr(p, n.frame.w, n.frame.h, ctx, n.id);
     return inset ? [`.background { ${shape}.fill(${paint})${inset} }`] : [`.background(${paint}, in: ${shape})`];
@@ -126,7 +126,7 @@ export function blendedFillModifier(fills: Paint[], n: SemNode, shape: string, c
 
 /** One background layer as a stand-alone view (the `.background` content of `fillModifier`). */
 function fillLayerView(p: Paint, n: SemNode, shape: string, ctx: EmitContext): string[] {
-  const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(EdgeInsets(top: ${num(p.inset[0])}, leading: ${num(p.inset[3])}, bottom: ${num(p.inset[2])}, trailing: ${num(p.inset[1])}))` : "";
+  const inset = p.kind !== "unsupported" && p.inset?.some((v) => v !== 0) ? `.padding(${edgeInsets(p.inset)})` : "";
   if (p.kind === "unsupported") return [];
   if (p.kind !== "image") return [`${shape}.fill(${paintExpr(p, n.frame.w, n.frame.h, ctx, n.id)})${inset}`];
   const layer = imageLayer(p, n, "background-image", ctx);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseTransform } from "../../../src/css/transforms.ts";
+import { parseTransform } from "../../../src/css/index.ts";
 
 
 describe("parseTransform", () => {

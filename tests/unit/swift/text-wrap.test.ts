@@ -5,7 +5,7 @@ import type { LayoutDoc } from "../../../src/model/layout.ts";
 
 function paragraph(): LayoutDoc {
   return {
-    version: 1, source: "paragraph.html", combo: { screen: "paragraph", theme: "light", demoState: "normal" },
+    version: 2, source: "paragraph.html", combo: { screen: "paragraph", theme: "light" },
     size: { w: 320, h: 180 }, dpr: 2, canvas: "white", fonts: [],
     root: { tag: "main", id: "root", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 320, h: 180 }, children: [{
       tag: "p", id: "paragraph", attrs: {},

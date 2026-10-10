@@ -95,7 +95,7 @@ export function parseBackgroundImage(s: string | undefined): Paint[] {
  * `url(…)`; anything else → `unsupported`. Gradient centers given in px stay at the
  * default (50% 50%) because the box size is unknown here.
  */
-export function parseGradient(s: string): Paint {
+function parseGradient(s: string): Paint {
   s = s.trim();
   const u = /^url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)]*))\s*\)$/s.exec(s);
   if (u) return { kind: "image", url: (u[1] ?? u[2] ?? u[3] ?? "").replace(/\\(.)/g, "$1").trim() };

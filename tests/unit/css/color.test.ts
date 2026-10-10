@@ -1,6 +1,6 @@
 import { expectClose } from "../../helpers/color.ts";
 import { describe, expect, test } from "bun:test";
-import { parseColor } from "../../../src/css/color.ts";
+import { parseColor } from "../../../src/css/index.ts";
 
 
 /** Chrome 152 canvas readback (sRGB, 8-bit) for each input; alpha rows use the computed rgba(). */

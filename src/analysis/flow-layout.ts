@@ -1,9 +1,15 @@
 /** Flow, float, stack and grid layout inference. */
 import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis } from "../model/semantic.ts";
+import { type Rect } from "../model/layout.ts";
 import { px, round2 } from "../css/index.ts";
 import { type AnalyzedChild } from "./context.ts";
 import { floating, lineTops, renders, hangsLeading, fillsWidthInside } from "./geometry.ts";
 import { finish } from "./node-base.ts";
+
+/** Horizontal overlap of more than 1px: a float over a box it shortens the line boxes of. */
+function overlapsX(a: Rect, b: Rect): boolean {
+  return Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1;
+}
 
 /**
  * A float's neighbour, split where its lines clear the float.
@@ -25,7 +31,7 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
     if (floating(it.node) || sem.kind !== "text" || sem.lineLimit !== undefined || sem.truncate) continue;
     // Only a box the float overlaps had its lines shortened instead of its width: a flex item's
     // computed `float` survives even though flex layout ignores it, and it sits clear of its row.
-    const over = items.filter((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, sem.frame.x + sem.frame.w) - Math.max(f.sem.frame.x, sem.frame.x) > 1);
+    const over = items.filter((f) => floating(f.node) && overlapsX(f.sem.frame, sem.frame));
     // Where each line after the first begins, as a (run, offset into its text) pair: a run's
     // `breaks` are the boundaries inside it, and the runs are in document order.
     const bounds: Array<[number, number]> = [];
@@ -126,7 +132,7 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
     const band = round2(base.frame.w - base.padding[1] - pl - taken);
     for (const it of items) {
       if (floating(it.node) || it.sem.width.kind !== "fill" || band <= 0 || band >= it.sem.frame.w) continue;
-      const shaped = items.some((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, it.sem.frame.x + it.sem.frame.w) - Math.max(f.sem.frame.x, it.sem.frame.x) > 1);
+      const shaped = items.some((f) => floating(f.node) && overlapsX(f.sem.frame, it.sem.frame));
       if (shaped) it.sem.frame = { ...it.sem.frame, w: band };
     }
   }

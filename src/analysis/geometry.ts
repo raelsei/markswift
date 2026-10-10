@@ -1,6 +1,6 @@
 /** Measured box geometry and reusable inset calculations. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type SemNode } from "../model/semantic.ts";
+import { type SemNode, type Axis } from "../model/semantic.ts";
 import { px } from "../css/index.ts";
 
 /** Rendered at all: a `display: none` box is collapsed away by the browser, so we drop it too. */
@@ -26,6 +26,21 @@ export function fillsWidthInside(n: SemNode): boolean {
 /** Taken out of normal flow to one side, with the line boxes beside it shortened. */
 export function floating(n: LayoutNode): boolean {
   return n.styles["float"] === "left" || n.styles["float"] === "right";
+}
+
+/** Positioned out of normal flow (`absolute`/`fixed`): placed as an overlay, never laid out by its parent. */
+export function outOfFlow(n: LayoutNode): boolean {
+  return n.styles["position"] === "absolute" || n.styles["position"] === "fixed";
+}
+
+/** A computed `display` that lays out its children as a flex container (`flex`, `inline-flex`). */
+export function isFlex(display: string | undefined): boolean {
+  return /flex/.test(display ?? "");
+}
+
+/** The axis `n` stacks its children on: horizontal only for a row-direction flex container. */
+export function mainAxis(n: LayoutNode): Axis {
+  return isFlex(n.styles["display"]) && /^row/.test(n.styles["flex-direction"] ?? "row") ? "h" : "v";
 }
 
 /**

@@ -12,7 +12,7 @@ function card(shadows: string, border = "0px") {
       "border-top-color": "rgb(255, 243, 163)", "border-right-color": "rgb(255, 243, 163)", "border-bottom-color": "rgb(255, 243, 163)", "border-left-color": "rgb(255, 243, 163)",
       "overflow-x": "hidden", "overflow-y": "hidden" }, children: [],
   };
-  const doc: LayoutDoc = { version: 1, source: "shadow-test", combo: { screen: "card", theme: "light", demoState: "normal" }, size: { w: 180, h: 230 }, dpr: 3, canvas: "rgb(24,21,43)", root };
+  const doc: LayoutDoc = { version: 2, source: "shadow-test", combo: { screen: "card", theme: "light" }, size: { w: 180, h: 230 }, dpr: 3, canvas: "rgb(24,21,43)", fonts: [], root };
   return emitSwift(inferScreen(doc, "card"), "CardView", { mode: "fidelity" }).view;
 }
 

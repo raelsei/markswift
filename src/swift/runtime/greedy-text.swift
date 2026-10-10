@@ -1,5 +1,3 @@
-/** Word-level layout for plain app paragraphs whose short final line SwiftUI would rebalance. */
-export const GREEDY_TEXT_RUNTIME = `
 struct MarkswiftGreedyText: View {
     let value: String
     let font: Font
@@ -18,7 +16,7 @@ struct MarkswiftGreedyText: View {
     var body: some View {
         let words = value.split(separator: " ")
         MarkswiftFlow(columnGap: fontSize * 0.25, rowGap: lineGap) {
-            ForEach(words.indices, id: \\.self) { index in
+            ForEach(words.indices, id: \.self) { index in
                 Text(verbatim: String(words[index]))
                     .font(font)
                     .foregroundStyle(color)
@@ -28,4 +26,3 @@ struct MarkswiftGreedyText: View {
         .accessibilityLabel(value)
     }
 }
-`;

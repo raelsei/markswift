@@ -1,7 +1,7 @@
 import type { Paint, Transform2D } from "../css/index.ts";
 import type { SemNode, Filter, ClipShape } from "../model/semantic.ts";
-import type { EmitContext } from "./context.ts";
-import { Writer, colorExpr, hash, indent, num, type ColorCtx } from "./format.ts";
+import type { ColorCtx, EmitContext } from "./context.ts";
+import { colorExpr, hash, indent, num, shapeStruct } from "./format.ts";
 import { note } from "./diagnostics.ts";
 import { paintExpr } from "./paint.ts";
 import { imageLayer } from "./images.ts";
@@ -85,21 +85,13 @@ export function clipPathModifier(c: ClipShape, n: SemNode, ctx: EmitContext): st
 /** One `Shape` struct per unique polygon (unit-square fractions); returns its name. */
 function polygonShape(points: Array<[number, number]>, shapes: Record<string, string>): string {
   const pts = points.map(([x, y]) => [num(x), num(y)] as const);
-  const name = "MarkswiftClip_" + hash(pts.map((p) => p.join(",")).join(" "));
-  if (shapes[name]) return name;
-  const w = new Writer();
-  // `nonisolated`: see the SVG shapes — Shape conformance under MainActor default isolation.
-  w.block(`nonisolated struct ${name}: Shape {`, () => {
-    w.block("func path(in rect: CGRect) -> Path {", () => {
-      w.line("func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y) }");
-      w.line("var p = Path()");
-      pts.forEach(([x, y], i) => w.line(`p.${i === 0 ? "move" : "addLine"}(to: P(${x}, ${y}))`));
-      w.line("p.closeSubpath()");
-      w.line("return p");
-    });
-  });
-  shapes[name] = w.toString();
-  return name;
+  return shapeStruct("MarkswiftClip_" + hash(pts.map((p) => p.join(",")).join(" ")), shapes, () => [
+    "func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y) }",
+    "var p = Path()",
+    ...pts.map(([x, y], i) => `p.${i === 0 ? "move" : "addLine"}(to: P(${x}, ${y}))`),
+    "p.closeSubpath()",
+    "return p",
+  ]);
 }
 
 /** `mask-image`: the paint's alpha masks the node (gradients directly, images as a layer). */

@@ -1,8 +1,8 @@
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode } from "../model/layout.ts";
-import { type Screen, type SemNode, type Axis, type StackNode, type SemBase, type Overlay } from "../model/semantic.ts";
+import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay } from "../model/semantic.ts";
 import { parseColor, parseDeclared, round2 } from "../css/index.ts";
-import { buildSvg } from "./svg.ts";
+import { buildSvg } from "./svg/build.ts";
 import { controlOf, buildControl } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -14,7 +14,7 @@ import { buildGrid } from "./grid.ts";
 import { buildWrapping } from "./wrapping.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
-import { unionRect, insetsOf, renders, hangsLeading } from "./geometry.ts";
+import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {} };
@@ -34,7 +34,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (policy.route === "image")
     return withBase(n, ctx, {
       kind: "image",
-      src: n.attrs["data-h2s-src"] ?? n.attrs["src"] ?? "",
+      src: n.currentSrc ?? n.attrs["src"] ?? "",
       contentMode: n.styles["object-fit"] === "contain" ? "fit" : "fill",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });
@@ -51,9 +51,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       collectRuns(c, runs);
       continue;
     }
-    const pos = c.styles["position"];
-    if (pos === "fixed" && n !== ctx.root) ctx.fixed.push(c);
-    else if (pos === "absolute" || pos === "fixed") abs.push(c);
+    if (c.styles["position"] === "fixed" && n !== ctx.root) ctx.fixed.push(c);
+    else if (outOfFlow(c)) abs.push(c);
     else flow.push(c);
   }
 
@@ -68,8 +67,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   // Controls come before the generic container path: same measured box, native control inside.
   const spec = policy.route === "control" ? controlOf(n) : undefined;
   if (spec) {
-    const childAxis: Axis = /flex/.test(n.styles["display"] ?? "block") && /^row/.test(n.styles["flex-direction"] ?? "row") ? "h" : "v";
-    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n, childAxis) };
+    const childAxis = mainAxis(n);
+    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n) };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
@@ -85,7 +84,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   // Such a node has no glyphs, no advance and no measured inline box, so it is not text; it is
   // the element's own box, and the check is on the *result* rather than the input because only
   // `buildText` knows the `white-space` mode that decides whether a space survives. Letting one
-  // through emitted `Text.h2sRuns([\n    ,\n])`, which does not compile in either mode.
+  // through emitted an empty run array, which does not compile in either mode.
   if (flow.length === 0 && runs.length > 0) {
     const t = buildText(n, runs, ctx, true);
     if (t.runs.length > 0) {
@@ -102,12 +101,12 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   const display = n.styles["display"] ?? "block";
-  const axis: Axis = /flex/.test(display) && /^row/.test(n.styles["flex-direction"] ?? "row") ? "h" : "v";
+  const axis = mainAxis(n);
   const declared = parseDeclared(n.attrs["style"]);
 
   // Children in measured order (handles CSS `order`), text runs grouped between flow children.
   const items: AnalyzedChild[] = [];
-  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n, axis) };
+  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n) };
   for (const c of flow) items.push({ node: c, sem: build(c, childCtx) });
   if (runs.length) {
     // Text interleaved with flow children (icon + label). Group consecutive runs into one text node.
@@ -128,11 +127,11 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     return finish(grid);
   }
 
-  const align = crossAlign(n, axis);
+  const align = crossAlign(n);
   const distribution = distributionOf(n.styles["justify-content"], display);
   // Ordinary float/inline-block lines become measured rows. Flex wrapping has its own native
   // reflow path and a captured-position fallback, including column and reverse wrapping.
-  const wraps = /flex/.test(display) && /^(wrap|wrap-reverse)$/.test(n.styles["flex-wrap"] ?? "");
+  const wraps = isFlex(display) && /^(wrap|wrap-reverse)$/.test(n.styles["flex-wrap"] ?? "");
   const lines = axis === "h" ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
   let stack: StackNode;
   const multi = lines.some((l) => l.length > 1);
@@ -140,10 +139,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     stack = buildWrapping(n, base, items, axis, align, distribution);
   } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
-    if (lines[0]!.some((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""))) notes.push("approximated: float → side-by-side row; text does not wrap around it");
+    if (lines[0]!.some((i) => floating(i.node))) notes.push("approximated: float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0]!, "start", "start");
   } else if (multi && lines.length > 1) {
-    const floats = items.filter((i) => /^(left|right)$/.test(i.node.styles["float"] ?? ""));
+    const floats = items.filter((i) => floating(i.node));
     if (floats.length) notes.push("approximated: float → side-by-side row; text does not wrap around it");
     const rows: AnalyzedChild[] = lines.map((line, i) => {
       if (line.length === 1) return line[0]!;
@@ -209,8 +208,7 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
   const contentLeft = host.bounds.x + insetsOf(host.styles)[3];
   for (const c of host.children) {
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
-    const pos = c.styles["position"];
-    if (pos === "absolute" || pos === "fixed" || !hangsLeading(c.bounds, contentLeft)) continue;
+    if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
     out.push({
       node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host }),
       layer: "overlay",
@@ -221,7 +219,3 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
   return out;
 }
 
-export { fontOf } from "./typography.ts";
-export { textPaintOf } from "./style.ts";
-export type { InferOptions } from "./context.ts";
-export type { BundledFamily } from "../model/fonts.ts";

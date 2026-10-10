@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { convert, convertHtml } from "../../src/index.ts";
 import type { Browser } from "playwright-core";
 
-const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
+const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const css = "html,body{margin:0} .card,.p-4,._card_ab12{box-sizing:border-box;width:240px;height:80px;padding:16px;background:rgb(255,0,0);font:16px system-ui}";
 
 browserTest("documents, fragments, compiled utility and module CSS use the same conversion", async () => {
   const sources = [
     { html: '<main data-markswift-root class="card">Hello</main>' },
-    { html: '<!doctype html><html><head><title>Example</title></head><body><main data-h2s-root class="p-4">Hello</main></body></html>' },
-    { html: '<main data-h2s-root class="_card_ab12">Hello</main>' },
+    { html: '<!doctype html><html><head><title>Example</title></head><body><main data-markswift-root class="p-4">Hello</main></body></html>' },
+    { html: '<main data-markswift-root class="_card_ab12">Hello</main>' },
   ];
   const results = await Promise.all(sources.map(source => convert(source, { name: "CardView", css })));
   for (const result of results) {
@@ -29,7 +29,7 @@ browserTest("file and inline assetsDir inputs embed local image resources before
   try {
     await Bun.write(join(directory, "photo.svg"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20" fill="red"/></svg>');
     await Bun.write(join(directory, "style.css"), "body{margin:0}main{width:100px;height:100px;background-image:url(photo.svg)}img{width:20px;height:20px}");
-    const html = '<link rel="stylesheet" href="style.css"><main data-h2s-root><img src="photo.svg"></main>';
+    const html = '<link rel="stylesheet" href="style.css"><main data-markswift-root><img src="photo.svg"></main>';
     const file = join(directory, "card with spaces.html");
     await Bun.write(file, html);
     for (const source of [{ file }, { html, assetsDir: directory }]) {
@@ -55,7 +55,7 @@ browserTest("URL capture, preparation hook and explicit root work together", asy
 }, 30000);
 
 browserTest("resource failures are returned to the caller", async () => {
-  const result = await convertHtml('<main data-h2s-root style="width:100px;height:50px"><img src="/missing.png" width="20" height="20" alt="Missing"></main>');
+  const result = await convertHtml('<main data-markswift-root style="width:100px;height:50px"><img src="/missing.png" width="20" height="20" alt="Missing"></main>');
   expect(result.warnings.some(message => message.includes("missing.png"))).toBe(true);
 }, 30000);
 

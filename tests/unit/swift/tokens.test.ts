@@ -5,7 +5,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { extractTokens, emitDesignTokens, camelize, screenBase, screenTokens } from "../../../src/swift/tokens.ts";
-import { colorExpr, type ColorCtx } from "../../../src/swift/format.ts";
+import { colorExpr } from "../../../src/swift/format.ts";
+import type { ColorCtx } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import type { Color } from "../../../src/css/index.ts";
 import type { Screen, SemNode, StackNode, Style, TextRun } from "../../../src/model/semantic.ts";
@@ -158,9 +159,11 @@ describe("extractTokens", () => {
     expect(emitDesignTokens(extractTokens(pair()))).toBe(emitDesignTokens(extractTokens(pair())));
   });
 
-  test("replaceable literal count matches the slots the tokens cover", () => {
+  test("a colour that flips with the theme is semantic even on a single slot", () => {
     const set = extractTokens(pair());
-    expect(set.replaceableLiterals).toBe(set.tokens.reduce((n, t) => n + t.literals, 0));
+    const card = set.tokens.find((t) => t.uses.includes("card"));
+    expect(card?.slots).toBe(1);
+    expect(card?.kind).toBe("semantic");
   });
 });
 
@@ -238,8 +241,13 @@ describe("colorExpr", () => {
     const amb = extractTokens([l!, d!]);
     const ctx: ColorCtx = { tokens: screenTokens(amb, l!), mode: "fidelity" };
     const border = amb.tokens.find((t) => t.kind === "static" && t.role === "border")!;
+    const card = amb.tokens.find((t) => t.kind === "semantic" && t.role === "fill")!;
     expect(colorExpr(WHITE, ctx, "card")).toBe("Color.markswift(1.0, 1.0, 1.0)");
     expect(colorExpr(WHITE, ctx, "other")).toBe(`Color.${border.name}`);
+    // A call site that names the slot resolves each slot to its own token.
+    expect(colorExpr(WHITE, ctx, "card", "fill0")).toBe(`Color.${card.name}`);
+    expect(colorExpr(WHITE, ctx, "card", "border")).toBe(`Color.${border.name}`);
+    expect(colorExpr(WHITE, ctx, "card", "outline")).toBe("Color.markswift(1.0, 1.0, 1.0)");
   });
 });
 

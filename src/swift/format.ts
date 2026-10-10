@@ -4,26 +4,6 @@
 import type { Color } from "../css/index.ts";
 import type { FontSpec } from "../model/semantic.ts";
 import type { ColorCtx } from "./context.ts";
-export type { ColorCtx, ScreenTokens } from "./context.ts";
-
-/** Indentation-aware line buffer. */
-export class Writer {
-  private lines: string[] = [];
-  private depth = 0;
-  line(s = ""): void {
-    this.lines.push(s ? "    ".repeat(this.depth) + s : "");
-  }
-  block(open: string, body: () => void, close = "}"): void {
-    this.line(open);
-    this.depth++;
-    body();
-    this.depth--;
-    this.line(close);
-  }
-  toString(): string {
-    return this.lines.join("\n") + "\n";
-  }
-}
 
 /** `Color.markswift(r, g, b[, a])` argument list; alpha omitted when opaque. */
 export function colorArgs(c: Color): string {
@@ -35,12 +15,14 @@ export function colorArgs(c: Color): string {
  * token of the screen, else the literal `Color.markswift(…)`.
  *
  * `id` is the node painting the colour; the lookup is (screen, theme, node, colour value)
- * because the call sites paint a colour without knowing which named slot of the node it is.
- * Omitting `id` — an SVG inlined through an `<img>`, a control's own value — yields the
- * literal: a colour the extractor never enumerated cannot claim a token.
+ * because most call sites paint a colour without knowing which named slot of the node it is.
+ * Those that do (text runs) pass `slot` (`run2`, `run2.dec`), which still resolves when one
+ * light colour is two tokens on the node. Omitting `id` — an SVG inlined through an `<img>`, a
+ * control's own value — yields the literal: a colour the extractor never enumerated cannot
+ * claim a token.
  */
-export function colorExpr(c: Color, ctx: ColorCtx, id?: string): string {
-  const token = ctx.tokens?.name(c, id);
+export function colorExpr(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
+  const token = ctx.tokens?.name(c, id, slot);
   return token ? `Color.${token}` : `Color.markswift(${colorArgs(c)})`;
 }
 
@@ -60,6 +42,60 @@ export function indent(lines: string[], n: number): string[] {
   return lines.map((l) => (l ? "    ".repeat(n) + l : l));
 }
 
+/** `HorizontalAlignment` of a start/center/end value (anything else is the leading edge). */
+export function horizontalAlignment(a: string | undefined): string {
+  return a === "center" ? ".center" : a === "end" ? ".trailing" : ".leading";
+}
+
+/** `VerticalAlignment` of a start/center/end value (anything else is the top edge). */
+export function verticalAlignment(a: string | undefined): string {
+  return a === "center" ? ".center" : a === "end" ? ".bottom" : ".top";
+}
+
+/** `Alignment` combining a horizontal and a vertical start/center/end value. */
+export function alignment(h: string | undefined, v: string | undefined): string {
+  if (v === "center") return horizontalAlignment(h);
+  if (h === "center") return verticalAlignment(v);
+  return verticalAlignment(v) + (h === "end" ? "Trailing" : "Leading");
+}
+
+/** Dash array of a CSS `dashed` (3w on, 2w off) or `dotted` (round dots 2w apart) line. */
+export function dashPattern(style: "dashed" | "dotted", width: number): string {
+  return style === "dashed" ? `[${num(width * 3)}, ${num(width * 2)}]` : `[0.01, ${num(width * 2)}]`;
+}
+
+/** `StrokeStyle` for a CSS line style; styles other than dashed/dotted stroke solid. */
+export function strokeStyle(width: number, style: string): string {
+  const dash = style === "dashed" || style === "dotted" ? `${style === "dotted" ? ", lineCap: .round" : ""}, dash: ${dashPattern(style, width)}` : "";
+  return `StrokeStyle(lineWidth: ${num(width)}${dash})`;
+}
+
+/** `EdgeInsets` of CSS-ordered (top, right, bottom, left) insets. */
+export function edgeInsets([top, right, bottom, left]: readonly number[]): string {
+  return `EdgeInsets(top: ${num(top!)}, leading: ${num(left!)}, bottom: ${num(bottom!)}, trailing: ${num(right!)})`;
+}
+
+/** A DOM id or design string as the body of a Swift identifier (may be empty). */
+export function identifier(s: string): string {
+  return s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+/** `base` the first time, then `base_r2`, `base_r3`, … — counted in `seen`. */
+export function uniqueName(base: string, seen: Record<string, number>): string {
+  const k = (seen[base] = (seen[base] ?? 0) + 1);
+  return k === 1 ? base : `${base}_r${k}`;
+}
+
+/**
+ * Registers a `Shape` struct once under `name`; `body` gives the lines of `path(in:)`.
+ * `nonisolated`: Shape's requirements are nonisolated; under a MainActor default-isolation
+ * build (SE-0466) an unannotated struct would fail to conform in Swift 6 mode.
+ */
+export function shapeStruct(name: string, shapes: Record<string, string>, body: () => string[]): string {
+  shapes[name] ??= [`nonisolated struct ${name}: Shape {`, "    func path(in rect: CGRect) -> Path {", ...indent(body(), 2), "    }", "}"].join("\n") + "\n";
+  return name;
+}
+
 const WEIGHT_NAMES: Array<[number, string]> = [
   [100, "ultraLight"],
   [200, "thin"],
@@ -72,12 +108,8 @@ const WEIGHT_NAMES: Array<[number, string]> = [
   [900, "black"],
 ];
 
-/**
- * Default point size of each `Font.TextStyle` at the standard content size — the table
- * `relativeTo:` scales against. Exported because leading has the same problem: a value derived
- * from a font size only tracks Dynamic Type if it is anchored to the same style.
- */
-export const TEXT_STYLE_SIZES: Array<[number, string]> = [
+/** Default point size of each `Font.TextStyle` at the standard content size — the table `relativeTo:` scales against. */
+const TEXT_STYLE_SIZES: Array<[number, string]> = [
   [34, "largeTitle"],
   [28, "title"],
   [22, "title2"],
@@ -92,8 +124,7 @@ export const TEXT_STYLE_SIZES: Array<[number, string]> = [
 
 /**
  * Swift `Font` expression for a run's font. A system family is its design plus the nearest
- * named weight in both modes; a bundled family differs by mode, which is the decision in
- * HANDOFF §10.15:
+ * named weight in both modes; a bundled family differs by mode:
  *
  * - **app** — `.custom(family, size:, relativeTo:)` plus an explicit `.weight(…)`: the shipped
  *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a

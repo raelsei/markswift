@@ -4,6 +4,7 @@ import { type Color, parseColor } from "../css/index.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
 import { classifyElement } from "../html/policy.ts";
+import { outOfFlow } from "./geometry.ts";
 
 // ---------- text ----------
 
@@ -11,8 +12,7 @@ import { classifyElement } from "../html/policy.ts";
 export function isInlineText(c: LayoutNode): boolean {
   if (classifyElement(c.tag, c.attrs).atomic) return false;
   if ((c.styles["display"] ?? "inline") !== "inline") return false;
-  const pos = c.styles["position"];
-  if (pos === "absolute" || pos === "fixed") return false;
+  if (outOfFlow(c)) return false;
   return c.children.every((k) => k.tag === "#text" || k.tag === "br" || isInlineText(k));
 }
 
@@ -54,21 +54,10 @@ export function contains(a: LayoutNode, b: LayoutNode): boolean {
 
 export type Collapse = "collapse" | "preserve" | "preserve-breaks";
 
-/** `white-space-collapse` (Chrome longhand), or the `white-space` shorthand for older snapshots. */
+/** Computed `white-space-collapse`; a hand-built tree without it gets the initial `collapse`. */
 export function collapseOf(s: Record<string, string>): Collapse {
   const v = s["white-space-collapse"];
-  if (v) return v === "collapse" ? "collapse" : v === "preserve-breaks" ? "preserve-breaks" : "preserve";
-  const ws = s["white-space"] ?? "normal";
-  if (ws === "pre" || ws === "pre-wrap" || ws === "break-spaces") return "preserve";
-  return ws === "pre-line" ? "preserve-breaks" : "collapse";
-}
-
-/** `text-wrap-mode: nowrap` (Chrome longhand), or the `white-space` shorthand for older snapshots. */
-export function noWrap(s: Record<string, string>): boolean {
-  const v = s["text-wrap-mode"];
-  if (v) return v === "nowrap";
-  const ws = s["white-space"];
-  return ws === "nowrap" || ws === "pre";
+  return !v || v === "collapse" ? "collapse" : v === "preserve-breaks" ? "preserve-breaks" : "preserve";
 }
 
 /**
@@ -103,6 +92,17 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
 }
 
 const WS = /\s/;
+
+/** The colour glyphs paint in: `-webkit-text-fill-color` overrides `color`; black when neither parses. */
+export function textColorOf(s: Record<string, string>): Color {
+  return parseColor(s["-webkit-text-fill-color"]) ?? parseColor(s["color"]) ?? { r: 0, g: 0, b: 0, a: 1 };
+}
+
+/** Concatenated text of an element's subtree, as the snapshot laid it out. */
+export function textContent(el: LayoutNode | undefined): string {
+  if (!el) return "";
+  return el.tag === "#text" ? (el.text ?? "") : el.children.map(textContent).join("");
+}
 
 export function decorationOf(s: Record<string, string>, color: Color): TextDecoration | undefined {
   const raw = s["-webkit-text-decorations-in-effect"] ?? s["text-decoration-line"] ?? "none";

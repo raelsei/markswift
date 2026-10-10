@@ -5,7 +5,7 @@
  * No SwiftUI / Compose vocabulary here.
  */
 import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
-import type { Rect } from "./layout.ts";
+import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
 
@@ -72,8 +72,6 @@ export interface Style {
   blur?: number;
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
-  /** Backdrop blur — a material approximation on native targets. */
-  backdropBlur?: number;
   transform?: Transform2D & { origin?: [number, number] };
   blend?: string;
   /** `clip-path` basic shape. */
@@ -111,7 +109,7 @@ export interface TextRun {
   font: FontSpec;
   color: Color;
   kerning?: number;
-  /** CSS `text-transform`; emitters apply it (`.textCase`) so bound text keeps it at runtime. */
+  /** CSS `text-transform`; emitters apply it (`.textCase` when every run shares it, else the literal). */
   transform?: TextTransform;
   italic?: boolean;
   decoration?: TextDecoration;
@@ -134,8 +132,6 @@ export interface TextRun {
    * identically cannot be known offline.
    */
   breaks?: number[];
-  /** True when the run came from a template interpolation (`{{ … }}`). */
-  bound?: boolean;
   /**
    * A run that paints no glyphs and only advances the line by this many points: the horizontal
    * padding/border of an inline element (`kbd`, `mark`, `code`), which a native text run cannot
@@ -235,11 +231,11 @@ export interface SemBase extends SizeConstraints {
    */
   selfAlign?: "center" | "end";
   /**
-   * Set on a node whose computed `direction` differs from its parent's; emitters override the
-   * layout direction there. Inherited descendants leave it unset, so it is emitted once per
-   * change — an LTR island inside an RTL block needs its own `"ltr"`.
+   * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
+   * neutral characters against it. Only text carries it — container order is already measured,
+   * so overriding the direction on a stack would mirror it a second time.
    */
-  layoutDirection?: "rtl" | "ltr";
+  layoutDirection?: "rtl";
   /** top, right, bottom, left — includes border width so content lands where the browser put it. */
   padding: [number, number, number, number];
   style: Style;
@@ -403,7 +399,7 @@ export interface Screen {
   version: 1;
   name: string;
   source: string;
-  theme: "light" | "dark";
+  theme: Theme;
   size: { w: number; h: number };
   /** Backdrop behind the root, from the design. */
   canvas: Color;

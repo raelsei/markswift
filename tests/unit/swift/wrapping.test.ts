@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileLayout } from "../../../src/compiler/index.ts";
-import { FLOW_RUNTIME } from "../../../src/swift/flow-runtime.ts";
+import flowRuntime from "../../../src/swift/runtime/flow.swift" with { type: "text" };
 import { typecheck } from "../../../tools/verify/typecheck.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 
@@ -18,7 +18,7 @@ function fixture(wrap = "wrap"): LayoutDoc {
     preferredSize: { width: "200px", height: "auto" },
     styles: { display: "flex", "flex-wrap": wrap, "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start" },
   };
-  return { version: 1, source: "wrap-test", combo: { screen: "s", theme: "light", demoState: "normal" }, size: { w: 200, h: 90 }, dpr: 1, canvas: "rgb(255,255,255)", root };
+  return { version: 2, source: "wrap-test", combo: { screen: "s", theme: "light" }, size: { w: 200, h: 90 }, dpr: 1, canvas: "rgb(255,255,255)", fonts: [], root };
 }
 
 test("supported wrapping compiles to the native flow runtime in both modes", () => {
@@ -64,11 +64,11 @@ test("a fixed-height start-packed host centers children within each row without 
   }
 });
 
-const nativeTest = (process.env.MARKSWIFT_SWIFT_TESTS ?? process.env.H2S_SWIFT_TESTS) === "1" ? test : test.skip;
+const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 nativeTest("flow runtime implements SwiftUI Layout and accepts fixed children with row alignment", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-flow-typecheck-"));
   try {
-    await Bun.write(join(directory, "FlowFixture.swift"), `import SwiftUI\n${FLOW_RUNTIME}\n
+    await Bun.write(join(directory, "FlowFixture.swift"), `import SwiftUI\n\n${flowRuntime}\n
 struct FlowFixture: View {
     var body: some View {
         MarkswiftFlow(columnGap: 10, rowGap: 12, horizontal: .trailing, vertical: .center) {

@@ -2,7 +2,7 @@
 import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type Size, type Axis, type SizeConstraints } from "../model/semantic.ts";
 import { round2, px } from "../css/index.ts";
-import { insetsOf, renders, hangsLeading, EDGES, unionRect } from "./geometry.ts";
+import { insetsOf, renders, hangsLeading, EDGES, unionRect, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
 import { type InferenceContext } from "./context.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
@@ -26,9 +26,9 @@ export function trailingInset(n: LayoutNode, height: Size, padBottom: number): n
   if (!ext) return padBottom;
   let inset = n.bounds.y + n.bounds.h - (ext.y + ext.h);
   const display = n.styles["display"] ?? "block";
-  const row = /^row/.test(n.styles["flex-direction"] ?? "row");
-  const verticalAlignment = row ? crossAlign(n, "h") : distributionOf(n.styles["justify-content"], display);
-  if (/flex/.test(display) && (row ? verticalAlignment === "center" || verticalAlignment === "end" : verticalAlignment !== "start")) {
+  const row = mainAxis(n) === "h";
+  const verticalAlignment = row ? crossAlign(n) : distributionOf(n.styles["justify-content"], display);
+  if (isFlex(display) && (row ? verticalAlignment === "center" || verticalAlignment === "end" : verticalAlignment !== "start")) {
     // Center/end alignment and distributed flex gaps already place the children. Turning the
     // remaining bottom space into padding applies that placement a second time, notably on a
     // viewport root that becomes fill-sized after inference. Only its real end margin remains.
@@ -49,8 +49,7 @@ function contentExtent(n: LayoutNode, margins: boolean): Rect | undefined {
   const contentLeft = n.bounds.x + insetsOf(n.styles)[3];
   let r: Rect | undefined;
   for (const c of n.children) {
-    const pos = c.styles["position"];
-    if (pos === "absolute" || pos === "fixed") continue;
+    if (outOfFlow(c)) continue;
     if (c.tag !== "#text") {
       if (c.bounds.w === 0 && c.bounds.h === 0) continue;
       if (!renders(c) || hangsLeading(c.bounds, contentLeft)) continue;
@@ -88,7 +87,7 @@ function hugs(n: LayoutNode, axis: Axis): boolean {
  */
 export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, notes: string[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "center" | "end" } {
   const s = n.styles;
-  const abs = s["position"] === "absolute" || s["position"] === "fixed";
+  const abs = outOfFlow(n);
   const declW = n.preferredSize?.width ?? d["width"];
   const declH = n.preferredSize?.height ?? d["height"];
 
@@ -96,11 +95,10 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   let hugsH = hugs(n, "v");
   // In a stretching flex row every child is as tall as the row, so a child equal to the box is
   // no evidence of hugging: some child must reach that height on its own content.
-  if (hugsH && /flex/.test(s["display"] ?? "") && /^row/.test(s["flex-direction"] ?? "row") && crossAlign(n, "h") === "stretch") {
+  if (hugsH && mainAxis(n) === "h" && crossAlign(n) === "stretch") {
     hugsH = n.children.some((c) => {
       if (c.tag === "#text" || c.tag === "br") return true;
-      const pos = c.styles["position"];
-      if (pos === "absolute" || pos === "fixed") return false;
+      if (outOfFlow(c)) return false;
       const self = c.styles["align-self"] ?? "auto";
       return (self !== "auto" && self !== "normal" && self !== "stretch") || hugs(c, "v");
     });
@@ -122,7 +120,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
   else if (growthW) width = growthW;
-  else if (ctx.parentAxis === "v" && (ctx.parentDisplay === "block" || ctx.parentAlign === "stretch") && !/inline/.test(s["display"] ?? "") && !abs) {
+  else if (ctx.parentAxis === "v" && ctx.parentAlign === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
   } else if (hugsW || !ctx.parent) width = { kind: "hug" };
   else if (fillsW && !abs) width = { kind: "fill" };

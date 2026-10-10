@@ -2,7 +2,7 @@
 import type { LayoutNode } from "../model/layout.ts";
 import type { SizeConstraints } from "../model/semantic.ts";
 import { resolveLength, round2 } from "../css/index.ts";
-import { insetsOf } from "./geometry.ts";
+import { insetsOf, outOfFlow } from "./geometry.ts";
 import type { InferenceContext } from "./context.ts";
 
 export function constraintsOf(n: LayoutNode, declared: Record<string, string>, ctx: InferenceContext, notes: string[]): SizeConstraints {
@@ -10,7 +10,7 @@ export function constraintsOf(n: LayoutNode, declared: Record<string, string>, c
   // CSS sizing constraints do not apply to ordinary non-replaced inline boxes.
   if (n.styles.display === "inline" && !["img", "svg", "input", "select", "textarea", "button", "video", "audio", "canvas", "iframe", "embed", "object"].includes(n.tag)) return result;
   const [pt, pr, pb, pl] = insetsOf(n.styles);
-  const positioned = /^(absolute|fixed)$/.test(n.styles.position ?? "");
+  const positioned = outOfFlow(n);
   const parentInsets = ctx.parent ? insetsOf(ctx.parent.styles) : undefined;
   const widthRef = ctx.parent && parentInsets && !positioned && ctx.parent.styles.display !== "inline"
     ? Math.max(0, ctx.parent.bounds.w - parentInsets[1] - parentInsets[3]) : undefined;

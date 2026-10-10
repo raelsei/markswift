@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
 
 const layout: LayoutDoc = {
-  version: 1, source: "component.html", combo: { screen: "card", theme: "light", demoState: "normal" },
+  version: 2, source: "component.html", combo: { screen: "card", theme: "light" },
   size: { w: 200, h: 80 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [],
   root: { id: "root", tag: "main", attrs: {}, styles: { display: "block", "background-color": "rgb(255, 0, 0)" }, bounds: { x: 0, y: 0, w: 200, h: 80 }, children: [] },
 };
@@ -14,10 +14,10 @@ test("captured-layout compilation is deterministic and does not mutate the input
   expect(layout).toEqual(before);
   expect(first.files["CardView.swift"]).toBe(first.code);
   expect(first.code).toContain("struct CardView: View");
-  expect(Object.keys(first.files)).toHaveLength(4);
+  expect(Object.keys(first.files)).toEqual(["CardView.swift", "MarkswiftRuntime.swift", "MarkswiftTokens.swift"]);
 });
 
-test("serialized CSS sizing intent survives public compilation without changing legacy captures", () => {
+test("serialized CSS sizing intent survives public compilation", () => {
   const input = structuredClone(layout);
   input.root.children = [{
     id: "section", tag: "section", attrs: {}, styles: { display: "block" },
@@ -34,7 +34,7 @@ test("serialized CSS sizing intent survives public compilation without changing 
 });
 
 test("invalid and conflicting type names cannot corrupt output files or Swift types", () => {
-  for (const name of ["../View", "bad name", "1Card", "Self", "View", "Text", "Color", "UIImage", "UIFont", "UIFontDescriptor", "StrokeStyle", "AsyncImage", "DesignSupport", "DesignTokens", "MarkswiftShapes"]) {
+  for (const name of ["../View", "bad name", "1Card", "Self", "View", "Text", "Color", "UIImage", "UIFont", "UIFontDescriptor", "StrokeStyle", "AsyncImage", "MarkswiftShapes"]) {
     expect(() => compileLayout(layout, { name })).toThrow();
   }
 });

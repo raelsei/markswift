@@ -1,23 +1,14 @@
-/**
- * Runtime helpers the emitted controls call; appended to MarkswiftRuntime.swift — always as the
- * tail of that file, never inside another declaration, so the import below stays at file scope.
- * It is first in the block because that is the nearest thing to the file's import list this
- * module owns; Swift accepts an import declaration anywhere at file scope, and `bun run
- * generate` typechecks the file every run, so a future append cannot break it silently.
- */
-
-export const CONTROL_RUNTIME = `
-// \`UTType\` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
+// `UTType` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
 import UniformTypeIdentifiers
 
-/// A URL from a design's \`href\`. Anything the design left unresolvable (an in-page anchor, a
-/// relative path, a malformed URL) becomes \`about:blank\` rather than trapping at runtime.
+/// A URL from a design's `href`. Anything the design left unresolvable (an in-page anchor, a
+/// relative path, a malformed URL) becomes `about:blank` rather than trapping at runtime.
 nonisolated func markswiftURL(_ s: String) -> URL {
     URL(string: s) ?? URL(string: "about:blank")!
 }
 
-/// The types an \`<input type="file" accept>\` list names. The tokens are the attribute's own
-/// forms — \`.png\`, \`image/png\`, \`image/*\` — and only the running system knows what they mean,
+/// The types an `<input type="file" accept>` list names. The tokens are the attribute's own
+/// forms — `.png`, `image/png`, `image/*` — and only the running system knows what they mean,
 /// so they are resolved here rather than at generation time. A token the system does not
 /// recognise is dropped, and a list that resolves to nothing means "any file".
 nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
@@ -93,7 +84,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
     }
 }
 
-/// The bar a browser paints for \`<progress>\`/\`<meter>\`: a rounded track with the completed part
+/// The bar a browser paints for `<progress>`/`<meter>`: a rounded track with the completed part
 /// filled, centred in the element's box.
 nonisolated struct MarkswiftBar: View {
     let fraction: Double
@@ -139,7 +130,7 @@ nonisolated struct MarkswiftBarGaugeStyle: GaugeStyle {
 }
 
 /// A range input as the browser paints it: a half-height track filled up to the value, with a
-/// round thumb on it. \`ImageRenderer\` cannot rasterise a live \`Slider\`, so the fidelity views
+/// round thumb on it. `ImageRenderer` cannot rasterise a live `Slider`, so the fidelity views
 /// use this to verify the design's geometry.
 nonisolated struct MarkswiftSliderTrack: View {
     let fraction: Double
@@ -163,4 +154,3 @@ nonisolated struct MarkswiftSliderTrack: View {
         }
     }
 }
-`;

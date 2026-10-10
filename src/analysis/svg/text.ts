@@ -42,8 +42,3 @@ function derivedBox(text: string, at: { x: number; y: number }, anchor: "start" 
   ctx.notes.push("approximated: svg text box estimated (markup has no measured glyph run)");
   return { x: round2((x - ctx.vb[0]) * sx), y: round2((at.y - size * 0.8 - ctx.vb[1]) * sy), w: round2(w * sx), h: round2(size * sy) };
 }
-
-export function textContent(el: LayoutNode | undefined): string {
-  if (!el) return "";
-  return el.tag === "#text" ? (el.text ?? "") : el.children.map(textContent).join("");
-}

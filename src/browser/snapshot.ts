@@ -9,6 +9,7 @@ import type { LayoutNode, Rect } from "../model/layout.ts";
 import { STYLE_WHITELIST } from "../model/layout.ts";
 import type { NodeIdentity } from "../input/types.ts";
 import type { PreferredSizes } from "./sizing.ts";
+import { round2 } from "../css/index.ts";
 
 /** CDP `RareStringData`: sparse per-node strings (`value[k]` belongs to node `index[k]`). */
 interface RareStringData {
@@ -51,6 +52,8 @@ interface Raw {
   name: string;
   value: string;
   attrs: Record<string, string>;
+  /** `<img>` only: see `LayoutNode.currentSrc`. */
+  currentSrc?: string;
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
@@ -92,8 +95,6 @@ export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
   };
   walk(root, "");
 }
-/** Written on `<img>` when the browser chose a `srcset`/`<picture>` candidate other than `src`. */
-export const CURRENT_SRC_ATTR = "data-h2s-src";
 
 /**
  * @param snap     snapshot as painted (styles incl. transform matrices, paint order)
@@ -221,7 +222,7 @@ function pseudoBox(raw: Raw): Rect | undefined {
 
 /**
  * Records the `srcset`/`<picture>` candidate the browser actually loaded as
- * `data-h2s-src`, spelled as authored (so it stays a bundlable path), when it
+ * `currentSrc`, spelled as authored (so it stays a bundlable path), when it
  * is not the plain `src`. Falls back to the absolute URL if no candidate matches.
  */
 function markCurrentSrc(img: Raw, currentSrc: string, base: string): void {
@@ -239,7 +240,7 @@ function markCurrentSrc(img: Raw, currentSrc: string, base: string): void {
   if (img.parent?.name === "picture") {
     for (const s of img.parent.children) if (s.type === 1 && s.name === "source") candidates.push(...srcsetUrls(s.attrs["srcset"] ?? ""));
   }
-  img.attrs[CURRENT_SRC_ATTR] = candidates.find((c) => resolve(c) === currentSrc) ?? currentSrc;
+  img.currentSrc = candidates.find((c) => resolve(c) === currentSrc) ?? currentSrc;
 }
 
 /** Candidate URLs of a `srcset` (HTML spec tokenisation: URLs are whitespace-free, descriptors run to the next comma). */
@@ -269,12 +270,6 @@ export function findByAttr(root: Raw, attr: string, value: string): Raw | undefi
     if (f) return f;
   }
   return undefined;
-}
-
-export function findAll(root: Raw, pred: (r: Raw) => boolean, out: Raw[] = []): Raw[] {
-  if (pred(root)) out.push(root);
-  for (const c of root.children) findAll(c, pred, out);
-  return out;
 }
 
 /**
@@ -316,6 +311,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
+  if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
   appendChildren(raw, origin, identity, path, node.children);
   return node;
 }
@@ -382,7 +378,5 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
 }
 
 function rebase(b: Rect, o: { x: number; y: number }): Rect {
-  return { x: round(b.x - o.x), y: round(b.y - o.y), w: round(b.w), h: round(b.h) };
+  return { x: round2(b.x - o.x), y: round2(b.y - o.y), w: round2(b.w), h: round2(b.h) };
 }
-
-const round = (v: number) => Math.round(v * 100) / 100;

@@ -5,7 +5,7 @@ import { visit } from "../../src/swift/traversal.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
 import type { SemNode } from "../../src/model/semantic.ts";
 
-const browserTest = (process.env.MARKSWIFT_BROWSER_TESTS ?? process.env.H2S_BROWSER_TESTS) === "1" ? test : test.skip;
+const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const HTML = '<main data-markswift-root id="sizing-root">' + [
   '<section id="limits-parent"><div id="content-percent" class="limit content percent"></div><div id="border-percent" class="limit border percent"></div><div id="content-calc" class="limit content calc"></div><div id="border-calc" class="limit border calc"></div></section>',
   '<div id="min-text" class="group">Floor</div><div id="max-text" class="group">Clipped</div>',

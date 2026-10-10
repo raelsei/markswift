@@ -1,5 +1,6 @@
 import type { SemNode, Edge, BorderStyle } from "../model/semantic.ts";
-import { colorExpr, num, type ColorCtx } from "./format.ts";
+import type { ColorCtx } from "./context.ts";
+import { colorExpr, dashPattern, num, strokeStyle } from "./format.ts";
 
 /**
  * Per-edge borders. An edge whose two corners are both square is a bar aligned to that edge —
@@ -49,10 +50,10 @@ export function borderSideModifiers(n: SemNode, ctx: ColorCtx): string[] {
         paint(`, band: ${num(2 / 3)}...1`);
         break;
       case "dashed":
-        paint(`, dash: [${num(g.width * 3)}, ${num(g.width * 2)}]`);
+        paint(`, dash: ${dashPattern("dashed", g.width)}`);
         break;
       case "dotted":
-        paint(`, dash: [0.01, ${num(g.width * 2)}], roundCaps: true`);
+        paint(`, dash: ${dashPattern("dotted", g.width)}, roundCaps: true`);
         break;
       default:
         paint("");
@@ -76,10 +77,8 @@ function straightBorderSides(edges: Array<[Edge | undefined, string, "height" | 
         break;
       }
       case "dashed":
-        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: StrokeStyle(lineWidth: ${num(e.width)}, dash: [${num(e.width * 3)}, ${num(e.width * 2)}])).frame(${dim}: ${num(e.width)})`));
-        break;
       case "dotted":
-        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: StrokeStyle(lineWidth: ${num(e.width)}, lineCap: .round, dash: [0.01, ${num(e.width * 2)}])).frame(${dim}: ${num(e.width)})`));
+        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: ${strokeStyle(e.width, e.style)}).frame(${dim}: ${num(e.width)})`));
         break;
       default:
         m.push(overlay(bar(e.width)));

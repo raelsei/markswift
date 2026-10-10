@@ -8,7 +8,7 @@ function element(tag: string, children: LayoutNode[] = [], styles: Record<string
 }
 
 function document(root: LayoutNode): LayoutDoc {
-  return { version: 1, source: "elements.html", combo: { screen: "elements", theme: "light", demoState: "normal" }, size: { w: 120, h: 40 }, dpr: 1, canvas: "white", fonts: [], root };
+  return { version: 2, source: "elements.html", combo: { screen: "elements", theme: "light" }, size: { w: 120, h: 40 }, dpr: 1, canvas: "white", fonts: [], root };
 }
 
 for (const tag of ["canvas", "iframe", "embed", "object", "math", "video", "audio"]) {

@@ -4,7 +4,7 @@ import { emitSwift } from "../../../src/swift/emit.ts";
 import type { LayoutDoc } from "../../../src/model/layout.ts";
 
 function capturedText(styles: Record<string, string>): LayoutDoc {
-  return { version: 1, source: "constraints.html", combo: { screen: "constraints", theme: "light", demoState: "normal" }, size: { w: 200, h: 100 }, dpr: 1, canvas: "white", fonts: [],
+  return { version: 2, source: "constraints.html", combo: { screen: "constraints", theme: "light" }, size: { w: 200, h: 100 }, dpr: 1, canvas: "white", fonts: [],
     root: { id: "root", tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 200, h: 100 }, children: [{
       id: "text", tag: "p", attrs: {}, styles: { display: "block", "box-sizing": "border-box", "font-family": "system-ui", "font-size": "14px", "line-height": "20px", ...styles }, bounds: { x: 0, y: 0, w: 200, h: 30 }, children: [{ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 40, h: 16 }, text: "Hi", children: [] }],
     }] } };

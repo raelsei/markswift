@@ -2,7 +2,7 @@ import type { Paint } from "../css/index.ts";
 import type { SemNode, ImageNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { colorExpr, fontExpr, indent, num, str } from "./format.ts";
-import { svgFromMarkup } from "../analysis/svg.ts";
+import { svgFromMarkup } from "../analysis/svg/markup.ts";
 import { svgExpr } from "./svg.ts";
 import { note } from "./diagnostics.ts";
 type ImagePaint = Extract<Paint, { kind: "image" }>;

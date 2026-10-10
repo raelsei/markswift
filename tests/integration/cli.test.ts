@@ -24,7 +24,7 @@ browserTest("CLI converts an HTML file and compiled CSS into a complete Swift bu
     expect(stderr).toBe("");
     expect(stdout).toContain("AlphaCard");
     expect(await Bun.file(join(output, "AlphaCard.swift")).text()).toContain("Hello CLI");
-    for (const file of ["MarkswiftRuntime.swift", "MarkswiftTokens.swift", "MarkswiftShapes.swift"]) {
+    for (const file of ["MarkswiftRuntime.swift", "MarkswiftTokens.swift"]) {
       expect(await Bun.file(join(output, file)).exists()).toBe(true);
     }
   } finally { await rm(directory, { recursive: true, force: true }); }

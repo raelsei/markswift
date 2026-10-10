@@ -2,10 +2,10 @@
 import type { LayoutNode } from "../model/layout.ts";
 import type { Axis, CrossAlign, Distribution, SemBase, StackNode } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
-import { parseDeclared, px, resolveLength, round2 } from "../css/syntax.ts";
+import { parseDeclared, px, resolveLength, round2 } from "../css/index.ts";
 import { insetsOf, renders, EDGES, unionRect } from "./geometry.ts";
 import { linesOf } from "./flow-layout.ts";
-import { measuredLayoutOf } from "./measured-layout.ts";
+import { measuredLayoutOf, paintOrder } from "./measured-layout.ts";
 
 function gap(value: string | undefined): number | undefined {
   if (!value || value === "normal") return 0;
@@ -32,7 +32,7 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
       if (wanted === undefined || Math.abs(item.sem.frame.h - wanted - (s["box-sizing"] === "border-box" ? 0 : pt + pb)) > 1) return "stretch-dependent child heights";
     }
     if (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed") return "intrinsic or filling child sizes";
-    if (EDGES.some(edge => s[`margin-${edge}`] === "auto" || Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
+    if (EDGES.some(edge => Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
     if (![undefined, "", "auto", "normal"].includes(s["align-self"])) return `align-self ${s["align-self"]}`;
     if (px(s.order) !== 0) return "CSS order allocation";
     const preferred = item.node.preferredSize?.width ?? parseDeclared(item.node.attrs.style)["width"];
@@ -88,9 +88,7 @@ export function buildWrapping(n: LayoutNode, base: SemBase, all: AnalyzedChild[]
   const items = all.filter(item => renders(item.node));
   const columnGap = gap(n.styles["column-gap"]), rowGap = gap(n.styles["row-gap"]);
   const reason = unsupported(n, plain, items, axis, align, distribution, columnGap, rowGap);
-  const ordered = reason
-    ? [...items].sort((a, b) => (a.node.paint ?? 0) - (b.node.paint ?? 0))
-    : linesOf(items).flat();
+  const ordered = reason ? paintOrder(items) : linesOf(items).flat();
   const stack: StackNode = { ...plain, kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map(item => item.sem) };
   if (reason) {
     stack.measured = measuredLayoutOf(plain, stack.children);
