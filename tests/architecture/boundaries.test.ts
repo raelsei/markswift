@@ -61,10 +61,10 @@ const graph = new Map<string, Dependency[]>(await Promise.all(files.map(async (f
   return [file, dependencies] as const;
 })));
 
-test("source imports never depend on research, coverage or tests", () => {
+test("source imports never depend on tools, tests, playground or research", () => {
   const violations: string[] = [];
   for (const [file, dependencies] of graph) for (const edge of dependencies) {
-    if (edge.target && /^(tools|tests|coverage)(\/|$)/.test(display(edge.target))) violations.push(`${display(file)} -> ${display(edge.target)}`);
+    if (edge.target && /^(tools|tests|playground|research)(\/|$)/.test(display(edge.target))) violations.push(`${display(file)} -> ${display(edge.target)}`);
   }
   expect(violations).toEqual([]);
 });

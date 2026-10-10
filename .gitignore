@@ -10,27 +10,20 @@ __pycache__/
 # Local research, measurements and development history
 /research/
 /STATE.md
-/package.local.json
-/tsconfig.local.json
 /tests/local/
-/tests/conformance/
 /docs/
-
-# Keep only portable verification helpers in the repository
-/tools/*
-!/tools/quality.ts
-!/tools/verify/
-/tools/verify/*
-!/tools/verify/typecheck.ts
+/plans/
+/.superpowers/
 
 # Generated output and editor/agent state
 /generated/
 /coverage/
 /out/
+/tests/conformance/out/
+/playground/.cache/
+/playground/dist/
+/playground/dist-service/
 /.agents/
 /.codex/
 /.claude/
 /.omp/
-
-# Local preview application and native render workspace
-/playground/

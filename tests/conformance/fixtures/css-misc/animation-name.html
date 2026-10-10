@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="animation-name; animation-duration; animation-iteration-count; animation-timing-function; animation-fill-mode; animation-delay">
+<meta name="markswift-themes" content="light,dark">
+<title>animation-name</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 24px; align-items: center; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.spinner { width: 32px; height: 32px; border-radius: 50%; border: 4px solid var(--line); border-top-color: var(--accent); animation-name: spin; animation-duration: 1s; animation-timing-function: linear; animation-iteration-count: infinite; }
+.fade { animation-name: fade; animation-duration: 300ms; animation-timing-function: ease-out; animation-fill-mode: both; animation-delay: 100ms; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.pulse { width: 32px; height: 32px; border-radius: 50%; background: #dc2626; animation: pulse 1.2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="animations">
+  <p class="cap">infinite spinner / one-shot fade-in with fill-mode both / pulsing dot</p>
+  <div class="row"><div class="spinner"></div><div class="fade">Faded in</div><div class="pulse"></div></div>
+</section>
+</main>
+</body>
+</html>

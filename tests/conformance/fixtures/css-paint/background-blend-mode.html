@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="markswift-rows" content="background-blend-mode; mix-blend-mode: darken; mix-blend-mode: lighten">
+<meta name="markswift-themes" content="light,dark">
+<title>Background and foreground blend scope</title>
+<style>
+html, body { margin: 0; }
+main { box-sizing: border-box; width: 393px; padding: 16px; background: #eee; }
+.row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.tile { width: 174px; height: 90px; position: relative; background-color: #5599bb; }
+.multiply { background-image: linear-gradient(#ee8844, #ee8844); background-blend-mode: multiply; }
+.screen { background-image: linear-gradient(#ee8844, #ee8844); background-blend-mode: screen; }
+.mark { position: absolute; left: 48px; top: 25px; width: 40px; height: 40px; background: #ee3344; }
+.darken { mix-blend-mode: darken; }
+.lighten { mix-blend-mode: lighten; }
+@media (prefers-color-scheme: dark) { main { background: #222; } }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+  <!-- Foreground marks retain their own colour: background blending is isolated. -->
+  <div class="row"><div class="tile multiply"><div class="mark"></div></div><div class="tile screen"><div class="mark"></div></div></div>
+  <!-- Foreground blending must instead use the tile as its backdrop. -->
+  <div class="row"><div class="tile"><div class="mark darken"></div></div><div class="tile"><div class="mark lighten"></div></div></div>
+</main>
+</body>
+</html>

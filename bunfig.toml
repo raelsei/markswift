@@ -1,0 +1,3 @@
+[test]
+# Bare `bun test` covers tracked suites only; local research and scratch tests are gitignored.
+pathIgnorePatterns = ["research/**", "tests/local/**"]

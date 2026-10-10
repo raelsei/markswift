@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="box-sizing; box-sizing: border-box; box-sizing: content-box">
+<title>box-sizing</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.bx { width: 160px; padding: 16px; border: 4px solid var(--accent); background: var(--soft); color: var(--fg); font-size: 13px; line-height: 16px; margin-bottom: 8px; }
+.cb { box-sizing: content-box; }
+.bb { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="content-box">
+  <p class="cap">content-box: 160 + 32 padding + 8 border = 200px wide</p>
+  <div class="bx cb">content-box</div>
+</section>
+<section class="v" id="border-box">
+  <p class="cap">border-box: 160px wide total</p>
+  <div class="bx bb">border-box</div>
+</section>
+</main>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="@role">
+<title>attr-role</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 10px; align-items: center; }
+.btn { display: inline-block; border-radius: 10px; padding: 8px 16px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.link { color: var(--accent); text-decoration: underline; }
+.sw { width: 44px; height: 26px; border-radius: 13px; background: var(--accent); position: relative; }
+.sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+.list { list-style: none; padding: 0; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.list div { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.list div:last-child { border-bottom: 0; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="roles">
+  <p class="cap">div role=button / span role=link / div role=switch aria-checked</p>
+  <div class="row"><div class="btn" role="button" tabindex="0">Confirm</div><span class="link" role="link" tabindex="0">Details</span><div class="sw" role="switch" aria-checked="true" tabindex="0"></div></div>
+</section>
+<section class="v" id="role-list">
+  <p class="cap">div role=list with role=listitem rows</p>
+  <div class="list" role="list"><div role="listitem">Inbox</div><div role="listitem">Sent</div><div role="listitem">Archive</div></div>
+</section>
+</main>
+</body>
+</html>

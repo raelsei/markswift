@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="position; position: absolute; position: relative; top; right; bottom; left">
+<title>position--absolute</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.card { position: relative; height: 120px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.badge { position: absolute; top: 8px; right: 8px; background: #dc2626; color: #fff; font-size: 11px; line-height: 14px; padding: 2px 8px; border-radius: 999px; }
+.overlay { position: absolute; inset: 0; background: rgba(37, 99, 235, 0.35); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; }
+.corner { position: absolute; bottom: 8px; left: 8px; }
+.centered { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="abs-badge">
+  <p class="cap">badge top/right, chip bottom/left</p>
+  <div class="card"><span class="badge">NEW</span><span class="b corner">bottom-left</span></div>
+</section>
+<section class="v" id="abs-overlay">
+  <p class="cap">inset: 0 overlay</p>
+  <div class="card"><div class="overlay">Overlay</div></div>
+</section>
+<section class="v" id="abs-centered">
+  <p class="cap">50%/50% + translate(-50%, -50%)</p>
+  <div class="card"><span class="b centered">Centered</span></div>
+</section>
+</main>
+</body>
+</html>

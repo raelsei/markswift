@@ -73,7 +73,7 @@ const files = { "browser.png": true, "ios.png": true, "diff.png": true, "layout.
 const artifactHashes = Object.fromEntries(Object.keys(files).map(name => [name, "a".repeat(64)]));
 const evidence = (overrides: Record<string, unknown> = {}) => ({
   ssim: 0.98, mismatch: 0.03, width: 640, height: 200, caseId: "display-flex", mode: "app", theme: "light",
-  viewportWidth: 320, viewportHeight: 2000, dpr: 2, loadedFonts: 0, rootWidthOverride: "[data-h2s-root] { width:100% !important }",
+  viewportWidth: 320, viewportHeight: 2000, dpr: 2, loadedFonts: 0, rootWidthOverride: "[data-markswift-root] { width:100% !important }",
   sourceRevision: "a".repeat(40), capturedAt: "2026-09-23T04:00:00.000Z", chrome: "Chrome 140", xcode: "Xcode 26", simulator: "iPhone iOS-26",
   fixtureHash: "c".repeat(64), harnessHash: "d".repeat(64),
   artifactHashes: { ...artifactHashes }, _hashes: { ...artifactHashes }, _files: { ...files },

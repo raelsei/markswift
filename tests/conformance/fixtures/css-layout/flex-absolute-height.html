@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="markswift-rows" content="display: flex; align-items; height; position: absolute">
+<meta name="markswift-themes" content="light,dark">
+<title>Flex items with only absolute children retain their height</title>
+<style>
+html, body { margin: 0; }
+main { box-sizing: border-box; width: 393px; padding: 16px; background: #eeeeee; }
+.row { display: flex; gap: 12px; }
+.tile { width: 174px; height: 90px; position: relative; background: #5599bb; }
+.mark { position: absolute; left: 48px; top: 25px; width: 40px; height: 40px; background: #ee3344; }
+@media (prefers-color-scheme: dark) { main { background: #222222; } }
+</style>
+</head>
+<body>
+<main data-markswift-root><div class="row"><div class="tile"><div class="mark"></div></div><div class="tile"><div class="mark"></div></div></div></main>
+</body>
+</html>

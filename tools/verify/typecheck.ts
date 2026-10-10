@@ -19,7 +19,7 @@ const SOFT_DEPRECATED: Array<[RegExp, string]> = [
   [/\.animation\([^)]*\)\s*$/m, "animation(_:) without value → animation(_:value:)"],
 ];
 
-export async function softDeprecations(swiftDir: string): Promise<string[]> {
+async function softDeprecations(swiftDir: string): Promise<string[]> {
   const hits: string[] = [];
   for (const f of (await readdir(swiftDir)).filter((f) => f.endsWith(".swift"))) {
     const text = await Bun.file(join(swiftDir, f)).text();
@@ -31,20 +31,15 @@ export async function softDeprecations(swiftDir: string): Promise<string[]> {
   return hits;
 }
 
-/** `swiftc -typecheck` every generated file together against the iOS simulator SDK. */
 /**
- * Compiler settings target iOS 18, Swift 6 language mode,
- * strict concurrency, MainActor default isolation. Generated code must be clean under the
- * strict compiler configuration.
+ * `swiftc -typecheck` every generated file together against the iOS 18 simulator SDK in Swift 6
+ * language mode with complete strict concurrency and MainActor default isolation.
  */
-export const TYPECHECK_TARGET = { ios: "18.0", swiftVersion: "6", strictConcurrency: true, defaultIsolationMainActor: true };
-
-export async function typecheck(swiftDir: string, target = TYPECHECK_TARGET): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
+export async function typecheck(swiftDir: string): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
   const files = (await readdir(swiftDir)).filter((f) => f.endsWith(".swift")).map((f) => join(swiftDir, f));
   const t0 = performance.now();
   const sdk = (await $`xcrun --sdk iphonesimulator --show-sdk-path`.text()).trim();
-  const flags = [`-swift-version`, target.swiftVersion, ...(target.strictConcurrency ? ["-strict-concurrency=complete"] : []), ...(target.defaultIsolationMainActor ? ["-default-isolation", "MainActor"] : [])];
-  const r = await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios${target.ios}-simulator ${flags} ${files}`.nothrow().quiet();
+  const r = await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete -default-isolation MainActor ${files}`.nothrow().quiet();
   const output = r.stderr.toString() + r.stdout.toString();
   // Deprecation warnings are failures: the emitter must never lean on APIs Apple is retiring.
   // Any warning fails: deprecations, isolation, unused — generated code ships warning-free.
