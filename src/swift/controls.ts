@@ -14,12 +14,12 @@
 import { parseColor } from "../css/index.ts";
 import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
-import type { EmitMode, ScreenTokens } from "./context.ts";
+import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
-export interface ControlDeps {
+export interface ControlDeps extends ColorCtx {
   /** Emits a child node the way the surrounding view would (containers → their property). */
   child: (n: SemNode) => string[];
   /** Control → `@State` property name; built by `controlMembers`. */

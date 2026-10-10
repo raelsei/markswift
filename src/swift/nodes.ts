@@ -24,7 +24,7 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
       core = imageNodeExpr(n, ctx);
       break;
     case "control":
-      core = controlExpr(n, { child: ctx.renderNode, stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.adaptive ? "adaptive" : ctx.screen.theme, tokens: ctx.tokens, id: n.id });
+      core = controlExpr(n, { child: ctx.renderNode, stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.adaptive ? "adaptive" : ctx.screen.theme, tokens: ctx.tokens, scaledFonts: ctx.scaledFonts, id: n.id });
       break;
     case "box":
       core = ["Color.clear"];

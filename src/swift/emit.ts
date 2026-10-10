@@ -25,15 +25,21 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   for (const p of props) nameOf.set(p.node, p.name);
   // Control state pass: a control owns its value, so the view that holds it declares the storage.
   const control = controlMembers(screen.root);
-  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, images, screen, mode: opts.mode, control, tokens: opts.tokens, adaptive: opts.adaptive, renderNode: (node) => refOf(node, ctx) };
+  const scaledFonts = new Map<string, string>();
+  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, images, screen, mode: opts.mode, control, tokens: opts.tokens, adaptive: opts.adaptive, scaledFonts, renderNode: (node) => refOf(node, ctx) };
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
-  const members = [...control.decls];
-  if (control.decls.length) members.push("");
-  members.push("var body: some View {", ...indent(refOf(screen.root, ctx), 1), "}");
+  // Body first: emitting it registers the `@ScaledMetric` font sizes declared above it.
+  const body = ["var body: some View {", ...indent(refOf(screen.root, ctx), 1), "}"];
   for (const p of props) {
-    members.push("", `// ${comment(p.node.id)}`, `private var ${p.name}: some View {`, ...indent(containerExpr(p.node as StackNode | GridNode, ctx), 1), "}");
+    body.push("", `// ${comment(p.node.id)}`, `private var ${p.name}: some View {`, ...indent(containerExpr(p.node as StackNode | GridNode, ctx), 1), "}");
   }
+  const scaled = [...scaledFonts].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, decl]) => decl);
+  const members = [...scaled];
+  if (scaled.length) members.push("");
+  members.push(...control.decls);
+  if (control.decls.length) members.push("");
+  members.push(...body);
   const preview = (theme: Theme, title: string) => [
     `#Preview("${title}") {`,
     ...indent([

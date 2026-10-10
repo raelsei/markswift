@@ -30,7 +30,7 @@ export interface EmitOptions {
 }
 
 /** Everything the recursive emitters need; built once per screen. */
-export interface EmitContext {
+export interface EmitContext extends ColorCtx {
   /** Recursive child lines; supplied by the screen emitter. */
   renderNode: (node: SemNode) => string[];
   fontMetrics: FontMetrics;
@@ -68,6 +68,8 @@ export interface ColorCtx {
   tokens?: ScreenTokens;
   /** Which output is being written; `fontExpr` emits a different font expression per mode. */
   mode: EmitMode;
+  /** App mode: `@ScaledMetric` font sizes used so far, property name → declaration; emitted once per view. */
+  scaledFonts?: Map<string, string>;
 }
 
 /** The view-level members a screen's controls need, in emission order. */
