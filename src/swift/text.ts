@@ -28,7 +28,8 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
   // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time.
-  const out: string[] = parts.length === 1 ? [parts[0]!] : ["Text.markswiftRuns([", ...parts.map((p) => `    ${p},`), "])"];
+  const out: string[] =
+    parts.length === 1 ? [parts[0]!] : ["Text.markswiftRuns([", ...parts.map((p) => `    ${p},`), "])"];
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
@@ -39,13 +40,23 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   const leading = first?.font.lineHeight === undefined ? 0 : first.font.lineHeight - natural;
   if (leading >= 0.01 && (ctx.mode === "app" || n.lines > 1)) out.push(`.lineSpacing(${num(leading)})`);
   // SwiftUI clamps a negative `.lineSpacing` to zero.
-  if (leading <= -0.01 && n.lines > 1) note(n, "approximated", "line-height", `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`);
+  if (leading <= -0.01 && n.lines > 1)
+    note(
+      n,
+      "approximated",
+      "line-height",
+      `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`,
+    );
   if (viewCase) out.push(`.textCase(.${viewCase})`);
   // `.shadow` is a View modifier too: one shadow for the whole text.
   const shadow = glyphs.find((r) => r.shadow)?.shadow;
   if (shadow) {
-    if (shadow.color.a > 0) out.push(`.shadow(color: ${colorExpr(shadow.color, ctx, n.id)}, radius: ${num(shadow.blur / 2)}, x: ${num(shadow.x)}, y: ${num(shadow.y)})`);
-    if (!glyphs.every((r) => r.shadow === undefined || JSON.stringify(r.shadow) === JSON.stringify(shadow))) note(n, "approximated", "text-shadow", "text-shadow of the first shadowed run applied to the whole text");
+    if (shadow.color.a > 0)
+      out.push(
+        `.shadow(color: ${colorExpr(shadow.color, ctx, n.id)}, radius: ${num(shadow.blur / 2)}, x: ${num(shadow.x)}, y: ${num(shadow.y)})`,
+      );
+    if (!glyphs.every((r) => r.shadow === undefined || JSON.stringify(r.shadow) === JSON.stringify(shadow)))
+      note(n, "approximated", "text-shadow", "text-shadow of the first shadowed run applied to the whole text");
   }
   // Soft wrapping is off for `nowrap` text, a single word CSS cannot break and, in fidelity,
   // whenever the browser's line division is known (baked-in breaks, or a single line that fit).
@@ -53,7 +64,8 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   // into the literal.
   const clamped = n.lineLimit !== undefined && n.noWrap !== true;
   const divided = n.noWrap === true || (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length));
-  const noSoftWrap = !n.truncate && !clamped && (divided || n.unbreakable === true || (ctx.mode === "fidelity" && n.lines === 1));
+  const noSoftWrap =
+    !n.truncate && !clamped && (divided || n.unbreakable === true || (ctx.mode === "fidelity" && n.lines === 1));
   out.push(`.fixedSize(horizontal: ${noSoftWrap}, vertical: true)`);
   // Fidelity pins the browser's line box (native line heights would drift the vertical rhythm).
   // App lets native metrics decide; alignment comes from `frameModifier`.
@@ -65,7 +77,10 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     const align = textBoxAlignment(n, shown > n.lines || clipsFirstLine(n));
     // Width is pinned only for text the browser broke; a single line that fit is held by
     // `fixedSize` alone so it stays flexible beside siblings.
-    const size = [noSoftWrap && divided ? `width: ${num(n.frame.w - n.padding[1] - n.padding[3])}` : "", `height: ${num(n.frame.h - n.padding[0] - n.padding[2])}`].filter(Boolean);
+    const size = [
+      noSoftWrap && divided ? `width: ${num(n.frame.w - n.padding[1] - n.padding[3])}` : "",
+      `height: ${num(n.frame.h - n.padding[0] - n.padding[2])}`,
+    ].filter(Boolean);
     out.push(`.frame(${size.join(", ")}, alignment: ${align})`);
   }
   // App mode: the half-leading above the first and below the last line, as padding so it grows
@@ -78,7 +93,13 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */
-function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, ctx: ColorCtx & { mode: EmitMode }): string {
+function runExpr(
+  r: TextRun,
+  i: number,
+  n: TextNode,
+  literalTransform: boolean,
+  ctx: ColorCtx & { mode: EmitMode },
+): string {
   // A gap run is pure advance; a named call keeps the run array cheap to typecheck.
   if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
   let text = r.text;
@@ -95,26 +116,53 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
   }
   if (literalTransform && r.transform) {
     text = transformLiteral(text, r.transform);
-    if (r.transform === "capitalize") note(n, "approximated", "text-transform: capitalize", "text-transform capitalize applied to the literal (no .textCase equivalent)");
+    if (r.transform === "capitalize")
+      note(
+        n,
+        "approximated",
+        "text-transform: capitalize",
+        "text-transform capitalize applied to the literal (no .textCase equivalent)",
+      );
   }
   let e = `Text(verbatim: ${str(text)})`;
   e += `.font(${fontExpr(r.font, ctx)})`;
   if (r.italic) e += ".italic()";
   // `background-clip: text`: the paint is the glyph fill (`Text.foregroundStyle` takes any ShapeStyle).
-  const paint = r.paint && r.paint.kind !== "image" && r.paint.kind !== "unsupported" ? paintExpr(r.paint, n.frame.w, n.frame.h, ctx, n.id) : undefined;
-  if (r.paint && !paint) note(n, "approximated", "background-clip: text", `background-clip text with a ${r.paint.kind} paint falls back to the text color`);
+  const paint =
+    r.paint && r.paint.kind !== "image" && r.paint.kind !== "unsupported"
+      ? paintExpr(r.paint, n.frame.w, n.frame.h, ctx, n.id)
+      : undefined;
+  if (r.paint && !paint)
+    note(
+      n,
+      "approximated",
+      "background-clip: text",
+      `background-clip text with a ${r.paint.kind} paint falls back to the text color`,
+    );
   // A run's own slot key (`run2`) resolves it even when the node paints its colour twice; a
   // paint fallback colour is no enumerated slot, so it keeps the node-wide lookup.
   e += `.foregroundStyle(${paint ?? colorExpr(r.color, ctx, n.id, r.paint ? undefined : `run${i}`)})`;
   if (r.decoration) {
     const d = r.decoration;
     const pattern = d.style === "dotted" ? ".dot" : d.style === "dashed" ? ".dash" : undefined;
-    if (d.style === "wavy" || d.style === "double") note(n, "approximated", "text-decoration-style", `text-decoration-style ${d.style} drawn solid`);
-    const args = [pattern ? `pattern: ${pattern}` : "", d.color ? `color: ${colorExpr(d.color, ctx, n.id, `run${i}.dec`)}` : ""].filter(Boolean).join(", ");
+    if (d.style === "wavy" || d.style === "double")
+      note(n, "approximated", "text-decoration-style", `text-decoration-style ${d.style} drawn solid`);
+    const args = [
+      pattern ? `pattern: ${pattern}` : "",
+      d.color ? `color: ${colorExpr(d.color, ctx, n.id, `run${i}.dec`)}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
     for (const line of d.lines) {
       if (line === "underline") e += `.underline(${args})`;
       else if (line === "line-through") e += `.strikethrough(${args})`;
-      else note(n, "approximated", "text-decoration-line: overline", "text-decoration-line overline has no SwiftUI form; dropped");
+      else
+        note(
+          n,
+          "approximated",
+          "text-decoration-line: overline",
+          "text-decoration-line overline has no SwiftUI form; dropped",
+        );
     }
   }
   if (r.kerning !== undefined && r.kerning !== 0) e += `.kerning(${num(r.kerning)})`;
@@ -127,5 +175,8 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
 function transformLiteral(text: string, t: NonNullable<TextRun["transform"]>): string {
   if (t === "uppercase") return text.toUpperCase();
   if (t === "lowercase") return text.toLowerCase();
-  return text.replace(/(^|[^\p{L}\p{N}'’])(\p{L})/gu, (_, before: string, letter: string) => before + letter.toUpperCase());
+  return text.replace(
+    /(^|[^\p{L}\p{N}'’])(\p{L})/gu,
+    (_, before: string, letter: string) => before + letter.toUpperCase(),
+  );
 }

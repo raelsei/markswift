@@ -62,7 +62,11 @@ export function extractTokens(screens: Screen[]): TokenSet {
     for (const u of us) {
       for (const slot of ["", `\u0000${u.slot}`]) {
         put(`${u.base}\u0000${u.theme}\u0000${u.nodeId}\u0000${colorKey(u.light)}${slot}`, name);
-        if (u.dark) put(`${u.base}\u0000${u.theme === "light" ? "dark" : "light"}\u0000${u.nodeId}\u0000${colorKey(u.dark)}${slot}`, name);
+        if (u.dark)
+          put(
+            `${u.base}\u0000${u.theme === "light" ? "dark" : "light"}\u0000${u.nodeId}\u0000${colorKey(u.dark)}${slot}`,
+            name,
+          );
       }
     }
     tokens.push({
@@ -92,6 +96,9 @@ export function extractTokens(screens: Screen[]): TokenSet {
 export function screenTokens(set: TokenSet, screen: Screen): ScreenTokens {
   const prefix = `${screenBase(screen)}\u0000${screen.theme}\u0000`;
   return {
-    name: (c, id, slot) => (id === undefined ? undefined : set.index.get(`${prefix}${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`)),
+    name: (c, id, slot) =>
+      id === undefined
+        ? undefined
+        : set.index.get(`${prefix}${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`),
   };
 }

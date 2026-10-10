@@ -72,13 +72,29 @@ interface Raw {
   children: Raw[];
 }
 
-const SKIP_TAGS: Record<string, true> = { script: true, style: true, link: true, meta: true, template: true, noscript: true };
+const SKIP_TAGS: Record<string, true> = {
+  script: true,
+  style: true,
+  link: true,
+  meta: true,
+  template: true,
+  noscript: true,
+};
 /**
  * Nodes that never get a layout box but must survive: SVG paint servers, so fills/strokes can
  * resolve `url(#id)`, and `<option>`/`<optgroup>`, which Chrome lays out in the select popup
  * rather than in the page — their labels are read as text, never measured.
  */
-const KEEP_WITHOUT_LAYOUT: Record<string, true> = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true };
+const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
+  defs: true,
+  lineargradient: true,
+  radialgradient: true,
+  stop: true,
+  clippath: true,
+  mask: true,
+  option: true,
+  optgroup: true,
+};
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
 
@@ -187,7 +203,11 @@ function assignLineBoxes(document: DomSnapshot["documents"][number], raws: Raw[]
     const r = raws[nodeIndex[tb.layoutIndex[k]!]!];
     const b = tb.bounds[k];
     if (!r || !b) continue;
-    (r.lines ??= []).push({ bounds: { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! }, start: tb.start[k]!, length: tb.length[k]! });
+    (r.lines ??= []).push({
+      bounds: { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! },
+      start: tb.start[k]!,
+      length: tb.length[k]!,
+    });
   }
 }
 
@@ -238,7 +258,8 @@ function markCurrentSrc(img: Raw, currentSrc: string, base: string): void {
   if (src !== undefined && resolve(src) === currentSrc) return;
   const candidates = srcsetUrls(img.attrs["srcset"] ?? "");
   if (img.parent?.name === "picture") {
-    for (const s of img.parent.children) if (s.type === 1 && s.name === "source") candidates.push(...srcsetUrls(s.attrs["srcset"] ?? ""));
+    for (const s of img.parent.children)
+      if (s.type === 1 && s.name === "source") candidates.push(...srcsetUrls(s.attrs["srcset"] ?? ""));
   }
   img.currentSrc = candidates.find((c) => resolve(c) === currentSrc) ?? currentSrc;
 }
@@ -293,7 +314,12 @@ export function findByAttr(root: Raw, attr: string, value: string): Raw | undefi
  * - `visibility: hidden` elements keep their box and are emitted like any
  *   other node; hiding is the inference pass's decision.
  */
-export function toLayout(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, path = ""): LayoutNode | undefined {
+export function toLayout(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  path = "",
+): LayoutNode | undefined {
   if (raw.type !== 1 || SKIP_TAGS[raw.name]) return undefined;
   if (!raw.bounds && !KEEP_WITHOUT_LAYOUT[raw.name]) return undefined; // display:none or not laid out
   return element(raw, origin, identity, path);
@@ -317,7 +343,13 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
 }
 
 /** Converts `raw`'s children into `out`; `path` is `raw`'s element path. */
-function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, path: string, out: LayoutNode[]): void {
+function appendChildren(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  path: string,
+  out: LayoutNode[],
+): void {
   let after: LayoutNode | undefined;
   let i = 0;
   for (const c of raw.children) {
@@ -328,12 +360,27 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
       // laid-out text of the snapshot never covers it, so its DOM value is the text, kept with
       // a zero rect because nothing measures it.
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
-        const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
+        const text: LayoutNode = {
+          tag: "#text",
+          attrs: {},
+          styles: {},
+          bounds: rebase(c.bounds, origin),
+          text: c.text,
+          children: [],
+        };
         // Only a broken text node needs its division recorded; one box is the bounds already.
-        if (c.lines && c.lines.length > 1) text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
+        if (c.lines && c.lines.length > 1)
+          text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
-        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
+        out.push({
+          tag: "#text",
+          attrs: {},
+          styles: {},
+          bounds: { x: 0, y: 0, w: 0, h: 0 },
+          text: c.value,
+          children: [],
+        });
       }
       continue;
     }
@@ -358,7 +405,12 @@ function hasLayout(raw: Raw): boolean {
   return raw.bounds !== undefined || raw.children.some(hasLayout);
 }
 
-function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, parentPath: string): LayoutNode | undefined {
+function pseudoElement(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  parentPath: string,
+): LayoutNode | undefined {
   const tag = PSEUDO_TAGS[raw.pseudo!];
   if (!tag || !raw.bounds) return undefined;
   const text = raw.text?.trim() ? raw.text : undefined;
@@ -369,7 +421,9 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
     attrs: {},
     styles: raw.styles,
     bounds: rebase(box ?? raw.bounds, origin),
-    children: text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : [],
+    children: text
+      ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }]
+      : [],
   };
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
   if (id !== undefined) node.id = id;

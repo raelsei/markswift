@@ -110,7 +110,9 @@ export function textContent(el: LayoutNode | undefined): string {
 
 export function decorationOf(s: Record<string, string>, color: Color): TextDecoration | undefined {
   const raw = s["-webkit-text-decorations-in-effect"] ?? s["text-decoration-line"] ?? "none";
-  const lines = raw.split(/\s+/).filter((l): l is DecorationLine => l === "underline" || l === "line-through" || l === "overline");
+  const lines = raw
+    .split(/\s+/)
+    .filter((l): l is DecorationLine => l === "underline" || l === "line-through" || l === "overline");
   if (!lines.length) return undefined;
   const d: TextDecoration = { lines };
   const dc = parseColor(s["text-decoration-color"]);

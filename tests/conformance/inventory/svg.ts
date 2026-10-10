@@ -24,7 +24,8 @@ const MDN_EL = "https://developer.mozilla.org/docs/Web/SVG/Element/";
 const MDN_ATTR = "https://developer.mozilla.org/docs/Web/SVG/Attribute/";
 const MDN_CSS = "https://developer.mozilla.org/docs/Web/CSS/";
 
-const FE_UNMAPPED = "Filter primitive with no SwiftUI equivalent (only single-primitive `feGaussianBlur`/`feDropShadow` graphs and the offset+blur+merge drop-shadow idiom are approximated); the filter is reported as `unmapped: svg filter <id>` and the shape is drawn unfiltered.";
+const FE_UNMAPPED =
+  "Filter primitive with no SwiftUI equivalent (only single-primitive `feGaussianBlur`/`feDropShadow` graphs and the offset+blur+merge drop-shadow idiom are approximated); the filter is reported as `unmapped: svg filter <id>` and the shape is drawn unfiltered.";
 
 export default {
   domain: "svg",
@@ -71,7 +72,7 @@ export default {
       ir: "SvgNode.paths (cloned per use)",
       via: "structure",
       impl: "no",
-      note: "Never rendered directly (correct), but `<use href=\"#symbol\">` is not resolved, so the icon is silently empty.",
+      note: 'Never rendered directly (correct), but `<use href="#symbol">` is not resolved, so the icon is silently empty.',
       spec: `${MDN_EL}symbol`,
     },
     {
@@ -82,7 +83,7 @@ export default {
       ir: "SvgNode.paths (cloned), SvgPath.transform (new)",
       via: "structure",
       impl: "no",
-      note: "Reference resolution (`href`/`xlink:href`, same-document only) is not implemented; a `<use>` child is skipped silently. External sprite sheets (`href=\"sprite.svg#id\"`) stay unmapped and must be reported.",
+      note: 'Reference resolution (`href`/`xlink:href`, same-document only) is not implemented; a `<use>` child is skipped silently. External sprite sheets (`href="sprite.svg#id"`) stay unmapped and must be reported.',
       spec: `${MDN_EL}use`,
     },
     {
@@ -156,7 +157,8 @@ export default {
       id: "svg:path",
       group: "Shapes",
       class: "mapped",
-      target: "Shape (Path.move/addLine/addCurve/addQuadCurve; arcs and relative/shorthand commands normalised by svgpath)",
+      target:
+        "Shape (Path.move/addLine/addCurve/addQuadCurve; arcs and relative/shorthand commands normalised by svgpath)",
       ir: "SvgPath.d",
       via: "structure",
       impl: "yes",
@@ -236,7 +238,7 @@ export default {
       ir: "SvgPath.pattern (new)",
       via: "structure",
       impl: "no",
-      note: "SwiftUI tiles only raster images (ImagePaint), so the pattern tile must be rasterised at 1x/2x/3x and bundled; `patternTransform`, `patternUnits: userSpaceOnUse` offsets and vector crispness are lost. Today a `fill=\"url(#pattern)\"` is reported as `unmapped: svg gradient fill` and the shape is left unfilled.",
+      note: 'SwiftUI tiles only raster images (ImagePaint), so the pattern tile must be rasterised at 1x/2x/3x and bundled; `patternTransform`, `patternUnits: userSpaceOnUse` offsets and vector crispness are lost. Today a `fill="url(#pattern)"` is reported as `unmapped: svg gradient fill` and the shape is left unfilled.',
       spec: `${MDN_EL}pattern`,
     },
 
@@ -249,7 +251,7 @@ export default {
       ir: "SvgNode.clip (new) / SvgPath.clip (new)",
       via: "structure",
       impl: "no",
-      note: "Not collected from defs; a shape with `clip-path=\"url(#c)\"` is drawn unclipped and nothing is reported. `clipPathUnits=\"objectBoundingBox\"` needs the shape's bounds to scale the clip path; multiple children union into one Path.",
+      note: 'Not collected from defs; a shape with `clip-path="url(#c)"` is drawn unclipped and nothing is reported. `clipPathUnits="objectBoundingBox"` needs the shape\'s bounds to scale the clip path; multiple children union into one Path.',
       spec: `${MDN_EL}clipPath`,
     },
     {
@@ -271,7 +273,7 @@ export default {
       ir: "SvgPath.markers (new)",
       via: "structure",
       impl: "no",
-      note: "Arrowheads/dots can be instantiated as additional paths at the referencing path's vertices; `orient=\"auto\"` is exact for straight segments but the tangent at curve endpoints is approximated, and `markerUnits=\"strokeWidth\"` scaling with `vector-effect` differs. Today markers are skipped silently.",
+      note: 'Arrowheads/dots can be instantiated as additional paths at the referencing path\'s vertices; `orient="auto"` is exact for straight segments but the tangent at curve endpoints is approximated, and `markerUnits="strokeWidth"` scaling with `vector-effect` differs. Today markers are skipped silently.',
       spec: `${MDN_EL}marker`,
     },
 
@@ -343,7 +345,7 @@ export default {
       ir: "SvgPath.effects (new)",
       via: "structure",
       impl: "no",
-      note: "Only recognisable graphs map: a lone `feGaussianBlur` → `.blur`, a lone `feDropShadow` or the `feOffset`+`feGaussianBlur`+`feFlood`/`feComposite`+`feMerge` idiom → `.shadow`; any other primitive makes the whole filter unmapped (reported once per shape). `filterUnits`/`x`/`y`/`width`/`height` clipping of the filter region is ignored. Today `filter=\"url(#f)\"` is dropped silently.",
+      note: 'Only recognisable graphs map: a lone `feGaussianBlur` → `.blur`, a lone `feDropShadow` or the `feOffset`+`feGaussianBlur`+`feFlood`/`feComposite`+`feMerge` idiom → `.shadow`; any other primitive makes the whole filter unmapped (reported once per shape). `filterUnits`/`x`/`y`/`width`/`height` clipping of the filter region is ignored. Today `filter="url(#f)"` is dropped silently.',
       spec: `${MDN_EL}filter`,
     },
     {
@@ -354,7 +356,7 @@ export default {
       ir: "SvgPath.effects (new)",
       via: "structure",
       impl: "no",
-      note: "`stdDeviation` maps to the blur radius (both Gaussian sigma), but anisotropic `stdDeviation=\"x y\"`, `edgeMode` and `in` other than SourceGraphic are not representable; the blur region is not clipped to the filter region.",
+      note: '`stdDeviation` maps to the blur radius (both Gaussian sigma), but anisotropic `stdDeviation="x y"`, `edgeMode` and `in` other than SourceGraphic are not representable; the blur region is not clipped to the filter region.',
       spec: `${MDN_EL}feGaussianBlur`,
     },
     {
@@ -376,7 +378,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Alone it has no equivalent; it is recognised only as part of the drop-shadow idiom (`svg:filter`). " + FE_UNMAPPED,
+      note:
+        "Alone it has no equivalent; it is recognised only as part of the drop-shadow idiom (`svg:filter`). " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feOffset`,
     },
     {
@@ -387,7 +391,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Fills the filter region with `flood-color`; recognised only as the colour source of the drop-shadow idiom. " + FE_UNMAPPED,
+      note:
+        "Fills the filter region with `flood-color`; recognised only as the colour source of the drop-shadow idiom. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feFlood`,
     },
     {
@@ -398,7 +404,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Stacks intermediate results; recognised only as the final SourceGraphic-over-shadow step of the drop-shadow idiom. " + FE_UNMAPPED,
+      note:
+        "Stacks intermediate results; recognised only as the final SourceGraphic-over-shadow step of the drop-shadow idiom. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feMerge`,
     },
     {
@@ -420,7 +428,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Blends two filter inputs; `.blendMode` only blends whole views against the backdrop, not arbitrary filter results. " + FE_UNMAPPED,
+      note:
+        "Blends two filter inputs; `.blendMode` only blends whole views against the backdrop, not arbitrary filter results. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feBlend`,
     },
     {
@@ -431,7 +441,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Arbitrary 5x4 matrices have no modifier; the `saturate`/`hueRotate` shortcuts could become `.saturation`/`.hueRotation` later but are not a decided mapping. " + FE_UNMAPPED,
+      note:
+        "Arbitrary 5x4 matrices have no modifier; the `saturate`/`hueRotate` shortcuts could become `.saturation`/`.hueRotation` later but are not a decided mapping. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feColorMatrix`,
     },
     {
@@ -497,7 +509,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Porter-Duff compositing of two inputs (`in`, `out`, `xor`, `arithmetic`); only the `in`-with-flood step of the drop-shadow idiom is recognised. " + FE_UNMAPPED,
+      note:
+        "Porter-Duff compositing of two inputs (`in`, `out`, `xor`, `arithmetic`); only the `in`-with-flood step of the drop-shadow idiom is recognised. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feComposite`,
     },
     {
@@ -618,7 +632,9 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Procedural Perlin noise (grain, paper textures) is script-like generated content; a rasterised asset is the only substitute and is not automated. " + FE_UNMAPPED,
+      note:
+        "Procedural Perlin noise (grain, paper textures) is script-like generated content; a rasterised asset is the only substitute and is not automated. " +
+        FE_UNMAPPED,
       spec: `${MDN_EL}feTurbulence`,
     },
 
@@ -664,7 +680,7 @@ export default {
       ir: "—",
       via: "structure",
       impl: "no",
-      note: "Timed attribute change (usually on `begin=\"click\"`); the snapshot keeps the base value. Report once per `<svg>`; not reported today.",
+      note: 'Timed attribute change (usually on `begin="click"`); the snapshot keeps the base value. Report once per `<svg>`; not reported today.',
       spec: `${MDN_EL}set`,
     },
     {
@@ -892,7 +908,7 @@ export default {
       ir: "SvgPath.markers (new)",
       via: "style",
       impl: "no",
-      note: "See `svg:marker`: the marker content is instantiated as extra path data at the final vertex; tangent for `orient=\"auto\"` on curves is approximated. Dropped silently today.",
+      note: 'See `svg:marker`: the marker content is instantiated as extra path data at the final vertex; tangent for `orient="auto"` on curves is approximated. Dropped silently today.',
       spec: `${MDN_CSS}marker-end`,
     },
     {
@@ -903,7 +919,7 @@ export default {
       ir: "SvgPath.markers (new)",
       via: "style",
       impl: "no",
-      note: "See `svg:marker`; interior-vertex bisector angles for `orient=\"auto\"` are computed from the path segments. Dropped silently today.",
+      note: 'See `svg:marker`; interior-vertex bisector angles for `orient="auto"` are computed from the path segments. Dropped silently today.',
       spec: `${MDN_CSS}marker-mid`,
     },
     {
@@ -1146,7 +1162,7 @@ export default {
       ir: "SvgPath.d",
       via: "attribute",
       impl: "partial",
-      note: "Attribute only; a CSS `d: path(\"…\")` declaration (used for CSS-animated icons) is not read from computed style.",
+      note: 'Attribute only; a CSS `d: path("…")` declaration (used for CSS-animated icons) is not read from computed style.',
       spec: `${MDN_CSS}d`,
     },
     {

@@ -30,12 +30,19 @@ export function svgExpr(n: SvgNode, shapes: Record<string, string>, ctx: ColorCt
   const [, , vw, vh] = n.viewBox;
   // preserveAspectRatio default (`xMidYMid meet`): uniform scale, content centred in the frame.
   const scale = vw > 0 && vh > 0 ? (n.stretch ? n.frame.w / vw : Math.min(n.frame.w / vw, n.frame.h / vh)) : 1;
-  const cw = n.stretch ? n.frame.w : vw * scale, ch = n.stretch ? n.frame.h : vh * scale;
+  const cw = n.stretch ? n.frame.w : vw * scale,
+    ch = n.stretch ? n.frame.h : vh * scale;
   const view: View = { vb: n.viewBox, scale, offset: [(n.frame.w - cw) / 2, (n.frame.h - ch) / 2], shapes, ctx, id };
   const layers = n.paths.flatMap((p) => layerLines(p, view));
   for (const t of n.texts ?? []) layers.push(textLine(t, view));
-  const out = layers.length === 0 ? ["Color.clear"] : layers.length === 1 ? [layers[0]!] : ["ZStack {", ...indent(layers, 1), "}"];
-  if (Math.abs(cw - n.frame.w) > 0.01 || Math.abs(ch - n.frame.h) > 0.01) out.push(`.frame(width: ${num(cw)}, height: ${num(ch)})`);
+  const out =
+    layers.length === 0
+      ? ["Color.clear"]
+      : layers.length === 1
+        ? [layers[0]!]
+        : ["ZStack {", ...indent(layers, 1), "}"];
+  if (Math.abs(cw - n.frame.w) > 0.01 || Math.abs(ch - n.frame.h) > 0.01)
+    out.push(`.frame(width: ${num(cw)}, height: ${num(ch)})`);
   // An `aria-label` (emitted by `placementModifiers`) wins over `<title>`.
   if (n.label && !n.a11y?.label) out.push(`.accessibilityLabel(${str(n.label)})`);
   return out;
@@ -50,22 +57,45 @@ function layerLines(p: SvgPath, view: View): string[] {
     const inset = (vw / 2 - p.ring.r) * scale;
     const lw = (p.strokeWidth ?? 1) * scale;
     // The stroke's view is the padded square, so gradient coordinates map through the circle's box.
-    const box: [number, number, number, number] = [vb[0] + vw / 2 - p.ring.r, vb[1] + vb[3] / 2 - p.ring.r, 2 * p.ring.r, 2 * p.ring.r];
-    const paint = p.strokeGradient ? gradientExpr(p.strokeGradient, box, view) : colorExpr(p.stroke ?? { r: 0, g: 0, b: 0, a: 1 }, view.ctx, view.id);
-    const rotate = p.ring.startAngle ? `.rotationEffect(.degrees(${Number.isInteger(p.ring.startAngle) ? p.ring.startAngle : num(p.ring.startAngle)}))` : "";
-    return [`Circle().trim(from: 0, to: ${num(p.ring.to)}).stroke(${withOpacity(paint, p.strokeOpacity)}, style: StrokeStyle(lineWidth: ${num(lw)}, lineCap: .${p.lineCap ?? "butt"}))${rotate}.padding(${num(inset)})`];
+    const box: [number, number, number, number] = [
+      vb[0] + vw / 2 - p.ring.r,
+      vb[1] + vb[3] / 2 - p.ring.r,
+      2 * p.ring.r,
+      2 * p.ring.r,
+    ];
+    const paint = p.strokeGradient
+      ? gradientExpr(p.strokeGradient, box, view)
+      : colorExpr(p.stroke ?? { r: 0, g: 0, b: 0, a: 1 }, view.ctx, view.id);
+    const rotate = p.ring.startAngle
+      ? `.rotationEffect(.degrees(${Number.isInteger(p.ring.startAngle) ? p.ring.startAngle : num(p.ring.startAngle)}))`
+      : "";
+    return [
+      `Circle().trim(from: 0, to: ${num(p.ring.to)}).stroke(${withOpacity(paint, p.strokeOpacity)}, style: StrokeStyle(lineWidth: ${num(lw)}, lineCap: .${p.lineCap ?? "butt"}))${rotate}.padding(${num(inset)})`,
+    ];
   }
   const name = shapeName(p.path, vb, view.shapes);
   const suffix = layerSuffix(p, view);
   const out: string[] = [];
-  const fill = p.gradient ? gradientExpr(p.gradient, vb, view) : p.fill && p.fill.a > 0 ? colorExpr(p.fill, view.ctx, view.id) : undefined;
-  if (fill) out.push(`${name}().fill(${withOpacity(fill, p.fillOpacity)}${p.eoFill ? ", style: FillStyle(eoFill: true)" : ""})${suffix}`);
-  const stroke = p.strokeGradient ? gradientExpr(p.strokeGradient, vb, view) : p.stroke && p.stroke.a > 0 ? colorExpr(p.stroke, view.ctx, view.id) : undefined;
+  const fill = p.gradient
+    ? gradientExpr(p.gradient, vb, view)
+    : p.fill && p.fill.a > 0
+      ? colorExpr(p.fill, view.ctx, view.id)
+      : undefined;
+  if (fill)
+    out.push(
+      `${name}().fill(${withOpacity(fill, p.fillOpacity)}${p.eoFill ? ", style: FillStyle(eoFill: true)" : ""})${suffix}`,
+    );
+  const stroke = p.strokeGradient
+    ? gradientExpr(p.strokeGradient, vb, view)
+    : p.stroke && p.stroke.a > 0
+      ? colorExpr(p.stroke, view.ctx, view.id)
+      : undefined;
   if (stroke) {
     const lw = (p.strokeWidth ?? 1) * scale;
     let style = `lineWidth: ${num(lw)}, lineCap: .${p.lineCap ?? "butt"}, lineJoin: .${p.lineJoin ?? "miter"}`;
     if (p.miterLimit !== undefined) style += `, miterLimit: ${num(p.miterLimit)}`;
-    if (p.dash?.length) style += `, dash: [${p.dash.map((v) => num(v * scale)).join(", ")}]${p.dashPhase ? `, dashPhase: ${num(p.dashPhase * scale)}` : ""}`;
+    if (p.dash?.length)
+      style += `, dash: [${p.dash.map((v) => num(v * scale)).join(", ")}]${p.dashPhase ? `, dashPhase: ${num(p.dashPhase * scale)}` : ""}`;
     out.push(`${name}().stroke(${withOpacity(stroke, p.strokeOpacity)}, style: StrokeStyle(${style}))${suffix}`);
   }
   return out;
@@ -74,7 +104,8 @@ function layerLines(p: SvgPath, view: View): string[] {
 /** Modifiers shared by a path's fill and stroke layers: opacity, clip, mask. */
 function layerSuffix(p: SvgPath, view: View): string {
   let s = p.opacity !== undefined ? `.opacity(${num(p.opacity)})` : "";
-  if (p.clip) s += `.clipShape(${shapeName(p.clip.path, view.vb, view.shapes)}()${p.clip.eoFill ? ", style: FillStyle(eoFill: true)" : ""})`;
+  if (p.clip)
+    s += `.clipShape(${shapeName(p.clip.path, view.vb, view.shapes)}()${p.clip.eoFill ? ", style: FillStyle(eoFill: true)" : ""})`;
   if (p.mask?.length) {
     // SVG masks are luminance masks; SwiftUI masks by alpha.
     const layers = p.mask.flatMap((m) => layerLines(m, view));
@@ -92,9 +123,14 @@ function withOpacity(paint: string, opacity: number | undefined): string {
 function gradientExpr(g: SvgGradient, box: [number, number, number, number], view: View): string {
   const { scale } = view;
   const [bx, by, bw, bh] = box;
-  const unit = ([x, y]: [number, number]) => `UnitPoint(x: ${num(bw ? (x - bx) / bw : 0.5)}, y: ${num(bh ? (y - by) / bh : 0.5)})`;
-  const stops = "[" + g.stops.map((s) => `.init(color: ${colorExpr(s.color, view.ctx, view.id)}, location: ${num(s.pos)})`).join(", ") + "]";
-  if (g.kind === "linear") return `LinearGradient(stops: ${stops}, startPoint: ${unit(g.start)}, endPoint: ${unit(g.end)})`;
+  const unit = ([x, y]: [number, number]) =>
+    `UnitPoint(x: ${num(bw ? (x - bx) / bw : 0.5)}, y: ${num(bh ? (y - by) / bh : 0.5)})`;
+  const stops =
+    "[" +
+    g.stops.map((s) => `.init(color: ${colorExpr(s.color, view.ctx, view.id)}, location: ${num(s.pos)})`).join(", ") +
+    "]";
+  if (g.kind === "linear")
+    return `LinearGradient(stops: ${stops}, startPoint: ${unit(g.start)}, endPoint: ${unit(g.end)})`;
   const [rx, ry] = g.radius;
   // An ellipse proportional to the box is a single radius fraction; otherwise a circle of the mean radius.
   if (bw && bh && Math.abs(rx / bw - ry / bh) < 0.005 && Math.abs(rx - ry) > 0.01) {
@@ -106,46 +142,53 @@ function gradientExpr(g: SvgGradient, box: [number, number, number, number], vie
 /** A text run as a `Text` centred on its measured box (frame px → content box px). */
 function textLine(t: SvgText, view: View): string {
   const font = { ...t.font, size: t.font.size * view.scale };
-  const cx = t.box.x + t.box.w / 2 - view.offset[0], cy = t.box.y + t.box.h / 2 - view.offset[1];
+  const cx = t.box.x + t.box.w / 2 - view.offset[0],
+    cy = t.box.y + t.box.h / 2 - view.offset[1];
   return `Text(verbatim: ${str(t.text)}).font(${fontExpr(font, view.ctx, true)}).foregroundStyle(${colorExpr(t.fill, view.ctx, view.id)}).fixedSize().position(x: ${num(cx)}, y: ${num(cy)})`;
 }
 
 /** One Shape struct per unique (path, viewBox); returns its name. */
 function shapeName(path: PathSegment[], vb: [number, number, number, number], shapes: Record<string, string>): string {
-  return shapeStruct("MarkswiftShape_" + hash(`${vb.join(" ")}|${path.map((s) => s.join(" ")).join(" ")}`), shapes, () => {
-    const [vx, vy, vw, vh] = vb;
-    const out = [
-      `let sx = rect.width / ${num(vw)}, sy = rect.height / ${num(vh)}`,
-      `func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + (x - ${num(vx)}) * sx, y: rect.minY + (y - ${num(vy)}) * sy) }`,
-      "var p = Path()",
-    ];
-    for (const seg of path) {
-      const [cmd, ...a] = seg as [string, ...number[]];
-      switch (cmd) {
-        case "M":
-          out.push(`p.move(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-          break;
-        case "L":
-          out.push(`p.addLine(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-          break;
-        case "H":
-          out.push(`p.addLine(to: CGPoint(x: P(${num(a[0]!)}, 0).x, y: p.currentPoint?.y ?? 0))`);
-          break;
-        case "V":
-          out.push(`p.addLine(to: CGPoint(x: p.currentPoint?.x ?? 0, y: P(0, ${num(a[0]!)}).y))`);
-          break;
-        case "C":
-          out.push(`p.addCurve(to: P(${num(a[4]!)}, ${num(a[5]!)}), control1: P(${num(a[0]!)}, ${num(a[1]!)}), control2: P(${num(a[2]!)}, ${num(a[3]!)}))`);
-          break;
-        case "Q":
-          out.push(`p.addQuadCurve(to: P(${num(a[2]!)}, ${num(a[3]!)}), control: P(${num(a[0]!)}, ${num(a[1]!)}))`);
-          break;
-        case "Z":
-          out.push("p.closeSubpath()");
-          break;
+  return shapeStruct(
+    "MarkswiftShape_" + hash(`${vb.join(" ")}|${path.map((s) => s.join(" ")).join(" ")}`),
+    shapes,
+    () => {
+      const [vx, vy, vw, vh] = vb;
+      const out = [
+        `let sx = rect.width / ${num(vw)}, sy = rect.height / ${num(vh)}`,
+        `func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: rect.minX + (x - ${num(vx)}) * sx, y: rect.minY + (y - ${num(vy)}) * sy) }`,
+        "var p = Path()",
+      ];
+      for (const seg of path) {
+        const [cmd, ...a] = seg as [string, ...number[]];
+        switch (cmd) {
+          case "M":
+            out.push(`p.move(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+            break;
+          case "L":
+            out.push(`p.addLine(to: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+            break;
+          case "H":
+            out.push(`p.addLine(to: CGPoint(x: P(${num(a[0]!)}, 0).x, y: p.currentPoint?.y ?? 0))`);
+            break;
+          case "V":
+            out.push(`p.addLine(to: CGPoint(x: p.currentPoint?.x ?? 0, y: P(0, ${num(a[0]!)}).y))`);
+            break;
+          case "C":
+            out.push(
+              `p.addCurve(to: P(${num(a[4]!)}, ${num(a[5]!)}), control1: P(${num(a[0]!)}, ${num(a[1]!)}), control2: P(${num(a[2]!)}, ${num(a[3]!)}))`,
+            );
+            break;
+          case "Q":
+            out.push(`p.addQuadCurve(to: P(${num(a[2]!)}, ${num(a[3]!)}), control: P(${num(a[0]!)}, ${num(a[1]!)}))`);
+            break;
+          case "Z":
+            out.push("p.closeSubpath()");
+            break;
+        }
       }
-    }
-    out.push("return p");
-    return out;
-  });
+      out.push("return p");
+      return out;
+    },
+  );
 }

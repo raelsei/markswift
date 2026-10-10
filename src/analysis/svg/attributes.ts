@@ -32,7 +32,12 @@ export function inherit(parent: Record<string, string>, own: Record<string, stri
 }
 
 /** Presentation value: computed style first, attribute fallback; inside a `<use>` instance `currentColor` follows the use element. */
-export function styleProp(c: LayoutNode, attrs: Record<string, string>, k: string, scope: SvgScope): string | undefined {
+export function styleProp(
+  c: LayoutNode,
+  attrs: Record<string, string>,
+  k: string,
+  scope: SvgScope,
+): string | undefined {
   const declared = attrs[k];
   if (scope.useColor && declared === "currentColor") return scope.useColor;
   const v = c.styles[k] ?? declared;
@@ -42,16 +47,25 @@ export function styleProp(c: LayoutNode, attrs: Record<string, string>, k: strin
 }
 
 /** `url(#id)` target from an attribute or the inline `style` (non-whitelisted properties such as `clip-path`/`mask`). */
-export function reference(c: LayoutNode, attrs: Record<string, string>, k: string, ctx: SvgContext): LayoutNode | undefined {
+export function reference(
+  c: LayoutNode,
+  attrs: Record<string, string>,
+  k: string,
+  ctx: SvgContext,
+): LayoutNode | undefined {
   const raw = attrs[k] ?? parseDeclared(c.attrs["style"])[k];
   const m = raw && /^url\(["']?#([^"')]+)["']?\)/.exec(raw);
-  if (m && !ctx.ids[m[1]!]) addDiagnostic(ctx.diagnostics, "unmapped", "svg", `svg ${k} url(#${m[1]}) (target not in document)`);
+  if (m && !ctx.ids[m[1]!])
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg", `svg ${k} url(#${m[1]}) (target not in document)`);
   return m ? ctx.ids[m[1]!] : undefined;
 }
 
 export function parseDash(s: string | undefined): number[] {
   if (!s || s === "none") return [];
-  const v = s.split(/[\s,]+/).map(parseFloat).filter((x) => Number.isFinite(x) && x >= 0);
+  const v = s
+    .split(/[\s,]+/)
+    .map(parseFloat)
+    .filter((x) => Number.isFinite(x) && x >= 0);
   return v.some((x) => x > 0) ? v : [];
 }
 

@@ -11,8 +11,21 @@ import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
-function el(tag: string, bounds: Rect, styles: Record<string, string>, children: LayoutNode[] = [], attrs: Record<string, string> = {}): LayoutNode {
-  return { tag, attrs, styles: { ...INHERITED, ...styles }, bounds, children, ...(attrs["id"] ? { id: attrs["id"] } : {}) };
+function el(
+  tag: string,
+  bounds: Rect,
+  styles: Record<string, string>,
+  children: LayoutNode[] = [],
+  attrs: Record<string, string> = {},
+): LayoutNode {
+  return {
+    tag,
+    attrs,
+    styles: { ...INHERITED, ...styles },
+    bounds,
+    children,
+    ...(attrs["id"] ? { id: attrs["id"] } : {}),
+  };
 }
 
 function textNode(text: string, bounds: Rect): LayoutNode {
@@ -20,7 +33,16 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 }
 
 function doc(root: LayoutNode): LayoutDoc {
-  return { version: 2, source: "test", combo: { screen: "s", theme: "light" }, size: { w: root.bounds.w, h: root.bounds.h }, dpr: 3, canvas: "rgb(255, 255, 255)", fonts: [], root };
+  return {
+    version: 2,
+    source: "test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: root.bounds.w, h: root.bounds.h },
+    dpr: 3,
+    canvas: "rgb(255, 255, 255)",
+    fonts: [],
+    root,
+  };
 }
 
 function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
@@ -56,7 +78,11 @@ describe("Step 1 direction", () => {
   ];
   for (const [fd, dir, jc, side] of packing) {
     test(`justify-content ${jc} in ${fd}/${dir} packs at ${side}`, () => {
-      expect(distributionOf(el("div", BOX, { display: "flex", "flex-direction": fd, direction: dir, "justify-content": jc }))).toBe(side as never);
+      expect(
+        distributionOf(
+          el("div", BOX, { display: "flex", "flex-direction": fd, direction: dir, "justify-content": jc }),
+        ),
+      ).toBe(side as never);
     });
   }
 
@@ -70,15 +96,23 @@ describe("Step 1 direction", () => {
   ];
   for (const [fd, dir, ai, side] of cross) {
     test(`align-items ${ai} in ${fd}/${dir} sits at ${side}`, () => {
-      expect(crossAlign(el("div", BOX, { display: "flex", "flex-direction": fd, direction: dir, "align-items": ai }))).toBe(side as never);
+      expect(
+        crossAlign(el("div", BOX, { display: "flex", "flex-direction": fd, direction: dir, "align-items": ai })),
+      ).toBe(side as never);
     });
   }
 
   test("a row-reverse row packed at flex-end sits at the visual start", () => {
-    const r = el("div", BOX, { display: "flex", "flex-direction": "row-reverse", "justify-content": "flex-end" }, [
-      el("div", { x: 50, y: 0, w: 50, h: 40 }, { display: "block" }, [], { id: "a" }),
-      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block" }, [], { id: "b" }),
-    ], { id: "r" });
+    const r = el(
+      "div",
+      BOX,
+      { display: "flex", "flex-direction": "row-reverse", "justify-content": "flex-end" },
+      [
+        el("div", { x: 50, y: 0, w: 50, h: 40 }, { display: "block" }, [], { id: "a" }),
+        el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block" }, [], { id: "b" }),
+      ],
+      { id: "r" },
+    );
     const screen = inferScreen(doc(el("main", BOX, { display: "block" }, [r])), "t");
     const stack = flatten(screen.root).find((n) => n.id === "r");
     if (stack?.kind !== "stack") throw new Error("expected #r stack");
@@ -89,7 +123,10 @@ describe("Step 1 direction", () => {
 
 /** The TextNode a leaf host becomes, inside a block `main` as wide as it. */
 function leafText(host: LayoutNode): TextNode {
-  const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: host.bounds.w, h: host.bounds.h }, { display: "block" }, [host])), "t");
+  const screen = inferScreen(
+    doc(el("main", { x: 0, y: 0, w: host.bounds.w, h: host.bounds.h }, { display: "block" }, [host])),
+    "t",
+  );
   const t = flatten(screen.root).find((n) => n.kind === "text");
   if (t?.kind !== "text") throw new Error("expected a text node");
   return t;
@@ -97,47 +134,96 @@ function leafText(host: LayoutNode): TextNode {
 
 describe("Step 2 text alignment", () => {
   test("-webkit-center (<center>, align=center) centres the text", () => {
-    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, [textNode("Hi", { x: 90, y: 3, w: 20, h: 14 })]));
+    const t = leafText(
+      el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, [
+        textNode("Hi", { x: 90, y: 3, w: 20, h: 14 }),
+      ]),
+    );
     expect(t.align).toBe("center");
   });
 
   test("-webkit-right aligns trailing", () => {
-    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-right" }, [textNode("Hi", { x: 180, y: 3, w: 20, h: 14 })]));
+    const t = leafText(
+      el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-right" }, [
+        textNode("Hi", { x: 180, y: 3, w: 20, h: 14 }),
+      ]),
+    );
     expect(t.align).toBe("trailing");
   });
 
   test("a flex column's justify-content centres vertically, not horizontally", () => {
-    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "flex", "flex-direction": "column", "justify-content": "center" }, [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })]));
+    const t = leafText(
+      el(
+        "div",
+        { x: 0, y: 0, w: 200, h: 100 },
+        { display: "flex", "flex-direction": "column", "justify-content": "center" },
+        [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })],
+      ),
+    );
     expect(t.align).toBe("leading");
     expect(t.padding).toEqual([0, 0, 0, 0]);
   });
 
   test("a flex column's align-items centres horizontally; the text stays at the top", () => {
-    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "center" }, [textNode("Hi", { x: 90, y: 0, w: 20, h: 14 })]));
+    const t = leafText(
+      el(
+        "div",
+        { x: 0, y: 0, w: 200, h: 100 },
+        { display: "flex", "flex-direction": "column", "align-items": "center" },
+        [textNode("Hi", { x: 90, y: 0, w: 20, h: 14 })],
+      ),
+    );
     expect(t.align).toBe("center");
     expect(t.padding).toEqual([0, 0, 80, 0]);
   });
 
   test("a td with vertical-align: middle keeps its text vertically centred", () => {
-    const t = leafText(el("td", { x: 0, y: 0, w: 200, h: 60 }, { display: "table-cell", "vertical-align": "middle" }, [textNode("Hi", { x: 0, y: 23, w: 20, h: 14 })]));
+    const t = leafText(
+      el("td", { x: 0, y: 0, w: 200, h: 60 }, { display: "table-cell", "vertical-align": "middle" }, [
+        textNode("Hi", { x: 0, y: 23, w: 20, h: 14 }),
+      ]),
+    );
     expect(t.padding).toEqual([0, 0, 0, 0]);
   });
 
   test("block text in a taller box stays at the top", () => {
-    const t = leafText(el("p", { x: 0, y: 0, w: 200, h: 30 }, { display: "block", "min-height": "30px" }, [textNode("Hi", { x: 0, y: 3, w: 20, h: 14 })]));
+    const t = leafText(
+      el("p", { x: 0, y: 0, w: 200, h: 30 }, { display: "block", "min-height": "30px" }, [
+        textNode("Hi", { x: 0, y: 3, w: 20, h: 14 }),
+      ]),
+    );
     expect(t.padding).toEqual([0, 0, 10, 0]);
   });
 
   test("a flex row aligned to flex-end puts the surplus above the text", () => {
-    const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 60 }, { display: "flex", "align-items": "flex-end" }, [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })]));
+    const t = leafText(
+      el("div", { x: 0, y: 0, w: 200, h: 60 }, { display: "flex", "align-items": "flex-end" }, [
+        textNode("Hi", { x: 0, y: 43, w: 20, h: 14 }),
+      ]),
+    );
     expect(t.padding).toEqual([40, 0, 0, 0]);
   });
 });
 
 /** `main > div(nowrap flex row, overflow-x hidden) > span#c(block, padded) > #text`. */
 function chipDoc(text: string, styles: Record<string, string> = {}, h = 28, glyphH = 14): LayoutDoc {
-  const span = el("span", { x: 0, y: 0, w: 60, h }, { display: "block", "padding-top": "4px", "padding-bottom": "4px", "padding-left": "12px", "padding-right": "12px", ...styles }, [textNode(text, { x: 12, y: 7, w: 36, h: glyphH })], { id: "c" });
-  const row = el("div", { x: 0, y: 0, w: 120, h }, { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" }, [span]);
+  const span = el(
+    "span",
+    { x: 0, y: 0, w: 60, h },
+    {
+      display: "block",
+      "padding-top": "4px",
+      "padding-bottom": "4px",
+      "padding-left": "12px",
+      "padding-right": "12px",
+      ...styles,
+    },
+    [textNode(text, { x: 12, y: 7, w: 36, h: glyphH })],
+    { id: "c" },
+  );
+  const row = el("div", { x: 0, y: 0, w: 120, h }, { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" }, [
+    span,
+  ]);
   return doc(el("main", { x: 0, y: 0, w: 120, h }, { display: "block" }, [row]));
 }
 
@@ -154,7 +240,9 @@ describe("Step 3 unbreakable words", () => {
     const code = compileLayout(d, { name: "Chip", mode: "app" }).code;
     const at = code.indexOf('Text(verbatim: "Design")');
     expect(at).toBeGreaterThanOrEqual(0);
-    expect(code.slice(at, code.indexOf(".fixedSize(", at) + 60)).toContain(".fixedSize(horizontal: true, vertical: true)");
+    expect(code.slice(at, code.indexOf(".fixedSize(", at) + 60)).toContain(
+      ".fixedSize(horizontal: true, vertical: true)",
+    );
   });
 
   test("words with a space between them can wrap", () => {
@@ -191,24 +279,42 @@ const BLUE = { "background-color": "rgb(0, 0, 255)" };
 
 describe("Step 4 align-self", () => {
   test("align-self: flex-end in a flex-start row sits at the bottom", () => {
-    const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, [
-      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
-      el("div", { x: 60, y: 20, w: 50, h: 20 }, { display: "block", "align-self": "flex-end", ...BLUE }, [], { id: "b" }),
-    ], { id: "row" });
+    const row = el(
+      "div",
+      { x: 0, y: 0, w: 300, h: 40 },
+      { display: "flex", "align-items": "flex-start" },
+      [
+        el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
+        el("div", { x: 60, y: 20, w: 50, h: 20 }, { display: "block", "align-self": "flex-end", ...BLUE }, [], {
+          id: "b",
+        }),
+      ],
+      { id: "row" },
+    );
     const { doc: d, node: b } = inferred(row, "b");
     expect(b.selfAlignV).toBe("end");
     expect(inferred(row, "a").node.selfAlignV).toBeUndefined();
-    expect(compileLayout(d, { name: "Row", mode: "app" }).code).toContain(".frame(maxHeight: .infinity, alignment: .bottom)");
+    expect(compileLayout(d, { name: "Row", mode: "app" }).code).toContain(
+      ".frame(maxHeight: .infinity, alignment: .bottom)",
+    );
     const fidelity = compileLayout(d, { name: "Row", mode: "fidelity" }).code;
     expect(fidelity).toContain(".padding(.top, 20.0)");
     expect(fidelity).not.toContain("maxHeight: .infinity, alignment: .bottom");
   });
 
   test("align-self: center in a stretch row is centred, not stretched", () => {
-    const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex" }, [
-      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
-      el("div", { x: 60, y: 10, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], { id: "b" }),
-    ], { id: "row" });
+    const row = el(
+      "div",
+      { x: 0, y: 0, w: 300, h: 40 },
+      { display: "flex" },
+      [
+        el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
+        el("div", { x: 60, y: 10, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], {
+          id: "b",
+        }),
+      ],
+      { id: "row" },
+    );
     const { doc: d, node: b } = inferred(row, "b");
     expect(b.selfAlignV).toBe("center");
     expect(b.height.kind).not.toBe("fill");
@@ -216,49 +322,92 @@ describe("Step 4 align-self", () => {
   });
 
   test("align-self: center in a stretch column centres horizontally", () => {
-    const col = el("div", { x: 0, y: 0, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "stretch" }, [
-      el("div", { x: 125, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], { id: "c" }),
-    ]);
+    const col = el(
+      "div",
+      { x: 0, y: 0, w: 300, h: 100 },
+      { display: "flex", "flex-direction": "column", "align-items": "stretch" },
+      [
+        el("div", { x: 125, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], {
+          id: "c",
+        }),
+      ],
+    );
     const { doc: d, node: c } = inferred(col, "c");
     expect(c.selfAlign).toBe("center");
     expect(c.width.kind).not.toBe("fill");
-    expect(compileLayout(d, { name: "Col", mode: "app" }).code).toContain(".frame(maxWidth: .infinity, alignment: .center)");
+    expect(compileLayout(d, { name: "Col", mode: "app" }).code).toContain(
+      ".frame(maxWidth: .infinity, alignment: .center)",
+    );
   });
 
   test("align-self: flex-start in an RTL column sits at the right", () => {
-    const col = el("div", { x: 0, y: 0, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", direction: "rtl" }, [
-      el("div", { x: 250, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "flex-start", ...BLUE }, [], { id: "c" }),
-    ]);
+    const col = el(
+      "div",
+      { x: 0, y: 0, w: 300, h: 100 },
+      { display: "flex", "flex-direction": "column", direction: "rtl" },
+      [
+        el("div", { x: 250, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "flex-start", ...BLUE }, [], {
+          id: "c",
+        }),
+      ],
+    );
     expect(inferred(col, "c").node.selfAlign).toBe("end");
   });
 
   test("align-self: baseline outside a baseline row is reported", () => {
     const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, [
       el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }),
-      el("div", { x: 60, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "baseline", ...BLUE }, [], { id: "b" }),
+      el("div", { x: 60, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "baseline", ...BLUE }, [], {
+        id: "b",
+      }),
     ]);
-    expect(inferred(row, "b").node.diagnostics.some((x) => x.feature === "align-self" && x.level === "approximated")).toBe(true);
+    expect(
+      inferred(row, "b").node.diagnostics.some((x) => x.feature === "align-self" && x.level === "approximated"),
+    ).toBe(true);
   });
 
   test("a margin-centred block child still centres", () => {
     const host = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [
-      el("div", { x: 50, y: 0, w: 200, h: 40 }, { display: "block", "margin-left": "50px", "margin-right": "50px", ...BLUE }, [], { id: "m" }),
+      el(
+        "div",
+        { x: 50, y: 0, w: 200, h: 40 },
+        { display: "block", "margin-left": "50px", "margin-right": "50px", ...BLUE },
+        [],
+        { id: "m" },
+      ),
     ]);
     expect(inferred(host, "m").node.selfAlign).toBe("center");
   });
 });
 
 /** A painted block flex item, optionally with Typed-OM auto margins. */
-function item(id: string, bounds: Rect, styles: Record<string, string> = {}, autoMargins?: ("top" | "right" | "bottom" | "left")[]): LayoutNode {
-  return { ...el("div", bounds, { display: "block", ...RED, ...styles }, [], { id }), ...(autoMargins ? { preferredSize: { width: "auto", height: "auto", autoMargins } } : {}) };
+function item(
+  id: string,
+  bounds: Rect,
+  styles: Record<string, string> = {},
+  autoMargins?: ("top" | "right" | "bottom" | "left")[],
+): LayoutNode {
+  return {
+    ...el("div", bounds, { display: "block", ...RED, ...styles }, [], { id }),
+    ...(autoMargins ? { preferredSize: { width: "auto", height: "auto", autoMargins } } : {}),
+  };
 }
 
 describe("Step 6 auto margins", () => {
   test("ml-auto in a navbar becomes a Spacer whose minimum is the CSS gap", () => {
-    const nav = { ...el("nav", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex", "column-gap": "8px" }, [
-      item("a", { x: 0, y: 0, w: 40, h: 20 }),
-      item("b", { x: 262, y: 0, w: 38, h: 20 }, { "margin-left": "214px" }, ["left"]),
-    ], { id: "n" }), preferredSize: { width: "300px", height: "auto" } };
+    const nav = {
+      ...el(
+        "nav",
+        { x: 0, y: 0, w: 300, h: 20 },
+        { display: "flex", "column-gap": "8px" },
+        [
+          item("a", { x: 0, y: 0, w: 40, h: 20 }),
+          item("b", { x: 262, y: 0, w: 38, h: 20 }, { "margin-left": "214px" }, ["left"]),
+        ],
+        { id: "n" },
+      ),
+      preferredSize: { width: "300px", height: "auto" },
+    };
     const { doc: d, node: n } = inferred(nav, "n");
     if (n.kind !== "stack") throw new Error("expected #n stack");
     expect(n.autoGaps).toEqual([1]);
@@ -269,10 +418,19 @@ describe("Step 6 auto margins", () => {
   });
 
   test("mt-auto in a column pushes the last child to the bottom", () => {
-    const col = { ...el("div", { x: 0, y: 0, w: 200, h: 300 }, { display: "flex", "flex-direction": "column" }, [
-      item("t", { x: 0, y: 0, w: 200, h: 20 }),
-      item("btn", { x: 0, y: 270, w: 200, h: 30 }, { "margin-top": "250px" }, ["top"]),
-    ], { id: "col" }), preferredSize: { width: "200px", height: "300px" } };
+    const col = {
+      ...el(
+        "div",
+        { x: 0, y: 0, w: 200, h: 300 },
+        { display: "flex", "flex-direction": "column" },
+        [
+          item("t", { x: 0, y: 0, w: 200, h: 20 }),
+          item("btn", { x: 0, y: 270, w: 200, h: 30 }, { "margin-top": "250px" }, ["top"]),
+        ],
+        { id: "col" },
+      ),
+      preferredSize: { width: "200px", height: "300px" },
+    };
     const { doc: d, node: n } = inferred(col, "col");
     if (n.kind !== "stack") throw new Error("expected #col stack");
     expect(n.autoGaps).toEqual([1]);
@@ -281,9 +439,16 @@ describe("Step 6 auto margins", () => {
   });
 
   test("ml-auto on the first child replaces the leading inset", () => {
-    const nav = { ...el("nav", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex" }, [
-      item("a", { x: 250, y: 0, w: 50, h: 20 }, { "margin-left": "250px" }, ["left"]),
-    ], { id: "n" }), preferredSize: { width: "300px", height: "auto" } };
+    const nav = {
+      ...el(
+        "nav",
+        { x: 0, y: 0, w: 300, h: 20 },
+        { display: "flex" },
+        [item("a", { x: 250, y: 0, w: 50, h: 20 }, { "margin-left": "250px" }, ["left"])],
+        { id: "n" },
+      ),
+      preferredSize: { width: "300px", height: "auto" },
+    };
     const n = inferred(nav, "n").node;
     if (n.kind !== "stack") throw new Error("expected #n stack");
     expect(n.autoGaps).toEqual([0]);
@@ -291,20 +456,32 @@ describe("Step 6 auto margins", () => {
   });
 
   test("an auto vertical margin in block flow is no Spacer", () => {
-    const host = { ...el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
-      item("t", { x: 0, y: 0, w: 200, h: 20 }),
-      item("b", { x: 0, y: 20, w: 200, h: 20 }, {}, ["top"]),
-    ], { id: "blk" }), preferredSize: { width: "200px", height: "100px" } };
+    const host = {
+      ...el(
+        "div",
+        { x: 0, y: 0, w: 200, h: 100 },
+        { display: "block" },
+        [item("t", { x: 0, y: 0, w: 200, h: 20 }), item("b", { x: 0, y: 20, w: 200, h: 20 }, {}, ["top"])],
+        { id: "blk" },
+      ),
+      preferredSize: { width: "200px", height: "100px" },
+    };
     const n = inferred(host, "blk").node;
     if (n.kind !== "stack") throw new Error("expected #blk stack");
     expect(n.autoGaps).toBeUndefined();
   });
 
   test("space-between keeps the CSS gap as the Spacers' minimum", () => {
-    const row = { ...el("div", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex", "justify-content": "space-between", "column-gap": "16px" }, [
-      item("a", { x: 0, y: 0, w: 40, h: 20 }),
-      item("b", { x: 260, y: 0, w: 40, h: 20 }),
-    ], { id: "r" }), preferredSize: { width: "300px", height: "auto" } };
+    const row = {
+      ...el(
+        "div",
+        { x: 0, y: 0, w: 300, h: 20 },
+        { display: "flex", "justify-content": "space-between", "column-gap": "16px" },
+        [item("a", { x: 0, y: 0, w: 40, h: 20 }), item("b", { x: 260, y: 0, w: 40, h: 20 })],
+        { id: "r" },
+      ),
+      preferredSize: { width: "300px", height: "auto" },
+    };
     const { doc: d, node: n } = inferred(row, "r");
     if (n.kind !== "stack") throw new Error("expected #r stack");
     expect(n.minGap).toBe(16);

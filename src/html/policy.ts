@@ -10,15 +10,30 @@ export function classifyElement(tag: string, attrs: Record<string, string> = {})
   // Prose links must remain inline runs: their union box can span several lines, so treating
   // it as an atomic flow control reorders text. buildText reports the dropped destination.
   // Block/inline-block links (and selected anchor roots) still reach the native control path.
-  if (tag === "a" && attrs["href"] !== undefined) return { route: "control", support: "implemented", atomic: false, known: true };
+  if (tag === "a" && attrs["href"] !== undefined)
+    return { route: "control", support: "implemented", atomic: false, known: true };
   if (tag === "input") {
     const type = (attrs["type"] ?? "text").toLowerCase();
     const why = Object.hasOwn(INPUT_PLACEHOLDERS, type) ? INPUT_PLACEHOLDERS[type] : undefined;
-    if (why) return { route: "placeholder", support: "unsupported", atomic: true, known: true, diagnostic: { level: "unmapped", feature: `input: ${type}`, message: `<input type="${type}"> ${why}` } };
+    if (why)
+      return {
+        route: "placeholder",
+        support: "unsupported",
+        atomic: true,
+        known: true,
+        diagnostic: { level: "unmapped", feature: `input: ${type}`, message: `<input type="${type}"> ${why}` },
+      };
   }
   if (Object.hasOwn(HTML_ELEMENTS, tag)) return HTML_ELEMENTS[tag]!;
   return {
-    route: "flow", support: "approximated", atomic: true, known: false,
-    diagnostic: { level: "approximated", feature: "custom-element", message: `<${tag}> ${tag.includes("-") ? "custom element" : "unclassified element"} → measured content; custom semantics and behavior are not translated` },
+    route: "flow",
+    support: "approximated",
+    atomic: true,
+    known: false,
+    diagnostic: {
+      level: "approximated",
+      feature: "custom-element",
+      message: `<${tag}> ${tag.includes("-") ? "custom element" : "unclassified element"} → measured content; custom semantics and behavior are not translated`,
+    },
   };
 }

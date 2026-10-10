@@ -21,7 +21,8 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
   const diagnostics: Diagnostic[] = [];
   const policy = classifyElement(n.tag, n.attrs);
-  if (policy.diagnostic) addDiagnostic(diagnostics, policy.diagnostic.level, policy.diagnostic.feature, policy.diagnostic.message);
+  if (policy.diagnostic)
+    addDiagnostic(diagnostics, policy.diagnostic.level, policy.diagnostic.feature, policy.diagnostic.message);
   const style = styleOf(n, diagnostics);
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);

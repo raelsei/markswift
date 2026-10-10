@@ -4,21 +4,76 @@ import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
 import type { StackNode } from "../../../src/model/semantic.ts";
 
-function child(id: string, x: number, y: number, styles: Record<string, string> = {}, preferred = { width: "80px", height: "40px" }): LayoutNode {
+function child(
+  id: string,
+  x: number,
+  y: number,
+  styles: Record<string, string> = {},
+  preferred = { width: "80px", height: "40px" },
+): LayoutNode {
   return {
-    tag: "div", id: `#${id}`, attrs: { id }, children: [], bounds: { x, y, w: 80, h: 40 }, preferredSize: preferred,
-    styles: { display: "block", "box-sizing": "border-box", "flex-grow": "0", "flex-shrink": "0", "flex-basis": "auto", ...styles },
+    tag: "div",
+    id: `#${id}`,
+    attrs: { id },
+    children: [],
+    bounds: { x, y, w: 80, h: 40 },
+    preferredSize: preferred,
+    styles: {
+      display: "block",
+      "box-sizing": "border-box",
+      "flex-grow": "0",
+      "flex-shrink": "0",
+      "flex-basis": "auto",
+      ...styles,
+    },
   };
 }
 
-function root(children: LayoutNode[], styles: Record<string, string> = {}, bounds: Rect = { x: 0, y: 0, w: 200, h: 90 }, height = "auto", screenHeight = bounds.h): StackNode {
+function root(
+  children: LayoutNode[],
+  styles: Record<string, string> = {},
+  bounds: Rect = { x: 0, y: 0, w: 200, h: 90 },
+  height = "auto",
+  screenHeight = bounds.h,
+): StackNode {
   const element: LayoutNode = {
-    tag: "div", attrs: {}, bounds, children, preferredSize: { width: `${bounds.w}px`, height },
-    styles: { display: "flex", "flex-direction": "row", "flex-wrap": "wrap", "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start", "justify-content": "flex-start", "align-content": "normal", ...styles },
+    tag: "div",
+    attrs: {},
+    bounds,
+    children,
+    preferredSize: { width: `${bounds.w}px`, height },
+    styles: {
+      display: "flex",
+      "flex-direction": "row",
+      "flex-wrap": "wrap",
+      "column-gap": "10px",
+      "row-gap": "10px",
+      "align-items": "flex-start",
+      "justify-content": "flex-start",
+      "align-content": "normal",
+      ...styles,
+    },
   };
   const nested = screenHeight !== bounds.h;
-  const page: LayoutNode = nested ? { tag: "main", attrs: {}, bounds: { x: 0, y: 0, w: bounds.w, h: screenHeight }, children: [element], styles: { display: "block" } } : element;
-  const doc: LayoutDoc = { version: 2, source: "wrap-test", combo: { screen: "s", theme: "light" }, size: { w: bounds.w, h: screenHeight }, dpr: 1, canvas: "rgb(255,255,255)", fonts: [], root: page };
+  const page: LayoutNode = nested
+    ? {
+        tag: "main",
+        attrs: {},
+        bounds: { x: 0, y: 0, w: bounds.w, h: screenHeight },
+        children: [element],
+        styles: { display: "block" },
+      }
+    : element;
+  const doc: LayoutDoc = {
+    version: 2,
+    source: "wrap-test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: bounds.w, h: screenHeight },
+    dpr: 1,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root: page,
+  };
   const screen = inferScreen(doc, "s");
   const node = nested && screen.root.kind === "stack" ? screen.root.children[0]! : screen.root;
   if (node.kind !== "stack") throw new Error("Expected wrapping stack");
@@ -28,7 +83,9 @@ function root(children: LayoutNode[], styles: Record<string, string> = {}, bound
 function measuredFrames(node: StackNode): Record<string, Rect> {
   const result: Record<string, Rect> = {};
   if (!node.measured) return result;
-  node.children.forEach((child, index) => { result[child.id] = node.measured!.frames[index]!; });
+  node.children.forEach((child, index) => {
+    result[child.id] = node.measured!.frames[index]!;
+  });
   return result;
 }
 
@@ -37,7 +94,7 @@ describe("fixed-item row wrapping", () => {
     const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)]);
     expect(node.wrap).toEqual({ columnGap: 10, rowGap: 10 });
     expect(node.measured).toBeUndefined();
-    expect(node.children.map(child => child.id)).toEqual(["#a", "#b", "#c"]);
+    expect(node.children.map((child) => child.id)).toEqual(["#a", "#b", "#c"]);
     expect(node.diagnostics.map((d) => d.message)).not.toContain("flex-wrap → fixed rows from the snapshot");
   });
 
@@ -49,7 +106,12 @@ describe("fixed-item row wrapping", () => {
   });
 
   test("a fixed-height host supports native wrapping when align-content explicitly packs at start", () => {
-    const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)], { "align-content": "flex-start" }, { x: 0, y: 0, w: 200, h: 200 }, "200px");
+    const node = root(
+      [child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)],
+      { "align-content": "flex-start" },
+      { x: 0, y: 0, w: 200, h: 200 },
+      "200px",
+    );
     expect(node.wrap).toEqual({ columnGap: 10, rowGap: 10 });
     expect(node.measured).toBeUndefined();
   });
@@ -61,7 +123,13 @@ describe("fixed-item row wrapping", () => {
   });
 
   test("fixed content-box items retain their full padding in native row geometry", () => {
-    const insets = { "box-sizing": "content-box", "padding-top": "10px", "padding-right": "10px", "padding-bottom": "10px", "padding-left": "10px" };
+    const insets = {
+      "box-sizing": "content-box",
+      "padding-top": "10px",
+      "padding-right": "10px",
+      "padding-bottom": "10px",
+      "padding-left": "10px",
+    };
     const node = root([
       child("a", 0, 0, insets, { width: "60px", height: "20px" }),
       child("b", 90, 0, insets, { width: "60px", height: "20px" }),
@@ -71,40 +139,72 @@ describe("fixed-item row wrapping", () => {
   });
 
   test("centered row content retains per-row cross alignment with unequal fixed heights", () => {
-    const short = (id: string, x: number, y: number) => ({ ...child(id, x, y, {}, { width: "80px", height: "20px" }), bounds: { x, y, w: 80, h: 20 } });
-    const node = root([short("a", 15, 10), child("b", 105, 0), short("c", 60, 50)], {
-      "justify-content": "center", "align-items": "center",
-    }, { x: 0, y: 0, w: 200, h: 70 });
+    const short = (id: string, x: number, y: number) => ({
+      ...child(id, x, y, {}, { width: "80px", height: "20px" }),
+      bounds: { x, y, w: 80, h: 20 },
+    });
+    const node = root(
+      [short("a", 15, 10), child("b", 105, 0), short("c", 60, 50)],
+      {
+        "justify-content": "center",
+        "align-items": "center",
+      },
+      { x: 0, y: 0, w: 200, h: 70 },
+    );
     expect(node.wrap).toEqual({ columnGap: 10, rowGap: 10 });
     expect(node.align).toBe("center");
     expect(node.distribution).toBe("center");
   });
 
   test("align-content start keeps centered unequal children at the top of a fixed-height host", () => {
-    const short = (id: string, x: number, y: number) => ({ ...child(id, x, y, {}, { width: "80px", height: "20px" }), bounds: { x, y, w: 80, h: 20 } });
-    const node = root([short("a", 15, 10), child("b", 105, 0), short("c", 60, 50)], {
-      "justify-content": "center", "align-items": "center", "align-content": "start",
-    }, { x: 0, y: 0, w: 200, h: 200 }, "200px", 300);
+    const short = (id: string, x: number, y: number) => ({
+      ...child(id, x, y, {}, { width: "80px", height: "20px" }),
+      bounds: { x, y, w: 80, h: 20 },
+    });
+    const node = root(
+      [short("a", 15, 10), child("b", 105, 0), short("c", 60, 50)],
+      {
+        "justify-content": "center",
+        "align-items": "center",
+        "align-content": "start",
+      },
+      { x: 0, y: 0, w: 200, h: 200 },
+      "200px",
+      300,
+    );
     expect(node.wrap).toEqual({ columnGap: 10, rowGap: 10 });
     expect(node.measured).toBeUndefined();
     expect(node.height).toEqual({ kind: "fixed", px: 200 });
     expect(node.padding).toEqual([0, 0, 0, 0]);
-    expect(node.children.map(item => item.frame.y)).toEqual([10, 0, 50]);
+    expect(node.children.map((item) => item.frame.y)).toEqual([10, 0, 50]);
   });
 });
 
 describe("measured wrapping fallback", () => {
-  test.each(["center", "flex-end", "space-between", "normal"])("a fixed host diagnoses %s even when captured rows exactly fill its height", alignContent => {
-    const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)],
-      { "align-content": alignContent }, { x: 0, y: 0, w: 200, h: 90 }, "90px", 200);
-    expect(node.wrap).toBeUndefined();
-    expect(node.measured).toMatchObject({ width: 200, height: 90 });
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("align-content");
-  });
+  test.each(["center", "flex-end", "space-between", "normal"])(
+    "a fixed host diagnoses %s even when captured rows exactly fill its height",
+    (alignContent) => {
+      const node = root(
+        [child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)],
+        { "align-content": alignContent },
+        { x: 0, y: 0, w: 200, h: 90 },
+        "90px",
+        200,
+      );
+      expect(node.wrap).toBeUndefined();
+      expect(node.measured).toMatchObject({ width: 200, height: 90 });
+      expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("align-content");
+    },
+  );
 
   test("a minimum-height host cannot assume centered rows remain hugging after reflow", () => {
-    const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)],
-      { "align-content": "center", "min-height": "90px" }, { x: 0, y: 0, w: 200, h: 90 }, "auto", 200);
+    const node = root(
+      [child("a", 0, 0), child("b", 90, 0), child("c", 0, 50)],
+      { "align-content": "center", "min-height": "90px" },
+      { x: 0, y: 0, w: 200, h: 90 },
+      "auto",
+      200,
+    );
     expect(node.wrap).toBeUndefined();
     expect(node.measured).toMatchObject({ width: 200, height: 90 });
   });
@@ -114,14 +214,21 @@ describe("measured wrapping fallback", () => {
     expect(node.wrap).toBeUndefined();
     expect(node.measured).toMatchObject({ width: 200, height: 90 });
     expect(measuredFrames(node)).toEqual({
-      "#a": { x: 0, y: 50, w: 80, h: 40 }, "#b": { x: 90, y: 50, w: 80, h: 40 }, "#c": { x: 0, y: 0, w: 80, h: 40 },
+      "#a": { x: 0, y: 50, w: 80, h: 40 },
+      "#b": { x: 90, y: 50, w: 80, h: 40 },
+      "#c": { x: 0, y: 0, w: 80, h: 40 },
     });
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("wrap-reverse");
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
   });
 
   test("column wrapping preserves columns rather than flattening every child vertically", () => {
-    const node = root([child("a", 0, 0), child("b", 0, 50), child("c", 90, 0)], { "flex-direction": "column" }, { x: 0, y: 0, w: 170, h: 90 }, "90px");
+    const node = root(
+      [child("a", 0, 0), child("b", 0, 50), child("c", 90, 0)],
+      { "flex-direction": "column" },
+      { x: 0, y: 0, w: 170, h: 90 },
+      "90px",
+    );
     expect(node.wrap).toBeUndefined();
     expect(node.measured).toMatchObject({ width: 170, height: 90 });
     expect(measuredFrames(node)["#c"]).toEqual({ x: 90, y: 0, w: 80, h: 40 });
@@ -129,18 +236,37 @@ describe("measured wrapping fallback", () => {
   });
 
   test("unsupported fixed-height cross-row distribution preserves captured geometry", () => {
-    const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 105)], {}, { x: 0, y: 0, w: 200, h: 200 }, "200px");
+    const node = root(
+      [child("a", 0, 0), child("b", 90, 0), child("c", 0, 105)],
+      {},
+      { x: 0, y: 0, w: 200, h: 200 },
+      "200px",
+    );
     expect(node.wrap).toBeUndefined();
     expect(measuredFrames(node)["#c"]).toEqual({ x: 0, y: 105, w: 80, h: 40 });
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("align-content");
   });
 
   test("fallback coordinates are relative to content origin rather than border box", () => {
-    const node = root([child("a", 23, 35), child("b", 113, 35), child("c", 23, 85)], {
-      "flex-wrap": "wrap-reverse", "padding-top": "10px", "padding-left": "8px", "padding-right": "8px", "padding-bottom": "10px",
-      "border-top-style": "solid", "border-left-style": "solid", "border-right-style": "solid", "border-bottom-style": "solid",
-      "border-top-width": "5px", "border-left-width": "5px", "border-right-width": "5px", "border-bottom-width": "5px",
-    }, { x: 10, y: 20, w: 226, h: 120 });
+    const node = root(
+      [child("a", 23, 35), child("b", 113, 35), child("c", 23, 85)],
+      {
+        "flex-wrap": "wrap-reverse",
+        "padding-top": "10px",
+        "padding-left": "8px",
+        "padding-right": "8px",
+        "padding-bottom": "10px",
+        "border-top-style": "solid",
+        "border-left-style": "solid",
+        "border-right-style": "solid",
+        "border-bottom-style": "solid",
+        "border-top-width": "5px",
+        "border-left-width": "5px",
+        "border-right-width": "5px",
+        "border-bottom-width": "5px",
+      },
+      { x: 10, y: 20, w: 226, h: 120 },
+    );
     expect(node.measured).toMatchObject({ width: 200, height: 90 });
     expect(measuredFrames(node)["#a"]).toEqual({ x: 0, y: 0, w: 80, h: 40 });
     expect(measuredFrames(node)["#c"]).toEqual({ x: 0, y: 50, w: 80, h: 40 });
@@ -152,16 +278,23 @@ describe("measured wrapping fallback", () => {
     [{}, { "flex-grow": "1" }, "allocation"],
     [{}, { "margin-left": "5px" }, "margin"],
     [{}, { "align-self": "center" }, "align-self"],
-  ] as const)("unsupported alignment/allocation remains a diagnosed measured layout", (hostStyles, childStyles, reason) => {
-    const node = root([child("a", 0, 0, childStyles), child("b", 90, 0), child("c", 0, 50)], hostStyles);
-    expect(node.wrap).toBeUndefined();
-    expect(node.measured?.frames).toHaveLength(3);
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain(reason);
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
-  });
+  ] as const)(
+    "unsupported alignment/allocation remains a diagnosed measured layout",
+    (hostStyles, childStyles, reason) => {
+      const node = root([child("a", 0, 0, childStyles), child("b", 90, 0), child("c", 0, 50)], hostStyles);
+      expect(node.wrap).toBeUndefined();
+      expect(node.measured?.frames).toHaveLength(3);
+      expect(node.diagnostics.map((d) => d.message).join(" ")).toContain(reason);
+      expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
+    },
+  );
 
   test("observed shrinking of a preferred fixed width uses captured positions", () => {
-    const node = root([child("a", 0, 0, { "flex-shrink": "1" }, { width: "120px", height: "40px" })], {}, { x: 0, y: 0, w: 80, h: 40 });
+    const node = root(
+      [child("a", 0, 0, { "flex-shrink": "1" }, { width: "120px", height: "40px" })],
+      {},
+      { x: 0, y: 0, w: 80, h: 40 },
+    );
     expect(node.wrap).toBeUndefined();
     expect(node.measured?.frames).toHaveLength(1);
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("allocation");
@@ -201,18 +334,64 @@ const TEXT = { "font-family": "system-ui", "font-size": "14px", "line-height": "
 /** A padded `span` chip sized by its "Design" label, with the CSS default flex-shrink: 1. */
 function chip(id: string, x: number, y: number, w = 60): LayoutNode {
   return {
-    tag: "span", id: `#${id}`, attrs: { id }, bounds: { x, y, w, h: 28 }, preferredSize: { width: "auto", height: "auto" },
-    styles: { display: "block", "flex-grow": "0", "flex-shrink": "1", "padding-left": "12px", "padding-right": "12px", "padding-top": "4px", "padding-bottom": "4px", ...TEXT },
-    children: [{ tag: "#text", attrs: {}, styles: { ...TEXT }, bounds: { x: x + 12, y: y + 7, w: 36, h: 14 }, text: "Design", children: [] }],
+    tag: "span",
+    id: `#${id}`,
+    attrs: { id },
+    bounds: { x, y, w, h: 28 },
+    preferredSize: { width: "auto", height: "auto" },
+    styles: {
+      display: "block",
+      "flex-grow": "0",
+      "flex-shrink": "1",
+      "padding-left": "12px",
+      "padding-right": "12px",
+      "padding-top": "4px",
+      "padding-bottom": "4px",
+      ...TEXT,
+    },
+    children: [
+      {
+        tag: "#text",
+        attrs: {},
+        styles: { ...TEXT },
+        bounds: { x: x + 12, y: y + 7, w: 36, h: 14 },
+        text: "Design",
+        children: [],
+      },
+    ],
   };
 }
 
 function chipDoc(children: LayoutNode[], styles: Record<string, string> = {}): LayoutDoc {
   const host: LayoutNode = {
-    tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 180, h: 66 }, children, preferredSize: { width: "180px", height: "auto" },
-    styles: { display: "flex", "flex-direction": "row", "flex-wrap": "wrap", "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start", "justify-content": "flex-start", "align-content": "normal", ...TEXT, ...styles },
+    tag: "div",
+    attrs: {},
+    bounds: { x: 0, y: 0, w: 180, h: 66 },
+    children,
+    preferredSize: { width: "180px", height: "auto" },
+    styles: {
+      display: "flex",
+      "flex-direction": "row",
+      "flex-wrap": "wrap",
+      "column-gap": "10px",
+      "row-gap": "10px",
+      "align-items": "flex-start",
+      "justify-content": "flex-start",
+      "align-content": "normal",
+      ...TEXT,
+      ...styles,
+    },
   };
-  return { version: 2, source: "wrap-test", combo: { screen: "s", theme: "light" }, size: { w: 180, h: 66 }, dpr: 1, canvas: "rgb(255,255,255)", fonts: [], root: host };
+  return {
+    version: 2,
+    source: "wrap-test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: 180, h: 66 },
+    dpr: 1,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root: host,
+  };
 }
 
 function chipHost(d: LayoutDoc): StackNode {
@@ -248,6 +427,8 @@ describe("intrinsic chip wrapping", () => {
     const app = compileLayout(d, { name: "Chips", mode: "app" }).code;
     expect(app).toContain("MarkswiftFlow(");
     expect(app).not.toContain(".frame(width: 60.0, height: 28.0, alignment: .topLeading)");
-    expect(compileLayout(d, { name: "Chips", mode: "fidelity" }).code).toContain(".frame(width: 60.0, height: 28.0, alignment: .topLeading)");
+    expect(compileLayout(d, { name: "Chips", mode: "fidelity" }).code).toContain(
+      ".frame(width: 60.0, height: 28.0, alignment: .topLeading)",
+    );
   });
 });

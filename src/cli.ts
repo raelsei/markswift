@@ -5,7 +5,10 @@ import { runConversion } from "./cli/run.ts";
 async function main(): Promise<number> {
   try {
     const command = parseArgs(process.argv.slice(2));
-    if (command.kind === "help") { process.stdout.write(HELP); return 0; }
+    if (command.kind === "help") {
+      process.stdout.write(HELP);
+      return 0;
+    }
     if (command.kind === "version") {
       const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
       process.stdout.write(`${manifest.version}\n`);

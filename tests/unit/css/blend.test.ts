@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { parseBlendMode, parseBlendModes } from "../../../src/css/index.ts";
 import type { BlendMode } from "../../../src/model/values.ts";
 
-
 describe("parseBlendMode", () => {
   test.each<[string | undefined, BlendMode | undefined]>([
     ["normal", "normal"],
@@ -18,7 +17,6 @@ describe("parseBlendMode", () => {
     [undefined, undefined],
   ])("%s", (input, want) => expect(parseBlendMode(input)).toEqual(want));
 });
-
 
 describe("parseBlendModes", () => {
   test("one keyword per background layer, CSS order (top-most first)", () => {

@@ -27,12 +27,21 @@ export function svgFromDataUrl(url: string): { vector?: SvgNode; intrinsic?: { w
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data || data[1] !== "image/svg+xml") return undefined;
   const [, , params = "", payload = ""] = data;
-  const rootEl = parseSvgRoot(params.split(";").includes("base64") ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload));
+  const rootEl = parseSvgRoot(
+    params.split(";").includes("base64")
+      ? Buffer.from(payload, "base64").toString("utf8")
+      : decodeURIComponent(payload),
+  );
   if (!rootEl) return {};
   const out: { vector?: SvgNode; intrinsic?: { w: number; h: number } } = {};
-  const w = rootEl.attribs["width"]?.trim(), h = rootEl.attribs["height"]?.trim();
-  const vb = rootEl.attribs["viewbox"]?.trim().split(/[\s,]+/).map(Number);
-  if (w && h && /^[\d.]+(px)?$/.test(w) && /^[\d.]+(px)?$/.test(h)) out.intrinsic = { w: parseFloat(w), h: parseFloat(h) };
+  const w = rootEl.attribs["width"]?.trim(),
+    h = rootEl.attribs["height"]?.trim();
+  const vb = rootEl.attribs["viewbox"]
+    ?.trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (w && h && /^[\d.]+(px)?$/.test(w) && /^[\d.]+(px)?$/.test(h))
+    out.intrinsic = { w: parseFloat(w), h: parseFloat(h) };
   else if (vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0) out.intrinsic = { w: vb[2]!, h: vb[3]! };
   const vector = svgFromElement(rootEl, { x: 0, y: 0, w: 0, h: 0 });
   if (vector) out.vector = vector;
@@ -52,13 +61,29 @@ function svgFromElement(rootEl: Element, frame: Rect): SvgNode | undefined {
     attrs: { ...el.attribs, ...parseDeclared(el.attribs["style"]) },
     styles: {},
     bounds: { x: 0, y: 0, w: 0, h: 0 },
-    children: el.children.flatMap((c) => (c.type === "tag" ? [toLayout(c as Element)] : c.type === "text" ? [{ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: (c as Text).data, children: [] }] : [])),
+    children: el.children.flatMap((c) =>
+      c.type === "tag"
+        ? [toLayout(c as Element)]
+        : c.type === "text"
+          ? [
+              {
+                tag: "#text",
+                attrs: {},
+                styles: {},
+                bounds: { x: 0, y: 0, w: 0, h: 0 },
+                text: (c as Text).data,
+                children: [],
+              },
+            ]
+          : [],
+    ),
   });
   const root = toLayout(rootEl);
   // No computed style here: seed the SVG initial fill so unfilled shapes paint black, as in the browser.
   root.attrs = { fill: "black", ...root.attrs };
   if (!root.attrs["viewbox"]) {
-    const w = num(root.attrs["width"]), h = num(root.attrs["height"]);
+    const w = num(root.attrs["width"]),
+      h = num(root.attrs["height"]);
     if (w <= 0 || h <= 0) return undefined;
     root.attrs["viewbox"] = `0 0 ${w} ${h}`;
   }
@@ -75,8 +100,15 @@ function svgFromElement(rootEl: Element, frame: Rect): SvgNode | undefined {
     overlays: [],
   };
   const node = buildSvg(root, base);
-  const styled = (el: LayoutNode): boolean => el.tag === "style" || el.attrs["class"] !== undefined || el.children.some(styled);
-  if (styled(root)) addDiagnostic(node.diagnostics, "unmapped", "style", "svg <style> rules and class selectors are not applied (markup has no computed style)");
+  const styled = (el: LayoutNode): boolean =>
+    el.tag === "style" || el.attrs["class"] !== undefined || el.children.some(styled);
+  if (styled(root))
+    addDiagnostic(
+      node.diagnostics,
+      "unmapped",
+      "style",
+      "svg <style> rules and class selectors are not applied (markup has no computed style)",
+    );
   node.confidence = confidenceOf(node.diagnostics);
   return node;
 }

@@ -9,7 +9,9 @@ const entry = join(import.meta.dir, "../../../src/cli.ts");
 async function invoke(...args: string[]) {
   const child = Bun.spawn([process.execPath, entry, ...args], { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
   ]);
   return { stdout, stderr, code };
 }
@@ -62,7 +64,9 @@ test("CLI leaves an existing output directory untouched", async () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("already exists");
     expect(await Bun.file(join(output, "keep.txt")).text()).toBe("keep me");
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("CLI explains missing input files before starting Chrome", async () => {
@@ -81,7 +85,9 @@ test("CLI explains missing input files before starting Chrome", async () => {
     expect(missingCss.stderr).toContain(`CSS file not found: ${css}`);
     expect(missingCss.stderr).toContain("--css is optional");
     expect(await Bun.file(join(output, "CardView.swift")).exists()).toBe(false);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("invalid Swift names are usage errors before Chrome starts", async () => {
@@ -112,10 +118,15 @@ test("--css url()s relative to the CSS file are inlined as data URLs", async () 
     await Bun.write(join(directory, "dist/fonts/x.woff2"), "wOF2");
     await Bun.write(join(directory, "dist/img/bg.png"), "png");
     const kept = ["url(data:image/png;base64,AA)", "url(https://cdn/x.png)", "url(/abs.png)", "url(missing.png)"];
-    const { css, missing } = await inlineRelativeUrls(`a{src:url(./fonts/x.woff2)}b{background:url("img/bg.png")}${kept.join(" ")}`, join(directory, "dist/app.css"));
+    const { css, missing } = await inlineRelativeUrls(
+      `a{src:url(./fonts/x.woff2)}b{background:url("img/bg.png")}${kept.join(" ")}`,
+      join(directory, "dist/app.css"),
+    );
     expect(css).toContain(`url("data:font/woff2;base64,${btoa("wOF2")}")`);
     expect(css).toContain(`url("data:image/png;base64,${btoa("png")}")`);
     for (const k of kept) expect(css).toContain(k);
     expect(missing).toEqual(["missing.png"]);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

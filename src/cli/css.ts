@@ -12,10 +12,21 @@ export async function inlineRelativeUrls(css: string, cssPath: string): Promise<
   const inlined: string[] = [];
   for (const match of css.matchAll(pattern)) {
     const ref = (match[1] ?? match[2] ?? match[3] ?? "").trim();
-    if (!ref || ref.startsWith("#") || ref.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(ref)) { inlined.push(match[0]); continue; }
+    if (!ref || ref.startsWith("#") || ref.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+      inlined.push(match[0]);
+      continue;
+    }
     let file: Bun.BunFile | undefined;
-    try { file = Bun.file(resolve(dir, decodeURIComponent(ref.replace(/[?#].*$/, "")))); } catch { /* malformed escape */ }
-    if (!file || !(await file.exists())) { missing.push(ref); inlined.push(match[0]); continue; }
+    try {
+      file = Bun.file(resolve(dir, decodeURIComponent(ref.replace(/[?#].*$/, ""))));
+    } catch {
+      /* malformed escape */
+    }
+    if (!file || !(await file.exists())) {
+      missing.push(ref);
+      inlined.push(match[0]);
+      continue;
+    }
     inlined.push(`url("data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}")`);
   }
   let i = 0;

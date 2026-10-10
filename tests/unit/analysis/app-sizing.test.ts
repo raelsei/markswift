@@ -9,10 +9,24 @@ import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
 import type { SemNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
-const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-function el(tag: string, bounds: Rect, styles: Record<string, string>, children: LayoutNode[] = [], attrs: Record<string, string> = {}): LayoutNode {
-  return { tag, attrs, styles: { ...INHERITED, ...styles }, bounds, children, ...(attrs["id"] ? { id: attrs["id"] } : {}) };
+function el(
+  tag: string,
+  bounds: Rect,
+  styles: Record<string, string>,
+  children: LayoutNode[] = [],
+  attrs: Record<string, string> = {},
+): LayoutNode {
+  return {
+    tag,
+    attrs,
+    styles: { ...INHERITED, ...styles },
+    bounds,
+    children,
+    ...(attrs["id"] ? { id: attrs["id"] } : {}),
+  };
 }
 
 function textNode(text: string, bounds: Rect): LayoutNode {
@@ -20,7 +34,17 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 }
 
 function doc(root: LayoutNode, viewport?: Rect): LayoutDoc {
-  return { version: 2, source: "test", combo: { screen: "s", theme: "light" }, size: { w: root.bounds.w, h: root.bounds.h }, dpr: 3, canvas: "rgb(255, 255, 255)", fonts: [], root, ...(viewport ? { viewport } : {}) };
+  return {
+    version: 2,
+    source: "test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: root.bounds.w, h: root.bounds.h },
+    dpr: 3,
+    canvas: "rgb(255, 255, 255)",
+    fonts: [],
+    root,
+    ...(viewport ? { viewport } : {}),
+  };
 }
 
 function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
@@ -36,9 +60,25 @@ const features = (n: SemNode) => n.diagnostics.map((d) => `${d.level}:${d.featur
 const code = (d: LayoutDoc, mode: "app" | "fidelity" = "app") => compileLayout(d, { name: "F", mode }).code;
 
 describe("Step 1 object-fit", () => {
-  const fixture = (fit?: string, position?: string) => doc(el("main", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
-    { ...el("img", { x: 0, y: 0, w: 200, h: 100 }, { display: "block", ...(fit ? { "object-fit": fit } : {}), ...(position ? { "object-position": position } : {}) }, [], { id: "img", src: "photo.png" }), currentSrc: PNG },
-  ]));
+  const fixture = (fit?: string, position?: string) =>
+    doc(
+      el("main", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
+        {
+          ...el(
+            "img",
+            { x: 0, y: 0, w: 200, h: 100 },
+            {
+              display: "block",
+              ...(fit ? { "object-fit": fit } : {}),
+              ...(position ? { "object-position": position } : {}),
+            },
+            [],
+            { id: "img", src: "photo.png" },
+          ),
+          currentSrc: PNG,
+        },
+      ]),
+    );
   const image = (d: LayoutDoc) => byId(inferScreen(d, "s").root, "img");
 
   test("fill (absent or explicit) stretches with a plain .resizable()", () => {
@@ -97,9 +137,19 @@ describe("Step 3 trailing inset", () => {
   const RED = { "background-color": "rgb(255, 0, 0)" };
 
   test("min-height slack is not bottom padding", () => {
-    const root = el("main", { x: 0, y: 0, w: 390, h: 760 }, { display: "block", "box-sizing": "border-box", "padding-top": "24px", "padding-bottom": "24px", "min-height": "760px" }, [
-      el("div", { x: 0, y: 24, w: 390, h: 100 }, { display: "block", ...RED }),
-    ], { id: "root" });
+    const root = el(
+      "main",
+      { x: 0, y: 0, w: 390, h: 760 },
+      {
+        display: "block",
+        "box-sizing": "border-box",
+        "padding-top": "24px",
+        "padding-bottom": "24px",
+        "min-height": "760px",
+      },
+      [el("div", { x: 0, y: 24, w: 390, h: 100 }, { display: "block", ...RED })],
+      { id: "root" },
+    );
     const screen = inferScreen(doc(root), "s");
     expect(screen.root.padding[2]).toBe(24);
     expect(screen.root.minHeight).toBe(760);
@@ -113,26 +163,42 @@ describe("Step 3 trailing inset", () => {
   });
 
   test("a grandchild end margin collapsing through its parent stays in the inset", () => {
-    const root = el("main", { x: 0, y: 0, w: 390, h: 140 }, { display: "block", "padding-top": "16px", "padding-bottom": "16px" }, [
-      el("section", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "0px" }, [
-        el("div", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "8px", ...RED }),
-      ]),
-    ]);
+    const root = el(
+      "main",
+      { x: 0, y: 0, w: 390, h: 140 },
+      { display: "block", "padding-top": "16px", "padding-bottom": "16px" },
+      [
+        el("section", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "0px" }, [
+          el("div", { x: 0, y: 16, w: 390, h: 100 }, { display: "block", "margin-bottom": "8px", ...RED }),
+        ]),
+      ],
+    );
     expect(inferScreen(doc(root), "s").root.padding[2]).toBe(24);
   });
 
   test("a centred flex column adds no bottom padding", () => {
-    const root = el("main", { x: 0, y: 0, w: 390, h: 400 }, { display: "flex", "flex-direction": "column", "justify-content": "center" }, [
-      el("div", { x: 0, y: 150, w: 390, h: 100 }, { display: "block", ...RED }),
-    ]);
+    const root = el(
+      "main",
+      { x: 0, y: 0, w: 390, h: 400 },
+      { display: "flex", "flex-direction": "column", "justify-content": "center" },
+      [el("div", { x: 0, y: 150, w: 390, h: 100 }, { display: "block", ...RED })],
+    );
     expect(inferScreen(doc(root), "s").root.padding[2]).toBe(0);
   });
 
   test("half-leading under an inline-only child is not padding", () => {
     const root = el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
-      el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block", "line-height": "20px" }, [
-        el("span", { x: 0, y: 3, w: 40, h: 14 }, { display: "inline" }, [textNode("Hi", { x: 0, y: 3, w: 40, h: 14 })]),
-      ], { id: "p" }),
+      el(
+        "p",
+        { x: 0, y: 0, w: 300, h: 20 },
+        { display: "block", "line-height": "20px" },
+        [
+          el("span", { x: 0, y: 3, w: 40, h: 14 }, { display: "inline" }, [
+            textNode("Hi", { x: 0, y: 3, w: 40, h: 14 }),
+          ]),
+        ],
+        { id: "p" },
+      ),
     ]);
     const p = byId(inferScreen(doc(root), "s").root, "p");
     expect(p.kind).toBe("text");
@@ -143,9 +209,10 @@ describe("Step 3 trailing inset", () => {
 describe("Step 4 viewport", () => {
   const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
   const RED = { "background-color": "rgb(255, 0, 0)" };
-  const tallRoot = () => el("main", { x: 0, y: 0, w: 390, h: 844 }, { display: "block", "min-height": "844px" }, [
-    el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED }),
-  ]);
+  const tallRoot = () =>
+    el("main", { x: 0, y: 0, w: 390, h: 844 }, { display: "block", "min-height": "844px" }, [
+      el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED }),
+    ]);
 
   test("a viewport-high root min-height is dropped", () => {
     const root = inferScreen(doc(tallRoot(), VIEWPORT), "s").root;
@@ -155,9 +222,13 @@ describe("Step 4 viewport", () => {
 
   test("a viewport-high non-root min-height stays a floor and is reported", () => {
     const root = el("main", { x: 0, y: 0, w: 390, h: 1000 }, { display: "block" }, [
-      el("section", { x: 0, y: 0, w: 390, h: 844 }, { display: "block", "min-height": "844px", ...RED }, [
-        el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED }),
-      ], { id: "s" }),
+      el(
+        "section",
+        { x: 0, y: 0, w: 390, h: 844 },
+        { display: "block", "min-height": "844px", ...RED },
+        [el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED })],
+        { id: "s" },
+      ),
     ]);
     const s = byId(inferScreen(doc(root, VIEWPORT), "s").root, "s");
     expect(s.minHeight).toBe(844);
@@ -171,11 +242,47 @@ describe("Step 4 viewport", () => {
 
 describe("Step 5 page scroll", () => {
   const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
-  const page = (h: number) => doc({ ...el("main", { x: 0, y: 0, w: 390, h }, { display: "block" }, [
-    { ...el("div", { x: 0, y: 0, w: 390, h: h / 2 }, { display: "block", "background-color": "rgb(255, 0, 0)" }), paint: 1 },
-    { ...el("div", { x: 0, y: h / 2, w: 390, h: h / 2 }, { display: "block", "background-color": "rgb(0, 255, 0)" }), paint: 2 },
-    { ...el("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, [], { id: "bar" }), paint: 3 },
-  ], { id: "root" }), paint: 0 }, VIEWPORT);
+  const page = (h: number) =>
+    doc(
+      {
+        ...el(
+          "main",
+          { x: 0, y: 0, w: 390, h },
+          { display: "block" },
+          [
+            {
+              ...el(
+                "div",
+                { x: 0, y: 0, w: 390, h: h / 2 },
+                { display: "block", "background-color": "rgb(255, 0, 0)" },
+              ),
+              paint: 1,
+            },
+            {
+              ...el(
+                "div",
+                { x: 0, y: h / 2, w: 390, h: h / 2 },
+                { display: "block", "background-color": "rgb(0, 255, 0)" },
+              ),
+              paint: 2,
+            },
+            {
+              ...el(
+                "div",
+                { x: 0, y: 784, w: 390, h: 60 },
+                { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" },
+                [],
+                { id: "bar" },
+              ),
+              paint: 3,
+            },
+          ],
+          { id: "root" },
+        ),
+        paint: 0,
+      },
+      VIEWPORT,
+    );
 
   test("a page taller than the viewport scrolls; its fixed bar is marked", () => {
     const root = inferScreen(page(2000), "s").root;
@@ -207,10 +314,24 @@ describe("Step 5 page scroll", () => {
 
 describe("Step 6 overlay anchoring", () => {
   const RED = { "background-color": "rgb(255, 0, 0)" };
-  const card = (y: number, insets: { top: string; right: string; bottom: string; left: string }) => doc({ ...el("main", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", position: "relative" }, [
-    { ...el("div", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", ...RED }), paint: 1 },
-    { ...el("div", { x: 264, y, w: 20, h: 20 }, { display: "block", position: "absolute", "background-color": "rgb(0, 0, 255)" }, [], { id: "x" }), paint: 2, preferredSize: { width: "20px", height: "20px", insets } },
-  ]), paint: 0 });
+  const card = (y: number, insets: { top: string; right: string; bottom: string; left: string }) =>
+    doc({
+      ...el("main", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", position: "relative" }, [
+        { ...el("div", { x: 0, y: 0, w: 300, h: 200 }, { display: "block", ...RED }), paint: 1 },
+        {
+          ...el(
+            "div",
+            { x: 264, y, w: 20, h: 20 },
+            { display: "block", position: "absolute", "background-color": "rgb(0, 0, 255)" },
+            [],
+            { id: "x" },
+          ),
+          paint: 2,
+          preferredSize: { width: "20px", height: "20px", insets },
+        },
+      ]),
+      paint: 0,
+    });
   const overlay = (d: LayoutDoc, id: string) => inferScreen(d, "s").root.overlays.find((o) => o.node.id === id)!;
 
   test("a right-anchored box keeps its trailing corner in app mode only", () => {
@@ -230,10 +351,30 @@ describe("Step 6 overlay anchoring", () => {
   });
 
   test("a fixed bottom bar anchors to the viewport, not the page", () => {
-    const d = doc({ ...el("main", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block" }, [
-      { ...el("div", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block", ...RED }), paint: 1 },
-      { ...el("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, [], { id: "bar" }), paint: 3, preferredSize: { width: "390px", height: "60px", insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" } } },
-    ]), paint: 0 }, { x: 0, y: 0, w: 390, h: 844 });
+    const d = doc(
+      {
+        ...el("main", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block" }, [
+          { ...el("div", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block", ...RED }), paint: 1 },
+          {
+            ...el(
+              "div",
+              { x: 0, y: 784, w: 390, h: 60 },
+              { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" },
+              [],
+              { id: "bar" },
+            ),
+            paint: 3,
+            preferredSize: {
+              width: "390px",
+              height: "60px",
+              insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" },
+            },
+          },
+        ]),
+        paint: 0,
+      },
+      { x: 0, y: 0, w: 390, h: 844 },
+    );
     const anchor = overlay(d, "bar").anchor!;
     expect(anchor.corner).toBe("bottomLeading");
     expect(anchor.offset[1]).toBe(0);

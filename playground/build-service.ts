@@ -10,7 +10,7 @@ export async function buildService(outputDirectory: string): Promise<void> {
     external: ["playwright-core"],
   });
   if (!built.success || built.outputs.length !== 1) {
-    throw new Error(`Service bundle failed: ${built.logs.map(log => String(log)).join("\n")}`);
+    throw new Error(`Service bundle failed: ${built.logs.map((log) => String(log)).join("\n")}`);
   }
   const playwright = await Bun.file(join(import.meta.dir, "../node_modules/playwright-core/package.json")).json();
   // The default dist folder is generated. Clear local install/cache files before packaging it.
@@ -18,12 +18,21 @@ export async function buildService(outputDirectory: string): Promise<void> {
   await mkdir(output, { recursive: true });
   await Bun.write(join(output, "server.js"), built.outputs[0]!);
   await copyFile(join(import.meta.dir, "../src/fonts/convert-font.py"), join(output, "convert-font.py"));
-  await writeFile(join(output, "package.json"), JSON.stringify({
-    name: "markswift-conversion-service", private: true, type: "module",
-    scripts: { start: "bun server.js" },
-    dependencies: { "playwright-core": playwright.version },
-    engines: { bun: ">=1.4.2" },
-  }, null, 2) + "\n");
+  await writeFile(
+    join(output, "package.json"),
+    JSON.stringify(
+      {
+        name: "markswift-conversion-service",
+        private: true,
+        type: "module",
+        scripts: { start: "bun server.js" },
+        dependencies: { "playwright-core": playwright.version },
+        engines: { bun: ">=1.4.2" },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 }
 
 if (import.meta.main) {

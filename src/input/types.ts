@@ -23,8 +23,4 @@ export interface CaptureRequest {
 /** Stable node identity for re-sync. `path` = element-index path from the capture root ("0/2/1"); `tag` lower-case; `attrs` raw. */
 export type NodeIdentity = (tag: string, attrs: Record<string, string>, path: string) => string | undefined;
 
-
-export type HtmlSource =
-  | { html: string; baseURL?: string; assetsDir?: string }
-  | { file: string }
-  | { url: string };
+export type HtmlSource = { html: string; baseURL?: string; assetsDir?: string } | { file: string } | { url: string };

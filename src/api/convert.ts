@@ -16,21 +16,34 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   validateName(options.name ?? "ConvertedView");
   const viewport = options.viewport ?? { width: 390, height: 844 };
   const dpr = options.dpr ?? 1;
-  if (![viewport.width, viewport.height].every((n) => Number.isInteger(n) && n > 0) || !Number.isFinite(dpr) || dpr <= 0) {
+  if (
+    ![viewport.width, viewport.height].every((n) => Number.isInteger(n) && n > 0) ||
+    !Number.isFinite(dpr) ||
+    dpr <= 0
+  ) {
     throw new Error("viewport dimensions must be positive integers and dpr must be positive and finite");
   }
   const timeoutMs = options.timeoutMs ?? 120_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be positive and finite");
-  if (["html", "file", "url"].filter((key) => key in source).length !== 1) throw new Error("provide exactly one of html, file or url");
+  if (["html", "file", "url"].filter((key) => key in source).length !== 1)
+    throw new Error("provide exactly one of html, file or url");
   if (options.untrustedInput && (!("html" in source) || source.assetsDir || source.baseURL)) {
     throw new Error("untrustedInput accepts pasted HTML without assetsDir or baseURL only");
   }
   const theme = options.theme ?? "adaptive";
-  if (theme !== "light" && theme !== "dark" && theme !== "adaptive") throw new Error("theme must be light, dark or adaptive");
-  if (options.darkClass !== undefined && !/^\S+$/.test(options.darkClass)) throw new Error("darkClass must be a single class name");
+  if (theme !== "light" && theme !== "dark" && theme !== "adaptive")
+    throw new Error("theme must be light, dark or adaptive");
+  if (options.darkClass !== undefined && !/^\S+$/.test(options.darkClass))
+    throw new Error("darkClass must be a single class name");
   let prepared: ResolvedSource | undefined;
   const deadline = AbortSignal.timeout(timeoutMs);
-  const renderer = new BrowserCapture({ viewport, dpr, channel: options.browserChannel, restricted: options.untrustedInput, signal: deadline });
+  const renderer = new BrowserCapture({
+    viewport,
+    dpr,
+    channel: options.browserChannel,
+    restricted: options.untrustedInput,
+    signal: deadline,
+  });
   // Closing Chrome rejects whatever is pending in it (goto, evaluate, fonts.ready, image decode).
   const stopOnTimeout = () => void renderer.stop().catch(() => {});
   deadline.addEventListener("abort", stopOnTimeout, { once: true });
@@ -42,22 +55,42 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     const name = options.name ?? "ConvertedView";
     // :has is resolved by Chromium. A fragment and a full document use identical root rules.
     const root = options.root ?? DEFAULT_ROOT;
-    const shot = (scheme: Theme) => renderer.capture({
-      screen: name, theme: scheme, url, html, root, waitFor: options.waitFor,
-      async prepare(page) {
-        if (options.css) await page.addStyleTag({ content: options.css });
-        if (scheme === "dark" && options.darkClass) await page.evaluate((c) => document.documentElement.classList.add(c), options.darkClass);
-        await options.prepare?.(page);
-      },
-    }, htmlIdentity, label);
+    const shot = (scheme: Theme) =>
+      renderer.capture(
+        {
+          screen: name,
+          theme: scheme,
+          url,
+          html,
+          root,
+          waitFor: options.waitFor,
+          async prepare(page) {
+            if (options.css) await page.addStyleTag({ content: options.css });
+            if (scheme === "dark" && options.darkClass)
+              await page.evaluate((c) => document.documentElement.classList.add(c), options.darkClass);
+            await options.prepare?.(page);
+          },
+        },
+        htmlIdentity,
+        label,
+      );
     // Adaptive: two captures in one browser session; the light one is emitted, the dark one pairs its colours.
     const capture = await shot(theme === "dark" ? "dark" : "light");
     const dark = theme === "adaptive" ? await shot("dark") : undefined;
     const sources = new Map([...capture.fontFiles, ...(dark?.fontFiles ?? [])].map((f) => [f.file, f.bytes]));
-    const fonts = await packageFonts(dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts, sources, undefined, deadline);
+    const fonts = await packageFonts(
+      dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts,
+      sources,
+      undefined,
+      deadline,
+    );
     deadline.throwIfAborted(); // an aborted converter returns a note, not an error
     const compiled = compileLayout(capture.layout, {
-      name, mode: options.mode, bundledFamilies: bundledFamilies(fonts), fontMetrics: metricsForFonts(fonts), dark: dark?.layout,
+      name,
+      mode: options.mode,
+      bundledFamilies: bundledFamilies(fonts),
+      fontMetrics: metricsForFonts(fonts),
+      dark: dark?.layout,
     });
     const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
     if (fonts.faces.length) {
@@ -66,7 +99,10 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     }
     const pageWarnings = dark ? [...new Set([...capture.warnings, ...dark.warnings])] : capture.warnings;
     return {
-      ...compiled, assets, warnings: [...pageWarnings, ...fonts.notes, ...compiled.warnings], layout: capture.layout,
+      ...compiled,
+      assets,
+      warnings: [...pageWarnings, ...fonts.notes, ...compiled.warnings],
+      layout: capture.layout,
       ...(dark ? { darkLayout: dark.layout } : {}),
     };
   } catch (error) {
@@ -74,8 +110,11 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     throw error;
   } finally {
     deadline.removeEventListener("abort", stopOnTimeout);
-    try { await renderer.stop(); }
-    finally { prepared?.close(); }
+    try {
+      await renderer.stop();
+    } finally {
+      prepared?.close();
+    }
   }
 }
 

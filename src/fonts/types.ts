@@ -1,6 +1,5 @@
 import type { FaceMetrics } from "../model/fonts.ts";
 
-
 /** A face bundled with the generated Swift; its bytes are `FontPackage.assets["Fonts/<file>"]`. */
 export interface PackagedFace {
   /** CSS family name — what `font-family` declarations say and what the emitter emits. */
@@ -18,7 +17,6 @@ export interface PackagedFace {
   /** The name table was rewritten so the CSS family name resolves. */
   renamed: boolean;
 }
-
 
 export interface FontPackage {
   faces: PackagedFace[];

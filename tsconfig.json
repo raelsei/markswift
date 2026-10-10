@@ -3,14 +3,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ESNext",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "types": [
-      "bun"
-    ],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -22,12 +16,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": [
-    "src/**/*.ts",
-    "tests/**/*.ts",
-    "tools/**/*.ts",
-    "playground/**/*.ts"
-  ],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "tools/**/*.ts", "playground/**/*.ts"],
   "exclude": [
     "node_modules",
     "tests/local",

@@ -64,9 +64,30 @@ export type PaintInset = {
  */
 export type Paint =
   | ({ kind: "solid"; color: Color } & PaintInset)
-  | ({ kind: "linear"; angle: number; corner?: [x: 1 | -1, y: 1 | -1]; stops: GradientStop[]; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true; space?: string } & PaintInset)
-  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true; space?: string } & PaintInset)
+  | ({
+      kind: "linear";
+      angle: number;
+      corner?: [x: 1 | -1, y: 1 | -1];
+      stops: GradientStop[];
+      repeating?: true;
+      space?: string;
+    } & PaintInset)
+  | ({
+      kind: "radial";
+      stops: GradientStop[];
+      center: [number, number];
+      ellipse: boolean;
+      repeating?: true;
+      space?: string;
+    } & PaintInset)
+  | ({
+      kind: "conic";
+      stops: GradientStop[];
+      from: number;
+      center: [number, number];
+      repeating?: true;
+      space?: string;
+    } & PaintInset)
   | ({
       kind: "image";
       url: string;

@@ -11,178 +11,508 @@ import sharp from "sharp";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
-const PUBLIC_HTML = '<main data-markswift-root><h2>Hello</h2><label>Name<input value="Ada"></label><button>Save</button><p>Visit <a href="https://example.com">our site</a> today.</p><a style="display:block" href="https://example.com">Open site</a><section style="max-width:50%;padding:4px"><p style="min-height:30px">Floor</p><p style="max-height:10px;overflow:hidden">Clipped</p><span style="display:inline-block;max-width:200px">Hi</span></section><svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="8" fill="red"/></svg></main>';
-const PUBLIC_CSS = "body{margin:0} main{width:300px;padding:20px;font:16px system-ui;background:#eee} h2{font-size:24px}label{display:block}";
+const PUBLIC_HTML =
+  '<main data-markswift-root><h2>Hello</h2><label>Name<input value="Ada"></label><button>Save</button><p>Visit <a href="https://example.com">our site</a> today.</p><a style="display:block" href="https://example.com">Open site</a><section style="max-width:50%;padding:4px"><p style="min-height:30px">Floor</p><p style="max-height:10px;overflow:hidden">Clipped</p><span style="display:inline-block;max-width:200px">Hi</span></section><svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="8" fill="red"/></svg></main>';
+const PUBLIC_CSS =
+  "body{margin:0} main{width:300px;padding:20px;font:16px system-ui;background:#eee} h2{font-size:24px}label{display:block}";
 
-nativeTest("public conversion produces complete Swift compilable in both modes", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-api-"));
-  try {
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
-      expect(result.code).toContain("Link(destination:");
-      expect(result.code).toContain("minHeight: 30.0");
-      expect(result.code).toContain("height: 10.0, alignment: .topLeading");
-      expect(result.code).toContain("maxWidth: 200.0");
-      expect(result.diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join("\n")).toContain("destination dropped");
-      const output = join(directory, mode);
-      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
-      const check = await typecheck(output);
-      if (!check.ok) throw new Error(check.output);
-      expect(check.ok).toBe(true);
-    }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
-
-nativeTest("public conversion renders on macOS in both modes", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-mac-"));
-  try {
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
-      const png = join(directory, `${mode}.png`);
-      await renderMac(result, join(directory, mode, "mac"), png);
-      const meta = await sharp(png).metadata();
-      expect([meta.width, meta.height]).toEqual([result.layout.size.w * 2, result.layout.size.h * 2]);
-    }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 240000);
-
-nativeTest("accessible forms compile in both modes", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-a11y-"));
-  try {
-    const fixture = await Bun.file(join(import.meta.dir, "../conformance/fixtures/html/input.html")).text();
-    const css = /<style>([\s\S]*)<\/style>/.exec(fixture)![1]!;
-    const main = /<main[\s\S]*<\/main>/.exec(fixture)![0]!.replace("</main>", '<button aria-label="Close">×</button><h2>Settings</h2><input type="email" aria-label="Work email"></main>');
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = await convertHtml(main, { name: "AccessibleForm", mode, css });
-      if (mode === "app") {
-        for (const s of ['.accessibilityLabel("Close")', ".accessibilityHeading(.h2)", ".markswiftSelects(", ".markswiftInputTraits(.email)", "@ScaledMetric(relativeTo:"]) expect(result.code).toContain(s);
+nativeTest(
+  "public conversion produces complete Swift compilable in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-api-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
+        expect(result.code).toContain("Link(destination:");
+        expect(result.code).toContain("minHeight: 30.0");
+        expect(result.code).toContain("height: 10.0, alignment: .topLeading");
+        expect(result.code).toContain("maxWidth: 200.0");
+        expect(
+          result.diagnostics
+            .flatMap((item) => item.diagnostics)
+            .map((d) => d.message)
+            .join("\n"),
+        ).toContain("destination dropped");
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+        expect(check.ok).toBe(true);
       }
-      const output = join(directory, mode);
-      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
-      const check = await typecheck(output);
-      if (!check.ok) throw new Error(check.output);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
+  },
+  120000,
+);
 
-nativeTest("adaptive light/dark conversion compiles", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-adaptive-"));
-  try {
-    const result = await convertHtml('<main data-markswift-root><h2>Account</h2><p class="note">Signed in</p><progress value="40" max="100"></progress></main>', {
-      name: "AdaptiveCard",
-      css: "body{margin:0} main{width:280px;padding:16px;font:16px system-ui;background:#fff;color:#111} .note{color:#555} @media (prefers-color-scheme: dark){main{background:#16181d;color:#f2f2f2}.note{color:#a0a4ab}}",
+nativeTest(
+  "public conversion renders on macOS in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-mac-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml(PUBLIC_HTML, { name: "ExampleCard", mode, css: PUBLIC_CSS });
+        const png = join(directory, `${mode}.png`);
+        await renderMac(result, join(directory, mode, "mac"), png);
+        const meta = await sharp(png).metadata();
+        expect([meta.width, meta.height]).toEqual([result.layout.size.w * 2, result.layout.size.h * 2]);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  240000,
+);
+
+nativeTest(
+  "accessible forms compile in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-a11y-"));
+    try {
+      const fixture = await Bun.file(join(import.meta.dir, "../conformance/fixtures/html/input.html")).text();
+      const css = /<style>([\s\S]*)<\/style>/.exec(fixture)![1]!;
+      const main = /<main[\s\S]*<\/main>/
+        .exec(fixture)![0]!
+        .replace(
+          "</main>",
+          '<button aria-label="Close">×</button><h2>Settings</h2><input type="email" aria-label="Work email"></main>',
+        );
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml(main, { name: "AccessibleForm", mode, css });
+        if (mode === "app") {
+          for (const s of [
+            '.accessibilityLabel("Close")',
+            ".accessibilityHeading(.h2)",
+            ".markswiftSelects(",
+            ".markswiftInputTraits(.email)",
+            "@ScaledMetric(relativeTo:",
+          ])
+            expect(result.code).toContain(s);
+        }
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
+
+nativeTest(
+  "adaptive light/dark conversion compiles",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-adaptive-"));
+    try {
+      const result = await convertHtml(
+        '<main data-markswift-root><h2>Account</h2><p class="note">Signed in</p><progress value="40" max="100"></progress></main>',
+        {
+          name: "AdaptiveCard",
+          css: "body{margin:0} main{width:280px;padding:16px;font:16px system-ui;background:#fff;color:#111} .note{color:#555} @media (prefers-color-scheme: dark){main{background:#16181d;color:#f2f2f2}.note{color:#a0a4ab}}",
+        },
+      );
+      expect(result.files["AdaptiveCard+Tokens.swift"]).toContain("= Color.markswift(light:");
+      expect(result.code).toContain("Color.markswift(light: Color.markswift(");
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(directory, file), content);
+      const check = await typecheck(directory);
+      if (!check.ok) throw new Error(check.output);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
+
+nativeTest(
+  "009: silent-loss fixes emit compilable Swift in both modes",
+  async () => {
+    const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+    const node = (
+      tag: string,
+      bounds: LayoutNode["bounds"],
+      styles: Record<string, string>,
+      children: LayoutNode[] = [],
+      attrs: Record<string, string> = {},
+    ): LayoutNode => ({ tag, attrs, styles: { ...BASE, ...styles }, bounds, children });
+    const text = (s: string, bounds: LayoutNode["bounds"]): LayoutNode => ({
+      tag: "#text",
+      attrs: {},
+      styles: { ...BASE },
+      bounds,
+      text: s,
+      children: [],
     });
-    expect(result.files["AdaptiveCard+Tokens.swift"]).toContain("= Color.markswift(light:");
-    expect(result.code).toContain("Color.markswift(light: Color.markswift(");
-    for (const [file, content] of Object.entries(result.files)) await Bun.write(join(directory, file), content);
-    const check = await typecheck(directory);
-    if (!check.ok) throw new Error(check.output);
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
-
-nativeTest("009: silent-loss fixes emit compilable Swift in both modes", async () => {
-  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
-  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, children: LayoutNode[] = [], attrs: Record<string, string> = {}): LayoutNode => ({ tag, attrs, styles: { ...BASE, ...styles }, bounds, children });
-  const text = (s: string, bounds: LayoutNode["bounds"]): LayoutNode => ({ tag: "#text", attrs: {}, styles: { ...BASE }, bounds, text: s, children: [] });
-  const CLIP = { "background-clip": "text", "background-image": "linear-gradient(to right, rgb(255, 0, 0), rgb(0, 0, 255))", "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" };
-  const root = node("main", { x: 0, y: 0, w: 300, h: 380 }, { display: "block" }, [
-    node("div", { x: 0, y: 0, w: 40, h: 40 }, { display: "block", transform: "matrix(-1, 0, 0, 1, 0, 0)", "background-color": "rgb(255, 0, 0)" }),
-    node("div", { x: 0, y: 40, w: 300, h: 50 }, { display: "grid", "grid-template-columns": "300px", "grid-template-rows": "30px 30px 30px", "row-gap": "0px", "overflow-y": "auto" }, [0, 30, 60].map((y) => node("div", { x: 0, y: 40 + y, w: 300, h: 30 }, { display: "block", "background-color": "rgb(0, 0, 255)" }))),
-    node("td", { x: 0, y: 90, w: 300, h: 20 }, { display: "table-cell" }, [text("\u00A0", { x: 0, y: 93, w: 4, h: 14 })]),
-    node("p", { x: 0, y: 110, w: 300, h: 20 }, { display: "block" }, [
-      text("Hello ", { x: 0, y: 113, w: 40, h: 14 }),
-      node("span", { x: 40, y: 113, w: 45, h: 14 }, { visibility: "hidden" }, [text("secret", { x: 40, y: 113, w: 45, h: 14 })]),
-      text(" world", { x: 85, y: 113, w: 40, h: 14 }),
-    ]),
-    node("h1", { x: 0, y: 130, w: 300, h: 40 }, { display: "block", ...CLIP }, [
-      text("Build ", { x: 0, y: 140, w: 60, h: 20 }),
-      node("span", { x: 60, y: 140, w: 70, h: 20 }, { "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [text("faster", { x: 60, y: 140, w: 70, h: 20 })]),
-    ]),
-    { ...node("img", { x: 0, y: 170, w: 40, h: 40 }, { display: "inline" }), currentSrc: "data:image/svg+xml," + encodeURIComponent('<svg viewBox="0 0 10 10"><path d="M0 0H10V10Z"/></svg>') },
-  ]);
-  const doc: LayoutDoc = { version: 2, source: "silent-loss", combo: { screen: "s", theme: "light" }, size: { w: 300, h: 380 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-009-"));
-  try {
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = compileLayout(doc, { name: "SilentLoss", mode });
-      if (mode === "app") expect(result.code).toContain(".scaleEffect(x: -1.0");
-      const output = join(directory, mode);
-      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
-      const check = await typecheck(output);
-      if (!check.ok) throw new Error(check.output);
+    const CLIP = {
+      "background-clip": "text",
+      "background-image": "linear-gradient(to right, rgb(255, 0, 0), rgb(0, 0, 255))",
+      "-webkit-text-fill-color": "rgba(0, 0, 0, 0)",
+    };
+    const root = node("main", { x: 0, y: 0, w: 300, h: 380 }, { display: "block" }, [
+      node(
+        "div",
+        { x: 0, y: 0, w: 40, h: 40 },
+        { display: "block", transform: "matrix(-1, 0, 0, 1, 0, 0)", "background-color": "rgb(255, 0, 0)" },
+      ),
+      node(
+        "div",
+        { x: 0, y: 40, w: 300, h: 50 },
+        {
+          display: "grid",
+          "grid-template-columns": "300px",
+          "grid-template-rows": "30px 30px 30px",
+          "row-gap": "0px",
+          "overflow-y": "auto",
+        },
+        [0, 30, 60].map((y) =>
+          node("div", { x: 0, y: 40 + y, w: 300, h: 30 }, { display: "block", "background-color": "rgb(0, 0, 255)" }),
+        ),
+      ),
+      node("td", { x: 0, y: 90, w: 300, h: 20 }, { display: "table-cell" }, [
+        text("\u00A0", { x: 0, y: 93, w: 4, h: 14 }),
+      ]),
+      node("p", { x: 0, y: 110, w: 300, h: 20 }, { display: "block" }, [
+        text("Hello ", { x: 0, y: 113, w: 40, h: 14 }),
+        node("span", { x: 40, y: 113, w: 45, h: 14 }, { visibility: "hidden" }, [
+          text("secret", { x: 40, y: 113, w: 45, h: 14 }),
+        ]),
+        text(" world", { x: 85, y: 113, w: 40, h: 14 }),
+      ]),
+      node("h1", { x: 0, y: 130, w: 300, h: 40 }, { display: "block", ...CLIP }, [
+        text("Build ", { x: 0, y: 140, w: 60, h: 20 }),
+        node("span", { x: 60, y: 140, w: 70, h: 20 }, { "-webkit-text-fill-color": "rgba(0, 0, 0, 0)" }, [
+          text("faster", { x: 60, y: 140, w: 70, h: 20 }),
+        ]),
+      ]),
+      {
+        ...node("img", { x: 0, y: 170, w: 40, h: 40 }, { display: "inline" }),
+        currentSrc:
+          "data:image/svg+xml," + encodeURIComponent('<svg viewBox="0 0 10 10"><path d="M0 0H10V10Z"/></svg>'),
+      },
+    ]);
+    const doc: LayoutDoc = {
+      version: 2,
+      source: "silent-loss",
+      combo: { screen: "s", theme: "light" },
+      size: { w: 300, h: 380 },
+      dpr: 1,
+      canvas: "rgb(255, 255, 255)",
+      fonts: [],
+      root,
+    };
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-009-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = compileLayout(doc, { name: "SilentLoss", mode });
+        if (mode === "app") expect(result.code).toContain(".scaleEffect(x: -1.0");
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
+  },
+  120000,
+);
 
-nativeTest("010: app-sizing output compiles in both modes", async () => {
-  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
-  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, extra: Partial<LayoutNode> = {}): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
-  const image = (x: number, fit: string, position?: string) => node("img", { x, y: 0, w: 70, h: 100 }, { display: "inline", "object-fit": fit, ...(position ? { "object-position": position } : {}) }, { attrs: { src: "photo.png" }, currentSrc: PNG, paint: 1 });
-  const root = node("main", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block", position: "relative" }, {
-    paint: 0,
-    children: [
-      node("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block" }, { paint: 1, children: [image(0, "fill"), image(70, "cover", "50% 0%"), image(140, "contain"), image(210, "none"), image(280, "scale-down")] }),
-      node("input", { x: 0, y: 100, w: 200, h: 38 }, { display: "inline-block" }, { attrs: { type: "text", value: "a" }, paint: 1 }),
-      node("div", { x: 0, y: 138, w: 390, h: 1862 }, { display: "block", "background-color": "rgb(240, 240, 240)" }, { paint: 1 }),
-      node("div", { x: 354, y: 8, w: 20, h: 20 }, { display: "block", position: "absolute", "background-color": "rgb(255, 0, 0)" }, { paint: 2, preferredSize: { width: "20px", height: "20px", insets: { top: "8px", right: "16px", bottom: "auto", left: "auto" } } }),
-      node("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, { paint: 3, preferredSize: { width: "390px", height: "60px", insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" } } }),
-    ],
-  });
-  const doc: LayoutDoc = { version: 2, source: "app-sizing", combo: { screen: "s", theme: "light" }, size: { w: 390, h: 2000 }, viewport: { x: 0, y: 0, w: 390, h: 844 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-010-"));
-  try {
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = compileLayout(doc, { name: "AppSizing", mode });
-      if (mode === "app") for (const marker of ["ScrollView(.vertical", ".overlay(alignment: .bottomLeading)", "minHeight: 38.0"]) expect(result.code).toContain(marker);
-      const output = join(directory, mode);
-      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
-      const check = await typecheck(output);
-      if (!check.ok) throw new Error(check.output);
+nativeTest(
+  "010: app-sizing output compiles in both modes",
+  async () => {
+    const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+    const node = (
+      tag: string,
+      bounds: LayoutNode["bounds"],
+      styles: Record<string, string>,
+      extra: Partial<LayoutNode> = {},
+    ): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
+    const image = (x: number, fit: string, position?: string) =>
+      node(
+        "img",
+        { x, y: 0, w: 70, h: 100 },
+        { display: "inline", "object-fit": fit, ...(position ? { "object-position": position } : {}) },
+        { attrs: { src: "photo.png" }, currentSrc: PNG, paint: 1 },
+      );
+    const root = node(
+      "main",
+      { x: 0, y: 0, w: 390, h: 2000 },
+      { display: "block", position: "relative" },
+      {
+        paint: 0,
+        children: [
+          node(
+            "div",
+            { x: 0, y: 0, w: 390, h: 100 },
+            { display: "block" },
+            {
+              paint: 1,
+              children: [
+                image(0, "fill"),
+                image(70, "cover", "50% 0%"),
+                image(140, "contain"),
+                image(210, "none"),
+                image(280, "scale-down"),
+              ],
+            },
+          ),
+          node(
+            "input",
+            { x: 0, y: 100, w: 200, h: 38 },
+            { display: "inline-block" },
+            { attrs: { type: "text", value: "a" }, paint: 1 },
+          ),
+          node(
+            "div",
+            { x: 0, y: 138, w: 390, h: 1862 },
+            { display: "block", "background-color": "rgb(240, 240, 240)" },
+            { paint: 1 },
+          ),
+          node(
+            "div",
+            { x: 354, y: 8, w: 20, h: 20 },
+            { display: "block", position: "absolute", "background-color": "rgb(255, 0, 0)" },
+            {
+              paint: 2,
+              preferredSize: {
+                width: "20px",
+                height: "20px",
+                insets: { top: "8px", right: "16px", bottom: "auto", left: "auto" },
+              },
+            },
+          ),
+          node(
+            "div",
+            { x: 0, y: 784, w: 390, h: 60 },
+            { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" },
+            {
+              paint: 3,
+              preferredSize: {
+                width: "390px",
+                height: "60px",
+                insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" },
+              },
+            },
+          ),
+        ],
+      },
+    );
+    const doc: LayoutDoc = {
+      version: 2,
+      source: "app-sizing",
+      combo: { screen: "s", theme: "light" },
+      size: { w: 390, h: 2000 },
+      viewport: { x: 0, y: 0, w: 390, h: 844 },
+      dpr: 1,
+      canvas: "rgb(255, 255, 255)",
+      fonts: [],
+      root,
+    };
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-010-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = compileLayout(doc, { name: "AppSizing", mode });
+        if (mode === "app")
+          for (const marker of ["ScrollView(.vertical", ".overlay(alignment: .bottomLeading)", "minHeight: 38.0"])
+            expect(result.code).toContain(marker);
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
+  },
+  120000,
+);
 
-nativeTest("011: flex and direction output compiles in both modes", async () => {
-  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
-  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, extra: Partial<LayoutNode> = {}): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
-  const box = (x: number, y: number, w: number, h: number, styles: Record<string, string> = {}, extra: Partial<LayoutNode> = {}) => node("div", { x, y, w, h }, { display: "block", "background-color": "rgb(255, 0, 0)", ...styles }, extra);
-  const text = (value: string, bounds: LayoutNode["bounds"]): LayoutNode => node("#text", bounds, {}, { text: value });
-  const chip = (x: number, y: number) => node("span", { x, y, w: 60, h: 28 }, { display: "block", "flex-shrink": "1", "padding-left": "12px", "padding-right": "12px", "padding-top": "4px", "padding-bottom": "4px" }, { preferredSize: { width: "auto", height: "auto" }, children: [text("Design", { x: x + 12, y: y + 7, w: 36, h: 14 })] });
-  const fixedWidth = (w: number, h = "auto") => ({ preferredSize: { width: `${w}px`, height: h } });
-  const root = node("main", { x: 0, y: 0, w: 390, h: 634 }, { display: "block" }, {
-    children: [
-      node("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "flex-direction": "row-reverse", "justify-content": "flex-end" }, { children: [box(50, 0, 50, 40), box(0, 0, 50, 40)] }),
-      node("div", { x: 0, y: 40, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, { children: [box(0, 40, 50, 40), box(60, 60, 50, 20, { "align-self": "flex-end" })] }),
-      node("div", { x: 0, y: 80, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "stretch" }, { children: [box(125, 80, 50, 20, { "align-self": "center" })] }),
-      node("div", { x: 0, y: 180, w: 180, h: 66 }, { display: "flex", "flex-wrap": "wrap", "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start" }, { ...fixedWidth(180), children: [chip(0, 180), chip(70, 180), chip(0, 218)] }),
-      node("nav", { x: 0, y: 246, w: 300, h: 20 }, { display: "flex", "column-gap": "8px" }, { ...fixedWidth(300), children: [box(0, 246, 40, 20), box(262, 246, 38, 20, { "margin-left": "214px" }, { preferredSize: { width: "auto", height: "auto", autoMargins: ["left"] } })] }),
-      node("div", { x: 0, y: 266, w: 200, h: 300 }, { display: "flex", "flex-direction": "column" }, { ...fixedWidth(200, "300px"), children: [box(0, 266, 200, 20), box(0, 536, 200, 30, { "margin-top": "250px" }, { preferredSize: { width: "auto", height: "auto", autoMargins: ["top"] } })] }),
-      node("div", { x: 0, y: 566, w: 300, h: 20 }, { display: "flex", "justify-content": "space-between", "column-gap": "16px" }, { ...fixedWidth(300), children: [box(0, 566, 40, 20), box(260, 566, 40, 20)] }),
-      node("div", { x: 0, y: 586, w: 120, h: 28 }, { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" }, { children: [chip(0, 586)] }),
-      node("div", { x: 0, y: 614, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, { children: [text("Hi", { x: 90, y: 617, w: 20, h: 14 })] }),
-    ],
-  });
-  const doc: LayoutDoc = { version: 2, source: "flex-direction", combo: { screen: "s", theme: "light" }, size: { w: 390, h: 634 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
-  const directory = await mkdtemp(join(tmpdir(), "markswift-native-011-"));
-  try {
-    for (const mode of ["app", "fidelity"] as const) {
-      const result = compileLayout(doc, { name: "FlexDirection", mode });
-      if (mode === "app") for (const marker of ["MarkswiftFlow(", "Spacer(minLength: 8.0)", "Spacer(minLength: 16.0)", "maxHeight: .infinity, alignment: .bottom", ".fixedSize(horizontal: true, vertical: true)"]) expect(result.code).toContain(marker);
-      const output = join(directory, mode);
-      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
-      const check = await typecheck(output);
-      if (!check.ok) throw new Error(check.output);
+nativeTest(
+  "011: flex and direction output compiles in both modes",
+  async () => {
+    const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+    const node = (
+      tag: string,
+      bounds: LayoutNode["bounds"],
+      styles: Record<string, string>,
+      extra: Partial<LayoutNode> = {},
+    ): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
+    const box = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      styles: Record<string, string> = {},
+      extra: Partial<LayoutNode> = {},
+    ) => node("div", { x, y, w, h }, { display: "block", "background-color": "rgb(255, 0, 0)", ...styles }, extra);
+    const text = (value: string, bounds: LayoutNode["bounds"]): LayoutNode =>
+      node("#text", bounds, {}, { text: value });
+    const chip = (x: number, y: number) =>
+      node(
+        "span",
+        { x, y, w: 60, h: 28 },
+        {
+          display: "block",
+          "flex-shrink": "1",
+          "padding-left": "12px",
+          "padding-right": "12px",
+          "padding-top": "4px",
+          "padding-bottom": "4px",
+        },
+        {
+          preferredSize: { width: "auto", height: "auto" },
+          children: [text("Design", { x: x + 12, y: y + 7, w: 36, h: 14 })],
+        },
+      );
+    const fixedWidth = (w: number, h = "auto") => ({ preferredSize: { width: `${w}px`, height: h } });
+    const root = node(
+      "main",
+      { x: 0, y: 0, w: 390, h: 634 },
+      { display: "block" },
+      {
+        children: [
+          node(
+            "div",
+            { x: 0, y: 0, w: 300, h: 40 },
+            { display: "flex", "flex-direction": "row-reverse", "justify-content": "flex-end" },
+            { children: [box(50, 0, 50, 40), box(0, 0, 50, 40)] },
+          ),
+          node(
+            "div",
+            { x: 0, y: 40, w: 300, h: 40 },
+            { display: "flex", "align-items": "flex-start" },
+            { children: [box(0, 40, 50, 40), box(60, 60, 50, 20, { "align-self": "flex-end" })] },
+          ),
+          node(
+            "div",
+            { x: 0, y: 80, w: 300, h: 100 },
+            { display: "flex", "flex-direction": "column", "align-items": "stretch" },
+            { children: [box(125, 80, 50, 20, { "align-self": "center" })] },
+          ),
+          node(
+            "div",
+            { x: 0, y: 180, w: 180, h: 66 },
+            {
+              display: "flex",
+              "flex-wrap": "wrap",
+              "column-gap": "10px",
+              "row-gap": "10px",
+              "align-items": "flex-start",
+            },
+            { ...fixedWidth(180), children: [chip(0, 180), chip(70, 180), chip(0, 218)] },
+          ),
+          node(
+            "nav",
+            { x: 0, y: 246, w: 300, h: 20 },
+            { display: "flex", "column-gap": "8px" },
+            {
+              ...fixedWidth(300),
+              children: [
+                box(0, 246, 40, 20),
+                box(
+                  262,
+                  246,
+                  38,
+                  20,
+                  { "margin-left": "214px" },
+                  { preferredSize: { width: "auto", height: "auto", autoMargins: ["left"] } },
+                ),
+              ],
+            },
+          ),
+          node(
+            "div",
+            { x: 0, y: 266, w: 200, h: 300 },
+            { display: "flex", "flex-direction": "column" },
+            {
+              ...fixedWidth(200, "300px"),
+              children: [
+                box(0, 266, 200, 20),
+                box(
+                  0,
+                  536,
+                  200,
+                  30,
+                  { "margin-top": "250px" },
+                  { preferredSize: { width: "auto", height: "auto", autoMargins: ["top"] } },
+                ),
+              ],
+            },
+          ),
+          node(
+            "div",
+            { x: 0, y: 566, w: 300, h: 20 },
+            { display: "flex", "justify-content": "space-between", "column-gap": "16px" },
+            { ...fixedWidth(300), children: [box(0, 566, 40, 20), box(260, 566, 40, 20)] },
+          ),
+          node(
+            "div",
+            { x: 0, y: 586, w: 120, h: 28 },
+            { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" },
+            { children: [chip(0, 586)] },
+          ),
+          node(
+            "div",
+            { x: 0, y: 614, w: 200, h: 20 },
+            { display: "block", "text-align": "-webkit-center" },
+            { children: [text("Hi", { x: 90, y: 617, w: 20, h: 14 })] },
+          ),
+        ],
+      },
+    );
+    const doc: LayoutDoc = {
+      version: 2,
+      source: "flex-direction",
+      combo: { screen: "s", theme: "light" },
+      size: { w: 390, h: 634 },
+      dpr: 1,
+      canvas: "rgb(255, 255, 255)",
+      fonts: [],
+      root,
+    };
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-011-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = compileLayout(doc, { name: "FlexDirection", mode });
+        if (mode === "app")
+          for (const marker of [
+            "MarkswiftFlow(",
+            "Spacer(minLength: 8.0)",
+            "Spacer(minLength: 16.0)",
+            "maxHeight: .infinity, alignment: .bottom",
+            ".fixedSize(horizontal: true, vertical: true)",
+          ])
+            expect(result.code).toContain(marker);
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
-  } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120000);
+  },
+  120000,
+);
 
 const ASSETS = join(import.meta.dir, "../conformance/fixtures/assets");
-const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-const SHARED = '<div style="width:40px;height:20px;background:var(--primary)"></div><div style="width:40px;height:20px;background:var(--primary)"></div><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2h16v16H2z" fill="#16a34a"/></svg>';
+const PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const SHARED =
+  '<div style="width:40px;height:20px;background:var(--primary)"></div><div style="width:40px;height:20px;background:var(--primary)"></div><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2h16v16H2z" fill="#16a34a"/></svg>';
 const EFFECTS = [
-  "filter:blur(2px)", "filter:brightness(1.2) contrast(1.1) saturate(.5) hue-rotate(45deg)", "filter:invert(1)", "filter:sepia(.6)",
-  "filter:drop-shadow(2px 2px 2px #0008)", "mix-blend-mode:multiply", "background:#fff8;backdrop-filter:blur(4px)",
-  "clip-path:polygon(50% 0,100% 100%,0 100%)", "mask-image:linear-gradient(#000,transparent)", "transform:rotate(12deg) scale(.9)",
+  "filter:blur(2px)",
+  "filter:brightness(1.2) contrast(1.1) saturate(.5) hue-rotate(45deg)",
+  "filter:invert(1)",
+  "filter:sepia(.6)",
+  "filter:drop-shadow(2px 2px 2px #0008)",
+  "mix-blend-mode:multiply",
+  "background:#fff8;backdrop-filter:blur(4px)",
+  "clip-path:polygon(50% 0,100% 100%,0 100%)",
+  "mask-image:linear-gradient(#000,transparent)",
+  "transform:rotate(12deg) scale(.9)",
   "box-shadow:inset 0 2px 4px #0006,0 4px 8px #0004;border-radius:8px",
 ];
 /**
@@ -200,7 +530,15 @@ const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: st
     name: "ControlsFamily",
     html: '<input type="text" placeholder="Name"><input type="checkbox" checked><input type="radio" name="r" checked><input type="range" value="30"><input type="date" value="2026-10-10"><input type="color" value="#2563eb"><input type="file"><input type="number" value="3"><select><option>One</option><option selected>Two</option></select><textarea>Notes</textarea><progress value="40" max="100"></progress><meter value="0.6"></meter><details open><summary>More</summary><p>Body</p></details><button>Save</button><a href="https://example.com">Link</a>',
     css: "main{display:flex;flex-direction:column;gap:6px;padding:8px}",
-    app: ["Slider(", "DatePicker(", "ColorPicker(", "TextEditor(", "DisclosureGroup(", ".fileImporter(", "Link(destination:"],
+    app: [
+      "Slider(",
+      "DatePicker(",
+      "ColorPicker(",
+      "TextEditor(",
+      "DisclosureGroup(",
+      ".fileImporter(",
+      "Link(destination:",
+    ],
   },
   {
     name: "SvgFamily",
@@ -213,7 +551,8 @@ const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: st
     app: ["Image.markswiftAsset("],
   },
   {
-    name: "WebfontFamily", assetsDir: ASSETS,
+    name: "WebfontFamily",
+    assetsDir: ASSETS,
     html: "<p>Geist text</p>",
     css: '@font-face{font-family:Geist;src:url(geist-latin-wght-normal.woff2) format("woff2");font-weight:100 900} main{font-family:Geist}',
     app: ["WebfontFamily+Fonts.swift", '.custom("Geist"'],
@@ -229,29 +568,42 @@ const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: st
 ];
 
 for (const mode of ["app", "fidelity"] as const) {
-  nativeTest(`every emitter family compiles, all bundles in one target (${mode})`, async () => {
-    const directory = await mkdtemp(join(tmpdir(), `markswift-native-matrix-${mode}-`));
-    try {
-      let runtime: string | undefined;
-      for (const f of FAMILIES) {
-        const result = await convert({ html: `<main data-markswift-root>${f.html}</main>`, ...(f.assetsDir ? { assetsDir: f.assetsDir } : {}) }, {
-          name: f.name, mode, css: `body{margin:0} :root{--primary:#2563eb} main{width:320px;font:16px system-ui} ${f.css ?? ""}`,
-        });
-        if (mode === "app") {
-          const all = Object.values(result.files).join("\n");
-          for (const marker of f.app) {
-            if (marker.endsWith(".swift")) expect(Object.keys(result.files)).toContain(marker);
-            else expect(all).toContain(marker);
+  nativeTest(
+    `every emitter family compiles, all bundles in one target (${mode})`,
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), `markswift-native-matrix-${mode}-`));
+      try {
+        let runtime: string | undefined;
+        for (const f of FAMILIES) {
+          const result = await convert(
+            { html: `<main data-markswift-root>${f.html}</main>`, ...(f.assetsDir ? { assetsDir: f.assetsDir } : {}) },
+            {
+              name: f.name,
+              mode,
+              css: `body{margin:0} :root{--primary:#2563eb} main{width:320px;font:16px system-ui} ${f.css ?? ""}`,
+            },
+          );
+          if (mode === "app") {
+            const all = Object.values(result.files).join("\n");
+            for (const marker of f.app) {
+              if (marker.endsWith(".swift")) expect(Object.keys(result.files)).toContain(marker);
+              else expect(all).toContain(marker);
+            }
+          }
+          for (const [file, content] of Object.entries(result.files)) {
+            if (file === "MarkswiftRuntime.swift") {
+              runtime ??= content;
+              expect(content).toBe(runtime);
+            } else expect(await Bun.file(join(directory, file)).exists()).toBe(false);
+            await Bun.write(join(directory, file), content);
           }
         }
-        for (const [file, content] of Object.entries(result.files)) {
-          if (file === "MarkswiftRuntime.swift") { runtime ??= content; expect(content).toBe(runtime); }
-          else expect(await Bun.file(join(directory, file)).exists()).toBe(false);
-          await Bun.write(join(directory, file), content);
-        }
+        const check = await typecheck(directory);
+        if (!check.ok) throw new Error(check.output);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
       }
-      const check = await typecheck(directory);
-      if (!check.ok) throw new Error(check.output);
-    } finally { await rm(directory, { recursive: true, force: true }); }
-  }, 300000);
+    },
+    300000,
+  );
 }

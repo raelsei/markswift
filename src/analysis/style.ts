@@ -10,8 +10,12 @@ export function styleOf(n: LayoutNode, diagnostics: Diagnostic[]): Style {
   const s = n.styles;
   const { w, h } = n.bounds;
   const dropped: string[] = [];
-  const style: Style = { fills: backgroundFills(s, w, h, diagnostics), shadows: parseShadows(s["box-shadow"], dropped) };
-  for (const x of dropped) addDiagnostic(diagnostics, "unmapped", "box-shadow", `shadow ${x} could not be parsed; dropped`);
+  const style: Style = {
+    fills: backgroundFills(s, w, h, diagnostics),
+    shadows: parseShadows(s["box-shadow"], dropped),
+  };
+  for (const x of dropped)
+    addDiagnostic(diagnostics, "unmapped", "box-shadow", `shadow ${x} could not be parsed; dropped`);
   Object.assign(style, borderStyle(s, w, h, diagnostics));
   applyEffects(n, style, diagnostics);
   return style;

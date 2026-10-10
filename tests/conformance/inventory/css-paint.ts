@@ -392,7 +392,7 @@ export default {
       ir: "Style.border (absent)",
       via: "style",
       impl: "yes",
-      note: "`none` and `hidden` both compute to no border; `styleOf` only checks `!== \"none\"`, so a computed `hidden` (table conflict resolution) would draw a ring.",
+      note: '`none` and `hidden` both compute to no border; `styleOf` only checks `!== "none"`, so a computed `hidden` (table conflict resolution) would draw a ring.',
       spec: "https://developer.mozilla.org/docs/Web/CSS/border-style",
     },
     {
@@ -980,7 +980,8 @@ export default {
       id: "filter",
       group: "Effects",
       class: "mapped",
-      target: ".blur / .brightness / .contrast / .saturation / .grayscale / .hueRotation / .colorInvert / .opacity / .shadow, chained in source order",
+      target:
+        ".blur / .brightness / .contrast / .saturation / .grayscale / .hueRotation / .colorInvert / .opacity / .shadow, chained in source order",
       ir: "Style.blur → Style.filters (new)",
       via: "style",
       impl: "partial",
@@ -1787,7 +1788,7 @@ export default {
       id: "list-style-type",
       group: "Lists",
       class: "approximated",
-      target: "Text(\"•\") / Text(\"1.\") marker run in an HStack row",
+      target: 'Text("•") / Text("1.") marker run in an HStack row',
       ir: "TextNode.runs (marker text)",
       via: "style",
       impl: "no",

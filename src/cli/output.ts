@@ -14,11 +14,20 @@ export async function ensureVacant(directory: string): Promise<void> {
 }
 
 /** Write the complete conversion bundle without replacing an existing directory. */
-export async function writeBundle(result: Pick<ConversionResult, "files" | "assets">, directory: string): Promise<string[]> {
+export async function writeBundle(
+  result: Pick<ConversionResult, "files" | "assets">,
+  directory: string,
+): Promise<string[]> {
   const entries = [...Object.entries(result.files), ...Object.entries(result.assets)];
   const folded = new Set<string>();
   for (const [name] of entries) {
-    if (!name || isAbsolute(name) || win32.isAbsolute(name) || name.includes("\\") || name.split("/").some(part => !part || part === "." || part === "..")) {
+    if (
+      !name ||
+      isAbsolute(name) ||
+      win32.isAbsolute(name) ||
+      name.includes("\\") ||
+      name.split("/").some((part) => !part || part === "." || part === "..")
+    ) {
       throw new Error(`Unsafe output path: ${name}`);
     }
     if (folded.has(name.toLowerCase())) throw new Error(`Duplicate output path: ${name}`);
@@ -30,7 +39,8 @@ export async function writeBundle(result: Pick<ConversionResult, "files" | "asse
   try {
     await mkdir(output);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`Output directory already exists: ${output}`);
+    if ((error as NodeJS.ErrnoException).code === "EEXIST")
+      throw new Error(`Output directory already exists: ${output}`);
     throw error;
   }
   try {
@@ -58,6 +68,12 @@ export function formatDiagnostics(report: ConversionResult["diagnostics"]): stri
     }
   }
   return [...groups.values()]
-    .sort((a, b) => Number(b.d.level === "unmapped") - Number(a.d.level === "unmapped") || a.d.feature.localeCompare(b.d.feature))
-    .map(({ d, ids }) => `${d.level} ${d.feature}: ${d.message} [${ids.length} node${ids.length === 1 ? "" : "s"}: ${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`);
+    .sort(
+      (a, b) =>
+        Number(b.d.level === "unmapped") - Number(a.d.level === "unmapped") || a.d.feature.localeCompare(b.d.feature),
+    )
+    .map(
+      ({ d, ids }) =>
+        `${d.level} ${d.feature}: ${d.message} [${ids.length} node${ids.length === 1 ? "" : "s"}: ${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`,
+    );
 }

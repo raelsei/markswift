@@ -5,7 +5,6 @@ import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.
 import { type FontConverter, pythonFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
 
-
 /**
  * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
  *
@@ -14,7 +13,12 @@ import { plistFragment } from "./registration.ts";
  * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
  * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
  */
-export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<string, Uint8Array>, convert: FontConverter = pythonFontConverter, signal?: AbortSignal): Promise<FontPackage> {
+export async function packageFonts(
+  faces: FontFace[],
+  sources: ReadonlyMap<string, Uint8Array>,
+  convert: FontConverter = pythonFontConverter,
+  signal?: AbortSignal,
+): Promise<FontPackage> {
   const notes: string[] = [];
   const packaged: PackagedFace[] = [];
   const assets: Record<string, Uint8Array> = {};
@@ -37,7 +41,10 @@ export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<strin
         `approximated: font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
       );
     }
-    if (!latin.length) notes.push(`unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`);
+    if (!latin.length)
+      notes.push(
+        `unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`,
+      );
 
     let bytes: Uint8Array | undefined;
     let usedSrc: FontFace["src"][number] | undefined;
@@ -49,7 +56,9 @@ export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<strin
       }
     }
     if (!bytes?.length || !usedSrc) {
-      notes.push(`unmapped: font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`);
+      notes.push(
+        `unmapped: font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`,
+      );
       continue;
     }
 
@@ -58,11 +67,14 @@ export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<strin
     // each needs its own subfamily or the lookup cannot tell them apart. A variable face covers
     // the whole range, so it is the family's Regular.
     const staticWeight = chosen.weight[0] === chosen.weight[1] ? chosen.weight[0] : undefined;
-    const weightName = staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
+    const weightName =
+      staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
     const stem = fontFileStem(chosen.family, subfamily, claimed);
     if (stem === undefined) {
-      notes.push(`approximated: font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`);
+      notes.push(
+        `approximated: font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`,
+      );
       continue;
     }
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
@@ -72,15 +84,35 @@ export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<strin
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
       notes.push(
         `unmapped: font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
-          (sig === "wOF2" || sig === "wOFF" ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli` : ""),
+          (sig === "wOF2" || sig === "wOFF"
+            ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli`
+            : ""),
       );
       continue;
     }
     assets[`Fonts/${file}`] = tool.bytes ?? bytes; // No rewritten bytes: already an sfnt with a matching name, shipped verbatim.
-    const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
-    packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
+    const metrics: FaceMetrics = {
+      upem: tool.upem,
+      ascent: tool.ascent,
+      descent: tool.descent,
+      lineGap: tool.lineGap,
+      useTypoMetrics: tool.useTypoMetrics,
+    };
+    packaged.push({
+      family: chosen.family,
+      file,
+      style: chosen.style,
+      weight: chosen.weight,
+      axes: tool.axes,
+      metrics,
+      converted: tool.converted,
+      renamed: tool.renamed,
+    });
     claimed.set(stem.toLowerCase(), chosen.family);
-    if (!chosen.loaded) notes.push(`approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`);
+    if (!chosen.loaded)
+      notes.push(
+        `approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`,
+      );
   }
 
   // A family whose bundled face is variable covers every weight of its axis; one whose face is
@@ -88,7 +120,9 @@ export async function packageFonts(faces: FontFace[], sources: ReadonlyMap<strin
   // has no instance for is a synthetic (smeared) weight and has to be reported once.
   for (const f of packaged) {
     if (!f.axes["wght"] && f.weight[0] !== f.weight[1]) {
-      notes.push(`approximated: font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`);
+      notes.push(
+        `approximated: font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`,
+      );
     }
   }
   const files = packaged.map((f) => f.file).sort();

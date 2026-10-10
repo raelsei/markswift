@@ -1,6 +1,15 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, edgeInsets, horizontalAlignment, indent, num, str, strokeStyle, verticalAlignment } from "./format.ts";
+import {
+  colorExpr,
+  edgeInsets,
+  horizontalAlignment,
+  indent,
+  num,
+  str,
+  strokeStyle,
+  verticalAlignment,
+} from "./format.ts";
 import { frameModifier } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
@@ -25,22 +34,26 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   if (n.kind === "image" && (n.contentMode === "cover" || n.contentMode === "none") && !st.clip) m.push(".clipped()");
   const shape = shapeExpr(st, n.frame.w, n.frame.h);
   // App mode draws fixed overlays outside a scrolling node's ScrollView (`containerExpr`).
-  const hoisted = (o: Overlay) => o.fixed === true && ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
+  const hoisted = (o: Overlay) =>
+    o.fixed === true && ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
   // puts B behind A, so apply the front-most background first.
-  for (const o of [...n.overlays.filter((o) => o.layer === "background" && !hoisted(o))].reverse()) m.push(...overlayModifier(o, "background", ctx));
+  for (const o of [...n.overlays.filter((o) => o.layer === "background" && !hoisted(o))].reverse())
+    m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
   m.push(...insetShadowModifiers(n, ctx));
   // Fills are bottom-most first in the IR; the same chain rule means the top-most goes first.
   // Unless a layer carries a `background-blend-mode`: blending is against the layers *below it
   // inside this node*, so the whole stack has to live in one compositing group instead of a
   // chain of independent `.background` modifiers.
-  if (st.fills.some((f) => f.kind !== "unsupported" && f.blend)) m.push(...blendedFillModifier(st.fills, n, shape, ctx));
+  if (st.fills.some((f) => f.kind !== "unsupported" && f.blend))
+    m.push(...blendedFillModifier(st.fills, n, shape, ctx));
   else for (const f of [...st.fills].reverse()) m.push(...fillModifier(f, n, shape, ctx));
   // backdrop-filter: over the flat canvases these designs use, blurring the backdrop changes
   // nothing visible, while SwiftUI materials add their own tint (badly in dark mode). The
   // translucent fill above already carries the "glass" look; keep the node flagged approximated.
-  if (st.clip || (st.radius && (n.kind === "stack" || n.kind === "grid") && n.overlays.length)) m.push(`.clipShape(${shape})`);
+  if (st.clip || (st.radius && (n.kind === "stack" || n.kind === "grid") && n.overlays.length))
+    m.push(`.clipShape(${shape})`);
   if (st.border) {
     const b = st.border;
     m.push(
@@ -53,10 +66,13 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
     // A ring `offset` outside the border edge: the box shape grown by offset + half the stroke.
     const o = st.outline;
     if (o.style === "double") note(n, "approximated", "outline-style", "outline-style double drawn solid");
-    m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`);
+    m.push(
+      `.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`,
+    );
   }
   m.push(...outerShadowModifiers(n, ctx));
-  for (const o of n.overlays.filter((o) => o.layer === "overlay" && !hoisted(o))) m.push(...overlayModifier(o, "overlay", ctx));
+  for (const o of n.overlays.filter((o) => o.layer === "overlay" && !hoisted(o)))
+    m.push(...overlayModifier(o, "overlay", ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
   if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, n, ctx));
   if (st.clipPath) m.push(clipPathModifier(st.clipPath, n, ctx));
@@ -87,8 +103,11 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
     else {
-      const anchor = t.origin ? `UnitPoint(x: ${num(n.frame.w ? t.origin[0] / n.frame.w : 0.5)}, y: ${num(n.frame.h ? t.origin[1] / n.frame.h : 0.5)})` : ".center";
-      if (t.scaleX !== 1 || t.scaleY !== 1) m.push(`.scaleEffect(x: ${num(t.scaleX)}, y: ${num(t.scaleY)}, anchor: ${anchor})`);
+      const anchor = t.origin
+        ? `UnitPoint(x: ${num(n.frame.w ? t.origin[0] / n.frame.w : 0.5)}, y: ${num(n.frame.h ? t.origin[1] / n.frame.h : 0.5)})`
+        : ".center";
+      if (t.scaleX !== 1 || t.scaleY !== 1)
+        m.push(`.scaleEffect(x: ${num(t.scaleX)}, y: ${num(t.scaleY)}, anchor: ${anchor})`);
       if (t.rotate !== 0) m.push(`.rotationEffect(.degrees(${num(t.rotate)}), anchor: ${anchor})`);
       if (t.tx !== 0 || t.ty !== 0) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
@@ -97,7 +116,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);
   // Fidelity rows already place every child by measured offset (layout.ts `geometry`).
-  if (n.selfAlignV && ctx.mode === "app") m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
+  if (n.selfAlignV && ctx.mode === "app")
+    m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
   if (st.hidden) m.push(".hidden()");
   // A `<label>` tap changes its checkbox or radio, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;

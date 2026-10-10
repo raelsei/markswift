@@ -38,12 +38,24 @@ function litEdge(c: Color): Color {
   return (Math.max(y, d) + 0.05) / (Math.min(y, d) + 0.05) < 1.75 ? shade(c, "light") : c;
 }
 
-export function borderStyle(s: Record<string, string>, w: number, h: number, diagnostics: Diagnostic[]): Partial<Style> {
+export function borderStyle(
+  s: Record<string, string>,
+  w: number,
+  h: number,
+  diagnostics: Diagnostic[],
+): Partial<Style> {
   const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
-  const cornerRadii = corners.map(c => parseRadiusXY(s[`border-${c}-radius`], w, h));
-  const ellipse = w > 0 && h > 0 && cornerRadii.every(([rx, ry]) => Math.abs(rx - w / 2) < 0.5 && Math.abs(ry - h / 2) < 0.5);
+  const cornerRadii = corners.map((c) => parseRadiusXY(s[`border-${c}-radius`], w, h));
+  const ellipse =
+    w > 0 && h > 0 && cornerRadii.every(([rx, ry]) => Math.abs(rx - w / 2) < 0.5 && Math.abs(ry - h / 2) < 0.5);
   const r = cornerRadii.map(([rx, ry], i) => {
-    if (!ellipse && Math.abs(rx - ry) > 0.5) addDiagnostic(diagnostics, "approximated", `border-${corners[i]}-radius`, `elliptical radius ${s[`border-${corners[i]}-radius`]} → circular`);
+    if (!ellipse && Math.abs(rx - ry) > 0.5)
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        `border-${corners[i]}-radius`,
+        `elliptical radius ${s[`border-${corners[i]}-radius`]} → circular`,
+      );
     return round2(Math.min((rx + ry) / 2, Math.min(w, h) / 2));
   }) as [number, number, number, number];
   const style: Partial<Style> = {};
@@ -63,16 +75,30 @@ export function borderStyle(s: Record<string, string>, w: number, h: number, dia
       // outset and ridge) and the lit pair keeps the colour, or is lightened when darkening
       // left too little contrast. Groove and ridge swap the two tones half-way through every
       // edge; one `Edge` carries the outer half, which is the whole of a thin border.
-      const shadowed = st === "inset" || st === "groove" ? e === "top" || e === "left" : e === "bottom" || e === "right";
+      const shadowed =
+        st === "inset" || st === "groove" ? e === "top" || e === "left" : e === "bottom" || e === "right";
       edges[e] = { width, color: shadowed ? shade(color, "dark") : litEdge(color), style: "solid" };
-      if (st === "groove" || st === "ridge") addDiagnostic(diagnostics, "approximated", `border-${e}-style`, `border-${e}-style ${st} → its outer half's tone across the edge`);
+      if (st === "groove" || st === "ridge")
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          `border-${e}-style`,
+          `border-${e}-style ${st} → its outer half's tone across the edge`,
+        );
     } else {
       edges[e] = { width, color, style: "solid" };
       addDiagnostic(diagnostics, "approximated", `border-${e}-style`, `border-${e}-style ${st} → solid`);
     }
   }
   const top = edges.top;
-  const uniform = top && EDGES.every((e) => edges[e]?.width === top.width && edges[e]?.style === top.style && JSON.stringify(edges[e]?.color) === JSON.stringify(top.color));
+  const uniform =
+    top &&
+    EDGES.every(
+      (e) =>
+        edges[e]?.width === top.width &&
+        edges[e]?.style === top.style &&
+        JSON.stringify(edges[e]?.color) === JSON.stringify(top.color),
+    );
   if (top && uniform && (top.style === "solid" || top.style === "dashed")) {
     style.border = { width: top.width, color: top.color };
     if (top.style === "dashed") style.border.dashed = true;

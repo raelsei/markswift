@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { parseBackgroundPosition, parseBackgroundRepeat, parseBackgroundSize } from "../../../src/css/index.ts";
 import type { BackgroundRepeat, BackgroundSize } from "../../../src/model/values.ts";
 
-
 describe("parseBackgroundSize", () => {
   test.each<[string, BackgroundSize | undefined]>([
     ["cover", "cover"],
@@ -22,7 +21,6 @@ describe("parseBackgroundSize", () => {
     expect(parseBackgroundSize("50% auto", 200, 100, 40, 20)).toEqual({ w: 100, h: 50 });
   });
 });
-
 
 describe("parseBackgroundPosition", () => {
   test.each<[string, [number, number]]>([
@@ -53,7 +51,6 @@ describe("parseBackgroundPosition", () => {
     expect(parseBackgroundPosition("10px 20px", 200, 100, 40, 20)).toEqual([10, 20]);
   });
 });
-
 
 describe("parseBackgroundRepeat", () => {
   test.each<[string, BackgroundRepeat | undefined]>([

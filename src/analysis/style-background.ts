@@ -1,7 +1,19 @@
 /** Computed background paint and text-clipped gradients. */
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { type Diagnostic, addDiagnostic } from "../model/semantic.ts";
-import { parseBackgroundImage, paintWithin, resolvePaint, splitTop, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
+import {
+  parseBackgroundImage,
+  paintWithin,
+  resolvePaint,
+  splitTop,
+  parseBackgroundSize,
+  parseBackgroundPosition,
+  round2,
+  parseBackgroundRepeat,
+  parseColor,
+  px,
+  parseBlendModes,
+} from "../css/index.ts";
 import type { Paint } from "../model/values.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
@@ -19,7 +31,9 @@ export function clipsText(el: LayoutNode): boolean {
  */
 export function textPaintOf(el: LayoutNode, run: Rect): Paint | undefined {
   if (!clipsText(el)) return undefined;
-  const p = parseBackgroundImage(el.styles["background-image"]).find((p) => p.kind === "linear" || p.kind === "radial" || p.kind === "conic");
+  const p = parseBackgroundImage(el.styles["background-image"]).find(
+    (p) => p.kind === "linear" || p.kind === "radial" || p.kind === "conic",
+  );
   return p && paintWithin(resolvePaint(p, el.bounds.w, el.bounds.h), el.bounds, run);
 }
 
@@ -36,7 +50,15 @@ function layerValue(list: string | undefined, i: number): string | undefined {
  * that; unknown (raster files) → only a `0% 0%` position is certain. A data: svg is parsed
  * here into the paint's `vector`; one that cannot be drawn is reported to `diagnostics`.
  */
-export function imagePaint(url: string, s: Record<string, string>, prop: "background" | "mask", i: number, w: number, h: number, diagnostics: Diagnostic[]): Paint {
+export function imagePaint(
+  url: string,
+  s: Record<string, string>,
+  prop: "background" | "mask",
+  i: number,
+  w: number,
+  h: number,
+  diagnostics: Diagnostic[],
+): Paint {
   const svg = svgFromDataUrl(url);
   const img = svg?.intrinsic;
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
@@ -44,7 +66,13 @@ export function imagePaint(url: string, s: Record<string, string>, prop: "backgr
   if (svg?.vector) {
     paint.vector = svg.vector;
     for (const d of svg.vector.diagnostics) addDiagnostic(diagnostics, d.level, d.feature, d.message);
-  } else if (svg) addDiagnostic(diagnostics, "unmapped", `${prop}-image: url()`, `${prop}-image svg data: URL has no viewBox; layer dropped`);
+  } else if (svg)
+    addDiagnostic(
+      diagnostics,
+      "unmapped",
+      `${prop}-image: url()`,
+      `${prop}-image svg data: URL has no viewBox; layer dropped`,
+    );
   if (size !== undefined) paint.size = size;
   let drawn: { w: number; h: number } | undefined;
   if (size === "cover" || size === "contain") {
@@ -71,11 +99,24 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
   for (let i = 0; i < layers.length; i++) {
     const p = layers[i]!;
     const top = layers.length - 1 - i;
-    if (p.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "background-image", `background-image ${p.raw.slice(0, 40)}`);
+    if (p.kind === "unsupported")
+      addDiagnostic(diagnostics, "unmapped", "background-image", `background-image ${p.raw.slice(0, 40)}`);
     else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h, diagnostics));
     else {
-      if (p.kind !== "solid" && p.repeating) addDiagnostic(diagnostics, "approximated", p.kind === "linear" ? "background-image: repeating-linear-gradient()" : "background-image", `repeating ${p.kind} gradient tiled from its first period`);
-      if (p.kind !== "solid" && p.space && p.space !== "srgb") addDiagnostic(diagnostics, "approximated", `background-image: ${p.kind}-gradient()`, `gradient interpolation in ${p.space} → SwiftUI default interpolation`);
+      if (p.kind !== "solid" && p.repeating)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          p.kind === "linear" ? "background-image: repeating-linear-gradient()" : "background-image",
+          `repeating ${p.kind} gradient tiled from its first period`,
+        );
+      if (p.kind !== "solid" && p.space && p.space !== "srgb")
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          `background-image: ${p.kind}-gradient()`,
+          `gradient interpolation in ${p.space} → SwiftUI default interpolation`,
+        );
       fills.push(resolvePaint(p, w, h));
     }
   }
@@ -89,7 +130,12 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
       if (f.kind === "unsupported") return;
       const box = j < imageStart ? boxes[boxes.length - 1] : boxes[(fills.length - 1 - j) % boxes.length];
       if (box !== "padding-box" && box !== "content-box") return;
-      f.inset = EDGES.map((e) => round2(edgeWidth(s, e) + (box === "content-box" ? px(s[`padding-${e}`]) : 0))) as [number, number, number, number];
+      f.inset = EDGES.map((e) => round2(edgeWidth(s, e) + (box === "content-box" ? px(s[`padding-${e}`]) : 0))) as [
+        number,
+        number,
+        number,
+        number,
+      ];
     });
   }
   // `background-blend-mode` blends a node's own layers against each other, not against the

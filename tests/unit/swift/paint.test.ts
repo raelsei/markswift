@@ -2,7 +2,14 @@ import { expect, test } from "bun:test";
 import { paintExpr } from "../../../src/swift/paint.ts";
 import type { Paint } from "../../../src/model/values.ts";
 
-const linear = (angle: number): Paint => ({ kind: "linear", angle, stops: [{ color: { r: 1, g: 0, b: 0, a: 1 }, pos: 0 }, { color: { r: 0, g: 0, b: 1, a: 1 }, pos: 1 }] });
+const linear = (angle: number): Paint => ({
+  kind: "linear",
+  angle,
+  stops: [
+    { color: { r: 1, g: 0, b: 0, a: 1 }, pos: 0 },
+    { color: { r: 0, g: 0, b: 1, a: 1 }, pos: 1 },
+  ],
+});
 
 test.each([
   [45, 100, 100, "startPoint: UnitPoint(x: 0.0, y: 1.0), endPoint: UnitPoint(x: 1.0, y: 0.0)"],

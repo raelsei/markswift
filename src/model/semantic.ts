@@ -25,7 +25,8 @@ export interface Diagnostic {
 
 /** Appends the diagnostic unless an identical one is already listed. */
 export function addDiagnostic(list: Diagnostic[], level: DiagnosticLevel, feature: string, message: string): void {
-  if (!list.some((d) => d.level === level && d.feature === feature && d.message === message)) list.push({ level, feature, message });
+  if (!list.some((d) => d.level === level && d.feature === feature && d.message === message))
+    list.push({ level, feature, message });
 }
 
 /** The only confidence rule: the worst level present, `mapped` when there is none. */

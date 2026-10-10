@@ -5,14 +5,44 @@ import { emitSwift } from "../../../src/swift/emit.ts";
 
 function card(shadows: string, border = "0px") {
   const root: LayoutNode = {
-    tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 180, h: 230 },
-    styles: { display: "block", "background-color": "rgb(255, 140, 0)", "border-top-left-radius": "24px", "border-top-right-radius": "24px", "border-bottom-left-radius": "24px", "border-bottom-right-radius": "24px", "box-shadow": shadows,
-      "border-top-width": border, "border-right-width": border, "border-bottom-width": border, "border-left-width": border,
-      "border-top-style": "solid", "border-right-style": "solid", "border-bottom-style": "solid", "border-left-style": "solid",
-      "border-top-color": "rgb(255, 243, 163)", "border-right-color": "rgb(255, 243, 163)", "border-bottom-color": "rgb(255, 243, 163)", "border-left-color": "rgb(255, 243, 163)",
-      "overflow-x": "hidden", "overflow-y": "hidden" }, children: [],
+    tag: "div",
+    attrs: {},
+    bounds: { x: 0, y: 0, w: 180, h: 230 },
+    styles: {
+      display: "block",
+      "background-color": "rgb(255, 140, 0)",
+      "border-top-left-radius": "24px",
+      "border-top-right-radius": "24px",
+      "border-bottom-left-radius": "24px",
+      "border-bottom-right-radius": "24px",
+      "box-shadow": shadows,
+      "border-top-width": border,
+      "border-right-width": border,
+      "border-bottom-width": border,
+      "border-left-width": border,
+      "border-top-style": "solid",
+      "border-right-style": "solid",
+      "border-bottom-style": "solid",
+      "border-left-style": "solid",
+      "border-top-color": "rgb(255, 243, 163)",
+      "border-right-color": "rgb(255, 243, 163)",
+      "border-bottom-color": "rgb(255, 243, 163)",
+      "border-left-color": "rgb(255, 243, 163)",
+      "overflow-x": "hidden",
+      "overflow-y": "hidden",
+    },
+    children: [],
   };
-  const doc: LayoutDoc = { version: 2, source: "shadow-test", combo: { screen: "card", theme: "light" }, size: { w: 180, h: 230 }, dpr: 3, canvas: "rgb(24,21,43)", fonts: [], root };
+  const doc: LayoutDoc = {
+    version: 2,
+    source: "shadow-test",
+    combo: { screen: "card", theme: "light" },
+    size: { w: 180, h: 230 },
+    dpr: 3,
+    canvas: "rgb(24,21,43)",
+    fonts: [],
+    root,
+  };
   return emitSwift(inferScreen(doc, "card"), "CardView", { mode: "fidelity" }).view;
 }
 
@@ -32,7 +62,9 @@ test("inset shadows preserve their blurred directional edge and stay between the
   expect(swift).toContain(".offset(x: 0.0, y: 3.0)");
   expect(swift).toContain("RoundedRectangle(cornerRadius: 19.0, style: .circular)");
   expect(swift).toContain(".mask(alignment: .center) {");
-  expect(swift.indexOf(".blur(radius: 2.5)")).toBeLessThan(swift.indexOf(".background(Color.markswift(1.0, 0.549, 0.0)"));
+  expect(swift.indexOf(".blur(radius: 2.5)")).toBeLessThan(
+    swift.indexOf(".background(Color.markswift(1.0, 0.549, 0.0)"),
+  );
   expect(swift).not.toContain(".shadow(");
 });
 

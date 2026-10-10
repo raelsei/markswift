@@ -9,16 +9,15 @@ export async function runConversion(command: ConversionCommand): Promise<void> {
   if ("file" in command.source && !(await Bun.file(command.source.file).exists())) {
     throw new Error(`HTML file not found: ${command.source.file}`);
   }
-  const source: HtmlSource = "stdin" in command.source
-    ? { html: await Bun.stdin.text() }
-    : command.source;
+  const source: HtmlSource = "stdin" in command.source ? { html: await Bun.stdin.text() } : command.source;
   let css: string | undefined;
   if (command.cssPath) {
     const cssFile = Bun.file(command.cssPath);
     if (!(await cssFile.exists())) throw new Error(`CSS file not found: ${command.cssPath} (--css is optional)`);
     const inlined = await inlineRelativeUrls(await cssFile.text(), command.cssPath);
     css = inlined.css;
-    for (const ref of inlined.missing) process.stderr.write(`Warning: --css reference not found next to ${command.cssPath}: ${ref}\n`);
+    for (const ref of inlined.missing)
+      process.stderr.write(`Warning: --css reference not found next to ${command.cssPath}: ${ref}\n`);
   }
   const result = await convert(source, { ...command.options, css });
   const files = await writeBundle(result, command.outDir);

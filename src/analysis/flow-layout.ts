@@ -1,5 +1,14 @@
 /** Flow, float, stack and grid layout inference. */
-import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis, addDiagnostic } from "../model/semantic.ts";
+import {
+  type SemBase,
+  type CrossAlign,
+  type Distribution,
+  type StackNode,
+  type TextRun,
+  type TextNode,
+  type Axis,
+  addDiagnostic,
+} from "../model/semantic.ts";
 import { type Rect } from "../model/layout.ts";
 import { px, round2 } from "../css/index.ts";
 import { type AnalyzedChild } from "./context.ts";
@@ -25,7 +34,12 @@ function overlapsX(a: Rect, b: Rect): boolean {
  * lifted lines — or undefined when nothing clears the float or the measured division cannot be
  * split (mixed inline styles, a clamped or truncating box, a division that is not the measured one).
  */
-function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlign, distribution: Distribution): StackNode | undefined {
+function liftClearedText(
+  base: SemBase,
+  items: AnalyzedChild[],
+  align: CrossAlign,
+  distribution: Distribution,
+): StackNode | undefined {
   for (const it of items) {
     const sem = it.sem;
     if (floating(it.node) || sem.kind !== "text" || sem.lineLimit !== undefined || sem.truncate) continue;
@@ -63,7 +77,13 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
     const headRuns = [...sem.runs.slice(0, ri), head];
     const tailRuns = [tail, ...sem.runs.slice(ri + 1)];
     const shapedH = round2(pt + cut * pitch);
-    const shaped: TextNode = { ...sem, runs: headRuns, frame: { ...sem.frame, h: shapedH }, padding: [pt, pr, 0, pl], lines: cut };
+    const shaped: TextNode = {
+      ...sem,
+      runs: headRuns,
+      frame: { ...sem.frame, h: shapedH },
+      padding: [pt, pr, 0, pl],
+      lines: cut,
+    };
     const cleared: TextNode = {
       ...sem,
       id: sem.id ? `${sem.id}#cleared` : "",
@@ -76,10 +96,30 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
     };
     const rowItems: AnalyzedChild[] = items.map((i) => (i === it ? { node: i.node, sem: shaped } : i));
     const bottom = Math.max(...rowItems.map((i) => i.sem.frame.y + i.sem.frame.h));
-    const rowBase: SemBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, diagnostics: [], overlays: [] };
+    const rowBase: SemBase = {
+      ...base,
+      id: base.id ? `${base.id}/beside` : "",
+      frame: { ...base.frame, h: round2(bottom - base.frame.y) },
+      diagnostics: [],
+      overlays: [],
+    };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
-    const outer = stackOf(base, "v", [{ node: it.node, sem: row }, { node: it.node, sem: cleared }], "stretch", "start");
-    addDiagnostic(outer.diagnostics, "approximated", "float", "float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
+    const outer = stackOf(
+      base,
+      "v",
+      [
+        { node: it.node, sem: row },
+        { node: it.node, sem: cleared },
+      ],
+      "stretch",
+      "start",
+    );
+    addDiagnostic(
+      outer.diagnostics,
+      "approximated",
+      "float",
+      "float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere",
+    );
     return outer;
   }
   return undefined;
@@ -91,7 +131,14 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
  * box (the browser shortens line boxes instead of the block), so the gap is the float's margin;
  * a negative `margin-top` really does overlap, and negative spacing reproduces it.
  */
-export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: CrossAlign, distribution: Distribution, flex = false): StackNode {
+export function stackOf(
+  base: SemBase,
+  axis: Axis,
+  all: AnalyzedChild[],
+  align: CrossAlign,
+  distribution: Distribution,
+  flex = false,
+): StackNode {
   const [pt, , , pl] = base.padding;
   const items = all.filter((i) => renders(i.node) && !hangsLeading(i.sem.frame, base.frame.x + pl));
   // A row whose text clears the float part-way down is two blocks, not one (see `liftClearedText`).
@@ -103,14 +150,20 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   for (let i = 1; i < items.length; i++) {
     const a = items[i - 1]!;
     const b = items[i]!;
-    let g = axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
+    let g =
+      axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
     if (g < -0.5) {
       if (axis === "h" && a.node.styles["float"] === "left") g = Math.max(0, px(a.node.styles["margin-right"]));
       else if (axis === "h" && b.node.styles["float"] === "right") g = Math.max(0, px(b.node.styles["margin-left"]));
       else if (axis === "v" && px(b.node.styles["margin-top"]) < -0.5) {
         // A card lifted onto a hero: the overlap is the design, not an approximation.
       } else {
-        addDiagnostic(base.diagnostics, "approximated", axis === "h" ? "margin-left" : "margin-top", `children overlap by ${round2(-g)}px`);
+        addDiagnostic(
+          base.diagnostics,
+          "approximated",
+          axis === "h" ? "margin-left" : "margin-top",
+          `children overlap by ${round2(-g)}px`,
+        );
         g = 0;
       }
     } else g = Math.max(0, g);
@@ -126,7 +179,8 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   const autoGaps: number[] = [];
   if (flex && (axis === "h" ? base.width : base.height).kind !== "hug") {
     for (let i = 0; i <= items.length; i++) {
-      const a = autoMargin(items[i - 1], after), b = autoMargin(items[i], before);
+      const a = autoMargin(items[i - 1], after),
+        b = autoMargin(items[i], before);
       if (a === undefined && b === undefined) continue;
       autoGaps.push(i);
       if (i > 0 && i < items.length) gaps[i - 1] = round2(Math.max(0, gaps[i - 1]! - (a ?? 0) - (b ?? 0)));
@@ -156,7 +210,10 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   // A hugging child that still holds a filling descendant stays greedy in SwiftUI (an
   // unconstrained container passes `maxWidth: .infinity` up), so a row would share its width
   // out instead of packing the measured ones. The browser already shrank it to fit: pin that.
-  if (axis === "h") for (const it of items) if (it.sem.width.kind === "hug" && fillsWidthInside(it.sem)) it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w) };
+  if (axis === "h")
+    for (const it of items)
+      if (it.sem.width.kind === "hug" && fillsWidthInside(it.sem))
+        it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w) };
 
   let leadInset = 0;
   if (items[0]) {
@@ -170,7 +227,17 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   if (distribution === "center" || distribution === "end" || distribution === "between") leadInset = 0;
   if (autoGaps.includes(0)) leadInset = round2(Math.max(0, leadInset - (autoMargin(items[0], before) ?? 0)));
 
-  return { ...base, kind: "stack", axis, spacing, align, distribution, leadInset, ...(autoGaps.length ? { autoGaps } : {}), children: items.map((i) => i.sem) };
+  return {
+    ...base,
+    kind: "stack",
+    axis,
+    spacing,
+    align,
+    distribution,
+    leadInset,
+    ...(autoGaps.length ? { autoGaps } : {}),
+    children: items.map((i) => i.sem),
+  };
 }
 
 /**
@@ -188,7 +255,10 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
     const f = it.sem.frame;
     const line = lines[lines.length - 1];
     const overlap = Math.min(bottom, f.y + f.h) - Math.max(top, f.y);
-    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
+    const clear =
+      !line ||
+      floating(it.node) ||
+      line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
     if (line && clear && overlap > 1 && overlap >= Math.min(f.h, bottom - top) / 2) {
       line.push(it);
       bottom = Math.max(bottom, f.y + f.h);

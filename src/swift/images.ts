@@ -23,30 +23,59 @@ export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitCon
   const box = n.frame;
   const repeat = p.repeat !== undefined && p.repeat !== "no-repeat";
   // Tile size: explicit, or the vector's viewBox; a raster's intrinsic size is unknown here.
-  const tile: [number, number] | undefined = repeat ? (typeof p.size === "object" ? [p.size.w, p.size.h] : src.kind === "vector" ? src.size : undefined) : undefined;
+  const tile: [number, number] | undefined = repeat
+    ? typeof p.size === "object"
+      ? [p.size.w, p.size.h]
+      : src.kind === "vector"
+        ? src.size
+        : undefined
+    : undefined;
   let view: string[];
   if (src.kind === "vector") {
     const [vw, vh] = src.size;
-    const s = p.size === "cover" ? Math.max(box.w / vw, box.h / vh) : p.size === "contain" ? Math.min(box.w / vw, box.h / vh) : 1;
+    const s =
+      p.size === "cover"
+        ? Math.max(box.w / vw, box.h / vh)
+        : p.size === "contain"
+          ? Math.min(box.w / vw, box.h / vh)
+          : 1;
     view = src.view(typeof p.size === "object" ? p.size.w : vw * s, typeof p.size === "object" ? p.size.h : vh * s);
   } else if (tile) view = [src.expr(".resizable()")];
   else if (repeat) {
     // `.tile` repeats at the intrinsic size from the top-left corner; axis and phase are lost.
     view = [src.expr(".resizable(resizingMode: .tile)")];
-    if (p.repeat !== "repeat") note(n, "approximated", "background-repeat", `background-repeat ${p.repeat} tiles both axes`);
-    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0)) note(n, "approximated", "background-position", `background-position ignored on a repeating ${prop}`);
+    if (p.repeat !== "repeat")
+      note(n, "approximated", "background-repeat", `background-repeat ${p.repeat} tiles both axes`);
+    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0))
+      note(n, "approximated", "background-position", `background-position ignored on a repeating ${prop}`);
   } else {
-    const sizing = p.size === "cover" ? ".resizable().scaledToFill()" : p.size === "contain" ? ".resizable().scaledToFit()" : p.size ? `.resizable().frame(width: ${num(p.size.w)}, height: ${num(p.size.h)})` : "";
+    const sizing =
+      p.size === "cover"
+        ? ".resizable().scaledToFill()"
+        : p.size === "contain"
+          ? ".resizable().scaledToFit()"
+          : p.size
+            ? `.resizable().frame(width: ${num(p.size.w)}, height: ${num(p.size.h)})`
+            : "";
     view = [src.expr(sizing)];
   }
   if (tile) {
     const [x, y] = p.position ?? [0, 0];
-    const args = [`tile: CGSize(width: ${num(tile[0])}, height: ${num(tile[1])})`, x || y ? `origin: CGPoint(x: ${num(x)}, y: ${num(y)})` : "", p.repeat === "repeat-x" ? "axes: .horizontal" : p.repeat === "repeat-y" ? "axes: .vertical" : ""];
+    const args = [
+      `tile: CGSize(width: ${num(tile[0])}, height: ${num(tile[1])})`,
+      x || y ? `origin: CGPoint(x: ${num(x)}, y: ${num(y)})` : "",
+      p.repeat === "repeat-x" ? "axes: .horizontal" : p.repeat === "repeat-y" ? "axes: .vertical" : "",
+    ];
     return ["Color.clear", `.overlay { MarkswiftTile(${args.filter(Boolean).join(", ")}) {`, ...indent(view, 1), "} }"];
   }
   if (repeat || !p.position) return ["Color.clear", ".overlay {", ...indent(view, 1), "}"];
   const [x, y] = p.position;
-  return ["Color.clear", ".overlay(alignment: .topLeading) {", ...indent(x || y ? [...view, `.offset(x: ${num(x)}, y: ${num(y)})`] : view, 1), "}"];
+  return [
+    "Color.clear",
+    ".overlay(alignment: .topLeading) {",
+    ...indent(x || y ? [...view, `.offset(x: ${num(x)}, y: ${num(y)})`] : view, 1),
+    "}",
+  ];
 }
 
 type ImageSource =
@@ -62,7 +91,10 @@ function vectorSource(vector: SvgNode, ctx: EmitContext): ImageSource {
     size: [vector.viewBox[2], vector.viewBox[3]],
     // No node id: the extractor does not enumerate the colours of an SVG inlined through a
     // `data:` URL, so they stay literals.
-    view: (w, h) => [...svgExpr({ ...vector, frame: { x: 0, y: 0, w, h } }, ctx.shapes, ctx), `.frame(width: ${num(w)}, height: ${num(h)})`],
+    view: (w, h) => [
+      ...svgExpr({ ...vector, frame: { x: 0, y: 0, w, h } }, ctx.shapes, ctx),
+      `.frame(width: ${num(w)}, height: ${num(h)})`,
+    ],
   };
 }
 
@@ -76,7 +108,11 @@ function vectorSource(vector: SvgNode, ctx: EmitContext): ImageSource {
 function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
-    if (/^https?:/i.test(url) && !LOOPBACK.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
+    if (/^https?:/i.test(url) && !LOOPBACK.test(url))
+      return {
+        kind: "raster",
+        expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }`,
+      };
     dropNote(url, n, prop);
     return undefined;
   }
@@ -85,7 +121,12 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   const bytes = dataBytes(payload, params.split(";").includes("base64"));
   const ext = rasterExt(bytes);
   if (!ext) {
-    note(n, "unmapped", imageFeature(prop), `${prop} data: URL is not a PNG/JPEG/GIF/BMP/WebP/TIFF image; layer dropped`);
+    note(
+      n,
+      "unmapped",
+      imageFeature(prop),
+      `${prop} data: URL is not a PNG/JPEG/GIF/BMP/WebP/TIFF image; layer dropped`,
+    );
     return undefined;
   }
   const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}.${ext}`;
@@ -100,14 +141,24 @@ function imageFeature(prop: string): string {
 
 /** Why a non-`data:` source that is not a usable remote URL cannot be shown. */
 function dropNote(url: string, n: SemNode, prop: string): void {
-  note(n, "unmapped", imageFeature(prop), LOOPBACK.test(url)
-    ? `${prop} image ${url} was not captured (temporary local server URL); layer dropped`
-    : `${prop} image ${url} is not embedded (no captured bytes); placeholder emitted`);
+  note(
+    n,
+    "unmapped",
+    imageFeature(prop),
+    LOOPBACK.test(url)
+      ? `${prop} image ${url} was not captured (temporary local server URL); layer dropped`
+      : `${prop} image ${url} is not embedded (no captured bytes); placeholder emitted`,
+  );
 }
 
 /** Bytes of a `data:` URL payload: base64, or percent-encoded octets. */
 function dataBytes(payload: string, base64: boolean): Buffer {
-  return base64 ? Buffer.from(payload, "base64") : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))), "latin1");
+  return base64
+    ? Buffer.from(payload, "base64")
+    : Buffer.from(
+        payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))),
+        "latin1",
+      );
 }
 
 /**
@@ -144,7 +195,14 @@ function decodable(url: string): boolean {
  */
 export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   // An `aria-label` (emitted by `placementModifiers`) wins over `alt`; `alt=""` still marks the image decorative.
-  const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : n.a11y?.label ? [] : [`.accessibilityLabel(${str(n.alt)})`];
+  const a11y =
+    n.alt === undefined
+      ? []
+      : n.alt === ""
+        ? [".accessibilityHidden(true)"]
+        : n.a11y?.label
+          ? []
+          : [`.accessibilityLabel(${str(n.alt)})`];
   const src = n.vector ? vectorSource(n.vector, ctx) : decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
     if (n.src && !n.src.startsWith("data:")) dropNote(n.src, n, "img");
@@ -165,18 +223,38 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   const fit = n.contentMode;
   let view: string[];
   if (src.kind === "raster") {
-    view = [src.expr(fit === "fill" ? ".resizable()" : fit === "none" ? "" : `.resizable().aspectRatio(contentMode: .${fit === "cover" ? "fill" : "fit"})`)];
+    view = [
+      src.expr(
+        fit === "fill"
+          ? ".resizable()"
+          : fit === "none"
+            ? ""
+            : `.resizable().aspectRatio(contentMode: .${fit === "cover" ? "fill" : "fit"})`,
+      ),
+    ];
   } else {
     // An SVG document letterboxes itself (`meet`), so CSS `fill` on a vector draws like `contain` in the full box.
     const [vw, vh] = src.size;
     if (fit === "fill") view = src.view(n.frame.w, n.frame.h);
     else {
-      const s = fit === "cover" ? Math.max(n.frame.w / vw, n.frame.h / vh) : fit === "none" ? 1 : Math.min(n.frame.w / vw, n.frame.h / vh);
+      const s =
+        fit === "cover"
+          ? Math.max(n.frame.w / vw, n.frame.h / vh)
+          : fit === "none"
+            ? 1
+            : Math.min(n.frame.w / vw, n.frame.h / vh);
       view = src.view(vw * s, vh * s);
     }
   }
   if (!n.position || fit === "fill") return [...view, ...a11y];
   const third = (f: number) => (f < 1 / 3 ? "start" : f > 2 / 3 ? "end" : "center");
-  if (n.position.some((f) => f !== 0 && f !== 0.5 && f !== 1)) note(n, "approximated", "object-position", "object-position → nearest edge/centre alignment");
-  return ["Color.clear", `.overlay(alignment: ${alignment(third(n.position[0]), third(n.position[1]))}) {`, ...indent(view, 1), "}", ...a11y];
+  if (n.position.some((f) => f !== 0 && f !== 0.5 && f !== 1))
+    note(n, "approximated", "object-position", "object-position → nearest edge/centre alignment");
+  return [
+    "Color.clear",
+    `.overlay(alignment: ${alignment(third(n.position[0]), third(n.position[1]))}) {`,
+    ...indent(view, 1),
+    "}",
+    ...a11y,
+  ];
 }

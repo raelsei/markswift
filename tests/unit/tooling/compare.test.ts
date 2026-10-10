@@ -6,22 +6,30 @@ import sharp from "sharp";
 import { compare, regionMismatch } from "../../../tools/verify/compare.ts";
 
 // 400×240 device px at DPR 2: white canvas, a #2563eb rect at (40,40,240,120), a #111827 bar at (40,180,320,20).
-const W = 400, H = 240;
+const W = 400,
+  H = 240;
 type Rgb = [number, number, number];
-const BLUE: Rgb = [0x25, 0x63, 0xeb], INK: Rgb = [0x11, 0x18, 0x27];
+const BLUE: Rgb = [0x25, 0x63, 0xeb],
+  INK: Rgb = [0x11, 0x18, 0x27];
 
 async function png(path: string, rects: Array<[number, number, number, number, Rgb]>, swap = false, width = W) {
   const buf = Buffer.alloc(width * H * 3, 255);
   for (const [x, y, w, h, c] of rects) {
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) buf.set(swap ? [c[2], c[1], c[0]] : c, (j * width + i) * 3);
+    for (let j = y; j < y + h; j++)
+      for (let i = x; i < x + w; i++) buf.set(swap ? [c[2], c[1], c[0]] : c, (j * width + i) * 3);
   }
-  await sharp(buf, { raw: { width, height: H, channels: 3 } }).png().toFile(path);
+  await sharp(buf, { raw: { width, height: H, channels: 3 } })
+    .png()
+    .toFile(path);
   return path;
 }
 
 let dir = "";
 let ref = "";
-const reference = (dy = 0): Array<[number, number, number, number, Rgb]> => [[40, 40 + dy, 240, 120, BLUE], [40, 180, 320, 20, INK]];
+const reference = (dy = 0): Array<[number, number, number, number, Rgb]> => [
+  [40, 40 + dy, 240, 120, BLUE],
+  [40, 180, 320, 20, INK],
+];
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "markswift-compare-"));
   ref = await png(join(dir, "ref.png"), reference());
