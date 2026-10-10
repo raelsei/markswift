@@ -117,3 +117,22 @@ describe("BUG-11 nested fixed", () => {
     expect(ids).toContain("#inner");
   });
 });
+
+describe("BUG-17 hidden runs", () => {
+  // `visibility: hidden` was read per node only: a hidden inline span painted its glyphs.
+  test("a hidden span keeps its advance and paints nothing", () => {
+    const p = el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
+      textNode("Hello ", { x: 0, y: 3, w: 40, h: 14 }),
+      el("span", { x: 40, y: 3, w: 45, h: 14 }, { visibility: "hidden" }, [textNode("secret", { x: 40, y: 3, w: 45, h: 14 })]),
+      textNode(" world", { x: 85, y: 3, w: 40, h: 14 }),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [p])), "S");
+    const t = flatten(screen.root).find((n) => n.kind === "text");
+    expect(t?.kind).toBe("text");
+    const runs = t?.kind === "text" ? t.runs : [];
+    const hidden = runs.filter((r) => r.text.includes("secret"));
+    expect(hidden.length).toBe(1);
+    expect(hidden[0]!.color.a).toBe(0);
+    for (const r of runs) if (!r.text.includes("secret") && r.text.trim()) expect(r.color.a).toBe(1);
+  });
+});

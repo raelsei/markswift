@@ -60,8 +60,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         if (!sameLine || b.x - (a.x + a.w) > 1.5) pendingSpace = true;
       }
     } else if (!text) continue;
-    const color = textColorOf(s);
-    const deco = decorationOf(s, color);
+    // `visibility: hidden` on an inline element keeps its advance but paints nothing: no glyphs,
+    // decoration, shadow, clip paint or box.
+    const hidden = s["visibility"] === "hidden" || s["visibility"] === "collapse";
+    const color = hidden ? { ...textColorOf(s), a: 0 } : textColorOf(s);
+    const deco = hidden ? undefined : decorationOf(s, color);
     // A collapsed space between two inline elements belongs to the text around them, not to
     // whichever element follows it: the browser does not underline the space between
     // `<del>…</del>` and `<ins>…</ins>`. It rides inside the next run's literal when that run
@@ -125,17 +128,17 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const droppedShadows: string[] = [];
     const shadows = parseShadows(s["text-shadow"], droppedShadows);
     for (const x of droppedShadows) note("unmapped", "text-shadow", `shadow ${x} could not be parsed; dropped`);
-    if (shadows[0]) run.shadow = shadows[0];
+    if (shadows[0] && !hidden) run.shadow = shadows[0];
     if (shadows.length > 1) note("approximated", "text-shadow", "multiple text-shadows → first only");
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
     for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
     const paint = textPaintOf(r.styleOf, r.node.bounds);
-    if (paint) run.paint = paint;
+    if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
     // carried by a run: SwiftUI has no per-run box. Collected for a background layer below.
-    if (el !== host && !painted.includes(el)) {
+    if (el !== host && !hidden && !painted.includes(el)) {
       const bg = parseColor(el.styles["background-color"]);
       if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
     }
