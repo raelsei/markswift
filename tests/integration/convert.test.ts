@@ -343,13 +343,27 @@ browserTest(
     });
     try {
       const started = performance.now();
-      await expect(convert({ url: `http://127.0.0.1:${server.port}/` }, { timeoutMs: 2000 })).rejects.toThrow(
-        /timed out after 2000 ms/,
-      );
+      // ponytail: plain await, not `expect(p).rejects` — Bun 1.4.3 never fires the test timeout while
+      // `.rejects` awaits a promise that never settles, so a regression here would hang the suite, not fail it.
+      const error = await convert({ url: `http://127.0.0.1:${server.port}/` }, { timeoutMs: 2000 }).catch((e) => e);
+      expect(String(error)).toMatch(/timed out after 2000 ms/);
       expect(performance.now() - started).toBeLessThan(10_000);
     } finally {
       server.stop(true);
     }
+  },
+  15000,
+);
+
+browserTest(
+  "the deadline also ends a capture step that closing Chrome cannot reject",
+  async () => {
+    // A never-settling prepare hook stands in for Playwright's `newPage` in flight as the context closes.
+    const error = await convertHtml('<main data-markswift-root style="width:10px;height:10px"></main>', {
+      timeoutMs: 2000,
+      prepare: () => new Promise<void>(() => {}),
+    }).catch((e) => e); // not `.rejects`: see the stalled-page test above
+    expect(String(error)).toMatch(/timed out after 2000 ms/);
   },
   15000,
 );
