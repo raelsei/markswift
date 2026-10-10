@@ -2,7 +2,7 @@
 import { type Color, hue, parseColor, TRANSPARENT } from "./color.ts";
 import { type BlendMode } from "./blend.ts";
 import { type BackgroundSize, type BackgroundRepeat } from "./background.ts";
-import { splitTop } from "./syntax.ts";
+import { splitTop, round2 } from "./syntax.ts";
 
 
 export interface GradientStop {
@@ -24,16 +24,18 @@ export type PaintInset = {
 
 /**
  * One `background-image` layer (or a solid `background-color`). Gradient variants carry
- * `repeating: true` for `repeating-*-gradient`; `center` is a 0..1 fraction of the box.
+ * `repeating: true` for `repeating-*-gradient`; `center` is a 0..1 fraction of the box;
+ * `space` is the colour space of an explicit `in <space>` clause. A linear `corner`
+ * (`to right top` = [1, -1]) keeps the square-box `angle` until `resolvePaint` knows the box.
  * Image layers carry the resolved `background-size`/`position`/`repeat` (px, box-relative)
  * when the producer knows the box; absent = fill the box. `inset` (any fill) is set for
  * `background-clip: padding-box | content-box`.
  */
 export type Paint =
   | ({ kind: "solid"; color: Color } & PaintInset)
-  | ({ kind: "linear"; angle: number; stops: GradientStop[]; repeating?: true } & PaintInset)
-  | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true } & PaintInset)
-  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true } & PaintInset)
+  | ({ kind: "linear"; angle: number; corner?: [x: 1 | -1, y: 1 | -1]; stops: GradientStop[]; repeating?: true; space?: string } & PaintInset)
+  | ({ kind: "radial"; stops: GradientStop[]; center: [number, number]; ellipse: boolean; repeating?: true; space?: string } & PaintInset)
+  | ({ kind: "conic"; stops: GradientStop[]; from: number; center: [number, number]; repeating?: true; space?: string } & PaintInset)
   | ({ kind: "image"; url: string; size?: BackgroundSize; position?: [number, number]; repeat?: BackgroundRepeat } & PaintInset)
   | { kind: "unsupported"; raw: string };
 
@@ -103,40 +105,53 @@ function parseGradient(s: string, dropped?: string[]): Paint {
   if (!m) return { kind: "unsupported", raw: s };
   const kind = m[2]!;
   const args = splitTop(m[3]!, ",");
+  // `in <space> [<hue method> hue]` may sit anywhere in the prelude; strip it before reading the rest.
+  let space: string | undefined;
+  const prelude = args[0] && !looksLikeColor(args[0])
+    ? args.shift()!.replace(/\bin\s+([a-z][a-z0-9-]*)(?:\s+(?:shorter|longer|increasing|decreasing)\s+hue)?/, (_, sp: string) => { space = sp; return ""; }).trim()
+    : "";
   let paint: Paint;
   if (kind === "linear") {
     let angle = 180; // CSS default: to bottom
-    if (args[0] && !looksLikeColor(args[0])) {
-      const a = args.shift()!;
-      const deg = /^[-+]?[\d.]/.test(a) ? hue(a) : undefined;
-      if (deg !== undefined) angle = deg;
-      else if (/^to\s+/.test(a)) angle = sideAngle(a);
-      else return { kind: "unsupported", raw: s };
+    let corner: [1 | -1, 1 | -1] | undefined;
+    if (/^[-+]?[\d.]/.test(prelude)) {
+      const deg = hue(prelude);
+      if (deg === undefined) return { kind: "unsupported", raw: s };
+      angle = deg;
+    } else if (prelude) {
+      const words = /^to\s+(.+)$/.exec(prelude)?.[1]!.split(/\s+/) ?? [];
+      const side: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 };
+      const x = words.find((w) => w === "left" || w === "right"), y = words.find((w) => w === "top" || w === "bottom");
+      if (words.length === 1 && side[words[0]!] !== undefined) angle = side[words[0]!]!;
+      else if (words.length === 2 && x && y) {
+        corner = [x === "right" ? 1 : -1, y === "bottom" ? 1 : -1];
+        angle = { "1,-1": 45, "1,1": 135, "-1,1": 225, "-1,-1": 315 }[corner.join()]!;
+      } else return { kind: "unsupported", raw: s };
     }
     paint = { kind: "linear", angle, stops: parseStops(args, dropped) };
+    if (corner) paint.corner = corner;
   } else if (kind === "radial") {
     let ellipse = true;
     let center: [number, number] = [0.5, 0.5];
-    if (args[0] && !looksLikeColor(args[0])) {
-      const a = args.shift()!;
-      if (/\bcircle\b/.test(a)) ellipse = false;
-      center = atPosition(a) ?? center;
-      const size = a.replace(/\bat\b.*$/, "").replace(/\b(circle|ellipse|farthest-corner)\b/g, "").trim();
+    if (prelude) {
+      if (/\bcircle\b/.test(prelude)) ellipse = false;
+      center = atPosition(prelude) ?? center;
+      const size = prelude.replace(/\bat\b.*$/, "").replace(/\b(circle|ellipse|farthest-corner)\b/g, "").trim();
       if (size) dropped?.push(`radial-gradient prelude "${size.slice(0, 40)}"`);
     }
     paint = { kind: "radial", stops: parseStops(args, dropped), center, ellipse };
   } else {
     let from = 0;
     let center: [number, number] = [0.5, 0.5];
-    if (args[0] && !looksLikeColor(args[0])) {
-      const a = args.shift()!;
-      const f = /from\s+([-+\d.]+(?:deg|rad|grad|turn)?)/.exec(a);
+    if (prelude) {
+      const f = /from\s+([-+\d.]+(?:deg|rad|grad|turn)?)/.exec(prelude);
       if (f) from = hue(f[1]!) ?? 0;
-      center = atPosition(a) ?? center;
+      center = atPosition(prelude) ?? center;
     }
     paint = { kind: "conic", stops: parseStops(args, dropped), from, center };
   }
   if (m[1]) paint.repeating = true;
+  if (space) paint.space = space;
   return paint;
 }
 
@@ -170,13 +185,6 @@ export const COLOR_TOKEN = String.raw`(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|col
 
 function looksLikeColor(s: string): boolean {
   return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent$)/.test(s.trim());
-}
-
-
-function sideAngle(a: string): number {
-  const t = a.replace(/^to\s+/, "").trim();
-  const map: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270, "top right": 45, "right top": 45, "bottom right": 135, "right bottom": 135, "bottom left": 225, "left bottom": 225, "top left": 315, "left top": 315 };
-  return map[t] ?? 180;
 }
 
 
@@ -229,6 +237,14 @@ function fillEvenly(stops: GradientStop[]): void {
  * period so the consumer can tile. Paints without px stops are returned as-is.
  */
 export function resolvePaint(p: Paint, w: number, h: number): Paint {
+  if (p.kind === "linear" && p.corner) {
+    // Magic corners: the gradient line is perpendicular to the diagonal that does not touch the corner.
+    const base = (Math.atan2(h, w) * 180) / Math.PI;
+    const [x, y] = p.corner;
+    const angle = round2(x === 1 ? (y === -1 ? base : 180 - base) : y === 1 ? 180 + base : 360 - base);
+    const { corner: _, ...rest } = p;
+    p = { ...rest, angle };
+  }
   if (p.kind !== "linear" && p.kind !== "radial") return p;
   if (!p.stops.some((s) => s.px !== undefined)) return p;
   let length: number;

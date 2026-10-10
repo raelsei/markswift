@@ -48,7 +48,10 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
     if (masks.length > 1) addDiagnostic(diagnostics, "approximated", "mask-image", "mask-image first layer only");
     if (first.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "mask-image", `mask-image ${first.raw.slice(0, 40)}`);
     else if (first.kind === "image") style.mask = imagePaint(first.url, s, "mask", 0, w, h);
-    else style.mask = resolvePaint(first, w, h);
+    else {
+      if (first.kind !== "solid" && first.space && first.space !== "srgb") addDiagnostic(diagnostics, "approximated", "mask-image: linear-gradient()", `gradient interpolation in ${first.space} → SwiftUI default interpolation`);
+      style.mask = resolvePaint(first, w, h);
+    }
   }
   const vis = s["visibility"];
   if (vis === "hidden" || vis === "collapse") {
