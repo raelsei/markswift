@@ -113,6 +113,55 @@ test("an overflow-hidden row takes its parent's width and clips overflowing item
   }
 });
 
+function overflowingRow(item: Record<string, string>): LayoutDoc {
+  // img.html at 320px: three 112px items plus gaps (360) overflow the 288px block row. CSS keeps
+  // the row at its container's width; a bare `maxWidth: .infinity` frame grows to the HStack's
+  // ideal width instead, widening every ancestor (the root VStack, and so a `width: 100%` image).
+  const input = capturedText({});
+  input.root.children = [
+    {
+      id: "row",
+      tag: "div",
+      attrs: {},
+      styles: { display: "flex", "column-gap": "12px" },
+      bounds: { x: 0, y: 0, w: 200, h: 40 },
+      children: [0, 1, 2].map((i) => ({
+        id: `item${i}`,
+        tag: "div",
+        attrs: {},
+        styles: { display: "block", "background-color": "rgb(220, 80, 60)", ...item },
+        bounds: { x: i * 92, y: 0, w: 80, h: 40 },
+        children: [],
+      })),
+    },
+  ];
+  return input;
+}
+
+test("a fill-width block keeps its parent's width when its content overflows, without clipping", () => {
+  const screen = inferScreen(overflowingRow({ width: "80px", height: "40px" }), "constraints");
+  for (const mode of ["app", "fidelity"] as const) {
+    const code = emitSwift(screen, "ConstraintView", { mode }).view;
+    const row = code.slice(code.indexOf("private var v_row"));
+    expect(row).toContain(".frame(minWidth: 0.0, maxWidth: .infinity");
+  }
+});
+
+test("flex-grow items of a row keep growing to their content, as CSS's automatic minimum does", () => {
+  const input = overflowingRow({ "flex-grow": "1", height: "40px" });
+  for (const item of input.root.children[0]!.children) item.bounds.w = 58.67;
+  const screen = inferScreen(input, "constraints");
+  if (screen.root.kind !== "stack" || screen.root.children[0]?.kind !== "stack") throw new Error("expected stacks");
+  expect(screen.root.children[0].children.map((c) => c.width.kind)).toEqual(["fill", "fill", "fill"]);
+  for (const mode of ["app", "fidelity"] as const) {
+    const code = emitSwift(screen, "ConstraintView", { mode }).view;
+    const row = code.slice(code.indexOf("private var v_row"));
+    const items = row.slice(row.indexOf("HStack"), row.indexOf("\n        }"));
+    expect(items).toContain("maxWidth: .infinity");
+    expect(items).not.toContain("minWidth: 0.0");
+  }
+});
+
 test("finite caps preserve intrinsic dimensions before background paint", () => {
   const screen = inferScreen(capturedText({ "background-color": "rgb(220, 80, 60)" }), "constraints");
   if (screen.root.kind !== "stack") throw new Error("expected stack");

@@ -36,6 +36,12 @@ export interface EmitContext extends ColorCtx {
   fontMetrics: FontMetrics;
   /** Container node → Swift property name. */
   nameOf: Map<SemNode, string>;
+  /**
+   * Items of native rows, grids and content-sized containers: CSS sizes them no narrower than
+   * their content (`min-width: auto` of flex/grid items, shrink-to-fit), so their fill frames
+   * may grow to it. Every other fill-width box takes its container's width; see `frameModifier`.
+   */
+  contentMinWidth: Set<SemNode>;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */
