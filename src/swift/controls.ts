@@ -199,14 +199,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   }
 }
 
-/** What iOS Safari gives the same input: keyboard, autofill type, and no auto-capitalisation for addresses. */
+/** What iOS Safari gives the same input; `markswiftInputTraits` applies it on iOS only (runtime/controls.swift). */
 const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
-  email: [".keyboardType(.emailAddress)", ".textContentType(.emailAddress)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
-  tel: [".keyboardType(.phonePad)", ".textContentType(.telephoneNumber)"],
-  url: [".keyboardType(.URL)", ".textContentType(.URL)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
-  number: [".keyboardType(.decimalPad)"],
-  search: [".keyboardType(.webSearch)", ".submitLabel(.search)"],
-  password: [".textContentType(.password)"],
+  email: [".markswiftInputTraits(.email)"],
+  tel: [".markswiftInputTraits(.tel)"],
+  url: [".markswiftInputTraits(.url)"],
+  number: [".markswiftInputTraits(.number)"],
+  search: [".markswiftInputTraits(.search)"],
+  password: [".markswiftInputTraits(.password)"],
 };
 
 /**

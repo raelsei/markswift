@@ -55,7 +55,7 @@ nativeTest("accessible forms compile in both modes", async () => {
     for (const mode of ["app", "fidelity"] as const) {
       const result = await convertHtml(main, { name: "AccessibleForm", mode, css });
       if (mode === "app") {
-        for (const s of ['.accessibilityLabel("Close")', ".accessibilityHeading(.h2)", ".markswiftSelects(", ".keyboardType(.emailAddress)", "@ScaledMetric(relativeTo:"]) expect(result.code).toContain(s);
+        for (const s of ['.accessibilityLabel("Close")', ".accessibilityHeading(.h2)", ".markswiftSelects(", ".markswiftInputTraits(.email)", "@ScaledMetric(relativeTo:"]) expect(result.code).toContain(s);
       }
       const output = join(directory, mode);
       for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);

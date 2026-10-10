@@ -160,9 +160,9 @@ test("radios sharing a name hold one selection", () => {
 
 test("input types choose the keyboard and content type in app mode", () => {
   const field = (type: string) => [el("input", { id: "f", type }, { x: 0, y: 0, w: 320, h: 30 }, [], { display: "inline-block" })];
-  expect(swift(field("email"), "app")).toContain(".keyboardType(.emailAddress)");
-  expect(swift(field("email"), "fidelity")).not.toContain(".keyboardType(.emailAddress)");
+  expect(swift(field("email"), "app")).toContain(".markswiftInputTraits(.email)");
+  expect(swift(field("email"), "fidelity")).not.toContain(".markswiftInputTraits(");
   const password = swift(field("password"), "app");
   expect(password.indexOf("SecureField(")).toBeGreaterThan(-1);
-  expect(password.indexOf("SecureField(")).toBeLessThan(password.indexOf(".textContentType(.password)"));
+  expect(password.indexOf("SecureField(")).toBeLessThan(password.indexOf(".markswiftInputTraits(.password)"));
 });

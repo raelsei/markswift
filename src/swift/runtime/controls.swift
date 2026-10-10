@@ -42,6 +42,27 @@ extension Binding where Value == String {
     }
 }
 
+/// The keyboard, autofill type and capitalisation iOS Safari gives the same `<input type>`.
+/// These modifiers exist only on iOS; on other platforms (the macOS render gate) the field is unchanged.
+nonisolated enum MarkswiftInputTraits: Sendable { case email, tel, url, number, search, password }
+
+extension View {
+    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits) -> some View {
+        #if os(iOS)
+        switch traits {
+        case .email: keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+        case .tel: keyboardType(.phonePad).textContentType(.telephoneNumber)
+        case .url: keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+        case .number: keyboardType(.decimalPad)
+        case .search: keyboardType(.webSearch).submitLabel(.search)
+        case .password: textContentType(.password)
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
 nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
