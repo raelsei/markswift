@@ -100,28 +100,36 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
   });
 }
 
+const MAX_FONT_BYTES = 25 * 1024 * 1024;
+
 /**
  * Reads the bytes behind every non-inline `@font-face` source and names each blob by content
  * hash, mutating the faces to point at the file. Runs in-process while the source's static
  * server is still up: that server is the only thing that can answer its own ephemeral-port URL,
  * and it stops when the conversion returns.
  *
+ * Only `http:`/`https:` URLs are fetched (what the capture browser itself could request; never
+ * `file:`, `s3:`, `blob:`), and a response over 25 MB is skipped. `signal` aborts the fetch.
  * A source that cannot be read keeps its `url` and gets no `file` — packaging reports it rather
  * than guessing.
  */
-export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true): Promise<Array<{ name: string; bytes: Uint8Array }>> {
+export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true, signal?: AbortSignal): Promise<Array<{ name: string; bytes: Uint8Array }>> {
   const files: Array<{ name: string; bytes: Uint8Array }> = [];
   const byHash: Record<string, string> = {};
   for (const face of faces) {
     for (const src of face.src) {
       if (src.url.startsWith("data:")) continue;
       if (!allowRemote) continue;
+      if (!URL.canParse(src.url) || !["http:", "https:"].includes(new URL(src.url).protocol)) continue;
       let bytes: Uint8Array;
       try {
-        const res = await fetch(src.url);
-        if (!res.ok) continue;
+        const res = await fetch(src.url, { signal, redirect: "follow" });
+        if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_FONT_BYTES) continue;
+        // ponytail: chunked responses are read fully before the size check; stream with a byte counter if hosts abuse it.
         bytes = new Uint8Array(await res.arrayBuffer());
-      } catch {
+        if (bytes.length > MAX_FONT_BYTES) continue;
+      } catch (error) {
+        if (signal?.aborted) throw error;
         continue;
       }
       const hash = new Bun.CryptoHasher("sha256").update(bytes).digest("hex").slice(0, 12);
