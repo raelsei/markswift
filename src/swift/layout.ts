@@ -58,7 +58,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis.
     if (ctx.mode === "fidelity") return [...out, `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
-    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}, showsIndicators: false) {`, ...indent(out, 1), `}`];
+    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`, ...indent(out, 1), `}`];
   }
   return out;
 }
