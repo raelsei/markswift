@@ -44,3 +44,10 @@ test("a measured box keeps paint, borders and effects together", () => {
   expect(style.outline).toEqual({ width: 1, color: { r: 0, g: 1, b: 0, a: 1 }, style: "solid", offset: 2 });
   expect(diagnostics).toEqual([]);
 });
+
+test("an individual rotate property becomes the node's transform", () => {
+  const diagnostics: Diagnostic[] = [];
+  const style = styleOf({ tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 40, h: 40 }, children: [], styles: { rotate: "45deg", "transform-origin": "20px 20px" } }, diagnostics);
+  expect(style.transform).toEqual({ rotate: 45, scaleX: 1, scaleY: 1, tx: 0, ty: 0, origin: [20, 20] });
+  expect(diagnostics).toEqual([]);
+});

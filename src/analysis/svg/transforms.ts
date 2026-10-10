@@ -29,6 +29,10 @@ export function isIdentity(m: SvgMatrix): boolean {
  * snapshot carries no computed value.
  */
 export function ownTransform(c: LayoutNode, diagnostics: Diagnostic[]): SvgMatrix {
+  for (const p of ["translate", "rotate", "scale"]) {
+    const v = c.styles[p];
+    if (v && v !== "none") addDiagnostic(diagnostics, "approximated", "transform", `svg individual transform properties ignored (${p}: ${v})`);
+  }
   const computed = c.styles["transform"];
   if (computed !== undefined) {
     if (computed === "none") return IDENTITY;

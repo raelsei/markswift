@@ -4,7 +4,7 @@ export { px, parseDeclared, splitTop, resolveLength, round2 } from "./syntax.ts"
 export { type BlendMode, parseBlendMode, parseBlendModes } from "./blend.ts";
 export { type Paint, paintWithin, parseBackgroundImage, resolvePaint } from "./paint.ts";
 export { type Shadow, parseShadows } from "./shadows.ts";
-export { type Transform2D, parseTransform, parseOrigin } from "./transforms.ts";
+export { type Transform2D, type TransformLoss, parseTransform, parseOrigin, cssTransform } from "./transforms.ts";
 export { parseFilters, parseClipPath } from "./effects.ts";
 export { type BackgroundRepeat, parseBackgroundRepeat, imageSize, type BackgroundSize, parseBackgroundSize, parseBackgroundPosition } from "./background.ts";
 export { fontWeight, fontFamilies } from "./typography.ts";

@@ -21,9 +21,11 @@ export function paintExpr(p: Paint, w: number, h: number, ctx: ColorCtx, id?: st
     case "solid":
       return colorExpr(p.color, ctx, id);
     case "linear": {
-      const rad = (p.angle * Math.PI) / 180;
-      const sx = 0.5 - 0.5 * Math.sin(rad), sy = 0.5 + 0.5 * Math.cos(rad);
-      const ex = 0.5 + 0.5 * Math.sin(rad), ey = 0.5 - 0.5 * Math.cos(rad);
+      const rad = (p.angle * Math.PI) / 180, sin = Math.sin(rad), cos = Math.cos(rad);
+      // CSS gradient line: through the centre, length |w·sinθ| + |h·cosθ|.
+      const half = (Math.abs(w * sin) + Math.abs(h * cos)) / 2;
+      const dx = w > 0 ? (half * sin) / w : 0.5 * sin, dy = h > 0 ? (half * cos) / h : 0.5 * cos;
+      const sx = 0.5 - dx, sy = 0.5 + dy, ex = 0.5 + dx, ey = 0.5 - dy;
       return `LinearGradient(stops: ${stops(p, ctx, id)}, startPoint: UnitPoint(x: ${num(sx)}, y: ${num(sy)}), endPoint: UnitPoint(x: ${num(ex)}, y: ${num(ey)}))`;
     }
     case "radial": {
