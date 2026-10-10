@@ -24,7 +24,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // Mode difference — HStack cross alignment. Fidelity: `.top` plus a per-child top padding
     // taken from the measured geometry, so placement does not depend on native text metrics.
     // App: the IR's cross alignment and no geometric padding; SwiftUI aligns natively.
-    const geometry = ctx.mode === "fidelity" && n.axis === "h" && n.align !== "stretch";
+    const geometry = ctx.mode === "fidelity" && n.axis === "h" && (n.align !== "stretch" || kids.some((k) => k.selfAlignV !== undefined));
     // `stretch` (the CSS default) puts a fixed-cross-size item at flex-start; filling ones stretch anyway.
     const align = n.axis === "v" ? horizontalAlignment(n.align) : geometry ? ".top" : n.align === "baseline" ? ".firstTextBaseline" : verticalAlignment(n.align);
     const ctor = n.axis === "v" ? `VStack(alignment: ${align}, spacing: ${num(spacing)})` : `HStack(alignment: ${align}, spacing: ${num(spacing)})`;
@@ -49,9 +49,10 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     });
     out.push("}");
     // Only content-height rows need an intrinsic proposal to keep stretch children from
-    // consuming all available height. Fixed/fill rows already receive a height proposal;
-    // discarding it collapses overlay-only Color children to their 10pt ideal height.
-    if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill")) out.push(".fixedSize(horizontal: false, vertical: true)");
+    // consuming all available height (and `align-self` children their `maxHeight: .infinity`).
+    // Fixed/fill rows already receive a height proposal; discarding it collapses overlay-only
+    // Color children to their 10pt ideal height.
+    if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
   out.push(...modifiers(n, ctx));
   if (n.scroll) {

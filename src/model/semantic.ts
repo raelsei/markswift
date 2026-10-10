@@ -254,10 +254,12 @@ export interface SemBase extends SizeConstraints {
   width: Size;
   height: Size;
   /**
-   * Cross-axis placement inside the parent's content box when the box does not span it
-   * (CSS auto or asymmetric margins). Default: leading.
+   * Horizontal placement inside a column/block parent's content box: asymmetric/auto margins or
+   * `align-self`. Default: the parent's alignment.
    */
-  selfAlign?: "center" | "end";
+  selfAlign?: "start" | "center" | "end";
+  /** Vertical placement inside a flex row from `align-self` when it differs from the row's `align-items`. */
+  selfAlignV?: "start" | "center" | "end";
   /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,

@@ -177,3 +177,73 @@ describe("Step 3 unbreakable words", () => {
     expect(t.unbreakable).toBeUndefined();
   });
 });
+
+/** `main(block) > host`, inferred; the node with `id`. */
+function inferred(host: LayoutNode, id: string): { doc: LayoutDoc; node: SemNode } {
+  const d = doc(el("main", { x: 0, y: 0, w: host.bounds.w, h: host.bounds.h }, { display: "block" }, [host]));
+  const node = flatten(inferScreen(d, "t").root).find((n) => n.id === id);
+  if (!node) throw new Error(`expected #${id}`);
+  return { doc: d, node };
+}
+
+const RED = { "background-color": "rgb(255, 0, 0)" };
+const BLUE = { "background-color": "rgb(0, 0, 255)" };
+
+describe("Step 4 align-self", () => {
+  test("align-self: flex-end in a flex-start row sits at the bottom", () => {
+    const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, [
+      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
+      el("div", { x: 60, y: 20, w: 50, h: 20 }, { display: "block", "align-self": "flex-end", ...BLUE }, [], { id: "b" }),
+    ], { id: "row" });
+    const { doc: d, node: b } = inferred(row, "b");
+    expect(b.selfAlignV).toBe("end");
+    expect(inferred(row, "a").node.selfAlignV).toBeUndefined();
+    expect(compileLayout(d, { name: "Row", mode: "app" }).code).toContain(".frame(maxHeight: .infinity, alignment: .bottom)");
+    const fidelity = compileLayout(d, { name: "Row", mode: "fidelity" }).code;
+    expect(fidelity).toContain(".padding(.top, 20.0)");
+    expect(fidelity).not.toContain("maxHeight: .infinity, alignment: .bottom");
+  });
+
+  test("align-self: center in a stretch row is centred, not stretched", () => {
+    const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex" }, [
+      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }, [], { id: "a" }),
+      el("div", { x: 60, y: 10, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], { id: "b" }),
+    ], { id: "row" });
+    const { doc: d, node: b } = inferred(row, "b");
+    expect(b.selfAlignV).toBe("center");
+    expect(b.height.kind).not.toBe("fill");
+    expect(compileLayout(d, { name: "Row", mode: "fidelity" }).code).toContain(".padding(.top, 10.0)");
+  });
+
+  test("align-self: center in a stretch column centres horizontally", () => {
+    const col = el("div", { x: 0, y: 0, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "stretch" }, [
+      el("div", { x: 125, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "center", ...BLUE }, [], { id: "c" }),
+    ]);
+    const { doc: d, node: c } = inferred(col, "c");
+    expect(c.selfAlign).toBe("center");
+    expect(c.width.kind).not.toBe("fill");
+    expect(compileLayout(d, { name: "Col", mode: "app" }).code).toContain(".frame(maxWidth: .infinity, alignment: .center)");
+  });
+
+  test("align-self: flex-start in an RTL column sits at the right", () => {
+    const col = el("div", { x: 0, y: 0, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", direction: "rtl" }, [
+      el("div", { x: 250, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "flex-start", ...BLUE }, [], { id: "c" }),
+    ]);
+    expect(inferred(col, "c").node.selfAlign).toBe("end");
+  });
+
+  test("align-self: baseline outside a baseline row is reported", () => {
+    const row = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, [
+      el("div", { x: 0, y: 0, w: 50, h: 40 }, { display: "block", ...RED }),
+      el("div", { x: 60, y: 0, w: 50, h: 20 }, { display: "block", "align-self": "baseline", ...BLUE }, [], { id: "b" }),
+    ]);
+    expect(inferred(row, "b").node.diagnostics.some((x) => x.feature === "align-self" && x.level === "approximated")).toBe(true);
+  });
+
+  test("a margin-centred block child still centres", () => {
+    const host = el("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [
+      el("div", { x: 50, y: 0, w: 200, h: 40 }, { display: "block", "margin-left": "50px", "margin-right": "50px", ...BLUE }, [], { id: "m" }),
+    ]);
+    expect(inferred(host, "m").node.selfAlign).toBe("center");
+  });
+});

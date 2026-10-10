@@ -1,6 +1,6 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, edgeInsets, indent, num, strokeStyle } from "./format.ts";
+import { colorExpr, edgeInsets, horizontalAlignment, indent, num, strokeStyle, verticalAlignment } from "./format.ts";
 import { frameModifier } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
@@ -79,7 +79,9 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   }
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
-  if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${n.selfAlign === "center" ? ".center" : ".trailing"})`);
+  if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);
+  // Fidelity rows already place every child by measured offset (layout.ts `geometry`).
+  if (n.selfAlignV && ctx.mode === "app") m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
   if (st.hidden) m.push(".hidden()");
   return m;
 }

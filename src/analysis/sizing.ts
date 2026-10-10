@@ -1,11 +1,11 @@
 /** Intrinsic versus fixed sizing inferred from measured content. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type Size, type Axis, type SizeConstraints, type Diagnostic } from "../model/semantic.ts";
+import { type Size, type Axis, type SizeConstraints, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import { round2, px } from "../css/index.ts";
 import { insetsOf, renders, hangsLeading, EDGES, unionRect, mainAxis, outOfFlow } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
 import { type InferenceContext } from "./context.ts";
-import { crossAlign } from "./alignment.ts";
+import { crossAlign, alignSelfOf } from "./alignment.ts";
 import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
 
@@ -96,9 +96,14 @@ function hugs(n: LayoutNode, axis: Axis): boolean {
  * Otherwise geometry tells: parent content box → fill, own content → hug, other sizes →
  * measured pixels. Flex allocation and constraints share the same border-box contract.
  */
-export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, diagnostics: Diagnostic[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "center" | "end" } {
+export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, diagnostics: Diagnostic[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "start" | "center" | "end"; selfAlignV?: "start" | "center" | "end" } {
   const s = n.styles;
   const abs = outOfFlow(n);
+  // The child's own cross alignment (`align-self`) overrides the container's `align-items`.
+  const own = ctx.parent ? alignSelfOf(n, ctx.parent) : undefined;
+  const align = own ?? ctx.parentAlign;
+  const placed = own !== undefined && own !== ctx.parentAlign && (own === "start" || own === "center" || own === "end") ? own : undefined;
+  if (own === "baseline" && ctx.parentAlign !== "baseline") addDiagnostic(diagnostics, "approximated", "align-self", "align-self: baseline → the row's own alignment");
   const declW = n.preferredSize?.width ?? d["width"];
   const declH = n.preferredSize?.height ?? d["height"];
 
@@ -131,7 +136,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
   else if (growthW) width = growthW;
-  else if (ctx.parentAxis === "v" && ctx.parentAlign === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
+  else if (ctx.parentAxis === "v" && align === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
   } else if (hugsW || !ctx.parent) width = { kind: "hug" };
   else if (fillsW && !abs) width = { kind: "fill" };
@@ -141,7 +146,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   if (declH && /px$/.test(declH)) height = measuredH;
   else if (declH === "100%") height = fillsH && !abs ? { kind: "fill" } : measuredH;
   else if (growthH) height = growthH;
-  else if (ctx.parentAxis === "h" && ctx.parentAlign === "stretch" && !abs && fillsH) height = { kind: "fill" };
+  else if (ctx.parentAxis === "h" && align === "stretch" && !abs && fillsH) height = { kind: "fill" };
   else if (hugsH || !ctx.parent) height = { kind: "hug" };
   else height = measuredH;
 
@@ -151,7 +156,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   // centred box, like plain side margins, make the margin box fill the parent while the border
   // box does not. Cap the width at what they leave and place the box the way they placed it.
   // (Computed style resolves `auto` to px, so this is geometry, not a declared property.)
-  let selfAlign: "center" | "end" | undefined;
+  let selfAlign: "start" | "center" | "end" | undefined;
   if (width.kind === "fill" && ctx.parentAxis === "v" && !abs) {
     const ml = px(s["margin-left"]);
     const mr = px(s["margin-right"]);
@@ -161,5 +166,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
       else if (ml > mr) selfAlign = "end";
     }
   }
-  return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}) };
+  if (selfAlign === undefined && placed && ctx.parentAxis === "v" && !abs) selfAlign = placed;
+  const selfAlignV = placed && ctx.parentAxis === "h" && !abs ? placed : undefined;
+  return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}), ...(selfAlignV !== undefined ? { selfAlignV } : {}) };
 }
