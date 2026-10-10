@@ -14,10 +14,9 @@ import { plistFragment, registrationSwift } from "./registration.ts";
  * `outDir` resolves `src[].file` (the capture's `_fonts/`). Faces are grouped by (family,
  * style): within a group the Basic-Latin subset wins, the rest are reported. A face whose bytes
  * cannot be read, or whose format iOS cannot load and `fontTools` cannot convert, is noted and
- * left out of the returned package (a failed conversion still drops the original bytes into
- * `Fonts/`, but they are not a packaged face and are not shipped).
+ * left out of the package; nothing is written for it.
  */
-export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: string): Promise<FontPackage> {
+export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: string, signal?: AbortSignal): Promise<FontPackage> {
   const fontsDir = join(swiftDir, "Fonts");
   await rm(fontsDir, { recursive: true, force: true });
   const notes: string[] = [];
@@ -69,16 +68,14 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const dst = join(fontsDir, file);
     const tmp = join(fontsDir, `.${stem}.src`);
     await Bun.write(tmp, bytes);
-    const tool = await runFontTool(tmp, dst, chosen.family, subfamily, true);
+    const tool = await runFontTool(tmp, dst, chosen.family, subfamily, true, signal);
     if (typeof tool === "string") {
-      // No converter: ship what we have and say exactly what is wrong with it. WOFF2 will not
-      // register, so the note has to name the format, not just the failure.
-      await Bun.write(dst, bytes);
+      // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
       await rm(tmp, { force: true });
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
       notes.push(
-        `unmapped: font-family ${chosen.family} could not be packaged (${tool}); wrote ${fmt} unconverted` +
-          (sig === "wOF2" || sig === "wOFF" ? ` — iOS cannot register ${fmt}, so this face will not load (needs python3 with fontTools + brotli)` : ""),
+        `unmapped: font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
+          (sig === "wOF2" || sig === "wOFF" ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli` : ""),
       );
       continue;
     }
