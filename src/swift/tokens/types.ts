@@ -48,6 +48,11 @@ export interface Slot {
   key: string;
   role: TokenRole;
   color: Color;
+  /**
+   * Which CSS gradient stop a gradient slot is — what a `from-`/`via-`/`to-` utility names:
+   * the first, the last, and the middle one only when it is the only middle one.
+   */
+  stop?: "from" | "via" | "to";
 }
 
 /** A colour slot after pairing the two themes. */
@@ -62,8 +67,10 @@ export interface Usage {
   light: Color;
   /** Unset when the node/slot exists in one theme only. */
   dark?: Color;
-  /** Custom-property names the node's declared style referenced. */
+  /** Token hints of the node: custom-property names and role-qualified class hints. */
   hints: string[];
+  /** {@link Slot.stop} */
+  stop?: "from" | "via" | "to";
   /** Document-order index of the first theme that carried this slot. */
   order: number;
 }

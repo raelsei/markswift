@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
 import type { StackNode } from "../../../src/model/semantic.ts";
 
@@ -166,14 +167,12 @@ describe("measured wrapping fallback", () => {
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("allocation");
   });
 
-  test("an unshrunk item still falls back when CSS can shrink it at a narrower size", () => {
+  test("an unshrunk item with the default flex-shrink reflows natively", () => {
     const item = child("a", 0, 0, { "flex-shrink": "1" }, { width: "150px", height: "40px" });
     item.bounds.w = 150;
     const node = root([item], {}, { x: 0, y: 0, w: 200, h: 40 });
-    expect(node.wrap).toBeUndefined();
-    expect(measuredFrames(node)["#a"]).toEqual({ x: 0, y: 0, w: 150, h: 40 });
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("allocation");
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
+    expect(node.wrap).toBeDefined();
+    expect(node.measured).toBeUndefined();
   });
 
   test("stretch-dependent auto heights fall back because merged rows can change their height", () => {
@@ -194,5 +193,61 @@ describe("measured wrapping fallback", () => {
     expect(node.wrap).toBeUndefined();
     expect(node.measured?.frames).toHaveLength(2);
     expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("ambiguous main-axis wrapping");
+  });
+});
+
+const TEXT = { "font-family": "system-ui", "font-size": "14px", "line-height": "20px", color: "rgb(0, 0, 0)" };
+
+/** A padded `span` chip sized by its "Design" label, with the CSS default flex-shrink: 1. */
+function chip(id: string, x: number, y: number, w = 60): LayoutNode {
+  return {
+    tag: "span", id: `#${id}`, attrs: { id }, bounds: { x, y, w, h: 28 }, preferredSize: { width: "auto", height: "auto" },
+    styles: { display: "block", "flex-grow": "0", "flex-shrink": "1", "padding-left": "12px", "padding-right": "12px", "padding-top": "4px", "padding-bottom": "4px", ...TEXT },
+    children: [{ tag: "#text", attrs: {}, styles: { ...TEXT }, bounds: { x: x + 12, y: y + 7, w: 36, h: 14 }, text: "Design", children: [] }],
+  };
+}
+
+function chipDoc(children: LayoutNode[], styles: Record<string, string> = {}): LayoutDoc {
+  const host: LayoutNode = {
+    tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 180, h: 66 }, children, preferredSize: { width: "180px", height: "auto" },
+    styles: { display: "flex", "flex-direction": "row", "flex-wrap": "wrap", "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start", "justify-content": "flex-start", "align-content": "normal", ...TEXT, ...styles },
+  };
+  return { version: 2, source: "wrap-test", combo: { screen: "s", theme: "light" }, size: { w: 180, h: 66 }, dpr: 1, canvas: "rgb(255,255,255)", fonts: [], root: host };
+}
+
+function chipHost(d: LayoutDoc): StackNode {
+  const node = inferScreen(d, "s").root;
+  if (node.kind !== "stack") throw new Error("Expected wrapping stack");
+  return node;
+}
+
+describe("intrinsic chip wrapping", () => {
+  const chips = () => [chip("a", 0, 0), chip("b", 70, 0), chip("c", 0, 38)];
+
+  test("hugging chips with the default flex-shrink reflow natively", () => {
+    const node = chipHost(chipDoc(chips()));
+    expect(node.wrap).toBeDefined();
+    expect(node.measured).toBeUndefined();
+    expect(node.children.map((c) => c.width.kind)).toEqual(["hug", "hug", "hug"]);
+  });
+
+  test("equal-height chips in a stretching host still reflow", () => {
+    const node = chipHost(chipDoc(chips(), { "align-items": "normal" }));
+    expect(node.wrap).toBeDefined();
+    expect(node.measured).toBeUndefined();
+  });
+
+  test("a chip that fills its line may have been shrunk, so it falls back", () => {
+    const node = chipHost(chipDoc([chip("a", 0, 0, 180)], {}));
+    expect(node.wrap).toBeUndefined();
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("shrink");
+  });
+
+  test("app mode lets chips size themselves; fidelity pins their captured boxes", () => {
+    const d = chipDoc(chips());
+    const app = compileLayout(d, { name: "Chips", mode: "app" }).code;
+    expect(app).toContain("MarkswiftFlow(");
+    expect(app).not.toContain(".frame(width: 60.0, height: 28.0, alignment: .topLeading)");
+    expect(compileLayout(d, { name: "Chips", mode: "fidelity" }).code).toContain(".frame(width: 60.0, height: 28.0, alignment: .topLeading)");
   });
 });

@@ -9,7 +9,8 @@ import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, in
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
-import { EDGES, edgeWidth, unionRect, isFlex } from "./geometry.ts";
+import { EDGES, edgeWidth, unionRect, isFlex, mainAxis } from "./geometry.ts";
+import { crossAlign, distributionOf } from "./alignment.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -156,7 +157,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
-  const ta = host.styles["text-align"] ?? "start";
+  // `<center>`, `align=center` and friends compute to `-webkit-center/-left/-right`; the side is the same.
+  const ta = (host.styles["text-align"] ?? "start").replace(/^-(webkit|internal)-/, "");
   const side = ta === "start" ? (dir === "rtl" ? "right" : "left") : ta === "end" ? (dir === "rtl" ? "left" : "right") : ta;
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
@@ -164,14 +166,23 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
   if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
   if (leaf) {
-    // A box taller than its line boxes: the browser keeps the text at the top (block flow) or
-    // where the flex container aligns it. The surplus becomes padding so the text lands there
-    // in both modes; a centred host stays as is (the emitter centres text in its box).
+    // A box taller than its line boxes. The surplus becomes padding so the text lands where the
+    // browser put it in both modes; a centred text stays as is (the emitter centres text in its box).
     const [pt, pr, pb, pl] = base.padding;
     const surplus = round2(frame.h - pt - pb - lines * lh);
-    const ai = /flex|-webkit-box/.test(host.styles["display"] ?? "") ? host.styles["align-items"] : undefined;
-    if (surplus > 2 && ai !== "center") {
-      base.padding = ai === "flex-end" || ai === "end" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+    // Where a flex/grid/table-cell host put the line boxes inside a taller box: measured, not
+    // derived from keywords — `td` vertical-align: middle, a flex column's justify-content, grid
+    // place-items all land here. The glyph union's distance to each content edge says top, centre
+    // (the emitter's default) or bottom; without measured glyphs the text stays at the top.
+    // Block flow always starts its line boxes at the top.
+    // ponytail: block hosts keep the keyword rule; a line box grown by sub/sup or a fallback font
+    // (emoji) reads as off-centre glyphs. Measure block hosts too (sub/sup paragraphs look better
+    // centred) once the visual gate can tell which is right.
+    if (surplus > 2) {
+      const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
+      const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
+      const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
+      if (Math.abs(above - below) > 2) base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -218,11 +229,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
     align:
-      ta === "center" || (isFlex(host.styles["display"]) && host.styles["justify-content"] === "center")
+      ta === "center" || (isFlex(host.styles["display"]) && (mainAxis(host) === "h" ? distributionOf(host) : crossAlign(host)) === "center")
         ? "center"
-        : side === "right"
-          ? "trailing"
-          : "leading",
+        : side === "right" ? "trailing" : "leading",
     lines,
   };
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
@@ -232,7 +241,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   else if (host.styles["text-wrap-mode"] === "nowrap") {
     node.noWrap = true;
     node.lineLimit = 1 + out.reduce((n, r) => n + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
-  }
+  } else if (lines === 1 && unbreakable(node.runs, host.styles)) node.unbreakable = true;
   if (host.styles["text-overflow"] === "ellipsis") node.truncate = true;
   // Only text needs the base writing direction: CoreText resolves neutral characters against it
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
@@ -242,4 +251,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb") note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+
+// ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.
+const ONE_WORD = /^[\p{L}\p{M}\p{N}.,:'’&$€£%]+$/u;
+const SPACE_FREE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+/** A single word CSS cannot soft-wrap: with `overflow-wrap: normal` it overflows its box instead. */
+function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
+  if ((s["overflow-wrap"] ?? "normal") !== "normal" || /^break-(all|word)$/.test(s["word-break"] ?? "")) return false;
+  const text = runs.filter((r) => r.gap === undefined).map((r) => r.text).join("");
+  return ONE_WORD.test(text) && !SPACE_FREE.test(text);
 }

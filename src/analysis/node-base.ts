@@ -23,7 +23,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.diagnostic) addDiagnostic(diagnostics, policy.diagnostic.level, policy.diagnostic.feature, policy.diagnostic.message);
   const style = styleOf(n, diagnostics);
-  const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
+  const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
   const a11y = a11yOf(n, ctx);
@@ -35,6 +35,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     height,
     ...constraints,
     ...(selfAlign !== undefined ? { selfAlign } : {}),
+    ...(selfAlignV !== undefined ? { selfAlignV } : {}),
     padding,
     style,
     confidence: "mapped",

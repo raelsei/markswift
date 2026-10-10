@@ -21,17 +21,22 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
   if (!["start", "center", "end", "stretch"].includes(align)) return `align-items ${n.styles["align-items"]}`;
   if (columnGap === undefined || rowGap === undefined) return "relative or complex row/column gaps";
 
+  const contentWidth = Math.max(0, base.frame.w - base.padding[1] - base.padding[3]);
+  const uniformHeight = items.every((i) => Math.abs(i.sem.frame.h - items[0]!.sem.frame.h) <= 0.5);
   for (const item of items) {
     const s = item.node.styles;
-    // A capture can fit perfectly while a narrower native proposal activates CSS shrinking.
-    if (px(s["flex-grow"]) > 0 || px(s["flex-shrink"] ?? "1") > 0) return "flex grow/shrink allocation";
-    if (align === "stretch") {
+    if (px(s["flex-grow"]) > 0) return "flex grow allocation";
+    // Items wrap before they shrink, so the default flex-shrink: 1 only engages for an item wider
+    // than its line; one that already fills the line may have been shrunk to it. MarkswiftFlow
+    // re-measures an oversized item at the line width, which is what CSS shrinking does to text.
+    if (px(s["flex-shrink"] ?? "1") > 0 && item.sem.frame.w >= contentWidth - 0.5) return "flex shrink allocation";
+    if (align === "stretch" && !uniformHeight) {
       const declaredHeight = item.node.preferredSize?.height ?? parseDeclared(item.node.attrs.style)["height"];
       const [pt, , pb] = insetsOf(s);
       const wanted = declaredHeight && /^(?:0|\d*\.?\d+px)$/.test(declaredHeight) ? resolveLength(declaredHeight, 0) : undefined;
       if (wanted === undefined || Math.abs(item.sem.frame.h - wanted - (s["box-sizing"] === "border-box" ? 0 : pt + pb)) > 1) return "stretch-dependent child heights";
     }
-    if (item.sem.width.kind !== "fixed" || item.sem.height.kind !== "fixed") return "intrinsic or filling child sizes";
+    if (item.sem.width.kind === "fill" || item.sem.height.kind === "fill") return "filling child sizes";
     if (EDGES.some(edge => Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
     if (![undefined, "", "auto", "normal"].includes(s["align-self"])) return `align-self ${s["align-self"]}`;
     if (px(s.order) !== 0) return "CSS order allocation";
@@ -43,7 +48,6 @@ function unsupported(n: LayoutNode, base: SemBase, items: AnalyzedChild[], axis:
 
   const lines = linesOf(items);
   const rows = lines.map(line => line.map(item => item.sem.frame).reduce(unionRect));
-  const contentWidth = Math.max(0, base.frame.w - base.padding[1] - base.padding[3]);
   const nativeLines: AnalyzedChild[][] = [];
   let nativeLine: AnalyzedChild[] = [], usedWidth = 0;
   for (const item of lines.flat()) {

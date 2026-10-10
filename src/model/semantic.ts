@@ -104,7 +104,7 @@ export interface Style {
   mask?: Paint;
   /** `visibility: hidden` — occupies space, paints nothing. */
   hidden?: boolean;
-  /** Names of CSS custom properties the declared style referenced (token hints). */
+  /** Token hints: CSS custom properties the declared style referenced, plus role-qualified class hints (`bg:white`). */
   tokens?: string[];
 }
 
@@ -254,10 +254,12 @@ export interface SemBase extends SizeConstraints {
   width: Size;
   height: Size;
   /**
-   * Cross-axis placement inside the parent's content box when the box does not span it
-   * (CSS auto or asymmetric margins). Default: leading.
+   * Horizontal placement inside a column/block parent's content box: asymmetric/auto margins or
+   * `align-self`. Default: the parent's alignment.
    */
-  selfAlign?: "center" | "end";
+  selfAlign?: "start" | "center" | "end";
+  /** Vertical placement inside a flex row from `align-self` when it differs from the row's `align-items`. */
+  selfAlignV?: "start" | "center" | "end";
   /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,
@@ -294,6 +296,10 @@ export interface StackNode extends SemBase {
   distribution: Distribution;
   /** Leading offset before the first child that padding does not explain. */
   leadInset: number;
+  /** Gaps taken by a CSS auto margin in a flex container — index i is before child i (children.length = after the last). Emitted as flexible Spacers; the gap's fixed part (`spacing`, or `leadInset` for 0) is their minimum. */
+  autoGaps?: number[];
+  /** `space-between`: the CSS gap, the Spacers' minimum length. */
+  minGap?: number;
   scroll?: Axis;
   /** Fixed-size row items that reflow natively when available width changes. */
   wrap?: { columnGap: number; rowGap: number };
@@ -327,6 +333,8 @@ export interface TextNode extends SemBase {
    * re-flowing. Unset means normal wrapping.
    */
   noWrap?: true;
+  /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
+  unbreakable?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
 }

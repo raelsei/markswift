@@ -91,7 +91,7 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
  * box (the browser shortens line boxes instead of the block), so the gap is the float's margin;
  * a negative `margin-top` really does overlap, and negative spacing reproduces it.
  */
-export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: CrossAlign, distribution: Distribution): StackNode {
+export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: CrossAlign, distribution: Distribution, flex = false): StackNode {
   const [pt, , , pl] = base.padding;
   const items = all.filter((i) => renders(i.node) && !hangsLeading(i.sem.frame, base.frame.x + pl));
   // A row whose text clears the float part-way down is two blocks, not one (see `liftClearedText`).
@@ -115,6 +115,22 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
       }
     } else g = Math.max(0, g);
     gaps.push(round2(g));
+  }
+  // `margin: auto` on a flex item takes the free space (`ml-auto`, `mt-auto`). Computed margins
+  // are used px, so the capture keeps the authored `auto` (PreferredSize.autoMargins). Such a gap
+  // becomes a Spacer whose minimum is what the margin did not add. Only with free space to take:
+  // in block flow an auto vertical margin is 0, and a hugging box has none.
+  const [before, after] = axis === "h" ? (["left", "right"] as const) : (["top", "bottom"] as const);
+  const autoMargin = (it: AnalyzedChild | undefined, side: "top" | "right" | "bottom" | "left") =>
+    it?.node.preferredSize?.autoMargins?.includes(side) ? px(it.node.styles[`margin-${side}`]) : undefined;
+  const autoGaps: number[] = [];
+  if (flex && (axis === "h" ? base.width : base.height).kind !== "hug") {
+    for (let i = 0; i <= items.length; i++) {
+      const a = autoMargin(items[i - 1], after), b = autoMargin(items[i], before);
+      if (a === undefined && b === undefined) continue;
+      autoGaps.push(i);
+      if (i > 0 && i < items.length) gaps[i - 1] = round2(Math.max(0, gaps[i - 1]! - (a ?? 0) - (b ?? 0)));
+    }
   }
   const uniform = gaps.every((g) => Math.abs(g - (gaps[0] ?? 0)) <= 0.5);
   const spacing = uniform ? round2(gaps[0] ?? 0) : gaps;
@@ -152,8 +168,9 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   // A leading gap is only meaningful when children are packed at the start or the distribution
   // leaves outer gaps (around/evenly); for center/end/between it is the distribution's doing.
   if (distribution === "center" || distribution === "end" || distribution === "between") leadInset = 0;
+  if (autoGaps.includes(0)) leadInset = round2(Math.max(0, leadInset - (autoMargin(items[0], before) ?? 0)));
 
-  return { ...base, kind: "stack", axis, spacing, align, distribution, leadInset, children: items.map((i) => i.sem) };
+  return { ...base, kind: "stack", axis, spacing, align, distribution, leadInset, ...(autoGaps.length ? { autoGaps } : {}), children: items.map((i) => i.sem) };
 }
 
 /**
