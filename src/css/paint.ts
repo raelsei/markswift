@@ -82,11 +82,11 @@ export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h
 }
 
 
-/** Computed `background-image` → paints, bottom-most first. */
-export function parseBackgroundImage(s: string | undefined): Paint[] {
+/** Computed `background-image` → paints, bottom-most first. `dropped` collects the parts a gradient could not read. */
+export function parseBackgroundImage(s: string | undefined, dropped?: string[]): Paint[] {
   if (!s || s === "none") return [];
   const layers = splitTop(s, ",").reverse();
-  return layers.map(parseGradient);
+  return layers.map((layer) => parseGradient(layer, dropped));
 }
 
 
@@ -95,7 +95,7 @@ export function parseBackgroundImage(s: string | undefined): Paint[] {
  * `url(…)`; anything else → `unsupported`. Gradient centers given in px stay at the
  * default (50% 50%) because the box size is unknown here.
  */
-function parseGradient(s: string): Paint {
+function parseGradient(s: string, dropped?: string[]): Paint {
   s = s.trim();
   const u = /^url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)]*))\s*\)$/s.exec(s);
   if (u) return { kind: "image", url: (u[1] ?? u[2] ?? u[3] ?? "").replace(/\\(.)/g, "$1").trim() };
@@ -113,7 +113,7 @@ function parseGradient(s: string): Paint {
       else if (/^to\s+/.test(a)) angle = sideAngle(a);
       else return { kind: "unsupported", raw: s };
     }
-    paint = { kind: "linear", angle, stops: parseStops(args) };
+    paint = { kind: "linear", angle, stops: parseStops(args, dropped) };
   } else if (kind === "radial") {
     let ellipse = true;
     let center: [number, number] = [0.5, 0.5];
@@ -121,8 +121,10 @@ function parseGradient(s: string): Paint {
       const a = args.shift()!;
       if (/\bcircle\b/.test(a)) ellipse = false;
       center = atPosition(a) ?? center;
+      const size = a.replace(/\bat\b.*$/, "").replace(/\b(circle|ellipse|farthest-corner)\b/g, "").trim();
+      if (size) dropped?.push(`radial-gradient prelude "${size.slice(0, 40)}"`);
     }
-    paint = { kind: "radial", stops: parseStops(args), center, ellipse };
+    paint = { kind: "radial", stops: parseStops(args, dropped), center, ellipse };
   } else {
     let from = 0;
     let center: [number, number] = [0.5, 0.5];
@@ -132,7 +134,7 @@ function parseGradient(s: string): Paint {
       if (f) from = hue(f[1]!) ?? 0;
       center = atPosition(a) ?? center;
     }
-    paint = { kind: "conic", stops: parseStops(args), from, center };
+    paint = { kind: "conic", stops: parseStops(args, dropped), from, center };
   }
   if (m[1]) paint.repeating = true;
   return paint;
@@ -178,11 +180,14 @@ function sideAngle(a: string): number {
 }
 
 
-function parseStops(args: string[]): GradientStop[] {
+function parseStops(args: string[], dropped?: string[]): GradientStop[] {
   const stops: GradientStop[] = [];
   for (const a of args) {
     const m = new RegExp(String.raw`^(${COLOR_TOKEN})\s*(?:([-+\d.]+)(%|px|deg))?\s*$`, "i").exec(a);
-    if (!m) continue;
+    if (!m) {
+      dropped?.push(`gradient stop ${a.slice(0, 40)}`);
+      continue;
+    }
     const color = parseColor(m[1]!) ?? TRANSPARENT;
     const stop: GradientStop = { color };
     if (m[2] !== undefined && m[3] === "%") stop.pos = +m[2] / 100;

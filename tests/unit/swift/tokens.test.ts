@@ -33,7 +33,7 @@ function box(over: { id?: string; style?: Style } = {}): SemNode {
     padding: [0, 0, 0, 0],
     style: over.style ?? style(),
     confidence: "mapped",
-    notes: [],
+    diagnostics: [],
     overlays: [],
   };
 }
@@ -53,7 +53,7 @@ function screen(theme: "light" | "dark", children: SemNode[], canvas: Color): Sc
     padding: [0, 0, 0, 0],
     style: style(),
     confidence: "mapped",
-    notes: [],
+    diagnostics: [],
     overlays: [],
     axis: "v",
     spacing: 0,

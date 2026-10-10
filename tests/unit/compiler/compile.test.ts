@@ -70,7 +70,7 @@ test("loopback image URLs are never emitted and are diagnosed", () => {
   expect(output.code).not.toContain("localhost");
   expect(output.code).not.toContain("AsyncImage");
   expect(output.code).toContain('Text(verbatim: "A")');
-  const notes = output.diagnostics.flatMap((d) => d.notes).join("\n");
+  const notes = output.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message).join("\n");
   expect(notes).toContain("http://127.0.0.1:5555/a.png");
   expect(notes).toContain("http://localhost:1/b.png");
 });
@@ -96,6 +96,6 @@ test("raster images ship once as Images/ files", () => {
     expect(result.code).not.toContain("iVBOR");
     expect(result.code).not.toContain('Image("logo")');
     expect(result.code).toContain('Text(verbatim: "Logo")');
-    expect(result.diagnostics.flatMap((d) => d.notes).join("\n")).toContain("logo.png");
+    expect(result.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message).join("\n")).toContain("logo.png");
   }
 });

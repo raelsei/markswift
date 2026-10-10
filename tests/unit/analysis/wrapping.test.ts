@@ -37,7 +37,7 @@ describe("fixed-item row wrapping", () => {
     expect(node.wrap).toEqual({ columnGap: 10, rowGap: 10 });
     expect(node.measured).toBeUndefined();
     expect(node.children.map(child => child.id)).toEqual(["#a", "#b", "#c"]);
-    expect(node.notes).not.toContain("approximated: flex-wrap → fixed rows from the snapshot");
+    expect(node.diagnostics.map((d) => d.message)).not.toContain("flex-wrap → fixed rows from the snapshot");
   });
 
   test("a single item on every line still remains a wrapping layout", () => {
@@ -98,7 +98,7 @@ describe("measured wrapping fallback", () => {
       { "align-content": alignContent }, { x: 0, y: 0, w: 200, h: 90 }, "90px", 200);
     expect(node.wrap).toBeUndefined();
     expect(node.measured).toMatchObject({ width: 200, height: 90 });
-    expect(node.notes.join(" ")).toContain("align-content");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("align-content");
   });
 
   test("a minimum-height host cannot assume centered rows remain hugging after reflow", () => {
@@ -115,8 +115,8 @@ describe("measured wrapping fallback", () => {
     expect(measuredFrames(node)).toEqual({
       "#a": { x: 0, y: 50, w: 80, h: 40 }, "#b": { x: 90, y: 50, w: 80, h: 40 }, "#c": { x: 0, y: 0, w: 80, h: 40 },
     });
-    expect(node.notes.join(" ")).toContain("wrap-reverse");
-    expect(node.notes.join(" ")).toContain("cannot reflow");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("wrap-reverse");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
   });
 
   test("column wrapping preserves columns rather than flattening every child vertically", () => {
@@ -124,14 +124,14 @@ describe("measured wrapping fallback", () => {
     expect(node.wrap).toBeUndefined();
     expect(node.measured).toMatchObject({ width: 170, height: 90 });
     expect(measuredFrames(node)["#c"]).toEqual({ x: 90, y: 0, w: 80, h: 40 });
-    expect(node.notes.join(" ")).toContain("column");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("column");
   });
 
   test("unsupported fixed-height cross-row distribution preserves captured geometry", () => {
     const node = root([child("a", 0, 0), child("b", 90, 0), child("c", 0, 105)], {}, { x: 0, y: 0, w: 200, h: 200 }, "200px");
     expect(node.wrap).toBeUndefined();
     expect(measuredFrames(node)["#c"]).toEqual({ x: 0, y: 105, w: 80, h: 40 });
-    expect(node.notes.join(" ")).toContain("align-content");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("align-content");
   });
 
   test("fallback coordinates are relative to content origin rather than border box", () => {
@@ -155,15 +155,15 @@ describe("measured wrapping fallback", () => {
     const node = root([child("a", 0, 0, childStyles), child("b", 90, 0), child("c", 0, 50)], hostStyles);
     expect(node.wrap).toBeUndefined();
     expect(node.measured?.frames).toHaveLength(3);
-    expect(node.notes.join(" ")).toContain(reason);
-    expect(node.notes.join(" ")).toContain("cannot reflow");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain(reason);
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
   });
 
   test("observed shrinking of a preferred fixed width uses captured positions", () => {
     const node = root([child("a", 0, 0, { "flex-shrink": "1" }, { width: "120px", height: "40px" })], {}, { x: 0, y: 0, w: 80, h: 40 });
     expect(node.wrap).toBeUndefined();
     expect(node.measured?.frames).toHaveLength(1);
-    expect(node.notes.join(" ")).toContain("allocation");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("allocation");
   });
 
   test("an unshrunk item still falls back when CSS can shrink it at a narrower size", () => {
@@ -172,8 +172,8 @@ describe("measured wrapping fallback", () => {
     const node = root([item], {}, { x: 0, y: 0, w: 200, h: 40 });
     expect(node.wrap).toBeUndefined();
     expect(measuredFrames(node)["#a"]).toEqual({ x: 0, y: 0, w: 150, h: 40 });
-    expect(node.notes.join(" ")).toContain("allocation");
-    expect(node.notes.join(" ")).toContain("cannot reflow");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("allocation");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
   });
 
   test("stretch-dependent auto heights fall back because merged rows can change their height", () => {
@@ -185,14 +185,14 @@ describe("measured wrapping fallback", () => {
     const node = root([fixed, short, stretched], { "align-items": "stretch" }, { x: 0, y: 0, w: 200, h: 70 });
     expect(node.wrap).toBeUndefined();
     expect(measuredFrames(node)["#c"]).toEqual({ x: 0, y: 50, w: 80, h: 20 });
-    expect(node.notes.join(" ")).toContain("stretch-dependent");
-    expect(node.notes.join(" ")).toContain("cannot reflow");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("stretch-dependent");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
   });
 
   test("captured row breaks that disagree with fixed-size native fitting use fallback", () => {
     const node = root([child("a", 0, 0), child("b", 0, 50)], {}, { x: 0, y: 0, w: 200, h: 90 });
     expect(node.wrap).toBeUndefined();
     expect(node.measured?.frames).toHaveLength(2);
-    expect(node.notes.join(" ")).toContain("ambiguous main-axis wrapping");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("ambiguous main-axis wrapping");
   });
 });

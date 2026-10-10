@@ -7,6 +7,7 @@ import { extractTokens, emitDesignTokens, screenTokens, themeDrift } from "../sw
 import type { ScreenTokens } from "../swift/context.ts";
 import { indent } from "../swift/format.ts";
 import type { FaceMetrics, BundledFamily } from "../model/fonts.ts";
+export type { Diagnostic, DiagnosticLevel, Confidence } from "../model/semantic.ts";
 
 export interface CompileOptions {
   /** Complete Swift type name, e.g. ProfileCard. ASCII identifiers starting with uppercase. */

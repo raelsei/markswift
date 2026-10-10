@@ -83,7 +83,7 @@ for (const width of [320, 390, 768]) {
         const diagnostic = result.diagnostics.find(item => item.id === `#${id}`);
         expect(diagnostic).toBeDefined();
         expect(diagnostic!.confidence).toBe("approximated");
-        expect(diagnostic!.notes.some(note => note.startsWith("approximated:") && note.includes(reason))).toBe(true);
+        expect(diagnostic!.diagnostics.some(d => d.level === "approximated" && d.message.includes(reason))).toBe(true);
       };
 
       const limitsContent = contentSize(measured("limits-parent"));

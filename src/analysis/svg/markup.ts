@@ -41,7 +41,7 @@ export function svgFromMarkup(markup: string, frame: Rect): SvgNode | undefined 
     padding: [0, 0, 0, 0],
     style: { fills: [], shadows: [] },
     confidence: "mapped",
-    notes: [],
+    diagnostics: [],
     overlays: [],
   };
   return finish(buildSvg(root, base));

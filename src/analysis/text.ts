@@ -1,6 +1,6 @@
 /** Construct semantic text nodes from measured inline runs. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type TextNode, type SemBase, type TextRun, type SemNode } from "../model/semantic.ts";
+import { type TextNode, type SemBase, type TextRun, type SemNode, type DiagnosticLevel, addDiagnostic } from "../model/semantic.ts";
 import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
@@ -23,19 +23,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // are only the text: the host's decoration belongs to the host container.
   const base: SemBase = leaf
     ? makeBase(host, ctx, parseDeclared(host.attrs["style"]))
-    : { id: host.id ? `${host.id}#text` : "", frame: host.bounds, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0], style: { fills: [], shadows: [] }, confidence: "mapped", notes: [], overlays: [] };
-  const notes = base.notes;
+    : { id: host.id ? `${host.id}#text` : "", frame: host.bounds, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0], style: { fills: [], shadows: [] }, confidence: "mapped", diagnostics: [], overlays: [] };
+  const note = (level: DiagnosticLevel, feature: string, message: string) => addDiagnostic(base.diagnostics, level, feature, message);
   const out: TextRun[] = [];
   const built: MeasuredTextRun[] = [];
   const painted: LayoutNode[] = [];
   let union: Rect | undefined;
   let pendingSpace = false;
   let prevRun: SourceTextRun | undefined;
-  const noted: Record<string, true> = {};
-  const note = (s: string) => {
-    if (!noted[s]) notes.push(s);
-    noted[s] = true;
-  };
+  let substituted = false;
   for (const r of runs) {
     const s = r.styleOf.styles;
     const mode: Collapse = r.node.tag === "br" ? "preserve" : collapseOf(s);
@@ -93,11 +89,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // `ui-sans-serif`, three fallbacks down, while the reference pixels are Geist.
     const first = families[0];
     if (first !== undefined && !ctx.bundledFamilies[first] && !SYSTEM_DESIGNS[first.toLowerCase()]) {
+      substituted = true;
       note(
-        `approximated: font-family ${first} is a web font this run did not bundle → ${resolved === undefined ? "system default design" : `the fallback ${resolved} it names next`}; glyph advances differ from the reference`,
+        "approximated",
+        "font-family: <unbundled family>",
+        `font-family ${first} is a web font this run did not bundle → ${resolved === undefined ? "system default design" : `the fallback ${resolved} it names next`}; glyph advances differ from the reference`,
       );
     } else if (resolved !== undefined && /^(cursive|fantasy)$/i.test(resolved)) {
-      note(`approximated: generic font-family ${resolved.toLowerCase()} has no system design → default`);
+      substituted = true;
+      note("approximated", "font-family", `generic font-family ${resolved.toLowerCase()} has no system design → default`);
     } else if (resolved !== undefined) {
       // A non-default design is a substitution, not a match: `.monospaced`/`.serif`/`.rounded` are
       // the Apple system faces (SF Mono, New York, SF Pro Rounded), and no other engine resolves
@@ -105,7 +105,16 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       // it does not implement `ui-rounded`, plain SF Pro. The glyphs are right for the platform
       // and different from the reference, so every comparison against one has to know.
       const design = SYSTEM_DESIGNS[resolved.toLowerCase()];
-      if (design && design !== "default") note(`approximated: font-family ${resolved} → SwiftUI .${design} design; glyph shapes and advances are the Apple system face, not the one the reference browser resolved`);
+      if (design && design !== "default") {
+        substituted = true;
+        note(
+          "approximated",
+          /^ui-(monospace|rounded|serif)$/i.test(resolved) ? `font-family: ${resolved.toLowerCase()}` : "font-family",
+          `font-family ${resolved} → SwiftUI .${design} design; glyph shapes and advances are the Apple system face, not the one the reference browser resolved`,
+        );
+      } else if (resolved === first && /^(arial|helvetica|helvetica neue)$/i.test(resolved)) {
+        note("approximated", "font-family", `font-family ${resolved} → SwiftUI .default design (SF Pro); glyph shapes and advances differ from the reference`);
+      }
     }
     const ls = s["letter-spacing"];
     if (ls && ls !== "normal") run.kerning = round2(px(ls));
@@ -113,12 +122,14 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     if (tt === "uppercase" || tt === "lowercase" || tt === "capitalize") run.transform = tt;
     if (/^(italic|oblique)/.test(s["font-style"] ?? "")) run.italic = true;
     if (deco) run.decoration = deco;
-    const shadows = parseShadows(s["text-shadow"]);
+    const droppedShadows: string[] = [];
+    const shadows = parseShadows(s["text-shadow"], droppedShadows);
+    for (const x of droppedShadows) note("unmapped", "text-shadow", `shadow ${x} could not be parsed; dropped`);
     if (shadows[0]) run.shadow = shadows[0];
-    if (shadows.length > 1) note("approximated: multiple text-shadows → first only");
+    if (shadows.length > 1) note("approximated", "text-shadow", "multiple text-shadows → first only");
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
-    for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note(`approximated: font-variant-numeric ${v} has no SwiftUI API → default figures`);
+    for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
     const paint = textPaintOf(r.styleOf, r.node.bounds);
     if (paint) run.paint = paint;
     const el = r.styleOf;
@@ -134,7 +145,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // the navigation is genuinely lost; what must not be lost is the record of losing it. This is
     // the most common link form in prose, and it used to report nothing at all.
     const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link) note(`approximated: inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`);
+    if (link) note("approximated", "a", `inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`);
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
@@ -193,7 +204,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         padding: [0, 0, 0, 0],
         style,
         confidence: "mapped",
-        notes: [],
+        diagnostics: [],
         overlays: [],
       };
       base.overlays.push({ node: finish(box), layer: "background", offset: [round2(b.x - frame.x), round2(b.y - frame.y)], covers: false });
@@ -212,6 +223,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           ? "trailing"
           : "leading",
     lines,
+    ...(substituted ? { fontSubstituted: true as const } : {}),
   };
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
@@ -226,8 +238,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
   // so overriding the direction on a stack would mirror it a second time.
   if (dir === "rtl") node.layoutDirection = "rtl";
-  if (ta === "justify") note("approximated: text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  if (ta === "justify") note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
   const wm = host.styles["writing-mode"];
-  if (wm && wm !== "horizontal-tb") note(`unmapped: writing-mode ${wm} → vertical text has no SwiftUI layout`);
+  if (wm && wm !== "horizontal-tb") note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
 }

@@ -14,11 +14,11 @@ export function classifyElement(tag: string, attrs: Record<string, string> = {})
   if (tag === "input") {
     const type = (attrs["type"] ?? "text").toLowerCase();
     const why = Object.hasOwn(INPUT_PLACEHOLDERS, type) ? INPUT_PLACEHOLDERS[type] : undefined;
-    if (why) return { route: "placeholder", support: "unsupported", atomic: true, known: true, note: `unmapped: <input type="${type}"> ${why}` };
+    if (why) return { route: "placeholder", support: "unsupported", atomic: true, known: true, diagnostic: { level: "unmapped", feature: `input: ${type}`, message: `<input type="${type}"> ${why}` } };
   }
   if (Object.hasOwn(HTML_ELEMENTS, tag)) return HTML_ELEMENTS[tag]!;
   return {
     route: "flow", support: "approximated", atomic: true, known: false,
-    note: `approximated: <${tag}> ${tag.includes("-") ? "custom element" : "unclassified element"} → measured content; custom semantics and behavior are not translated`,
+    diagnostic: { level: "approximated", feature: "custom-element", message: `<${tag}> ${tag.includes("-") ? "custom element" : "unclassified element"} → measured content; custom semantics and behavior are not translated` },
   };
 }

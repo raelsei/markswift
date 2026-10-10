@@ -1,6 +1,6 @@
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode } from "../model/layout.ts";
-import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay } from "../model/semantic.ts";
+import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, addDiagnostic } from "../model/semantic.ts";
 import { parseColor, parseDeclared, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { controlOf, buildControl } from "./controls.ts";
@@ -119,7 +119,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   const base = makeBase(n, ctx, declared);
-  const notes = base.notes;
+  const diagnostics = base.diagnostics;
 
   if (display === "grid" || display === "inline-grid") {
     const grid = buildGrid(n, base, items);
@@ -139,11 +139,13 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     stack = buildWrapping(n, base, items, axis, align, distribution);
   } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
-    if (lines[0]!.some((i) => floating(i.node))) notes.push("approximated: float → side-by-side row; text does not wrap around it");
+    if (lines[0]!.some((i) => floating(i.node))) addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0]!, "start", "start");
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
-    if (floats.length) notes.push("approximated: float → side-by-side row; text does not wrap around it");
+    if (floats.length) addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
+    for (const d of new Set(flow.map((c) => c.styles.display).filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid")))
+      addDiagnostic(diagnostics, "approximated", `display: ${d}`, `${d} items → rows of the captured line division; they do not re-wrap at another width`);
     const rows: AnalyzedChild[] = lines.map((line, i) => {
       if (line.length === 1) return line[0]!;
       const u = line.map((it) => it.sem.frame).reduce(unionRect);
@@ -155,7 +157,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
         padding: [0, 0, 0, 0],
         style: { fills: [], shadows: [] },
         confidence: "mapped",
-        notes: [],
+        diagnostics: [],
         overlays: [],
       };
       const row = finish(stackOf(rowBase, "h", line, "start", "start"));

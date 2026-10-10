@@ -56,9 +56,9 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
   ];
-  // After emission: `note()` may have downgraded nodes for emit-time approximations.
+  // After emission: `note()` may have regraded nodes for emit-time losses.
   visit(screen.root, (n) => {
-    if (n.confidence !== "mapped") report.push({ id: n.id, kind: n.kind, confidence: n.confidence, notes: n.notes });
+    if (n.confidence !== "mapped") report.push({ id: n.id, kind: n.kind, confidence: n.confidence, diagnostics: n.diagnostics });
   });
   return { view: lines.join("\n") + "\n", shapes, images, report };
 }

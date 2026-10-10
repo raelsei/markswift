@@ -1,5 +1,6 @@
 /** Computed background paint and text-clipped gradients. */
 import type { LayoutNode, Rect } from "../model/layout.ts";
+import { type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import { type Paint, parseBackgroundImage, paintWithin, resolvePaint, splitTop, imageSize, parseBackgroundSize, parseBackgroundPosition, round2, parseBackgroundRepeat, parseColor, px, parseBlendModes } from "../css/index.ts";
 import { EDGES, edgeWidth } from "./geometry.ts";
 
@@ -47,18 +48,20 @@ export function imagePaint(url: string, s: Record<string, string>, prop: "backgr
   return paint;
 }
 
-export function backgroundFills(s: Record<string, string>, w: number, h: number, notes: string[]): Paint[] {
+export function backgroundFills(s: Record<string, string>, w: number, h: number, diagnostics: Diagnostic[]): Paint[] {
   const fills: Paint[] = [];
   const bg = parseColor(s["background-color"]);
   if (bg && bg.a > 0) fills.push({ kind: "solid", color: bg });
-  const layers = parseBackgroundImage(s["background-image"]);
+  const dropped: string[] = [];
+  const layers = parseBackgroundImage(s["background-image"], dropped);
+  for (const x of dropped) addDiagnostic(diagnostics, "approximated", "background-image", `${x} ignored`);
   for (let i = 0; i < layers.length; i++) {
     const p = layers[i]!;
     const top = layers.length - 1 - i;
-    if (p.kind === "unsupported") notes.push(`unmapped: background-image ${p.raw.slice(0, 40)}`);
+    if (p.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "background-image", `background-image ${p.raw.slice(0, 40)}`);
     else if (p.kind === "image") fills.push(imagePaint(p.url, s, "background", top, w, h));
     else {
-      if (p.kind !== "solid" && p.repeating) notes.push(`approximated: repeating ${p.kind} gradient tiled from its first period`);
+      if (p.kind !== "solid" && p.repeating) addDiagnostic(diagnostics, "approximated", p.kind === "linear" ? "background-image: repeating-linear-gradient()" : "background-image", `repeating ${p.kind} gradient tiled from its first period`);
       fills.push(resolvePaint(p, w, h));
     }
   }

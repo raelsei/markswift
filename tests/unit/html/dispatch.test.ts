@@ -17,7 +17,7 @@ for (const tag of ["canvas", "iframe", "embed", "object", "math", "video", "audi
     for (const mode of ["app", "fidelity"] as const) {
       const result = compileLayout(input, { mode });
       expect(result.diagnostics).toContainEqual(expect.objectContaining({
-        id: tag, kind: "box", confidence: "unmapped", notes: expect.arrayContaining([expect.stringContaining(`<${tag}>`)]),
+        id: tag, kind: "box", confidence: "unmapped", diagnostics: expect.arrayContaining([expect.objectContaining({ level: "unmapped", feature: tag })]),
       }));
     }
   });
@@ -38,7 +38,7 @@ test("wrapped prose links preserve DOM reading order and report their lost desti
   expect(screen.root.kind).toBe("text");
   if (screen.root.kind !== "text") throw new Error("Prose was split into flow controls");
   expect(screen.root.runs.map(run => run.text).join("")).toBe("Before long link wrapping After");
-  expect(compileLayout(input).diagnostics.flatMap(item => item.notes).join("\n")).toContain("destination dropped");
+  expect(compileLayout(input).diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join("\n")).toContain("destination dropped");
 });
 
 test("custom elements preserve children while making missing behavior explicit", () => {

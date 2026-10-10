@@ -1,6 +1,6 @@
 /** Bounded native row reflow; unsupported flex algorithms retain captured positions. */
 import type { LayoutNode } from "../model/layout.ts";
-import type { Axis, CrossAlign, Distribution, SemBase, StackNode } from "../model/semantic.ts";
+import { type Axis, type CrossAlign, type Distribution, type SemBase, type StackNode, addDiagnostic } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
 import { parseDeclared, px, resolveLength, round2 } from "../css/index.ts";
 import { insetsOf, renders, EDGES, unionRect } from "./geometry.ts";
@@ -92,7 +92,7 @@ export function buildWrapping(n: LayoutNode, base: SemBase, all: AnalyzedChild[]
   const stack: StackNode = { ...plain, kind: "stack", axis, align, distribution, spacing: columnGap ?? 0, leadInset: 0, children: ordered.map(item => item.sem) };
   if (reason) {
     stack.measured = measuredLayoutOf(plain, stack.children);
-    stack.notes.push(`approximated: flex-wrap ${reason} → captured child positions; cannot reflow at another size`);
+    addDiagnostic(stack.diagnostics, "approximated", "flex-wrap", `flex-wrap ${reason} → captured child positions; cannot reflow at another size`);
   } else {
     stack.wrap = { columnGap: round2(columnGap!), rowGap: round2(rowGap!) };
   }

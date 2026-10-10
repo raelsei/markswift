@@ -2,22 +2,23 @@ import { expect, test } from "bun:test";
 import { styleOf } from "../../../src/analysis/style.ts";
 import { shapeExpr } from "../../../src/swift/paint.ts";
 import type { LayoutNode } from "../../../src/model/layout.ts";
+import type { Diagnostic } from "../../../src/model/semantic.ts";
 
 const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
 function node(radius: string): LayoutNode {
   return { tag: "div", attrs: {}, bounds: { x: 0, y: 0, w: 272, h: 176 }, children: [], styles: Object.fromEntries(corners.map(c => [`border-${c}-radius`, radius])) };
 }
 test("50% corner radii on a non-square box retain an ellipse rather than a capsule", () => {
-  const notes: string[] = [];
-  const style = styleOf(node("50%"), notes);
+  const diagnostics: Diagnostic[] = [];
+  const style = styleOf(node("50%"), diagnostics);
   expect(shapeExpr(style, 272, 176)).toBe("Ellipse()");
-  expect(notes).toEqual([]);
+  expect(diagnostics).toEqual([]);
 });
 test("a circular pill radius still emits a capsule", () => {
-  const notes: string[] = [];
-  const style = styleOf(node("88px"), notes);
+  const diagnostics: Diagnostic[] = [];
+  const style = styleOf(node("88px"), diagnostics);
   expect(shapeExpr(style, 272, 176)).toBe("Capsule(style: .circular)");
-  expect(notes).toEqual([]);
+  expect(diagnostics).toEqual([]);
 });
 
 test("a measured box keeps paint, borders and effects together", () => {
@@ -32,8 +33,8 @@ test("a measured box keeps paint, borders and effects together", () => {
     styles[`border-${edge}-width`] = "2px";
     styles[`border-${edge}-color`] = "rgb(0, 0, 255)";
   }
-  const notes: string[] = [];
-  const style = styleOf({ tag: "main", attrs: {}, bounds: { x: 0, y: 0, w: 100, h: 80 }, children: [], styles }, notes);
+  const diagnostics: Diagnostic[] = [];
+  const style = styleOf({ tag: "main", attrs: {}, bounds: { x: 0, y: 0, w: 100, h: 80 }, children: [], styles }, diagnostics);
   expect(style.fills).toEqual([{ kind: "solid", color: { r: 1, g: 0, b: 0, a: 1 } }]);
   expect(style.border).toEqual({ width: 2, color: { r: 0, g: 0, b: 1, a: 1 } });
   expect(style.opacity).toBe(0.5);
@@ -41,5 +42,5 @@ test("a measured box keeps paint, borders and effects together", () => {
   expect(style.blur).toBe(3);
   expect(style.transform).toEqual({ rotate: 0, scaleX: 1, scaleY: 1, tx: 5, ty: 6, origin: [50, 40] });
   expect(style.outline).toEqual({ width: 1, color: { r: 0, g: 1, b: 0, a: 1 }, style: "solid", offset: 2 });
-  expect(notes).toEqual([]);
+  expect(diagnostics).toEqual([]);
 });

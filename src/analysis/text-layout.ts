@@ -1,6 +1,6 @@
 /** Inline gaps, fragments, line breaks and baseline placement. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type TextRun } from "../model/semantic.ts";
+import { type TextRun, type DiagnosticLevel } from "../model/semantic.ts";
 import { type BundledFamilies } from "../model/fonts.ts";
 import { round2, px } from "../css/index.ts";
 import { type MeasuredTextRun } from "./context.ts";
@@ -126,7 +126,7 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
  * Fragments are grouped by their top edge; the first fragment of each line after the first is
  * a break, and the first output character at or after its raw index is where it goes.
  */
-export function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => void): void {
+export function markLineBreaks(built: MeasuredTextRun[], note: (level: DiagnosticLevel, feature: string, message: string) => void): void {
   let forced = false;
   for (const b of built) {
     const boxes = b.node.lines;
@@ -151,7 +151,7 @@ export function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => vo
     b.run.breaks = breaks;
     forced = true;
   }
-  if (forced) note("approximated: line division forced from the browser (native wraps differently)");
+  if (forced) note("approximated", "text-wrap-mode", "line division forced from the browser (native wraps differently)");
 }
 
 /**
@@ -159,7 +159,7 @@ export function markLineBreaks(built: MeasuredTextRun[], note: (s: string) => vo
  * offset in px. The shift is measured against the nearest run on the same line that sits on the
  * host's own baseline, so a UA-defined keyword needs no table.
  */
-export function markBaselineShifts(built: MeasuredTextRun[], host: LayoutNode, note: (s: string) => void): void {
+export function markBaselineShifts(built: MeasuredTextRun[], host: LayoutNode, note: (level: DiagnosticLevel, feature: string, message: string) => void): void {
   const shifted = built.filter((b) => {
     const el = b.styleOf;
     const va = el.styles["vertical-align"];
@@ -171,7 +171,7 @@ export function markBaselineShifts(built: MeasuredTextRun[], host: LayoutNode, n
     // Same line: the boxes overlap vertically. Same baseline: the host's font size.
     const ref = built.find((o) => o !== b && o.run.font.size === hostSize && o.node.bounds.y < b.node.bounds.y + b.node.bounds.h && b.node.bounds.y < o.node.bounds.y + o.node.bounds.h);
     if (!ref) {
-      note("approximated: baseline-shifted run without unshifted text on its line → shift dropped");
+      note("approximated", "vertical-align", "baseline-shifted run without unshifted text on its line → shift dropped");
       continue;
     }
     const a = ref.node.bounds;

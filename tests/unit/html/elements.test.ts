@@ -24,7 +24,11 @@ test("every standard element has an explicit compiler policy", () => {
     const policy = classifyElement(tag);
     expect(policy.known).toBe(true);
     expect(policy.route).toBeDefined();
-    if (policy.support === "unsupported" || policy.support === "approximated") expect(policy.note).toBeTruthy();
+    if (policy.support === "unsupported" || policy.support === "approximated") {
+      expect(policy.diagnostic).toBeTruthy();
+      expect(policy.diagnostic!.message).toContain(tag);
+      expect(policy.diagnostic!.feature).toBe(tag);
+    }
   }
 });
 
@@ -54,7 +58,7 @@ test("unknown and custom elements keep measured layout and report the fallback",
     expect(policy.known).toBe(false);
     expect(policy.route).toBe("flow");
     expect(policy.support).toBe("approximated");
-    expect(policy.note).toContain(tag);
+    expect(policy.diagnostic!.message).toContain(tag);
     expect(isInlineText(element(tag))).toBe(false);
   }
 });

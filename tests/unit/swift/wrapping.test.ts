@@ -27,7 +27,7 @@ test("supported wrapping compiles to the native flow runtime in both modes", () 
     expect(output.code).toContain("MarkswiftFlow(");
     expect(output.code).not.toContain("MarkswiftMeasuredLayout(");
     expect(output.files["MarkswiftRuntime.swift"]).toContain("struct MarkswiftFlow: Layout");
-    expect(output.diagnostics.flatMap(item => item.notes).join(" ")).not.toContain("fixed rows from the snapshot");
+    expect(output.diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join(" ")).not.toContain("fixed rows from the snapshot");
   }
 });
 
@@ -35,7 +35,7 @@ test("unsupported wrapping emits captured positions and an explicit reflow limit
   const output = compileLayout(fixture("wrap-reverse"), { name: "WrappedView" });
   expect(output.code).toContain("MarkswiftMeasuredLayout(");
   expect(output.code).not.toContain("MarkswiftFlow(");
-  expect(output.diagnostics.flatMap(item => item.notes).join(" ")).toContain("cannot reflow");
+  expect(output.diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join(" ")).toContain("cannot reflow");
 });
 
 test("a fixed-height start-packed host centers children within each row without centering the flow block", () => {

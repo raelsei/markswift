@@ -34,8 +34,8 @@ export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitCon
   else if (repeat) {
     // `.tile` repeats at the intrinsic size from the top-left corner; axis and phase are lost.
     view = [src.expr(".resizable(resizingMode: .tile)")];
-    if (p.repeat !== "repeat") note(n, `approximated: background-repeat ${p.repeat} tiles both axes`);
-    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0)) note(n, `approximated: background-position ignored on a repeating ${prop}`);
+    if (p.repeat !== "repeat") note(n, "approximated", "background-repeat", `background-repeat ${p.repeat} tiles both axes`);
+    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0)) note(n, "approximated", "background-position", `background-position ignored on a repeating ${prop}`);
   } else {
     const sizing = p.size === "cover" ? ".resizable().scaledToFill()" : p.size === "contain" ? ".resizable().scaledToFit()" : p.size ? `.resizable().frame(width: ${num(p.size.w)}, height: ${num(p.size.h)})` : "";
     view = [src.expr(sizing)];
@@ -76,7 +76,7 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
     const bytes = dataBytes(payload, base64);
     const ext = rasterExt(bytes);
     if (!ext) {
-      note(n, `unmapped: ${prop} data: URL is not a PNG/JPEG/GIF/BMP/WebP/TIFF image; layer dropped`);
+      note(n, "unmapped", imageFeature(prop), `${prop} data: URL is not a PNG/JPEG/GIF/BMP/WebP/TIFF image; layer dropped`);
       return undefined;
     }
     const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}.${ext}`;
@@ -86,10 +86,10 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
   if (!svg) {
-    note(n, `unmapped: ${prop} svg data: URL has no viewBox; layer dropped`);
+    note(n, "unmapped", imageFeature(prop), `${prop} svg data: URL has no viewBox; layer dropped`);
     return undefined;
   }
-  for (const t of svg.notes) note(n, t);
+  for (const d of svg.diagnostics) note(n, d.level, d.feature, d.message);
   return {
     kind: "vector",
     size: [svg.viewBox[2], svg.viewBox[3]],
@@ -102,11 +102,16 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   };
 }
 
+/** Inventory row of an image source: the `<img>` element, or the `url()` value row of `background-image`/`mask-image`. */
+function imageFeature(prop: string): string {
+  return prop === "img" ? "img" : `${prop}: url()`;
+}
+
 /** Why a non-`data:` source that is not a usable remote URL cannot be shown. */
 function dropNote(url: string, n: SemNode, prop: string): void {
-  note(n, LOOPBACK.test(url)
-    ? `unmapped: ${prop} image ${url} was not captured (temporary local server URL); layer dropped`
-    : `unmapped: ${prop} image ${url} is not embedded (no captured bytes); placeholder emitted`);
+  note(n, "unmapped", imageFeature(prop), LOOPBACK.test(url)
+    ? `${prop} image ${url} was not captured (temporary local server URL); layer dropped`
+    : `${prop} image ${url} is not embedded (no captured bytes); placeholder emitted`);
 }
 
 /** Bytes of a `data:` URL payload: base64, or percent-encoded octets. */
@@ -153,7 +158,7 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
     if (n.src && !n.src.startsWith("data:")) dropNote(n.src, n, "img");
     if (!n.alt) return ["Color.clear", ...a11y];
     // The browser paints the alt text at the top-left of the box in the element's own font.
-    note(n, "approximated: broken image source → alt text in the measured box");
+    note(n, "approximated", "img", "broken image source → alt text in the measured box");
     return [
       `Text(verbatim: ${str(n.alt)})`,
       ...(n.font ? [`.font(${fontExpr(n.font, ctx)})`] : []),

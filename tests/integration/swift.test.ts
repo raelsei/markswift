@@ -19,7 +19,7 @@ nativeTest("public conversion produces complete Swift compilable in both modes",
       expect(result.code).toContain("minHeight: 30.0");
       expect(result.code).toContain("height: 10.0, alignment: .topLeading");
       expect(result.code).toContain("maxWidth: 200.0");
-      expect(result.diagnostics.flatMap(item => item.notes).join("\n")).toContain("destination dropped");
+      expect(result.diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join("\n")).toContain("destination dropped");
       const output = join(directory, mode);
       for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
       const check = await typecheck(output);
