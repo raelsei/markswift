@@ -2,20 +2,24 @@ import type { SemNode } from "../model/semantic.ts";
 import type { EmitContext, EmitMode } from "./context.ts";
 import { alignment, num } from "./format.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
+/** Controls whose height follows their label: in app mode a measured CSS height is a floor, so Dynamic Type can grow it. */
+const TEXT_CONTROLS: Record<string, true> = { button: true, link: true, textField: true, secureField: true, picker: true, datePicker: true };
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
   // the screen width is "fill" (the device decides), and a fixed height on an ordinary
-  // text-only stack is a floor (`minHeight`) so native text metrics can grow it without clipping.
+  // text-only stack or a text-bearing control is a floor (`minHeight`) so native text metrics
+  // can grow it without clipping.
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
   const w = n.width.kind === "fixed" ? n.width.px : undefined;
   const h = n.height.kind === "fixed" ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
-  const textFloor = app && h !== undefined && n.maxHeight === undefined && n.kind === "stack"
-    && !n.measured && !n.wrap && n.children.length > 0 && n.children.every((c) => c.kind === "text") ? h : undefined;
+  const floor = app && h !== undefined && n.maxHeight === undefined && (
+    (n.kind === "stack" && !n.measured && !n.wrap && n.children.length > 0 && n.children.every((c) => c.kind === "text"))
+    || (n.kind === "control" && TEXT_CONTROLS[n.control] === true)) ? h : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
-  const fixedH = h !== undefined && textFloor === undefined ? `height: ${num(h)}` : undefined;
+  const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
   const fillW = n.width.kind === "fill" || screenWide;
   const fillH = n.height.kind === "fill";
   const align = fillAlignment(n, ctx.mode);
@@ -26,7 +30,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // a finite cap. Margin placement, when needed, is applied after paint by modifiers.ts.
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap
   // would grow a smaller explicit size to the cap instead of keeping its measured dimension.
-  const minHeight = n.minHeight === undefined ? textFloor : Math.max(n.minHeight, textFloor ?? 0);
+  const minHeight = n.minHeight === undefined ? floor : Math.max(n.minHeight, floor ?? 0);
   const flex = [
     !fixedW && n.minWidth !== undefined ? `minWidth: ${num(n.minWidth)}` : "",
     !fixedW && n.maxWidth !== undefined ? `maxWidth: ${num(n.maxWidth)}` : !fixedW && fillW ? "maxWidth: .infinity" : "",
