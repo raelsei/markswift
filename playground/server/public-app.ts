@@ -16,7 +16,7 @@ export function createPublicApp(options: PublicAppOptions) {
   const cors = { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
   const headers = { ...cors, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
   const json = (value: unknown, status = 200) => Response.json(value, { status, headers });
-  const convert = convertHandler(store, json, true);
+  const convert = convertHandler(store, json);
   const limited = (ip: string) => {
     const now = Date.now();
     const recent = (attempts.get(ip) ?? []).filter(t => now - t < 60_000);

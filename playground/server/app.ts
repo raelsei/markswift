@@ -8,7 +8,7 @@ export function createApp(port: number, workDirectory: string, nativePreview: bo
   const publicDir = join(import.meta.dir, "../public");
   const assets: Record<string, string> = { "/": "index.html", "/styles.css": "styles.css", "/config.js": "config.js", "/app.js": "app.js", "/sample.js": "sample.js" };
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
-  const convert = convertHandler(store, json, false);
+  const convert = convertHandler(store, json);
   return async (request: Request): Promise<Response> => {
     if (!allowRequest(request, port)) return json({ error: "This request is not allowed by the local playground." }, 403);
     const path = new URL(request.url).pathname;
@@ -17,7 +17,7 @@ export function createApp(port: number, workDirectory: string, nativePreview: bo
       if (request.method === "GET" && assets[path]) {
         return new Response(Bun.file(join(publicDir, assets[path])), { headers: { "Cache-Control": "no-store", "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff" } });
       }
-      if (request.method === "POST" && path === "/api/convert") return await convert(await request.json());
+      if (request.method === "POST" && path === "/api/convert") return await convert(await request.json(), { signal: request.signal });
       if (request.method === "POST" && path === "/api/render") {
         const parsed = renderInput.safeParse(await request.json());
         if (!parsed.success) return json({ error: "Choose a valid conversion." }, 400);
