@@ -1,5 +1,5 @@
 /** Semantic node base construction and confidence classification. */
-import { type SemNode, type Confidence, type SemBase } from "../model/semantic.ts";
+import { type SemNode, type SemBase, type Diagnostic, addDiagnostic, confidenceOf } from "../model/semantic.ts";
 import { type LayoutNode } from "../model/layout.ts";
 import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
@@ -9,14 +9,8 @@ import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 
 export function finish<T extends SemNode>(node: T): T {
-  node.confidence = worst(node.notes);
+  node.confidence = confidenceOf(node.diagnostics);
   return node;
-}
-
-function worst(notes: string[]): Confidence {
-  if (notes.some((s) => s.startsWith("unmapped"))) return "unmapped";
-  if (notes.some((s) => s.startsWith("approximated"))) return "approximated";
-  return "mapped";
 }
 
 export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: InferenceContext, extra: T): SemNode {
@@ -25,11 +19,11 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 }
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
-  const notes: string[] = [];
+  const diagnostics: Diagnostic[] = [];
   const policy = classifyElement(n.tag, n.attrs);
-  if (policy.note) notes.push(policy.note);
-  const style = styleOf(n, notes);
-  const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, notes);
+  if (policy.diagnostic) addDiagnostic(diagnostics, policy.diagnostic.level, policy.diagnostic.feature, policy.diagnostic.message);
+  const style = styleOf(n, diagnostics);
+  const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
   return {
@@ -42,7 +36,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     padding,
     style,
     confidence: "mapped",
-    notes,
+    diagnostics,
     overlays: [],
   };
 }

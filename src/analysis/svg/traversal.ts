@@ -1,6 +1,6 @@
 /** Traverse SVG groups, instances and shapes with recursive clipping and masks. */
 import { type LayoutNode, type Rect } from "../../model/layout.ts";
-import { type SvgPath } from "../../model/semantic.ts";
+import { type SvgPath, addDiagnostic } from "../../model/semantic.ts";
 import { parseColor, round2, px } from "../../css/index.ts";
 import { type SvgScope, type SvgContext, type SvgMatrix } from "./context.ts";
 import { IDENTITY, multiply, ownTransform, bake } from "./transforms.ts";
@@ -18,7 +18,7 @@ function childScope(c: LayoutNode, scope: SvgScope, ctx: SvgContext, extra: SvgM
   const own = parseFloat(c.attrs["opacity"] ?? "1");
   return {
     attrs: inherit(scope.attrs, c.attrs),
-    ctm: multiply(multiply(scope.ctm, extra), ownTransform(c, ctx.notes)),
+    ctm: multiply(multiply(scope.ctm, extra), ownTransform(c, ctx.diagnostics)),
     opacity: scope.opacity * (Number.isFinite(own) ? own : 1),
     useColor: scope.useColor,
     depth: scope.depth,
@@ -38,23 +38,23 @@ function visitOne(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
     const inner = childScope(c, scope, ctx);
     for (const k of c.children) if (k.bounds.w > 0 || k.bounds.h > 0) visitOne(k, inner, ctx);
   } else if (GROUP_TAGS[c.tag]) {
-    if (c.tag === "a") ctx.notes.push("approximated: svg <a> link → shapes only");
+    if (c.tag === "a") addDiagnostic(ctx.diagnostics, "approximated", "svg:a", "svg <a> link → shapes only");
     visitChildren(c, childScope(c, scope, ctx), ctx);
   } else if (c.tag === "use") instantiate(c, scope, ctx);
   else if (c.tag === "text") collectText(c, childScope(c, scope, ctx), { x: 0, y: 0 }, ctx);
-  else if (c.tag === "image") ctx.notes.push("unmapped: svg image");
+  else if (c.tag === "image") addDiagnostic(ctx.diagnostics, "unmapped", "svg:image", "svg image");
 }
 
 /** `<use href="#id">`: draw the target (symbol, group or shape) translated by x/y, sized like a nested viewport for symbols. */
 function instantiate(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
   const href = c.attrs["href"] ?? c.attrs["xlink:href"] ?? "";
   if (!href.startsWith("#")) {
-    ctx.notes.push(`unmapped: svg use ${href || "(no href)"}`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:use", `svg use ${href || "(no href)"}`);
     return;
   }
   const target = ctx.ids[href.slice(1)];
   if (!target) {
-    ctx.notes.push(`unmapped: svg use ${href} (target not in document)`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:use", `svg use ${href} (target not in document)`);
     return;
   }
   if (scope.depth > 8) return;
@@ -180,12 +180,12 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
 
 function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): SvgPath["clip"] | undefined {
   if (el.tag !== "clippath") {
-    ctx.notes.push(`unmapped: svg clip-path url(#${el.attrs["id"]})`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:clipPath", `svg clip-path url(#${el.attrs["id"]})`);
     return undefined;
   }
   // clipPathUnits="objectBoundingBox": the clip's user space is the clipped shape's box.
   const units = el.attrs["clippathunits"] === "objectBoundingBox" ? multiply(scope.ctm, [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y]) : scope.ctm;
-  const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
+  const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs) };
   const parts: string[] = [];
   let eoFill: true | undefined;
   for (const c of el.children) {
@@ -207,11 +207,11 @@ function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): S
 
 function maskOf(el: LayoutNode, scope: SvgScope, ctx: SvgContext): SvgPath[] | undefined {
   if (el.tag !== "mask") {
-    ctx.notes.push(`unmapped: svg mask url(#${el.attrs["id"]})`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:mask", `svg mask url(#${el.attrs["id"]})`);
     return undefined;
   }
-  ctx.notes.push("approximated: svg mask → luminance mask");
-  const inner: SvgScope = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.notes)), attrs: inherit(scope.attrs, el.attrs) };
+  addDiagnostic(ctx.diagnostics, "approximated", "svg:mask", "svg mask → luminance mask");
+  const inner: SvgScope = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs) };
   const before = ctx.paths.length;
   visitChildren(el, inner, ctx);
   const paths = ctx.paths.splice(before);

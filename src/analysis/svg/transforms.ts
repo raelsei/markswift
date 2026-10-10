@@ -1,5 +1,6 @@
 /** SVG affine transforms and path transformation. */
 import { type LayoutNode } from "../../model/layout.ts";
+import { type Diagnostic, addDiagnostic } from "../../model/semantic.ts";
 import { default as svgpath } from "svgpath";
 import { type SvgMatrix } from "./context.ts";
 
@@ -27,13 +28,13 @@ export function isIdentity(m: SvgMatrix): boolean {
  * matrix) about its `transform-origin`, in user units. Falls back to the attribute when the
  * snapshot carries no computed value.
  */
-export function ownTransform(c: LayoutNode, notes: string[]): SvgMatrix {
+export function ownTransform(c: LayoutNode, diagnostics: Diagnostic[]): SvgMatrix {
   const computed = c.styles["transform"];
   if (computed !== undefined) {
     if (computed === "none") return IDENTITY;
     const m = /^matrix\(([^)]+)\)$/.exec(computed);
     if (!m) {
-      notes.push(`approximated: svg 3D transform ignored (${computed})`);
+      addDiagnostic(diagnostics, "approximated", "transform", `svg 3D transform ignored (${computed})`);
       return IDENTITY;
     }
     const v = m[1]!.split(",").map(Number) as SvgMatrix;

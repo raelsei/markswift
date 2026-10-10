@@ -49,13 +49,13 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   const leading = first?.font.lineHeight === undefined ? 0 : first.font.lineHeight - natural;
   if (leading >= 0.01 && (ctx.mode === "app" || n.lines > 1)) out.push(`.lineSpacing(${num(leading)})`);
   // SwiftUI clamps a negative `.lineSpacing` to zero.
-  if (leading <= -0.01 && n.lines > 1) note(n, `approximated: line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`);
+  if (leading <= -0.01 && n.lines > 1) note(n, "approximated", "line-height", `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`);
   if (viewCase) out.push(`.textCase(.${viewCase})`);
   // `.shadow` is a View modifier too: one shadow for the whole text.
   const shadow = glyphs.find((r) => r.shadow)?.shadow;
   if (shadow) {
     if (shadow.color.a > 0) out.push(`.shadow(color: ${colorExpr(shadow.color, ctx, n.id)}, radius: ${num(shadow.blur / 2)}, x: ${num(shadow.x)}, y: ${num(shadow.y)})`);
-    if (!glyphs.every((r) => r.shadow === undefined || JSON.stringify(r.shadow) === JSON.stringify(shadow))) note(n, "approximated: text-shadow of the first shadowed run applied to the whole text");
+    if (!glyphs.every((r) => r.shadow === undefined || JSON.stringify(r.shadow) === JSON.stringify(shadow))) note(n, "approximated", "text-shadow", "text-shadow of the first shadowed run applied to the whole text");
   }
   // Soft wrapping is off for `nowrap` text and, in fidelity, whenever the browser's line
   // division is known (baked-in breaks, or a single line that fit). Ellipsised text (overflow
@@ -94,7 +94,7 @@ function usesGreedyWords(n: TextNode): boolean {
   if (r.gap !== undefined || r.italic || r.decoration || r.shadow || r.paint || r.kerning || r.transform || r.tabularNums || r.baselineOffset !== undefined) return false;
   if (r.font.family.kind !== "system" || r.font.family.design !== "default" || r.font.weight !== 400 || r.font.lineHeight === undefined) return false;
   if (r.font.lineHeight < naturalLineHeight(r.font, {})) return false;
-  if (n.notes.some((note) => note.includes("font-family"))) return false;
+  if (n.fontSubstituted) return false;
   return /^[\x21-\x7E]+(?: [\x21-\x7E]+)+$/.test(r.text);
 }
 
@@ -116,26 +116,26 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
   }
   if (literalTransform && r.transform) {
     text = transformLiteral(text, r.transform);
-    if (r.transform === "capitalize") note(n, "approximated: text-transform capitalize applied to the literal (no .textCase equivalent)");
+    if (r.transform === "capitalize") note(n, "approximated", "text-transform: capitalize", "text-transform capitalize applied to the literal (no .textCase equivalent)");
   }
   let e = `Text(verbatim: ${str(text)})`;
   e += `.font(${fontExpr(r.font, ctx)})`;
   if (r.italic) e += ".italic()";
   // `background-clip: text`: the paint is the glyph fill (`Text.foregroundStyle` takes any ShapeStyle).
   const paint = r.paint && r.paint.kind !== "image" && r.paint.kind !== "unsupported" ? paintExpr(r.paint, n.frame.w, n.frame.h, ctx, n.id) : undefined;
-  if (r.paint && !paint) note(n, `approximated: background-clip text with a ${r.paint.kind} paint falls back to the text color`);
+  if (r.paint && !paint) note(n, "approximated", "background-clip: text", `background-clip text with a ${r.paint.kind} paint falls back to the text color`);
   // A run's own slot key (`run2`) resolves it even when the node paints its colour twice; a
   // paint fallback colour is no enumerated slot, so it keeps the node-wide lookup.
   e += `.foregroundStyle(${paint ?? colorExpr(r.color, ctx, n.id, r.paint ? undefined : `run${i}`)})`;
   if (r.decoration) {
     const d = r.decoration;
     const pattern = d.style === "dotted" ? ".dot" : d.style === "dashed" ? ".dash" : undefined;
-    if (d.style === "wavy" || d.style === "double") note(n, `approximated: text-decoration-style ${d.style} drawn solid`);
+    if (d.style === "wavy" || d.style === "double") note(n, "approximated", "text-decoration-style", `text-decoration-style ${d.style} drawn solid`);
     const args = [pattern ? `pattern: ${pattern}` : "", d.color ? `color: ${colorExpr(d.color, ctx, n.id, `run${i}.dec`)}` : ""].filter(Boolean).join(", ");
     for (const line of d.lines) {
       if (line === "underline") e += `.underline(${args})`;
       else if (line === "line-through") e += `.strikethrough(${args})`;
-      else note(n, "approximated: text-decoration-line overline has no SwiftUI form; dropped");
+      else note(n, "approximated", "text-decoration-line: overline", "text-decoration-line overline has no SwiftUI form; dropped");
     }
   }
   if (r.kerning !== undefined && r.kerning !== 0) e += `.kerning(${num(r.kerning)})`;

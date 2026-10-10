@@ -77,7 +77,7 @@ describe("line height", () => {
     ]);
     const text = flatten(inferScreen(doc(root), "s").root).find((n): n is TextNode => n.kind === "text");
     expect(text?.runs[0]?.font.lineHeight).toBe(20);
-    expect(text?.notes).toEqual([]);
+    expect(text?.diagnostics).toEqual([]);
     expect(text?.confidence).toBe("mapped");
   });
 

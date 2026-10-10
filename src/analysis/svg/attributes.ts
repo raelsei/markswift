@@ -1,5 +1,6 @@
 /** SVG presentation attributes, inherited values and references. */
 import { type LayoutNode } from "../../model/layout.ts";
+import { addDiagnostic } from "../../model/semantic.ts";
 import { parseDeclared } from "../../css/index.ts";
 import { type SvgScope, type SvgContext } from "./context.ts";
 
@@ -41,7 +42,7 @@ export function styleProp(c: LayoutNode, attrs: Record<string, string>, k: strin
 export function reference(c: LayoutNode, attrs: Record<string, string>, k: string, ctx: SvgContext): LayoutNode | undefined {
   const raw = attrs[k] ?? parseDeclared(c.attrs["style"])[k];
   const m = raw && /^url\(["']?#([^"')]+)["']?\)/.exec(raw);
-  if (m && !ctx.ids[m[1]!]) ctx.notes.push(`unmapped: svg ${k} url(#${m[1]}) (target not in document)`);
+  if (m && !ctx.ids[m[1]!]) addDiagnostic(ctx.diagnostics, "unmapped", "svg", `svg ${k} url(#${m[1]}) (target not in document)`);
   return m ? ctx.ids[m[1]!] : undefined;
 }
 

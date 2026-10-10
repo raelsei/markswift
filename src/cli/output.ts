@@ -1,6 +1,7 @@
 import { lstat, mkdir, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import type { ConversionResult } from "../api/types.ts";
+import type { Diagnostic } from "../model/semantic.ts";
 
 export async function ensureVacant(directory: string): Promise<void> {
   try {
@@ -43,4 +44,20 @@ export async function writeBundle(result: Pick<ConversionResult, "files" | "asse
     throw error;
   }
   return entries.map(([name]) => name).sort();
+}
+
+/** One line per distinct (level, feature, message), unmapped first, naming the nodes it affects. */
+export function formatDiagnostics(report: ConversionResult["diagnostics"]): string[] {
+  const groups = new Map<string, { d: Diagnostic; ids: string[] }>();
+  for (const node of report) {
+    for (const d of node.diagnostics) {
+      const key = `${d.level}\u0000${d.feature}\u0000${d.message}`;
+      const group = groups.get(key) ?? { d, ids: [] };
+      group.ids.push(node.id || node.kind);
+      groups.set(key, group);
+    }
+  }
+  return [...groups.values()]
+    .sort((a, b) => Number(b.d.level === "unmapped") - Number(a.d.level === "unmapped") || a.d.feature.localeCompare(b.d.feature))
+    .map(({ d, ids }) => `${d.level} ${d.feature}: ${d.message} [${ids.length} node${ids.length === 1 ? "" : "s"}: ${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`);
 }

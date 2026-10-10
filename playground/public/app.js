@@ -111,7 +111,7 @@ function showDiagnostics(result) {
   const messages = [...(result.warnings || []), ...(result.diagnostics || []).map((item) => {
     if (typeof item === 'string') return item;
     const label = [item.id, item.kind].filter(Boolean).join(' / ');
-    const notes = Array.isArray(item.notes) ? item.notes.filter((note) => typeof note === 'string').join(' ') : '';
+    const notes = Array.isArray(item.diagnostics) ? item.diagnostics.map((d) => `[${d.level}] ${d.feature} — ${d.message}`).join(' ') : '';
     return [label, notes || item.message || item.reason || item.code || 'Conversion note'].filter(Boolean).join(': ');
   })];
   const unique = [...new Set(messages)];

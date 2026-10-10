@@ -1,5 +1,5 @@
 /** Flow, float, stack and grid layout inference. */
-import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis } from "../model/semantic.ts";
+import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis, addDiagnostic } from "../model/semantic.ts";
 import { type Rect } from "../model/layout.ts";
 import { px, round2 } from "../css/index.ts";
 import { type AnalyzedChild } from "./context.ts";
@@ -71,15 +71,15 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
       frame: { ...sem.frame, y: round2(sem.frame.y + shapedH), h: round2(sem.frame.h - shapedH) },
       padding: [0, pr, pb, pl],
       lines: tops.length - cut,
-      notes: [...sem.notes],
+      diagnostics: [...sem.diagnostics],
       overlays: [],
     };
     const rowItems: AnalyzedChild[] = items.map((i) => (i === it ? { node: i.node, sem: shaped } : i));
     const bottom = Math.max(...rowItems.map((i) => i.sem.frame.y + i.sem.frame.h));
-    const rowBase: SemBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
+    const rowBase: SemBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, diagnostics: [], overlays: [] };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
     const outer = stackOf(base, "v", [{ node: it.node, sem: row }, { node: it.node, sem: cleared }], "stretch", "start");
-    outer.notes.push("approximated: float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
+    addDiagnostic(outer.diagnostics, "approximated", "float", "float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
     return outer;
   }
   return undefined;
@@ -110,7 +110,7 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
       else if (axis === "v" && px(b.node.styles["margin-top"]) < -0.5) {
         // A card lifted onto a hero: the overlap is the design, not an approximation.
       } else {
-        base.notes.push(`approximated: children overlap by ${round2(-g)}px`);
+        addDiagnostic(base.diagnostics, "approximated", axis === "h" ? "margin-left" : "margin-top", `children overlap by ${round2(-g)}px`);
         g = 0;
       }
     } else g = Math.max(0, g);

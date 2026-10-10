@@ -1,7 +1,7 @@
 /** Shared SVG traversal data contracts. */
 import { type BundledFamilies } from "../../model/fonts.ts";
 import { type LayoutNode, type Rect } from "../../model/layout.ts";
-import { type SvgPath, type SvgText } from "../../model/semantic.ts";
+import { type Diagnostic, type SvgPath, type SvgText } from "../../model/semantic.ts";
 
 /** Affine matrix in SVG order `[a, b, c, d, e, f]`. */
 export type SvgMatrix = [number, number, number, number, number, number];
@@ -22,7 +22,7 @@ export interface SvgScope {
 export interface SvgContext {
   bundledFamilies: BundledFamilies;
   ids: Record<string, LayoutNode>;
-  notes: string[];
+  diagnostics: Diagnostic[];
   vb: [number, number, number, number];
   frame: Rect;
   paths: SvgPath[];

@@ -33,8 +33,8 @@ export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitCon
   else if (repeat) {
     // `.tile` repeats at the intrinsic size from the top-left corner; axis and phase are lost.
     view = [src.expr(".resizable(resizingMode: .tile)")];
-    if (p.repeat !== "repeat") note(n, `approximated: background-repeat ${p.repeat} tiles both axes`);
-    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0)) note(n, `approximated: background-position ignored on a repeating ${prop}`);
+    if (p.repeat !== "repeat") note(n, "approximated", "background-repeat", `background-repeat ${p.repeat} tiles both axes`);
+    if (p.position && (p.position[0] !== 0 || p.position[1] !== 0)) note(n, "approximated", "background-position", `background-position ignored on a repeating ${prop}`);
   } else {
     const sizing = p.size === "cover" ? ".resizable().scaledToFill()" : p.size === "contain" ? ".resizable().scaledToFit()" : p.size ? `.resizable().frame(width: ${num(p.size.w)}, height: ${num(p.size.h)})` : "";
     view = [src.expr(sizing)];
@@ -63,7 +63,7 @@ type ImageSource =
  */
 function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
   if (LOOPBACK.test(url)) {
-    note(n, `unmapped: ${prop} image ${url} was not captured (temporary local server URL); layer dropped`);
+    note(n, "unmapped", prop === "img" ? "img" : `${prop}: url()`, `${prop} image ${url} was not captured (temporary local server URL); layer dropped`);
     return undefined;
   }
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
@@ -81,10 +81,10 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
   if (!svg) {
-    note(n, `unmapped: ${prop} svg data: URL has no viewBox; layer dropped`);
+    note(n, "unmapped", prop === "img" ? "img" : `${prop}: url()`, `${prop} svg data: URL has no viewBox; layer dropped`);
     return undefined;
   }
-  for (const t of svg.notes) note(n, t);
+  for (const d of svg.diagnostics) note(n, d.level, d.feature, d.message);
   return {
     kind: "vector",
     size: [svg.viewBox[2], svg.viewBox[3]],
@@ -130,10 +130,10 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${str(n.alt)})`];
   const src = decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
-    if (LOOPBACK.test(n.src)) note(n, `unmapped: img image ${n.src} was not captured (temporary local server URL); layer dropped`);
+    if (LOOPBACK.test(n.src)) note(n, "unmapped", "img", `img image ${n.src} was not captured (temporary local server URL); layer dropped`);
     if (!n.alt) return ["Color.clear", ...a11y];
     // The browser paints the alt text at the top-left of the box in the element's own font.
-    note(n, "approximated: broken image source → alt text in the measured box");
+    note(n, "approximated", "img", "broken image source → alt text in the measured box");
     return [
       `Text(verbatim: ${str(n.alt)})`,
       ...(n.font ? [`.font(${fontExpr(n.font, ctx)})`] : []),

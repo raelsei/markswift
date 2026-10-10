@@ -12,7 +12,7 @@ import { textContent } from "../text-runs.ts";
 /** Build the SvgNode for `n` on top of an already-measured `base` (frame, style, padding). `doc` is the document root used to resolve `#id` references. */
 export function buildSvg(n: LayoutNode, base: SemBase, doc: LayoutNode = n, bundledFamilies: BundledFamilies = {}): SvgNode {
   const vb = (n.attrs["viewbox"] ?? `0 0 ${n.bounds.w} ${n.bounds.h}`).split(/[\s,]+/).map(Number) as [number, number, number, number];
-  const ctx: SvgContext = { bundledFamilies, ids: idIndex(doc), notes: base.notes, vb, frame: n.bounds, paths: [], texts: [] };
+  const ctx: SvgContext = { bundledFamilies, ids: idIndex(doc), diagnostics: base.diagnostics, vb, frame: n.bounds, paths: [], texts: [] };
   visitChildren(n, { attrs: inherit({}, n.attrs), ctm: IDENTITY, opacity: 1, depth: 0 }, ctx);
   base.width = { kind: "fixed", px: round2(n.bounds.w) };
   base.height = { kind: "fixed", px: round2(n.bounds.h) };

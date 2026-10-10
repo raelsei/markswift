@@ -1,10 +1,10 @@
 import type { ElementPolicy, ElementRoute, ElementSupport } from "./types.ts";
 
 function family(tags: string, route: ElementRoute, support: ElementSupport = "implemented", limitation?: string): Record<string, ElementPolicy> {
-  return Object.fromEntries(tags.split(" ").map((tag) => [tag, Object.freeze({
+  return Object.fromEntries(tags.split(" ").map((tag) => [tag, Object.freeze<ElementPolicy>({
     route, support, known: true,
     atomic: !!limitation || ["control", "image", "svg", "placeholder", "metadata"].includes(route),
-    ...(limitation ? { note: `${support === "unsupported" ? "unmapped" : "approximated"}: <${tag}> ${limitation}` } : {}),
+    ...(limitation ? { diagnostic: { level: support === "unsupported" ? "unmapped" : "approximated", feature: tag, message: `<${tag}> ${limitation}` } } : {}),
   })]));
 }
 

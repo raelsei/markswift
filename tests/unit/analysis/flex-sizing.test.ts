@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { flexGrowthSize } from "../../../src/analysis/flex-sizing.ts";
 import type { InferenceContext } from "../../../src/analysis/context.ts";
 import type { LayoutNode } from "../../../src/model/layout.ts";
-import type { Axis } from "../../../src/model/semantic.ts";
+import type { Axis, Diagnostic } from "../../../src/model/semantic.ts";
 
 function item(axis: Axis, size: number, grow: number, styles: Record<string, string> = {}): LayoutNode {
   return {
@@ -24,9 +24,9 @@ for (const axis of ["h", "v"] as const) {
   describe(`${axis === "h" ? "row" : "column"} flex growth`, () => {
     test("equal grow factors and equal measured sizes retain native fill", () => {
       const a = item(axis, 150, 1), b = item(axis, 150, 1);
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a, b]), notes)).toEqual({ kind: "fill" });
-      expect(notes).toEqual([]);
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a, b]), diagnostics)).toEqual({ kind: "fill" });
+      expect(diagnostics).toEqual([]);
     });
 
     test("fractional browser rounding within one pixel retains native fill", () => {
@@ -37,26 +37,28 @@ for (const axis of ["h", "v"] as const) {
     test("equal grow factors with unequal basis allocation preserve measured size", () => {
       const a = item(axis, 200, 1, { "flex-basis": "100px" });
       const b = item(axis, 100, 1, { "flex-basis": "0px" });
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a, b]), notes)).toEqual({ kind: "fixed", px: 200 });
-      expect(notes.join(" ")).toContain("unequal measured");
-      expect(notes.join(" ")).toContain("basis");
-      expect(notes.join(" ")).toContain("[200,100]");
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a, b]), diagnostics)).toEqual({ kind: "fixed", px: 200 });
+      const messages = diagnostics.map((d) => d.message).join(" ");
+      expect(messages).toContain("unequal measured");
+      expect(messages).toContain("basis");
+      expect(messages).toContain("[200,100]");
     });
 
     test("unequal grow ratios preserve measured size rather than equal native shares", () => {
       const a = item(axis, 100, 1), b = item(axis, 200, 2);
-      const notes: string[] = [];
-      expect(flexGrowthSize(b, axis, context(axis, [a, b]), notes)).toEqual({ kind: "fixed", px: 200 });
-      expect(notes.join(" ")).toContain("unequal flex-grow");
-      expect(notes.join(" ")).toContain("[1,2]");
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(b, axis, context(axis, [a, b]), diagnostics)).toEqual({ kind: "fixed", px: 200 });
+      const messages = diagnostics.map((d) => d.message).join(" ");
+      expect(messages).toContain("unequal flex-grow");
+      expect(messages).toContain("[1,2]");
     });
 
     test("partial total growth preserves unused CSS space", () => {
       const a = item(axis, 75, 0.25), b = item(axis, 75, 0.25);
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a, b]), notes)).toEqual({ kind: "fixed", px: 75 });
-      expect(notes.join(" ")).toContain("total 0.5 < 1");
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a, b]), diagnostics)).toEqual({ kind: "fixed", px: 75 });
+      expect(diagnostics.map((d) => d.message).join(" ")).toContain("total 0.5 < 1");
     });
 
     test("a lone half grower beside a fixed sibling preserves its partial allocation", () => {
@@ -66,9 +68,9 @@ for (const axis of ["h", "v"] as const) {
 
     test("a lone full grower beside a fixed sibling consumes the remaining space", () => {
       const a = item(axis, 240, 1), fixed = item(axis, 60, 0);
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a, fixed]), notes)).toEqual({ kind: "fill" });
-      expect(notes).toEqual([]);
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a, fixed]), diagnostics)).toEqual({ kind: "fill" });
+      expect(diagnostics).toEqual([]);
     });
 
     test("fixed/absolute/hidden nodes and text do not participate in grow ratios", () => {
@@ -80,16 +82,16 @@ for (const axis of ["h", "v"] as const) {
         item(axis, 40, 9, { display: "none" }),
         text,
       ];
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a, ...excluded, b]), notes)).toEqual({ kind: "fill" });
-      expect(notes).toEqual([]);
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a, ...excluded, b]), diagnostics)).toEqual({ kind: "fill" });
+      expect(diagnostics).toEqual([]);
     });
 
     test.each(["absolute", "fixed"])("a %s-positioned element is not itself a flex grower", position => {
       const a = item(axis, 150, 1, { position });
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a]), notes)).toBeUndefined();
-      expect(notes).toEqual([]);
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a]), diagnostics)).toBeUndefined();
+      expect(diagnostics).toEqual([]);
     });
 
     test("a hidden element and a non-grower are outside growth handling", () => {
@@ -101,9 +103,9 @@ for (const axis of ["h", "v"] as const) {
 
     test.each(["block", "grid"])("positive flex-grow in a %s parent has no effect", display => {
       const a = item(axis, 100, 1);
-      const notes: string[] = [];
-      expect(flexGrowthSize(a, axis, context(axis, [a], display), notes)).toBeUndefined();
-      expect(notes).toEqual([]);
+      const diagnostics: Diagnostic[] = [];
+      expect(flexGrowthSize(a, axis, context(axis, [a], display), diagnostics)).toBeUndefined();
+      expect(diagnostics).toEqual([]);
     });
 
     test("growth handling only applies on the parent's main axis", () => {
@@ -116,9 +118,9 @@ for (const axis of ["h", "v"] as const) {
 test("unequal shrink allocation pins the browser's fractional measured size", () => {
   const a = item("h", 166.66667, 1, { "flex-basis": "200px", "flex-shrink": "1" });
   const b = item("h", 133.33333, 1, { "flex-basis": "200px", "flex-shrink": "2" });
-  const notes: string[] = [];
-  expect(flexGrowthSize(a, "h", context("h", [a, b]), notes)).toEqual({ kind: "fixed", px: 166.67 });
-  expect(notes.join(" ")).toContain("shrink");
+  const diagnostics: Diagnostic[] = [];
+  expect(flexGrowthSize(a, "h", context("h", [a, b]), diagnostics)).toEqual({ kind: "fixed", px: 166.67 });
+  expect(diagnostics.map((d) => d.message).join(" ")).toContain("shrink");
 });
 
 test("a grower without a flex parent remains outside growth handling", () => {

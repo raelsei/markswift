@@ -1,11 +1,11 @@
 /** Normalize browser-computed CSS constraints to the semantic border-box contract. */
 import type { LayoutNode } from "../model/layout.ts";
-import type { SizeConstraints } from "../model/semantic.ts";
+import { type SizeConstraints, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import { resolveLength, round2 } from "../css/index.ts";
 import { insetsOf, outOfFlow } from "./geometry.ts";
 import type { InferenceContext } from "./context.ts";
 
-export function constraintsOf(n: LayoutNode, declared: Record<string, string>, ctx: InferenceContext, notes: string[]): SizeConstraints {
+export function constraintsOf(n: LayoutNode, declared: Record<string, string>, ctx: InferenceContext, diagnostics: Diagnostic[]): SizeConstraints {
   const result: SizeConstraints = {};
   // CSS sizing constraints do not apply to ordinary non-replaced inline boxes.
   if (n.styles.display === "inline" && !["img", "svg", "input", "select", "textarea", "button", "video", "audio", "canvas", "iframe", "embed", "object"].includes(n.tag)) return result;
@@ -30,7 +30,7 @@ export function constraintsOf(n: LayoutNode, declared: Record<string, string>, c
     const resolved = unresolved ? undefined : resolveLength(raw, widthRef ?? 0);
     if (resolved === undefined) {
       result[key] = round2(Math.max(insets, measured));
-      notes.push(`approximated: ${property} ${raw} → captured border-box ${round2(measured)}px; ${unresolved ? "containing-block sizing is not established" : "intrinsic/complex constraint is not reconstructed"}`);
+      addDiagnostic(diagnostics, "approximated", property, `${property} ${raw} → captured border-box ${round2(measured)}px; ${unresolved ? "containing-block sizing is not established" : "intrinsic/complex constraint is not reconstructed"}`);
     } else {
       result[key] = round2(Math.max(insets, resolved + (n.styles["box-sizing"] === "border-box" ? 0 : insets)));
     }

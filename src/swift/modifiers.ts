@@ -45,7 +45,7 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   if (st.outline && st.outline.width > 0 && st.outline.color.a > 0) {
     // A ring `offset` outside the border edge: the box shape grown by offset + half the stroke.
     const o = st.outline;
-    if (o.style === "double") note(n, "approximated: outline-style double drawn solid");
+    if (o.style === "double") note(n, "approximated", "outline-style", "outline-style double drawn solid");
     m.push(`.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`);
   }
   m.push(...outerShadowModifiers(n, ctx));

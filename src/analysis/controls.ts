@@ -8,7 +8,7 @@
 import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../css/index.ts";
-import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
+import { type ControlKind, type ControlNode, type Diagnostic, type FontSpec, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
 import { textContent } from "./text-runs.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -26,7 +26,7 @@ export interface ControlSpec {
   expanded?: boolean;
   files?: ControlNode["files"];
   /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
-  notes: string[];
+  diagnostics: Diagnostic[];
 }
 
 /**
@@ -35,11 +35,11 @@ export interface ControlSpec {
  */
 export function controlOf(n: LayoutNode): ControlSpec | undefined {
   const a = n.attrs;
-  const notes: string[] = [];
+  const diagnostics: Diagnostic[] = [];
   const disabled = "disabled" in a ? true : undefined;
   switch (n.tag) {
     case "button": {
-      const spec: ControlSpec = { control: "button", notes };
+      const spec: ControlSpec = { control: "button", diagnostics };
       if (a["onclick"]) spec.action = a["onclick"];
       if (disabled) spec.disabled = true;
       return spec;
@@ -47,19 +47,19 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "a": {
       const href = a["href"];
       if (href === undefined) return undefined;
-      const spec: ControlSpec = { control: "link", href, notes };
+      const spec: ControlSpec = { control: "link", href, diagnostics };
       // An absolute URL has a destination outside the app and becomes a `Link`. Everything else
       // — `#`, `#section`, `/path` — is navigation only the app can perform, so the element
       // becomes a button over the same callback an `onclick` would get, named after whatever the
       // design called the target so the placeholder says which link it was.
       if (!ABSOLUTE_URL.test(href)) {
         spec.action = a["onclick"] || `#${targetName(href, n)}`;
-        notes.push(`approximated: <a href="${href}"> has no runtime destination → Button over a placeholder action`);
+        addDiagnostic(diagnostics, "approximated", "a", `<a href="${href}"> has no runtime destination → Button over a placeholder action`);
       }
       return spec;
     }
     case "textarea": {
-      const spec: ControlSpec = { control: "textEditor", notes };
+      const spec: ControlSpec = { control: "textEditor", diagnostics };
       const text = textContent(n).trim();
       if (text) spec.value = text;
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
@@ -75,18 +75,18 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
         if (label) options.push(label);
         if ("selected" in o.attrs) selected = label;
       }
-      const spec: ControlSpec = { control: "picker", options, notes };
+      const spec: ControlSpec = { control: "picker", options, diagnostics };
       // A closed `<select>` shows the selected option, or the first one when the page names none.
       const shown = selected || options[0];
       if (shown) spec.value = shown;
       // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
-      if (!options.length) notes.push("approximated: <select> option labels are not in the snapshot → picker with no choices");
-      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1)) notes.push("approximated: <select multiple/size> list box → menu picker");
+      if (!options.length) addDiagnostic(diagnostics, "approximated", "select", "<select> option labels are not in the snapshot → picker with no choices");
+      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1)) addDiagnostic(diagnostics, "approximated", "select", "<select multiple/size> list box → menu picker");
       if (disabled) spec.disabled = true;
       return spec;
     }
     case "details": {
-      const spec: ControlSpec = { control: "disclosure", notes };
+      const spec: ControlSpec = { control: "disclosure", diagnostics };
       if ("open" in a) spec.expanded = true;
       return spec;
     }
@@ -94,10 +94,10 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "meter": {
       const min = num(a["min"]) ?? 0;
       const max = num(a["max"]) ?? 1;
-      const spec: ControlSpec = { control: n.tag === "progress" ? "progress" : "gauge", range: { min, max: Math.max(max, min) }, notes };
+      const spec: ControlSpec = { control: n.tag === "progress" ? "progress" : "gauge", range: { min, max: Math.max(max, min) }, diagnostics };
       const v = a["value"];
       if (v !== undefined && num(v) !== undefined) spec.value = v;
-      else if (n.tag === "progress") notes.push("approximated: indeterminate <progress> → animated bar");
+      else if (n.tag === "progress") addDiagnostic(diagnostics, "approximated", "progress", "indeterminate <progress> → animated bar");
       if (n.tag === "meter") spec.level = meterLevel(num(a["value"]) ?? 0, min, Math.max(max, min), num(a["low"]), num(a["high"]), num(a["optimum"]));
       return spec;
     }
@@ -107,8 +107,8 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       // HTML's missing/invalid value default for `@type` is Text, so a type nobody recognises is
       // a text field — and the box the capture measured is the one Chrome gave a text field.
       const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
-      if (!Object.hasOwn(INPUT_CONTROLS, type)) notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
-      const spec: ControlSpec = { control, notes };
+      if (!Object.hasOwn(INPUT_CONTROLS, type)) addDiagnostic(diagnostics, "approximated", "input", `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
+      const spec: ControlSpec = { control, diagnostics };
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
       } else if (a["value"] !== undefined) spec.value = a["value"];
@@ -126,7 +126,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
         if ("multiple" in a) spec.files.multiple = true;
         // Chrome draws the button caption and the chosen-file text in the input's shadow DOM,
         // which the snapshot cannot reach, so the generated button keeps the box and loses them.
-        notes.push('approximated: <input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach');
+        addDiagnostic(diagnostics, "approximated", "input: file", '<input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach');
       }
       if (control === "button" && a["onclick"]) spec.action = a["onclick"];
       if (disabled) spec.disabled = true;
@@ -139,7 +139,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
 
 /** A control's laid-out surroundings, as the generic container path produced them. */
 export interface ControlParts {
-  /** The box the generic path would have painted: frame, padding, style, notes. */
+  /** The box the generic path would have painted: frame, padding, style, diagnostics. */
   base: SemBase;
   /** Element children, in document order, already built. */
   children: Array<{ node: LayoutNode; sem: SemNode }>;
@@ -155,9 +155,9 @@ export interface ControlParts {
  * `content` in measured order (a `<summary>` becomes the disclosure's `label` instead).
  */
 export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNode {
-  const { control, notes, ...state } = spec;
+  const { control, diagnostics, ...state } = spec;
   const base = parts.base;
-  base.notes.push(...notes);
+  base.diagnostics.push(...diagnostics);
   let label: SemNode | undefined;
   const kids = parts.children.filter((c) => {
     if (control === "disclosure" && c.node.tag === "summary" && !label) {

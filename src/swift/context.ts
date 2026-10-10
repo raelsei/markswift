@@ -1,13 +1,13 @@
 import type { Color } from "../css/index.ts";
-import type { Screen, SemNode } from "../model/semantic.ts";
+import type { Confidence, Diagnostic, Screen, SemNode } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
   view: string;
   /** Shapes referenced by this screen: name → Swift struct source. */
   shapes: Record<string, string>;
-  /** Nodes whose confidence is not `mapped`. */
-  report: Array<{ id: string; kind: string; confidence: string; notes: string[] }>;
+  /** Nodes whose confidence is not `mapped`, with what each lost. */
+  report: Array<{ id: string; kind: string; confidence: Confidence; diagnostics: Diagnostic[] }>;
 }
 
 /**

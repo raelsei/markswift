@@ -1,6 +1,6 @@
 /** Native-grid admission is proven from resolved tracks and captured cell geometry. */
 import type { LayoutNode } from "../model/layout.ts";
-import type { GridNode, SemBase } from "../model/semantic.ts";
+import { type GridNode, type SemBase, addDiagnostic } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
 import { px, round2, resolvedGridTracks } from "../css/index.ts";
 import { renders, insetsOf } from "./geometry.ts";
@@ -37,7 +37,7 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
       child.width = { kind: "fixed", px: round2(child.frame.w) };
       child.height = { kind: "fixed", px: round2(child.frame.h) };
     }
-    base.notes.push("approximated: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
+    addDiagnostic(base.diagnostics, "approximated", "display: grid", "captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed");
     return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
   }
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
@@ -47,6 +47,6 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     if (item.sem.height.kind === "fill") item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
     return item.sem;
   });
-  base.notes.push("approximated: regular captured tracks mapped to native Grid; responsive track definitions are not reconstructed");
+  addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", "regular captured tracks mapped to native Grid; responsive track definitions are not reconstructed");
   return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
 }

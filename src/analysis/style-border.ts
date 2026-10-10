@@ -1,5 +1,5 @@
 /** CSS border geometry and Chrome's 3D edge shading. */
-import type { Style, Edge } from "../model/semantic.ts";
+import { type Style, type Edge, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import { type Color, parseColor, parseRadiusXY, round2 } from "../css/index.ts";
 import { EDGES, edgeWidth, type EdgeName } from "./geometry.ts";
 
@@ -37,12 +37,12 @@ function litEdge(c: Color): Color {
   return (Math.max(y, d) + 0.05) / (Math.min(y, d) + 0.05) < 1.75 ? shade(c, "light") : c;
 }
 
-export function borderStyle(s: Record<string, string>, w: number, h: number, notes: string[]): Partial<Style> {
+export function borderStyle(s: Record<string, string>, w: number, h: number, diagnostics: Diagnostic[]): Partial<Style> {
   const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
   const cornerRadii = corners.map(c => parseRadiusXY(s[`border-${c}-radius`], w, h));
   const ellipse = w > 0 && h > 0 && cornerRadii.every(([rx, ry]) => Math.abs(rx - w / 2) < 0.5 && Math.abs(ry - h / 2) < 0.5);
   const r = cornerRadii.map(([rx, ry], i) => {
-    if (!ellipse && Math.abs(rx - ry) > 0.5) notes.push(`approximated: elliptical radius ${s[`border-${corners[i]}-radius`]} → circular`);
+    if (!ellipse && Math.abs(rx - ry) > 0.5) addDiagnostic(diagnostics, "approximated", `border-${corners[i]}-radius`, `elliptical radius ${s[`border-${corners[i]}-radius`]} → circular`);
     return round2(Math.min((rx + ry) / 2, Math.min(w, h) / 2));
   }) as [number, number, number, number];
   const style: Partial<Style> = {};
@@ -64,10 +64,10 @@ export function borderStyle(s: Record<string, string>, w: number, h: number, not
       // edge; one `Edge` carries the outer half, which is the whole of a thin border.
       const shadowed = st === "inset" || st === "groove" ? e === "top" || e === "left" : e === "bottom" || e === "right";
       edges[e] = { width, color: shadowed ? shade(color, "dark") : litEdge(color), style: "solid" };
-      if (st === "groove" || st === "ridge") notes.push(`approximated: border-${e}-style ${st} → its outer half's tone across the edge`);
+      if (st === "groove" || st === "ridge") addDiagnostic(diagnostics, "approximated", `border-${e}-style`, `border-${e}-style ${st} → its outer half's tone across the edge`);
     } else {
       edges[e] = { width, color, style: "solid" };
-      notes.push(`approximated: border-${e}-style ${st} → solid`);
+      addDiagnostic(diagnostics, "approximated", `border-${e}-style`, `border-${e}-style ${st} → solid`);
     }
   }
   const top = edges.top;

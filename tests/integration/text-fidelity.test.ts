@@ -17,5 +17,5 @@ browserTest("pre preserves whitespace and reports monospace font substitution", 
   });
   expect(textNodes).toEqual([{ content: "one    two\n  indented line", lines: 2 }]);
   expect(result.code).toContain(".monospaced");
-  expect(result.diagnostics.flatMap(item => item.notes).join("\n")).toContain("font-family ui-monospace");
+  expect(result.diagnostics.flatMap(item => item.diagnostics).map(d => d.message).join("\n")).toContain("font-family ui-monospace");
 });

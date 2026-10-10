@@ -48,12 +48,12 @@ export function filterModifier(f: Filter, n: SemNode, ctx: ColorCtx): string[] {
     case "hue-rotate":
       return [`.hueRotation(.degrees(${num(f.degrees)}))`];
     case "invert":
-      if (f.amount !== 0 && f.amount !== 1) note(n, `approximated: filter invert(${num(f.amount)}) is all-or-nothing on iOS`);
+      if (f.amount !== 0 && f.amount !== 1) note(n, "approximated", "filter: invert()", `filter invert(${num(f.amount)}) is all-or-nothing on iOS`);
       return f.amount >= 0.5 ? [".colorInvert()"] : [];
     case "sepia": {
       // Sepia is a colour matrix; desaturate + multiply by the matrix's tint of white, faded by the amount.
       const tint = [1, 0.89, 0.694].map((c) => 1 - f.amount * (1 - c)) as [number, number, number];
-      note(n, "approximated: filter sepia() as desaturation + warm tint");
+      note(n, "approximated", "filter: sepia()", "filter sepia() as desaturation + warm tint");
       return [`.saturation(${num(1 - f.amount)})`, `.colorMultiply(Color.markswift(${num(tint[0])}, ${num(tint[1])}, ${num(tint[2])}))`];
     }
   }

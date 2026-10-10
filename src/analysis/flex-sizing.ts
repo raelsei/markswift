@@ -1,5 +1,5 @@
 import type { LayoutNode } from "../model/layout.ts";
-import type { Axis, Size } from "../model/semantic.ts";
+import { type Axis, type Size, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import type { InferenceContext } from "./context.ts";
 import { px, round2 } from "../css/index.ts";
 import { isFlex, outOfFlow } from "./geometry.ts";
@@ -9,7 +9,7 @@ function inFlow(node: LayoutNode): boolean {
 }
 
 /** Native stacks can share equal leftover space, but cannot reproduce arbitrary CSS allocation. */
-export function flexGrowthSize(n: LayoutNode, axis: Axis, ctx: InferenceContext, notes: string[]): Size | undefined {
+export function flexGrowthSize(n: LayoutNode, axis: Axis, ctx: InferenceContext, diagnostics: Diagnostic[]): Size | undefined {
   const parent = ctx.parent;
   if (!parent || ctx.parentAxis !== axis || !isFlex(ctx.parentDisplay ?? parent.styles.display)) return undefined;
   if (!inFlow(n) || px(n.styles["flex-grow"]) <= 0) return undefined;
@@ -27,6 +27,6 @@ export function flexGrowthSize(n: LayoutNode, axis: Axis, ctx: InferenceContext,
   if (total < 1) reasons.push(`flex-grow total ${total} < 1 leaves unused space`);
   if (!equalFactors) reasons.push(`unequal flex-grow factors [${factors.join(",")}]`);
   if (!equalSizes) reasons.push(`unequal measured ${dimension}s [${sizes.map(round2).join(",")}] (basis, shrink or content constraints)`);
-  notes.push(`approximated: ${reasons.join("; ")}; measured ${dimension} pinned`);
+  addDiagnostic(diagnostics, "approximated", "flex-grow", `${reasons.join("; ")}; measured ${dimension} pinned`);
   return { kind: "fixed", px: round2(axis === "h" ? n.bounds.w : n.bounds.h) };
 }

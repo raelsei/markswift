@@ -105,7 +105,7 @@ for (const [tag, markup] of Object.entries(UNSUPPORTED_MARKUP)) {
     expect(diagnostic).toBeDefined();
     expect(diagnostic!.kind).toBe("box");
     expect(diagnostic!.confidence).toBe("unmapped");
-    expect(diagnostic!.notes.some(note => note.startsWith("unmapped:") && note.includes(`<${tag}>`))).toBe(true);
+    expect(diagnostic!.diagnostics.some(d => d.level === "unmapped" && d.message.includes(`<${tag}>`))).toBe(true);
     expect(result.code).toContain("Before");
     expect(result.code).toContain("After");
   }, 30000);
@@ -123,7 +123,7 @@ browserTest("an unsupported inline object retains its visible fallback and repor
   const diagnostic = result.diagnostics.find(item => item.id === "#unsupported-object");
   expect(diagnostic).toBeDefined();
   expect(diagnostic!.confidence).toBe("unmapped");
-  expect(diagnostic!.notes.some(note => note.startsWith("unmapped:") && note.includes("<object>"))).toBe(true);
+  expect(diagnostic!.diagnostics.some(d => d.level === "unmapped" && d.message.includes("<object>"))).toBe(true);
   expect(result.code).toContain("Visible fallback");
   expect(result.code).toContain("Before");
   expect(result.code).toContain("After");

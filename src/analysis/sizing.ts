@@ -1,6 +1,6 @@
 /** Intrinsic versus fixed sizing inferred from measured content. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type Size, type Axis, type SizeConstraints } from "../model/semantic.ts";
+import { type Size, type Axis, type SizeConstraints, type Diagnostic } from "../model/semantic.ts";
 import { round2, px } from "../css/index.ts";
 import { insetsOf, renders, hangsLeading, EDGES, unionRect, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 import { isInlineText } from "./text-runs.ts";
@@ -85,7 +85,7 @@ function hugs(n: LayoutNode, axis: Axis): boolean {
  * Otherwise geometry tells: parent content box → fill, own content → hug, other sizes →
  * measured pixels. Flex allocation and constraints share the same border-box contract.
  */
-export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, notes: string[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "center" | "end" } {
+export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, diagnostics: Diagnostic[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "center" | "end" } {
   const s = n.styles;
   const abs = outOfFlow(n);
   const declW = n.preferredSize?.width ?? d["width"];
@@ -113,8 +113,8 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   }
   const measuredW: Size = { kind: "fixed", px: round2(n.bounds.w) };
   const measuredH: Size = { kind: "fixed", px: round2(n.bounds.h) };
-  const growthW = flexGrowthSize(n, "h", ctx, notes);
-  const growthH = flexGrowthSize(n, "v", ctx, notes);
+  const growthW = flexGrowthSize(n, "h", ctx, diagnostics);
+  const growthH = flexGrowthSize(n, "v", ctx, diagnostics);
 
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
@@ -134,7 +134,7 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   else if (hugsH || !ctx.parent) height = { kind: "hug" };
   else height = measuredH;
 
-  const constraints = constraintsOf(n, d, ctx, notes);
+  const constraints = constraintsOf(n, d, ctx, diagnostics);
 
   // Horizontal margins on a block child are not part of the IR: the used `auto` margins of a
   // centred box, like plain side margins, make the margin box fill the parent while the border

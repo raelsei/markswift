@@ -3,6 +3,7 @@ import { sizeOf } from "../../../src/analysis/sizing.ts";
 import { parseDeclared } from "../../../src/css/index.ts";
 import type { LayoutNode } from "../../../src/model/layout.ts";
 import type { InferenceContext } from "../../../src/analysis/context.ts";
+import type { Diagnostic } from "../../../src/model/semantic.ts";
 
 function element(w: number, h: number, styles: Record<string, string> = {}, children: LayoutNode[] = [], inline = ""): LayoutNode {
   return { tag: "div", attrs: { style: inline }, bounds: { x: 0, y: 0, w, h }, styles, children };
@@ -10,8 +11,8 @@ function element(w: number, h: number, styles: Record<string, string> = {}, chil
 const parent = element(400, 200, { display: "block", "padding-left": "20px", "padding-right": "20px", "border-left-style": "solid", "border-right-style": "solid", "border-left-width": "5px", "border-right-width": "5px" });
 const ctx: InferenceContext = { root: parent, parent, parentAxis: "v", parentDisplay: "block", parentAlign: "stretch", bundledFamilies: {}, fixed: [] };
 function sizing(n: LayoutNode, context = ctx) {
-  const notes: string[] = [];
-  return { ...sizeOf(n, parseDeclared(n.attrs.style), context, notes), notes };
+  const diagnostics: Diagnostic[] = [];
+  return { ...sizeOf(n, parseDeclared(n.attrs.style), context, diagnostics), diagnostics };
 }
 const ownInsets = { "padding-left": "10px", "padding-right": "10px", "border-left-style": "solid", "border-right-style": "solid", "border-left-width": "4px", "border-right-width": "4px" };
 
@@ -29,14 +30,14 @@ test.each([
 test("intrinsic or unresolved max-width never turns into a zero-pixel cap", () => {
   const result = sizing(element(120, 40, { "max-width": "fit-content" }));
   expect(result.maxWidth).toBe(120);
-  expect(result.notes.join("\n")).toContain("max-width");
+  expect(result.diagnostics.map((d) => d.message).join("\n")).toContain("max-width");
 });
 
 test("a percentage cap without a captured containing block preserves the observed width", () => {
   const n = element(175, 40, { "max-width": "50%" });
   const result = sizing(n, { root: n, bundledFamilies: {}, fixed: [] });
   expect(result.maxWidth).toBe(175);
-  expect(result.notes.join("\n")).toContain("captured");
+  expect(result.diagnostics.map((d) => d.message).join("\n")).toContain("captured");
 });
 
 test("min-width wins over a conflicting max-width", () => {
@@ -63,7 +64,7 @@ test("vertical content-box constraints include vertical padding and borders", ()
 test("percentage heights keep the captured constraint instead of guessing parent definiteness", () => {
   const result = sizing(element(40, 60, { "min-height": "50%", "max-height": "calc(75% - 10px)" }));
   expect(result).toMatchObject({ minHeight: 60, maxHeight: 60 });
-  expect(result.notes.join("\n")).toContain("captured");
+  expect(result.diagnostics.map((d) => d.message).join("\n")).toContain("captured");
 });
 
 test("100% content-box dimensions with padding retain measured overflow", () => {

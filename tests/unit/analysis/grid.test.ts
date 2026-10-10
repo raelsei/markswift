@@ -34,7 +34,7 @@ test('grid preserves a hole before a later row',()=>{
  const input=capture('100px 100px 100px','20px 20px',[[0,0,100,20],[220,0,100,20],[0,30,100,20],[110,30,100,20],[220,30,100,20]]);
  const n=grid(input);expect(n.columns).toBe(3);
  expect(n.measured?.frames).toEqual(input.root.children.map(c=>({...c.bounds,x:c.bounds.x-12,y:c.bounds.y-8})));
- expect(n.notes.join('\n')).toContain('captured grid placement');
+ expect(n.diagnostics.map(d=>d.message).join('\n')).toContain('captured grid placement');
 });
 
 test('aligned intrinsic items cannot invent additional columns',()=>{

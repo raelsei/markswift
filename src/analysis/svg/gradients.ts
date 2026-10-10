@@ -1,6 +1,6 @@
 /** Resolve SVG gradient paint servers and inherited stops. */
 import { type Rect, type LayoutNode } from "../../model/layout.ts";
-import { type SvgGradient } from "../../model/semantic.ts";
+import { type SvgGradient, addDiagnostic } from "../../model/semantic.ts";
 import { parseDeclared, parseColor, round2 } from "../../css/index.ts";
 import { type SvgContext } from "./context.ts";
 import { transformAttr, apply, isIdentity } from "./transforms.ts";
@@ -12,7 +12,7 @@ export function gradientOf(raw: string, bbox: Rect, ctx: SvgContext): SvgGradien
   const id = raw.replace(/^url\(["']?#|["']?\)$/g, "");
   const el = ctx.ids[id];
   if (!el || (el.tag !== "lineargradient" && el.tag !== "radialgradient")) {
-    ctx.notes.push(`unmapped: svg paint url(#${id})`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "fill", `svg paint url(#${id})`);
     return undefined;
   }
   // `href` chains: attributes and stops fall back to the referenced gradient.
@@ -40,7 +40,7 @@ export function gradientOf(raw: string, bbox: Rect, ctx: SvgContext): SvgGradien
     stops.push({ color: Number.isFinite(so) && so < 1 ? { ...color, a: color.a * so } : color, pos });
   }
   if (!stops.length) {
-    ctx.notes.push(`unmapped: svg gradient #${id} has no stops`);
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:stop", `svg gradient #${id} has no stops`);
     return undefined;
   }
   const [vx, , vw, vh] = ctx.vb;
@@ -65,9 +65,9 @@ export function gradientOf(raw: string, bbox: Rect, ctx: SvgContext): SvgGradien
   const r = len("r", obb ? 0.5 : diag / 2, diag);
   const center = toUser(len("cx", obb ? 0.5 : vx + vw / 2, vw), len("cy", obb ? 0.5 : ctx.vb[1] + vh / 2, vh));
   const radius: [number, number] = obb ? [round2(r * bbox.w), round2(r * bbox.h)] : [round2(r), round2(r)];
-  if (!isIdentity(tf)) ctx.notes.push("approximated: svg radialGradient gradientTransform → centre only");
+  if (!isIdentity(tf)) addDiagnostic(ctx.diagnostics, "approximated", "svg:radialGradient", "svg radialGradient gradientTransform → centre only");
   // Emitters draw an ellipse proportional to the frame or a circle; anything else is approximated.
   const proportional = Math.abs(bbox.w / vw - bbox.h / vh) < 0.005;
-  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01) ctx.notes.push("approximated: svg radialGradient on a non-proportional bounding box → circular");
+  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01) addDiagnostic(ctx.diagnostics, "approximated", "svg:radialGradient", "svg radialGradient on a non-proportional bounding box → circular");
   return { kind: "radial", stops, center, radius };
 }
