@@ -42,6 +42,21 @@ export const WEIGHT_SUBFAMILY: Record<number, string> = {
 
 
 /** `Geist Variable` → `GeistVariable`; a file name and a PostScript name stem. */
-export function sanitize(family: string): string {
+function sanitize(family: string): string {
   return family.replace(/[^A-Za-z0-9]/g, "") || "Font";
+}
+
+
+/**
+ * File stem for a packaged face, unique within one package case-insensitively (as `writeBundle` checks).
+ * `claimed` maps lower-cased stems already written to their CSS family. Returns `undefined` when this exact
+ * family already owns the stem: the same family+subfamily twice (italic and oblique, or a static 400 and a
+ * variable Regular) would register one PostScript name twice on iOS, so only the first can be bundled.
+ */
+export function fontFileStem(family: string, subfamily: string, claimed: ReadonlyMap<string, string>): string | undefined {
+  const base = sanitize(family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
+  const owner = claimed.get(base.toLowerCase());
+  if (owner === undefined) return base;
+  if (owner === family) return undefined;
+  for (let n = 2; ; n++) if (!claimed.has(`${base}-${n}`.toLowerCase())) return `${base}-${n}`;
 }

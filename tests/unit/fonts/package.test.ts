@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fontFileStem } from "../../../src/fonts/source.ts";
 
 test("a missing python3 leaves the face unbundled with a note and writes no font file", async () => {
   const dir = await mkdtemp(join(tmpdir(), "markswift-fonts-"));
@@ -24,4 +25,14 @@ console.log(JSON.stringify({ notes: pkg.notes, faces: pkg.faces.length, files: a
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("packaged font file stems never collide", () => {
+  const claimed = new Map([["font", "思源黑体"]]);
+  expect(fontFileStem("思源黑体", "Regular", new Map())).toBe("Font");
+  expect(fontFileStem("源ノ角ゴシック", "Regular", claimed)).toBe("Font-2");
+  expect(fontFileStem("Inter", "Italic", new Map())).toBe("Inter-Italic");
+  expect(fontFileStem("Inter", "Italic", new Map([["inter-italic", "Inter"]]))).toBeUndefined();
+  expect(fontFileStem("Ab", "Regular", new Map())).toBe("Ab");
+  expect(fontFileStem("AB", "Regular", new Map([["ab", "Ab"]]))).toBe("AB-2");
 });

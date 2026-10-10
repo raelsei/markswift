@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
-import { coversLatin, srcBytes, sanitize, WEIGHT_SUBFAMILY } from "./source.ts";
+import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
 import { runFontTool } from "./converter.ts";
 import { plistFragment, registrationSwift } from "./registration.ts";
 
@@ -31,6 +31,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     (groups[k] ??= []).push(f);
   }
   await mkdir(fontsDir, { recursive: true });
+  const claimed = new Map<string, string>();
   for (const k of Object.keys(groups).sort()) {
     const group = groups[k]!;
     const latin = group.filter((f) => coversLatin(f.unicodeRange));
@@ -63,7 +64,11 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const staticWeight = chosen.weight[0] === chosen.weight[1] ? chosen.weight[0] : undefined;
     const weightName = staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
-    const stem = sanitize(chosen.family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
+    const stem = fontFileStem(chosen.family, subfamily, claimed);
+    if (stem === undefined) {
+      notes.push(`approximated: font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`);
+      continue;
+    }
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
     const dst = join(fontsDir, file);
     const tmp = join(fontsDir, `.${stem}.src`);
@@ -83,6 +88,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     await rm(tmp, { force: true });
     const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
     packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
+    claimed.set(stem.toLowerCase(), chosen.family);
     if (!chosen.loaded) notes.push(`approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`);
   }
 
