@@ -3,6 +3,7 @@ import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import { svgFromMarkup } from "../../../src/analysis/svg/markup.ts";
+import { pathBounds } from "../../../src/analysis/svg/geometry.ts";
 
 test("SVG chart labels and nested tspans use the conversion's bundled fonts", () => {
   const styles = { "font-family": '"Geist Variable", sans-serif', "font-size": "12px", "font-weight": "400", fill: "rgb(0, 0, 0)" };
@@ -52,5 +53,36 @@ describe("BUG-03 markup SVG paints like the browser", () => {
   });
   test("text takes its font size from attributes", () => {
     expect(svgFromMarkup('<svg viewBox="0 0 100 20"><text x="0" y="15" font-size="12">Hi</text></svg>', { x: 0, y: 0, w: 100, h: 20 })!.texts![0]!.font.size).toBe(12);
+  });
+});
+
+describe("BUG-14 SVG groups, nested viewports and object-bounding-box clips", () => {
+  const FRAME = { x: 0, y: 0, w: 20, h: 20 };
+  const draw = (markup: string) => svgFromMarkup(markup, FRAME)!;
+
+  test("a group clip-path applies to the shapes below it", () => {
+    const p = draw('<svg viewBox="0 0 10 10"><defs><clipPath id="c"><rect width="5" height="5"/></clipPath></defs><g clip-path="url(#c)"><rect width="10" height="10" fill="red"/></g></svg>').paths[0]!;
+    expect(p.clip).toBeDefined();
+    expect(pathBounds(p.clip!.d)).toEqual({ x: 0, y: 0, w: 5, h: 5 });
+  });
+  test("a group mask applies to the shapes below it", () => {
+    const p = draw('<svg viewBox="0 0 10 10"><defs><mask id="m"><rect width="5" height="5" fill="white"/></mask></defs><g mask="url(#m)"><rect width="10" height="10" fill="red"/></g></svg>').paths[0]!;
+    expect(p.mask?.length).toBe(1);
+  });
+  test("filters, markers and foreignObject are reported", () => {
+    const node = draw(
+      '<svg viewBox="0 0 10 10"><defs><filter id="f"/><marker id="m"/></defs><g filter="url(#f)"><path d="M0 0L10 10" stroke="red" marker-end="url(#m)"/></g><foreignObject width="5" height="5"><div>x</div></foreignObject></svg>',
+    );
+    for (const feature of ["svg:filter", "svg:marker", "svg:foreignObject"]) expect(node.diagnostics).toContainEqual(expect.objectContaining({ level: "unmapped", feature }));
+  });
+  test("a nested <svg> is its own viewport", () => {
+    const p = draw('<svg viewBox="0 0 20 20"><svg x="10" width="10" height="10" viewBox="0 0 100 100"><rect width="100" height="100"/></svg></svg>').paths[0]!;
+    expect(pathBounds(p.d)).toEqual({ x: 10, y: 0, w: 10, h: 10 });
+  });
+  test("an objectBoundingBox clip applies the transform once", () => {
+    const p = draw('<svg viewBox="0 0 20 20"><defs><clipPath id="o" clipPathUnits="objectBoundingBox"><rect width="0.5" height="1"/></clipPath></defs><g transform="translate(5,0)"><rect width="4" height="4" clip-path="url(#o)"/></g></svg>').paths[0]!;
+    const b = pathBounds(p.clip!.d);
+    expect(b.x).toBeCloseTo(5, 5);
+    expect(b.w).toBeCloseTo(2, 5);
   });
 });
