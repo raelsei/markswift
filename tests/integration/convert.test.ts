@@ -73,6 +73,49 @@ browserTest("faces without an explicit font-weight are reported as loaded", asyn
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 60000);
 
+browserTest("faces declared in @imported sheets are collected", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-import-test-"));
+  try {
+    await copyFile(GEORGIA, join(directory, "face.ttf"));
+    await Bun.write(join(directory, "fonts.css"), '@font-face{font-family:"Imported";src:url(face.ttf)}');
+    await Bun.write(join(directory, "main.css"), '@import "fonts.css"; main{font-family:Imported}');
+    const file = join(directory, "page.html");
+    await Bun.write(file, '<link rel="stylesheet" href="main.css"><main data-markswift-root style="width:200px;height:40px">Hello</main>');
+    const result = await convert({ file });
+    expect(result.layout.fonts.find((f) => f.family === "Imported")?.loaded).toBe(true);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 60000);
+
+browserTest("faces declared in cross-origin sheets are collected", async () => {
+  const georgia = Bun.file(GEORGIA);
+  const cors = { "access-control-allow-origin": "*" };
+  const remote = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    fetch: (req) => new URL(req.url).pathname === "/fonts.css"
+      ? new Response('@font-face{font-family:"Remote";src:url(/remote.ttf)}', { headers: { ...cors, "content-type": "text/css" } })
+      : new Response(georgia, { headers: { ...cors, "content-type": "font/ttf" } }),
+  });
+  // A served page, not a `{ file }` source: Chrome's Local Network Access blocks loopback
+  // subresources of a route-fulfilled document, which a public CDN sheet never meets.
+  const page = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    fetch: () => new Response(`<link rel="stylesheet" href="http://127.0.0.1:${remote.port}/fonts.css"><main data-markswift-root style="width:200px;height:40px;font-family:Remote">Hello</main>`, { headers: { "content-type": "text/html" } }),
+  });
+  try {
+    const result = await convert({ url: `http://127.0.0.1:${page.port}/` });
+    expect(result.warnings.filter((w) => w.includes("could not be read"))).toEqual([]);
+    expect(result.layout.fonts.find((f) => f.family === "Remote")?.loaded).toBe(true);
+  } finally {
+    page.stop(true);
+    remote.stop(true);
+  }
+}, 60000);
+
+browserTest("uncompiled Tailwind directives are reported", async () => {
+  const result = await convertHtml('<main data-markswift-root style="width:10px;height:10px"></main>', { css: "@tailwind base;\n@tailwind utilities;" });
+  expect(result.warnings.filter((w) => w.includes("uncompiled Tailwind"))).toHaveLength(1);
+}, 30000);
+
 browserTest("restricted pasted HTML cannot run scripts or request server-side resources", async () => {
   let requests = 0;
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => { requests++; return new Response("blocked"); } });

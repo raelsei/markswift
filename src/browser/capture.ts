@@ -7,7 +7,7 @@
  */
 import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
-import { chromium, type Browser, type BrowserContext } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
 import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
@@ -16,6 +16,15 @@ import { inlineCapturedImages } from "./images.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
+
+/** The final URL of a response and every URL it was redirected from. */
+const requestURLs = (r: Response) => {
+  const urls = [r.url()];
+  for (let q = r.request().redirectedFrom(); q; q = q.redirectedFrom()) urls.push(q.url());
+  return urls;
+};
+
+const UNCOMPILED_TAILWIND = /@tailwind\s+(base|components|utilities|variants)\b|@import\s+(url\(\s*)?["']tailwindcss["']|@apply\s/;
 
 export interface Capture {
   /** Resource failures and page errors observed while preparing this capture. */
@@ -61,6 +70,8 @@ export class BrowserCapture {
     const errors: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
+    const sheets = new Map<string, string>();
+    const sheetReads: Promise<void>[] = [];
     // Chromium probes /favicon.ico on its own; a static directory rarely has one.
     const favicon = (url: string) => url.endsWith("/favicon.ico");
     page.on("pageerror", (e) => errors.push(String(e)));
@@ -74,6 +85,10 @@ export class BrowserCapture {
       if (r.ok() && mime?.startsWith("image/")) {
         imageReads.push(r.body().then((bytes) => { images.set(r.url(), `data:${mime};base64,${bytes.toString("base64")}`); })
           .catch(() => { errors.push(`Could not capture image bytes: ${r.url()}`); }));
+      }
+      if (r.ok() && r.request().resourceType() === "stylesheet") {
+        sheetReads.push(r.text().then((text) => { for (const u of requestURLs(r)) sheets.set(u, text); })
+          .catch(() => { errors.push(`Could not read stylesheet: ${r.url()}`); }));
       }
     });
     try {
@@ -96,7 +111,14 @@ export class BrowserCapture {
       const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
       await settle(page);
-      const fonts = await collectFontFaces(page);
+      await Promise.all(sheetReads);
+      const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
+      for (const href of unreadable) errors.push(`Stylesheet could not be read: ${href}; its @font-face rules were not collected.`);
+      const inlineStyles = await page.evaluate(() => [...document.querySelectorAll("style:not([data-markswift-harness])")].map((s) => s.textContent ?? ""));
+      const tailwind = new Set<string>();
+      for (const text of inlineStyles) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add("inline <style>");
+      for (const [url, text] of sheets) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add(url);
+      for (const label of tailwind) errors.push(`Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`);
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted);
       const rootRect = await page.evaluate(
         ({ sel, mark }) => {

@@ -9,10 +9,12 @@ import type { FontFace as FontFaceRecord } from "../model/layout.ts";
  * the reference pixels are its glyphs or a fallback's. Runs after `settle`, so
  * `document.fonts.ready` has already resolved.
  *
- * Cross-origin stylesheets throw on `cssRules`, so their `@font-face` rules are not collected.
+ * `@import`ed sheets are followed. A cross-origin sheet throws on `cssRules`; its rules are then
+ * parsed from `sheetText` (response bodies by request URL, kept by the capture) into a
+ * constructable sheet. A sheet with neither is returned in `unreadable`.
  */
-export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
-  return await page.evaluate(() => {
+export async function collectFontFaces(page: Page, sheetText: Record<string, string>): Promise<{ faces: FontFaceRecord[]; unreadable: string[] }> {
+  return await page.evaluate((sheetText) => {
     const KEYWORD_WEIGHT: Record<string, number> = { normal: 400, bold: 700, lighter: 100, bolder: 700 };
     const weightRange = (s: string): [number, number] => {
       const parts = s.trim().split(/\s+/).filter(Boolean);
@@ -42,6 +44,16 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
     };
     const unquote = (s: string) => s.trim().replace(/^["']|["']$/g, "").trim();
     const faces: FontFaceRecord[] = [];
+    const unreadable: string[] = [];
+    const rulesOf = (sheet: CSSStyleSheet): CSSRuleList | undefined => {
+      try { return sheet.cssRules; } catch { /* cross-origin */ }
+      const text = sheet.href ? sheetText[sheet.href] : undefined;
+      if (text === undefined) { unreadable.push(sheet.href ?? "inline stylesheet"); return undefined; }
+      // ponytail: replaceSync drops @import inside a cross-origin sheet; follow them by text if a corpus needs it.
+      const parsed = new CSSStyleSheet();
+      parsed.replaceSync(text);
+      return parsed.cssRules;
+    };
     const visit = (rules: CSSRuleList, base: string): void => {
       for (const rule of rules) {
         if (rule instanceof CSSFontFaceRule) {
@@ -68,18 +80,15 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
             src,
             loaded: false,
           });
+        } else if (rule instanceof CSSImportRule) {
+          if (rule.styleSheet) { const r = rulesOf(rule.styleSheet); if (r) visit(r, rule.styleSheet.href ?? base); }
         } else if ("cssRules" in rule) visit((rule as CSSGroupingRule).cssRules, base);
       }
     };
     for (const sheet of document.styleSheets) {
       if ((sheet.ownerNode as Element | null)?.hasAttribute?.("data-markswift-harness")) continue;
-      let rules: CSSRuleList;
-      try {
-        rules = sheet.cssRules;
-      } catch {
-        continue;
-      }
-      visit(rules, sheet.href ?? document.baseURI);
+      const rules = rulesOf(sheet);
+      if (rules) visit(rules, sheet.href ?? document.baseURI);
     }
     // `document.fonts` holds the same faces as live objects; a loaded one is what painted.
     const loaded = new Set<string>();
@@ -97,8 +106,8 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
       seen.add(key);
       out.push({ ...f, loaded: loaded.has(`${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}`) });
     }
-    return out;
-  });
+    return { faces: out, unreadable };
+  }, sheetText);
 }
 
 const MAX_FONT_BYTES = 25 * 1024 * 1024;
