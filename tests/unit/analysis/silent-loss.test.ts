@@ -37,3 +37,20 @@ describe("BUG-16 preserve-mode source map", () => {
     expect(normalizeWhitespace(text, "preserve").src).toEqual([0, 1, 2, 3, 4, 5]);
   });
 });
+
+describe("BUG-05 non-collapsible spaces", () => {
+  // CSS collapses only space, tab, segment breaks and form feed; JS `\s` also matched NBSP and friends.
+  test("NBSP survives collapse; ASCII whitespace still collapses", () => {
+    expect(normalizeWhitespace("10\u00A0km", "collapse").text).toBe("10\u00A0km");
+    expect(normalizeWhitespace("a\u00A0\u00A0b", "collapse").text).toBe("a\u00A0\u00A0b");
+    expect(normalizeWhitespace("a \n\t b", "collapse").text).toBe("a b");
+  });
+
+  test("an NBSP-only cell is text, not an empty box", () => {
+    const td = el("td", { x: 0, y: 0, w: 200, h: 20 }, { display: "table-cell" }, [textNode("\u00A0", { x: 0, y: 3, w: 4, h: 14 })]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [td])), "S");
+    const sem = flatten(screen.root).find((n) => n.frame.w === 200 && n !== screen.root);
+    expect(sem?.kind).toBe("text");
+    expect(sem?.kind === "text" ? sem.runs[0]?.text : undefined).toBe("\u00A0");
+  });
+});

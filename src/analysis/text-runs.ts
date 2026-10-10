@@ -91,7 +91,8 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
   return { text: out, src };
 }
 
-const WS = /\s/;
+/** CSS collapsible white space (space, tab, segment breaks, form feed). NBSP, U+202F, U+3000 and U+2000–200A are content: they never collapse or break. */
+const WS = /[ \t\n\r\f]/;
 
 /** The colour glyphs paint in: `-webkit-text-fill-color` overrides `color`; black when neither parses. */
 export function textColorOf(s: Record<string, string>): Color {

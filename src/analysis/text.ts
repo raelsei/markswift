@@ -42,18 +42,18 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       // Collapsible whitespace merges across run boundaries; a whitespace-only run is just the
       // separator between its neighbours.
       const prev = out[out.length - 1];
-      if (!text.trim()) {
-        if (prev && !/\s$/.test(prev.text)) pendingSpace = true;
+      if (!/[^ \t\n\r\f]/.test(text)) {
+        if (prev && !/[ \t\n\r\f]$/.test(prev.text)) pendingSpace = true;
         continue;
       }
-      if (text.startsWith(" ") && (!prev || /\s$/.test(prev.text))) {
+      if (text.startsWith(" ") && (!prev || /[ \t\n\r\f]$/.test(prev.text))) {
         text = text.slice(1);
         src = src.slice(1);
       }
       // Snapshots may omit a whitespace-only text node between two inline elements; the laid-out
       // boxes (the inline element's, so its padding does not count) still show it as a gap on the
       // line, or as a break opportunity that wrapped.
-      if (prev && prevRun && r.node.tag !== "br" && !/\s$/.test(prev.text) && !text.startsWith(" ")) {
+      if (prev && prevRun && r.node.tag !== "br" && !/[ \t\n\r\f]$/.test(prev.text) && !text.startsWith(" ")) {
         const a = (prevRun.styleOf === host ? prevRun.node : prevRun.styleOf).bounds;
         const b = (r.styleOf === host ? r.node : r.styleOf).bounds;
         const sameLine = b.y < a.y + a.h - 1;
@@ -150,8 +150,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
   }
-  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^\s+/);
-  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /\s+$/);
+  if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
+  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
