@@ -283,6 +283,10 @@ export interface StackNode extends SemBase {
   distribution: Distribution;
   /** Leading offset before the first child that padding does not explain. */
   leadInset: number;
+  /** Gaps taken by a CSS auto margin in a flex container — index i is before child i (children.length = after the last). Emitted as flexible Spacers; the gap's fixed part (`spacing`, or `leadInset` for 0) is their minimum. */
+  autoGaps?: number[];
+  /** `space-between`: the CSS gap, the Spacers' minimum length. */
+  minGap?: number;
   scroll?: Axis;
   /** Fixed-size row items that reflow natively when available width changes. */
   wrap?: { columnGap: number; rowGap: number };

@@ -20,7 +20,10 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     const kids = n.children;
     const uniform = typeof n.spacing === "number";
     const spacers = n.distribution === "between" || n.distribution === "around" || n.distribution === "evenly";
-    const spacing = spacers ? 0 : uniform ? (n.spacing as number) : 0;
+    // CSS auto margins (`ml-auto`, `mt-auto`) take the free space: flexible Spacers at those gaps.
+    const auto = new Set(n.autoGaps ?? []);
+    const gapAt = (i: number) => (typeof n.spacing === "number" ? n.spacing : (n.spacing[i - 1] ?? 0));
+    const spacing = spacers || auto.size ? 0 : uniform ? (n.spacing as number) : 0;
     // Mode difference — HStack cross alignment. Fidelity: `.top` plus a per-child top padding
     // taken from the measured geometry, so placement does not depend on native text metrics.
     // App: the IR's cross alignment and no geometric padding; SwiftUI aligns natively.
@@ -34,7 +37,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // plus one after the last (all gaps equal).
     const around = n.distribution === "around", evenly = n.distribution === "evenly";
     kids.forEach((c, i) => {
-      if ((i > 0 && n.distribution === "between") || around || evenly) out.push("    Spacer(minLength: 0)");
+      if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
+      if ((i > 0 && n.distribution === "between") || around || evenly) out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
       const lines = ctx.renderNode(c);
       const extra: string[] = [];
       if (geometry) {
@@ -42,10 +46,11 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
         if (dy > 0.5) extra.push(`.padding(.top, ${num(dy)})`);
       }
       // Negative when the first child hangs outside the content box (outside markers, negative margins).
-      if (i === 0 && n.leadInset !== 0 && !around && !evenly) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
-      if (!uniform && !spacers && i > 0) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num((n.spacing as number[])[i - 1] ?? 0)})`);
+      if (i === 0 && n.leadInset !== 0 && !around && !evenly && !auto.has(0)) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
+      if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i)) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
       out.push(...indent([...lines, ...extra], 1));
       if (around || (evenly && i === kids.length - 1)) out.push("    Spacer(minLength: 0)");
+      if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
     });
     out.push("}");
     // Only content-height rows need an intrinsic proposal to keep stretch children from

@@ -1,7 +1,7 @@
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
 import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, type Axis, addDiagnostic } from "../model/semantic.ts";
-import { parseColor, parseDeclared, round2 } from "../css/index.ts";
+import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { controlOf, buildControl } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
@@ -193,7 +193,11 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     });
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
-    stack = stackOf(base, axis, lines.flat(), align, distribution);
+    stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
+    if (distribution === "between") {
+      const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
+      if (g > 0) stack.minGap = round2(g);
+    }
   }
 
   const scroll = scrollAxis(n, stack.children.map((c) => c.frame));

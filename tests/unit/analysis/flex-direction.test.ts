@@ -247,3 +247,67 @@ describe("Step 4 align-self", () => {
     expect(inferred(host, "m").node.selfAlign).toBe("center");
   });
 });
+
+/** A painted block flex item, optionally with Typed-OM auto margins. */
+function item(id: string, bounds: Rect, styles: Record<string, string> = {}, autoMargins?: ("top" | "right" | "bottom" | "left")[]): LayoutNode {
+  return { ...el("div", bounds, { display: "block", ...RED, ...styles }, [], { id }), ...(autoMargins ? { preferredSize: { width: "auto", height: "auto", autoMargins } } : {}) };
+}
+
+describe("Step 6 auto margins", () => {
+  test("ml-auto in a navbar becomes a Spacer whose minimum is the CSS gap", () => {
+    const nav = { ...el("nav", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex", "column-gap": "8px" }, [
+      item("a", { x: 0, y: 0, w: 40, h: 20 }),
+      item("b", { x: 262, y: 0, w: 38, h: 20 }, { "margin-left": "214px" }, ["left"]),
+    ], { id: "n" }), preferredSize: { width: "300px", height: "auto" } };
+    const { doc: d, node: n } = inferred(nav, "n");
+    if (n.kind !== "stack") throw new Error("expected #n stack");
+    expect(n.autoGaps).toEqual([1]);
+    expect(n.spacing).toBe(8);
+    const code = compileLayout(d, { name: "Nav", mode: "app" }).code;
+    expect(code).toContain("Spacer(minLength: 8.0)");
+    expect(code).not.toContain(".padding(.leading, 222.0)");
+  });
+
+  test("mt-auto in a column pushes the last child to the bottom", () => {
+    const col = { ...el("div", { x: 0, y: 0, w: 200, h: 300 }, { display: "flex", "flex-direction": "column" }, [
+      item("t", { x: 0, y: 0, w: 200, h: 20 }),
+      item("btn", { x: 0, y: 270, w: 200, h: 30 }, { "margin-top": "250px" }, ["top"]),
+    ], { id: "col" }), preferredSize: { width: "200px", height: "300px" } };
+    const { doc: d, node: n } = inferred(col, "col");
+    if (n.kind !== "stack") throw new Error("expected #col stack");
+    expect(n.autoGaps).toEqual([1]);
+    const code = compileLayout(d, { name: "Col", mode: "app" }).code;
+    expect(code.slice(code.indexOf("VStack"))).toContain("Spacer(minLength: 0.0)");
+  });
+
+  test("ml-auto on the first child replaces the leading inset", () => {
+    const nav = { ...el("nav", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex" }, [
+      item("a", { x: 250, y: 0, w: 50, h: 20 }, { "margin-left": "250px" }, ["left"]),
+    ], { id: "n" }), preferredSize: { width: "300px", height: "auto" } };
+    const n = inferred(nav, "n").node;
+    if (n.kind !== "stack") throw new Error("expected #n stack");
+    expect(n.autoGaps).toEqual([0]);
+    expect(n.leadInset).toBe(0);
+  });
+
+  test("an auto vertical margin in block flow is no Spacer", () => {
+    const host = { ...el("div", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
+      item("t", { x: 0, y: 0, w: 200, h: 20 }),
+      item("b", { x: 0, y: 20, w: 200, h: 20 }, {}, ["top"]),
+    ], { id: "blk" }), preferredSize: { width: "200px", height: "100px" } };
+    const n = inferred(host, "blk").node;
+    if (n.kind !== "stack") throw new Error("expected #blk stack");
+    expect(n.autoGaps).toBeUndefined();
+  });
+
+  test("space-between keeps the CSS gap as the Spacers' minimum", () => {
+    const row = { ...el("div", { x: 0, y: 0, w: 300, h: 20 }, { display: "flex", "justify-content": "space-between", "column-gap": "16px" }, [
+      item("a", { x: 0, y: 0, w: 40, h: 20 }),
+      item("b", { x: 260, y: 0, w: 40, h: 20 }),
+    ], { id: "r" }), preferredSize: { width: "300px", height: "auto" } };
+    const { doc: d, node: n } = inferred(row, "r");
+    if (n.kind !== "stack") throw new Error("expected #r stack");
+    expect(n.minGap).toBe(16);
+    expect(compileLayout(d, { name: "Between", mode: "app" }).code).toContain("Spacer(minLength: 16.0)");
+  });
+});
