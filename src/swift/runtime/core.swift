@@ -57,14 +57,23 @@ extension Text {
     }
 }
 
+/// Bundle holding the generated `Images/` resources. `.main` for an app target; set it to `Bundle.module`
+/// (or a framework bundle) when the generated views live in a package.
+enum MarkswiftAssets {
+    nonisolated(unsafe) static var bundle: Bundle = .main
+    nonisolated(unsafe) static let cache = NSCache<NSString, UIImage>()
+}
+
 extension Image {
-    /// A raster image inlined as base64 (a `data:` URL in the design). Falls back to a system
-    /// placeholder instead of trapping when the payload is not an image UIKit can decode.
-    nonisolated static func markswiftData(_ base64: String) -> Image {
-        if let data = Data(base64Encoded: base64), let image = UIImage(data: data) {
-            return Image(uiImage: image)
-        }
-        return Image(systemName: "photo")
+    /// A raster image shipped as `Images/<file>`; decoded once per process, then cached. Falls back to a
+    /// system placeholder instead of trapping when the file is missing from the bundle.
+    nonisolated static func markswiftAsset(_ file: String) -> Image {
+        if let cached = MarkswiftAssets.cache.object(forKey: file as NSString) { return Image(uiImage: cached) }
+        let bundle = MarkswiftAssets.bundle
+        guard let url = bundle.url(forResource: "Images/" + file, withExtension: nil) ?? bundle.url(forResource: file, withExtension: nil),
+              let image = UIImage(contentsOfFile: url.path) else { return Image(systemName: "photo") }
+        MarkswiftAssets.cache.setObject(image, forKey: file as NSString)
+        return Image(uiImage: image)
     }
 }
 

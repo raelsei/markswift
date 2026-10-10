@@ -29,8 +29,6 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
 }
 
 export interface ConversionResult extends CompileResult {
-  /** Relative output paths -> bytes. Add these resources to the iOS target. */
-  assets: Record<string, Uint8Array>;
   /** Font packaging limitations, browser resource/page errors and light/dark pairing limitations. */
   warnings: string[];
   /** The emitted capture: the light one for `adaptive`. */

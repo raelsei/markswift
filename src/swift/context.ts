@@ -6,6 +6,8 @@ export interface SwiftOutput {
   view: string;
   /** Shapes referenced by this screen: name → Swift struct source. */
   shapes: Record<string, string>;
+  /** Raster files referenced by this screen: bundle path (`Images/<hash>.<ext>`) → bytes. */
+  images: Record<string, Uint8Array>;
   /** Nodes whose confidence is not `mapped`, with what each lost. */
   report: Array<{ id: string; kind: string; confidence: Confidence; diagnostics: Diagnostic[] }>;
 }
@@ -36,6 +38,8 @@ export interface EmitContext {
   nameOf: Map<SemNode, string>;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
+  /** Raster files referenced so far, path → bytes. */
+  images: Record<string, Uint8Array>;
   screen: Screen;
   mode: EmitMode;
   /** `@State` names and action callbacks of this screen's controls. */

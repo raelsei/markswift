@@ -28,6 +28,8 @@ export interface CompileResult {
   /** All Swift sources needed by this view, including shared runtime helpers. */
   files: Record<string, string>;
   diagnostics: SwiftOutput["report"];
+  /** Binary resources referenced by the generated Swift (relative bundle path → bytes), e.g. `Images/<hash>.png`. Add these resources to the iOS target. */
+  assets: Record<string, Uint8Array>;
   /** Light/dark pairing limitations; empty for a single-theme compile. */
   warnings: string[];
 }
@@ -80,7 +82,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
   }
   const shapes = Object.keys(result.shapes).sort().map((key) => result.shapes[key]);
   return {
-    name, code: result.view, diagnostics: result.report, warnings,
+    name, code: result.view, diagnostics: result.report, warnings, assets: result.images,
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,

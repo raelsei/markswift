@@ -19,7 +19,7 @@ bun run test
 
 The alpha CLI runs with Bun from this checkout; it does not require the playground API.
 Give it a new output directory because one conversion produces several Swift sources and may
-include font assets. An existing directory is never overwritten.
+include font and image assets. An existing directory is never overwritten.
 
 ```sh
 printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18px system-ui">Hello Markswift</main>' \
@@ -73,13 +73,15 @@ for (const [path, bytes] of Object.entries(result.assets)) {
 ```
 
 Add **all generated `.swift` files** to the same iOS target, not just `result.code`.
-When fonts are returned, add `Fonts/` resources and merge `<View>+UIAppFonts.plist.fragment` into
+When fonts or images are returned, add the `Fonts/` and `Images/` folders as resources (folder
+references keep the paths; plain groups also work). If the views live in a Swift package, set
+`MarkswiftAssets.bundle = .module` once at startup. Merge `<View>+UIAppFonts.plist.fragment` into
 the app's Info.plist, or call `<View>.BundledFonts.register(in:)` with the resource bundle before rendering.
 Every per-view declaration (tokens in `<View>.Palette`, shapes, bundled-font registration) is
 nested in the view's type and its files are prefixed with the view name, so several conversions
 can share one target. `MarkswiftRuntime.swift` is identical for every conversion made by the same
 Markswift version: add it to a target once, and replace it (re-converting older screens) when you
-upgrade. Add each `Fonts/` file once.
+upgrade. Add each `Fonts/` file once; `Images/` files are named by content hash, so views share them.
 
 ## Inputs and output
 
@@ -106,18 +108,21 @@ const result = compileLayout(savedLayout, { name: "CardView", mode: "app" });
   for client-mounted content.
 - `mode: "app"` emits native layout; `"fidelity"` aims at the captured geometry for visual
   comparison. One viewport is one observed state, not an inferred set of responsive rules.
-- The result contains `code`, `files`, font `assets`, node `diagnostics`, resource/font
+- The result contains `code`, `files`, `assets` (fonts and raster images as `Images/<hash>.<ext>`,
+  one file per distinct image), node `diagnostics`, resource/font
   `warnings`, the measured `layout` and, for adaptive conversions, `darkLayout`. Loaded images are
   embedded in the captured layout so generated code does not depend on a temporary local server.
-  Unavailable images are reported; a loopback image URL (`127.0.0.1`, `localhost`) is never emitted —
-  the layer becomes a placeholder (or the `alt` text) with a diagnostic.
+  Unavailable images are reported; a loopback image URL (`127.0.0.1`, `localhost`) or an image
+  without captured bytes is never emitted — the layer becomes a placeholder (or the `alt` text)
+  with a diagnostic. Remote `http(s)` images load at runtime through `AsyncImage`.
 - Each `diagnostics` entry is a node (`id`, `kind`, `confidence`) with what it lost:
   `{ level: "approximated" | "unmapped", feature, message }`, where `feature` is a conformance
   inventory row id (`font-family`, `display: grid`, `svg:use`, `img`), so reports group by feature.
 - `timeoutMs` (default 120000, i.e. 120 s) bounds the whole conversion: browser, network and font
   conversion. A conversion that exceeds it rejects with `conversion timed out after <n> ms`.
 - `compileLayout` accepts prepared `bundledFamilies` and `fontMetrics` for custom fonts.
-  Without them it uses native system fonts and reports substitutions. It does not package assets.
+  Without them it uses native system fonts and reports substitutions. It returns raster image
+  `assets` too, but does not package fonts.
   Saved layouts must be `LayoutDoc` version 2; recapture older files.
 
 **Light and dark.** By default (`theme: "adaptive"`, CLI `--theme adaptive`) Markswift captures the

@@ -78,7 +78,7 @@ const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: st
   {
     name: "ImageFamily",
     html: `<img style="width:40px;height:40px" src="${PNG}"><img style="width:40px;height:40px" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><circle cx='5' cy='5' r='4' fill='red'/></svg>"><div style="width:120px;height:40px;background:url(${PNG}) repeat;background-size:8px 8px"></div>`,
-    app: ["Image.markswiftData("],
+    app: ["Image.markswiftAsset("],
   },
   {
     name: "WebfontFamily", assetsDir: ASSETS,

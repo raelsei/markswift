@@ -11,6 +11,7 @@ export type { EmitMode, EmitOptions, SwiftOutput } from "./context.ts";
 export { SWIFT_RUNTIME } from "./runtime.ts";
 export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): SwiftOutput {
   const shapes: Record<string, string> = {};
+  const images: Record<string, Uint8Array> = {};
   const report: SwiftOutput["report"] = [];
   const props: Array<{ name: string; node: SemNode }> = [];
   const seen: Record<string, number> = {};
@@ -24,7 +25,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   for (const p of props) nameOf.set(p.node, p.name);
   // Control state pass: a control owns its value, so the view that holds it declares the storage.
   const control = controlMembers(screen.root);
-  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, screen, mode: opts.mode, control, tokens: opts.tokens, adaptive: opts.adaptive, renderNode: (node) => refOf(node, ctx) };
+  const ctx: EmitContext = { fontMetrics: opts.fontMetrics ?? {}, nameOf, shapes, images, screen, mode: opts.mode, control, tokens: opts.tokens, adaptive: opts.adaptive, renderNode: (node) => refOf(node, ctx) };
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   const members = [...control.decls];
@@ -59,5 +60,5 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   visit(screen.root, (n) => {
     if (n.confidence !== "mapped") report.push({ id: n.id, kind: n.kind, confidence: n.confidence, diagnostics: n.diagnostics });
   });
-  return { view: lines.join("\n") + "\n", shapes, report };
+  return { view: lines.join("\n") + "\n", shapes, images, report };
 }

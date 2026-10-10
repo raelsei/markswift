@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Paint } from "../css/index.ts";
 import type { SemNode, ImageNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
@@ -57,31 +58,35 @@ type ImageSource =
 
 /**
  * Image source for a URL. Inline `data:` payloads: SVG markup becomes vector Shapes (UIImage
- * cannot decode SVG), anything else decodes at runtime through `Image.markswiftData` (never
- * force-unwrapped). `http(s)` loads asynchronously; anything else is an asset-catalog name.
- * `undefined` (with a note) when the payload is unusable.
+ * cannot decode SVG), a raster becomes one file `Images/<sha256-12>.<ext>` in `ctx.images` (identical
+ * bytes share it) loaded through `Image.markswiftAsset`. `http(s)` loads asynchronously; anything
+ * else (a loopback or a non-embedded relative URL) has no bytes to ship.
+ * `undefined` (with a note) when the source is unusable.
  */
 function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
-  if (LOOPBACK.test(url)) {
-    note(n, "unmapped", prop === "img" ? "img" : `${prop}: url()`, `${prop} image ${url} was not captured (temporary local server URL); layer dropped`);
-    return undefined;
-  }
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
-    if (/^https?:/i.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
-    const name = url.replace(/[?#].*$/, "").replace(/^.*\//, "").replace(/\.[a-z0-9]+$/i, "");
-    return { kind: "raster", expr: (sizing) => `Image(${str(name)})${sizing}` };
+    if (/^https?:/i.test(url) && !LOOPBACK.test(url)) return { kind: "raster", expr: (sizing) => `AsyncImage(url: URL(string: ${str(url)})) { $0${sizing} } placeholder: { Color.clear }` };
+    dropNote(url, n, prop);
+    return undefined;
   }
   const [, mime = "", params = "", payload = ""] = data;
   const base64 = params.split(";").includes("base64");
   if (mime !== "image/svg+xml") {
-    const b64 = base64 ? payload : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))), "latin1").toString("base64");
-    return { kind: "raster", expr: (sizing) => `Image.markswiftData(${str(b64)})${sizing}` };
+    const bytes = dataBytes(payload, base64);
+    const ext = rasterExt(bytes);
+    if (!ext) {
+      note(n, "unmapped", imageFeature(prop), `${prop} data: URL is not a PNG/JPEG/GIF/BMP/WebP/TIFF image; layer dropped`);
+      return undefined;
+    }
+    const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}.${ext}`;
+    ctx.images[`Images/${file}`] ??= new Uint8Array(bytes);
+    return { kind: "raster", expr: (sizing) => `Image.markswiftAsset(${str(file)})${sizing}` };
   }
   const markup = base64 ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
   const svg = svgFromMarkup(markup, { x: 0, y: 0, w: 0, h: 0 });
   if (!svg) {
-    note(n, "unmapped", prop === "img" ? "img" : `${prop}: url()`, `${prop} svg data: URL has no viewBox; layer dropped`);
+    note(n, "unmapped", imageFeature(prop), `${prop} svg data: URL has no viewBox; layer dropped`);
     return undefined;
   }
   for (const d of svg.diagnostics) note(n, d.level, d.feature, d.message);
@@ -97,28 +102,48 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
   };
 }
 
+/** Inventory row of an image source: the `<img>` element, or the `url()` value row of `background-image`/`mask-image`. */
+function imageFeature(prop: string): string {
+  return prop === "img" ? "img" : `${prop}: url()`;
+}
+
+/** Why a non-`data:` source that is not a usable remote URL cannot be shown. */
+function dropNote(url: string, n: SemNode, prop: string): void {
+  note(n, "unmapped", imageFeature(prop), LOOPBACK.test(url)
+    ? `${prop} image ${url} was not captured (temporary local server URL); layer dropped`
+    : `${prop} image ${url} is not embedded (no captured bytes); placeholder emitted`);
+}
+
+/** Bytes of a `data:` URL payload: base64, or percent-encoded octets. */
+function dataBytes(payload: string, base64: boolean): Buffer {
+  return base64 ? Buffer.from(payload, "base64") : Buffer.from(payload.replace(/%([0-9a-f]{2})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))), "latin1");
+}
+
 /**
- * Payload prefixes of the raster formats UIImage decodes. A `data:` URL matching none of them is
- * a broken image: the browser paints the `alt` text in the box instead of the picture, and so do we.
+ * Payload prefixes of the raster formats UIImage decodes, with the file extension each ships as.
+ * A `data:` URL matching none of them is a broken image: the browser paints the `alt` text in the
+ * box instead of the picture, and so do we.
  */
-const RASTER_MAGIC: number[][] = [
-  [0x89, 0x50, 0x4e, 0x47], // PNG
-  [0xff, 0xd8, 0xff], // JPEG
-  [0x47, 0x49, 0x46, 0x38], // GIF
-  [0x42, 0x4d], // BMP
-  [0x52, 0x49, 0x46, 0x46], // RIFF (WebP)
-  [0x49, 0x49, 0x2a, 0x00], // TIFF little-endian
-  [0x4d, 0x4d, 0x00, 0x2a], // TIFF big-endian
+const RASTER_MAGIC: Array<[ext: string, magic: number[]]> = [
+  ["png", [0x89, 0x50, 0x4e, 0x47]],
+  ["jpg", [0xff, 0xd8, 0xff]],
+  ["gif", [0x47, 0x49, 0x46, 0x38]],
+  ["bmp", [0x42, 0x4d]],
+  ["webp", [0x52, 0x49, 0x46, 0x46]], // RIFF
+  ["tiff", [0x49, 0x49, 0x2a, 0x00]], // little-endian
+  ["tiff", [0x4d, 0x4d, 0x00, 0x2a]], // big-endian
 ];
 
-/** Can this source produce pixels? Only an inline payload can be judged here; anything else resolves at runtime, except a loopback URL, which never will. */
+function rasterExt(bytes: Uint8Array): string | undefined {
+  return RASTER_MAGIC.find(([, magic]) => magic.every((b, i) => bytes[i] === b))?.[0];
+}
+
+/** Can this source produce pixels? An inline payload is judged by its bytes; otherwise only a non-loopback `http(s)` URL can. */
 function decodable(url: string): boolean {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
-  if (!data) return url.length > 0 && !LOOPBACK.test(url);
+  if (!data) return /^https?:/i.test(url) && !LOOPBACK.test(url);
   const [, mime = "", params = "", payload = ""] = data;
-  if (mime === "image/svg+xml") return true;
-  const bytes = params.split(";").includes("base64") ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload), "latin1");
-  return RASTER_MAGIC.some((magic) => magic.every((b, i) => bytes[i] === b));
+  return mime === "image/svg+xml" || rasterExt(dataBytes(payload, params.split(";").includes("base64"))) !== undefined;
 }
 
 /**
@@ -130,7 +155,7 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${str(n.alt)})`];
   const src = decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
-    if (LOOPBACK.test(n.src)) note(n, "unmapped", "img", `img image ${n.src} was not captured (temporary local server URL); layer dropped`);
+    if (n.src && !n.src.startsWith("data:")) dropNote(n.src, n, "img");
     if (!n.alt) return ["Color.clear", ...a11y];
     // The browser paints the alt text at the top-left of the box in the element's own font.
     note(n, "approximated", "img", "broken image source → alt text in the measured box");
