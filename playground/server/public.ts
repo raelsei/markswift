@@ -10,9 +10,9 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("POR
 const workDirectory = process.env.MARKSWIFT_WORK_DIR ?? join(import.meta.dir, ".cache");
 await mkdir(workDirectory, { recursive: true });
 await sweepResults(workDirectory);
-const app = createPublicApp({ publicOrigin, workDirectory });
+const app = createPublicApp({ publicOrigin, workDirectory, trustedProxy: process.env.MARKSWIFT_TRUSTED_PROXY });
 const server = Bun.serve({
   hostname: "0.0.0.0", port, idleTimeout: 120, maxRequestBodySize: 1_000_000,
-  fetch(request, server) { return app(request, server.requestIP(request)?.address ?? "unknown"); },
+  fetch(request, server) { return app(request, server.requestIP(request)?.address); },
 });
 console.log(`Markswift conversion API listening on ${server.port}; allowed frontend: ${publicOrigin}`);

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildStatic } from "../build.ts";
-import { createPublicApp } from "../server/public-app.ts";
+import { clientIp, createPublicApp, rateLimiter } from "../server/public-app.ts";
 import { buildService } from "../build-service.ts";
 
 test("static bundle works below a Pages project path and names its conversion API", async () => {
@@ -43,6 +43,24 @@ test("public API allows one configured frontend origin and exposes conversion wi
 
 test("public API requires a secure frontend origin outside localhost", () => {
   expect(() => createPublicApp({ publicOrigin: "http://demo.example.com", workDirectory: "/tmp" })).toThrow("HTTPS");
+});
+
+test("rate limiter uses a one-minute window per key and keeps a bounded number of keys", () => {
+  const limiter = rateLimiter(2, 5);
+  expect(limiter.limited("a", 0)).toBe(false);
+  expect(limiter.limited("a", 1)).toBe(false);
+  expect(limiter.limited("a", 2)).toBe(true);
+  expect(limiter.limited("a", 60_001 + 1)).toBe(false);
+  for (let key = 0; key < 20; key++) limiter.limited(`k${key}`, 70_000);
+  expect(limiter.size()).toBeLessThanOrEqual(5);
+});
+
+test("client IP trusts X-Forwarded-For only from the configured proxy", () => {
+  const forwarded = new Request("https://api.example.com/", { headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2" } });
+  expect(clientIp(forwarded, "9.9.9.9")).toBe("9.9.9.9");
+  expect(clientIp(forwarded, "9.9.9.9", "10.0.0.1")).toBe("9.9.9.9");
+  expect(clientIp(forwarded, "10.0.0.1", "10.0.0.1")).toBe("2.2.2.2");
+  expect(clientIp(new Request("https://api.example.com/"), "10.0.0.1", "10.0.0.1")).toBe("10.0.0.1");
 });
 
 test("conversion service bundles independently of the library source tree", async () => {
