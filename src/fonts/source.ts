@@ -1,6 +1,5 @@
 import type { FontFace } from "../model/layout.ts";
 
-
 /** Codepoints a face must cover to be the one worth bundling: Basic Latin. */
 export function coversLatin(range: string | undefined): boolean {
   if (!range) return true;
@@ -14,15 +13,17 @@ export function coversLatin(range: string | undefined): boolean {
   return false;
 }
 
-
 /** Bytes behind one `src` entry: the `data:` URL itself, or the captured bytes keyed by `src.file`. */
-export function srcBytes(src: FontFace["src"][number], sources: ReadonlyMap<string, Uint8Array>): Uint8Array | undefined {
+export function srcBytes(
+  src: FontFace["src"][number],
+  sources: ReadonlyMap<string, Uint8Array>,
+): Uint8Array | undefined {
   const data = /^data:[^,]*;base64,(.*)$/s.exec(src.url);
   if (data) return Uint8Array.from(Buffer.from(data[1]!, "base64"));
-  if (src.url.startsWith("data:")) return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
+  if (src.url.startsWith("data:"))
+    return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
   return src.file ? sources.get(src.file) : undefined;
 }
-
 
 /** OpenType weight class → the subfamily name a font file conventionally carries for it. */
 export const WEIGHT_SUBFAMILY: Record<number, string> = {
@@ -37,12 +38,10 @@ export const WEIGHT_SUBFAMILY: Record<number, string> = {
   900: "Black",
 };
 
-
 /** `Geist Variable` → `GeistVariable`; a file name and a PostScript name stem. */
 function sanitize(family: string): string {
   return family.replace(/[^A-Za-z0-9]/g, "") || "Font";
 }
-
 
 /**
  * File stem for a packaged face, unique within one package case-insensitively (as `writeBundle` checks).
@@ -50,7 +49,11 @@ function sanitize(family: string): string {
  * family already owns the stem: the same family+subfamily twice (italic and oblique, or a static 400 and a
  * variable Regular) would register one PostScript name twice on iOS, so only the first can be bundled.
  */
-export function fontFileStem(family: string, subfamily: string, claimed: ReadonlyMap<string, string>): string | undefined {
+export function fontFileStem(
+  family: string,
+  subfamily: string,
+  claimed: ReadonlyMap<string, string>,
+): string | undefined {
   const base = sanitize(family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
   const owner = claimed.get(base.toLowerCase());
   if (owner === undefined) return base;

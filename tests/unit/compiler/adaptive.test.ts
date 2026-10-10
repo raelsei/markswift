@@ -4,21 +4,39 @@ import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
 
 type Node = LayoutDoc["root"];
 const box = (id: string, y: number, styles: Record<string, string>): Node => ({
-  id, tag: "div", attrs: {}, styles: { display: "block", ...styles }, bounds: { x: 0, y, w: 200, h: 20 }, children: [],
+  id,
+  tag: "div",
+  attrs: {},
+  styles: { display: "block", ...styles },
+  bounds: { x: 0, y, w: 200, h: 20 },
+  children: [],
 });
 
 function page(theme: "light" | "dark", card: string, edge?: string): LayoutDoc {
   return {
-    version: 2, source: "card.html", combo: { screen: "card", theme },
-    size: { w: 200, h: 100 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [],
+    version: 2,
+    source: "card.html",
+    combo: { screen: "card", theme },
+    size: { w: 200, h: 100 },
+    dpr: 1,
+    canvas: "rgb(255, 255, 255)",
+    fonts: [],
     root: {
-      id: "root", tag: "main", attrs: {}, styles: { display: "block" }, bounds: { x: 0, y: 0, w: 200, h: 100 },
+      id: "root",
+      tag: "main",
+      attrs: {},
+      styles: { display: "block" },
+      bounds: { x: 0, y: 0, w: 200, h: 100 },
       children: [
         box("card", 0, { "background-color": card }),
         box("accent", 20, { "background-color": "rgb(0, 128, 255)" }),
         box("accent2", 40, { "background-color": "rgb(0, 128, 255)" }),
         box("lone", 60, { "background-color": "rgb(51, 178, 77)" }),
-        box("edge", 80, edge ? { "border-top-style": "solid", "border-top-width": "2px", "border-top-color": edge } : {}),
+        box(
+          "edge",
+          80,
+          edge ? { "border-top-style": "solid", "border-top-width": "2px", "border-top-color": edge } : {},
+        ),
       ],
     },
   };
@@ -30,7 +48,10 @@ const adaptive = compileLayout(light, { name: "CardView", dark });
 const tokens = adaptive.files["CardView+Tokens.swift"]!;
 
 test("a single-use colour that differs in dark becomes an adaptive token the view references", () => {
-  const name = /static let (\w+) = Color\.markswift\(light: \.markswift\(1\.0, 1\.0, 1\.0\), dark: \.markswift\(0\.0, 0\.0, 0\.0\)\)/.exec(tokens)?.[1];
+  const name =
+    /static let (\w+) = Color\.markswift\(light: \.markswift\(1\.0, 1\.0, 1\.0\), dark: \.markswift\(0\.0, 0\.0, 0\.0\)\)/.exec(
+      tokens,
+    )?.[1];
   expect(name).toBeDefined();
   expect(adaptive.code).toContain(`Palette.${name}`);
   expect(adaptive.code).not.toContain("Color.markswift(1.0, 1.0, 1.0)");
@@ -73,7 +94,10 @@ test("one light colour that pairs with two dark colours on a node is reported, n
   const edge = { "border-top-style": "solid", "border-top-width": "2px", "border-top-color": "rgb(255, 255, 255)" };
   const doc = (theme: "light" | "dark", fill: string): LayoutDoc => ({
     ...page(theme, fill),
-    root: { ...page(theme, fill).root, children: [box("card", 0, { "background-color": fill, ...edge }), box("other", 20, edge)] },
+    root: {
+      ...page(theme, fill).root,
+      children: [box("card", 0, { "background-color": fill, ...edge }), box("other", 20, edge)],
+    },
   });
   const result = compileLayout(doc("light", "rgb(255, 255, 255)"), { dark: doc("dark", "rgb(0, 0, 0)") });
   expect(result.warnings.join("\n")).toMatch(/adaptive: 1 node\(s\) paint a colour that changes in dark .*: card$/);

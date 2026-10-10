@@ -32,7 +32,10 @@ export function trailingInset(n: LayoutNode, height: Size, padBottom: number): n
   const margins = contentExtent(n, true)!;
   const slack = n.bounds.y + n.bounds.h - (ext.y + ext.h);
   // The children's own end margins, and those collapsing through the children flush with the content bottom.
-  const flush = n.children.filter((c) => c.tag !== "#text" && !outOfFlow(c) && renders(c) && Math.abs(c.bounds.y + c.bounds.h - (ext.y + ext.h)) <= 0.5);
+  const flush = n.children.filter(
+    (c) =>
+      c.tag !== "#text" && !outOfFlow(c) && renders(c) && Math.abs(c.bounds.y + c.bounds.h - (ext.y + ext.h)) <= 0.5,
+  );
   const margin = Math.max(0, margins.y + margins.h - (ext.y + ext.h), ...flush.map(endMargin));
   return round2(Math.max(padBottom, Math.min(slack, padBottom + margin)));
 }
@@ -46,7 +49,9 @@ function endMargin(c: LayoutNode): number {
   const own = px(c.styles["margin-bottom"]);
   if (insetsOf(c.styles)[2] !== 0) return own;
   const bottom = c.bounds.y + c.bounds.h;
-  const flush = c.children.filter((k) => k.tag !== "#text" && !outOfFlow(k) && renders(k) && Math.abs(k.bounds.y + k.bounds.h - bottom) <= 0.5);
+  const flush = c.children.filter(
+    (k) => k.tag !== "#text" && !outOfFlow(k) && renders(k) && Math.abs(k.bounds.y + k.bounds.h - bottom) <= 0.5,
+  );
   return Math.max(own, ...flush.map(endMargin));
 }
 
@@ -82,7 +87,8 @@ function contentExtent(n: LayoutNode, margins: boolean): Rect | undefined {
  */
 function hugs(n: LayoutNode, axis: Axis): boolean {
   const [pt, pr, pb, pl] = insetsOf(n.styles);
-  const textHost = n.children.length > 0 && n.children.every((c) => c.tag === "#text" || c.tag === "br" || isInlineText(c));
+  const textHost =
+    n.children.length > 0 && n.children.every((c) => c.tag === "#text" || c.tag === "br" || isInlineText(c));
   const tol = axis === "v" && textHost ? Math.max(4, px(n.styles["line-height"])) : 1;
   for (const ext of [contentExtent(n, true), contentExtent(n, false)]) {
     const natural = axis === "h" ? (ext?.w ?? 0) + pl + pr : (ext?.h ?? 0) + pt + pb;
@@ -96,14 +102,28 @@ function hugs(n: LayoutNode, axis: Axis): boolean {
  * Otherwise geometry tells: parent content box → fill, own content → hug, other sizes →
  * measured pixels. Flex allocation and constraints share the same border-box contract.
  */
-export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceContext, diagnostics: Diagnostic[]): SizeConstraints & { width: Size; height: Size; selfAlign?: "start" | "center" | "end"; selfAlignV?: "start" | "center" | "end" } {
+export function sizeOf(
+  n: LayoutNode,
+  d: Record<string, string>,
+  ctx: InferenceContext,
+  diagnostics: Diagnostic[],
+): SizeConstraints & {
+  width: Size;
+  height: Size;
+  selfAlign?: "start" | "center" | "end";
+  selfAlignV?: "start" | "center" | "end";
+} {
   const s = n.styles;
   const abs = outOfFlow(n);
   // The child's own cross alignment (`align-self`) overrides the container's `align-items`.
   const own = ctx.parent ? alignSelfOf(n, ctx.parent) : undefined;
   const align = own ?? ctx.parentAlign;
-  const placed = own !== undefined && own !== ctx.parentAlign && (own === "start" || own === "center" || own === "end") ? own : undefined;
-  if (own === "baseline" && ctx.parentAlign !== "baseline") addDiagnostic(diagnostics, "approximated", "align-self", "align-self: baseline → the row's own alignment");
+  const placed =
+    own !== undefined && own !== ctx.parentAlign && (own === "start" || own === "center" || own === "end")
+      ? own
+      : undefined;
+  if (own === "baseline" && ctx.parentAlign !== "baseline")
+    addDiagnostic(diagnostics, "approximated", "align-self", "align-self: baseline → the row's own alignment");
   const declW = n.preferredSize?.width ?? d["width"];
   const declH = n.preferredSize?.height ?? d["height"];
 
@@ -119,7 +139,8 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
       return (self !== "auto" && self !== "normal" && self !== "stretch") || hugs(c, "v");
     });
   }
-  let fillsW = false, fillsH = false;
+  let fillsW = false,
+    fillsH = false;
   if (ctx.parent) {
     const [ppt, ppr, ppb, ppl] = insetsOf(ctx.parent.styles);
     const outerW = n.bounds.w + px(s["margin-left"]) + px(s["margin-right"]);
@@ -168,5 +189,11 @@ export function sizeOf(n: LayoutNode, d: Record<string, string>, ctx: InferenceC
   }
   if (selfAlign === undefined && placed && ctx.parentAxis === "v" && !abs) selfAlign = placed;
   const selfAlignV = placed && ctx.parentAxis === "h" && !abs ? placed : undefined;
-  return { width, height, ...constraints, ...(selfAlign !== undefined ? { selfAlign } : {}), ...(selfAlignV !== undefined ? { selfAlignV } : {}) };
+  return {
+    width,
+    height,
+    ...constraints,
+    ...(selfAlign !== undefined ? { selfAlign } : {}),
+    ...(selfAlignV !== undefined ? { selfAlignV } : {}),
+  };
 }

@@ -9,7 +9,15 @@ import { collectText } from "./text.ts";
 import { pathBounds, ringOf } from "./geometry.ts";
 import { gradientOf } from "./gradients.ts";
 
-const SVG_SHAPE_TAGS: Record<string, true> = { path: true, circle: true, rect: true, line: true, polyline: true, polygon: true, ellipse: true };
+const SVG_SHAPE_TAGS: Record<string, true> = {
+  path: true,
+  circle: true,
+  rect: true,
+  line: true,
+  polyline: true,
+  polygon: true,
+  ellipse: true,
+};
 
 /** Containers whose children are drawn in place. */
 const GROUP_TAGS: Record<string, true> = { g: true, svg: true, a: true };
@@ -40,19 +48,31 @@ function nestedViewport(c: LayoutNode, scope: SvgScope, ctx: SvgContext): SvgSco
   const inner = childScope(c, scope, ctx);
   const [, , vw, vh] = ctx.vb;
   // ponytail: percentages resolve against the root viewBox, not the parent viewport (wrong only for 3-level nesting with %).
-  const len = (v: string | undefined, span: number, def: number) => (v?.trim().endsWith("%") ? (parseFloat(v) / 100) * span : num(v, def));
-  const w = len(c.attrs["width"], vw, vw), h = len(c.attrs["height"], vh, vh);
-  inner.ctm = multiply(multiply(inner.ctm, [1, 0, 0, 1, len(c.attrs["x"], vw, 0), len(c.attrs["y"], vh, 0)]), viewBoxFit(c.attrs["viewbox"], w, h));
+  const len = (v: string | undefined, span: number, def: number) =>
+    v?.trim().endsWith("%") ? (parseFloat(v) / 100) * span : num(v, def);
+  const w = len(c.attrs["width"], vw, vw),
+    h = len(c.attrs["height"], vh, vh);
+  inner.ctm = multiply(
+    multiply(inner.ctm, [1, 0, 0, 1, len(c.attrs["x"], vw, 0), len(c.attrs["y"], vh, 0)]),
+    viewBoxFit(c.attrs["viewbox"], w, h),
+  );
   return inner;
 }
 
 /** `<g clip-path|mask>`: resolved once in the group's user space, inherited by every shape below. */
 function groupEffects(c: LayoutNode, inner: SvgScope, ctx: SvgContext): void {
   const clip = reference(c, c.attrs, "clip-path", ctx);
-  if (clip?.attrs["clippathunits"] === "objectBoundingBox") addDiagnostic(ctx.diagnostics, "unmapped", "svg:clipPath", "svg objectBoundingBox clip-path on a group is not applied");
+  if (clip?.attrs["clippathunits"] === "objectBoundingBox")
+    addDiagnostic(
+      ctx.diagnostics,
+      "unmapped",
+      "svg:clipPath",
+      "svg objectBoundingBox clip-path on a group is not applied",
+    );
   else if (clip) {
     const own = clipOf(clip, inner, { x: 0, y: 0, w: 0, h: 0 }, ctx);
-    if (own && inner.clip) addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
+    if (own && inner.clip)
+      addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
     if (own) inner.clip = own;
   }
   const mask = reference(c, c.attrs, "mask", ctx);
@@ -66,9 +86,12 @@ export function visitChildren(el: LayoutNode, scope: SvgScope, ctx: SvgContext):
 
 function visitOne(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
   const filter = c.styles["filter"] ?? c.attrs["filter"];
-  if (filter && filter !== "none") addDiagnostic(ctx.diagnostics, "unmapped", "svg:filter", `svg filter ${filter.slice(0, 40)} is not drawn`);
-  if (["marker-start", "marker-mid", "marker-end", "marker"].some((k) => c.attrs[k] && c.attrs[k] !== "none")) addDiagnostic(ctx.diagnostics, "unmapped", "svg:marker", "svg markers (marker-start/mid/end) are not drawn");
-  if (c.tag === "foreignobject") addDiagnostic(ctx.diagnostics, "unmapped", "svg:foreignObject", "svg foreignObject content is not drawn");
+  if (filter && filter !== "none")
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:filter", `svg filter ${filter.slice(0, 40)} is not drawn`);
+  if (["marker-start", "marker-mid", "marker-end", "marker"].some((k) => c.attrs[k] && c.attrs[k] !== "none"))
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:marker", "svg markers (marker-start/mid/end) are not drawn");
+  if (c.tag === "foreignobject")
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg:foreignObject", "svg foreignObject content is not drawn");
   if (SVG_SHAPE_TAGS[c.tag]) {
     const p = shapeToPath(c, childScope(c, scope, ctx), ctx, true);
     if (p) ctx.paths.push(p);
@@ -99,7 +122,8 @@ function instantiate(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
     return;
   }
   if (scope.depth > 8) return;
-  const x = num(c.attrs["x"]), y = num(c.attrs["y"]);
+  const x = num(c.attrs["x"]),
+    y = num(c.attrs["y"]);
   const inner = childScope(c, scope, ctx);
   inner.ctm = multiply(inner.ctm, [1, 0, 0, 1, x, y]);
   inner.useColor = c.styles["color"] ?? scope.useColor;
@@ -107,7 +131,8 @@ function instantiate(c: LayoutNode, scope: SvgScope, ctx: SvgContext): void {
   if (target.tag === "symbol" || target.tag === "svg") {
     // A symbol instance is a nested viewport: use/symbol width+height (default 100% of ours) with the symbol's viewBox fitted `meet`, centred.
     const [, , vw, vh] = ctx.vb;
-    const w = num(c.attrs["width"] ?? target.attrs["width"], vw), h = num(c.attrs["height"] ?? target.attrs["height"], vh);
+    const w = num(c.attrs["width"] ?? target.attrs["width"], vw),
+      h = num(c.attrs["height"] ?? target.attrs["height"], vh);
     inner.ctm = multiply(inner.ctm, viewBoxFit(target.attrs["viewbox"], w, h));
     visitChildren(target, { ...inner, attrs: inherit(inner.attrs, target.attrs) }, ctx);
   } else visitOne(target, inner, ctx);
@@ -123,17 +148,24 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
       d = attrs["d"];
       break;
     case "circle": {
-      const cx = g("cx"), cy = g("cy"), r = g("r");
+      const cx = g("cx"),
+        cy = g("cy"),
+        r = g("r");
       d = `M ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} Z`;
       circle = { cx, cy, r };
       break;
     }
     case "rect": {
-      const x = g("x"), y = g("y"), w = g("width"), h = g("height");
-      const rx = Math.min(g("rx", g("ry")), w / 2), ry = Math.min(g("ry", g("rx")), h / 2);
-      d = rx > 0 && ry > 0
-        ? `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`
-        : `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
+      const x = g("x"),
+        y = g("y"),
+        w = g("width"),
+        h = g("height");
+      const rx = Math.min(g("rx", g("ry")), w / 2),
+        ry = Math.min(g("ry", g("rx")), h / 2);
+      d =
+        rx > 0 && ry > 0
+          ? `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`
+          : `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
       break;
     }
     case "line":
@@ -141,14 +173,20 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
       break;
     case "polyline":
     case "polygon": {
-      const pts = (attrs["points"] ?? "").trim().split(/[\s,]+/).map(Number);
+      const pts = (attrs["points"] ?? "")
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number);
       const parts: string[] = [];
       for (let i = 0; i + 1 < pts.length; i += 2) parts.push(`${i === 0 ? "M" : "L"} ${pts[i]} ${pts[i + 1]}`);
       d = parts.join(" ") + (c.tag === "polygon" ? " Z" : "");
       break;
     }
     case "ellipse": {
-      const cx = g("cx"), cy = g("cy"), rx = g("rx"), ry = g("ry");
+      const cx = g("cx"),
+        cy = g("cy"),
+        rx = g("rx"),
+        ry = g("ry");
       d = `M ${cx + rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx - rx} ${cy} A ${rx} ${ry} 0 1 1 ${cx + rx} ${cy} Z`;
       break;
     }
@@ -208,7 +246,8 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
     // A shape's own clip or mask wins over the one inherited from a group.
     const clip = reference(c, attrs, "clip-path", ctx);
     const own = clip ? clipOf(clip, scope, bbox, ctx) : undefined;
-    if (own && scope.clip) addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
+    if (own && scope.clip)
+      addDiagnostic(ctx.diagnostics, "approximated", "svg:clipPath", "nested svg clip-paths → innermost only");
     const clipped = own ?? scope.clip;
     if (clipped) p.clip = clipped;
     const mask = reference(c, attrs, "mask", ctx);
@@ -227,8 +266,15 @@ function clipOf(el: LayoutNode, scope: SvgScope, bbox: Rect, ctx: SvgContext): S
   }
   // clipPathUnits="objectBoundingBox": the clip's user space is the clipped shape's box.
   // bbox comes from the baked path: already in viewBox space, so scope.ctm must not apply again.
-  const units: SvgMatrix = el.attrs["clippathunits"] === "objectBoundingBox" ? [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y] : scope.ctm;
-  const inner: SvgScope = { ...scope, ctm: multiply(units, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs), clip: undefined, mask: undefined };
+  const units: SvgMatrix =
+    el.attrs["clippathunits"] === "objectBoundingBox" ? [bbox.w, 0, 0, bbox.h, bbox.x, bbox.y] : scope.ctm;
+  const inner: SvgScope = {
+    ...scope,
+    ctm: multiply(units, ownTransform(el, ctx.diagnostics)),
+    attrs: inherit(scope.attrs, el.attrs),
+    clip: undefined,
+    mask: undefined,
+  };
   const parts: PathSegment[] = [];
   let eoFill: true | undefined;
   for (const c of el.children) {
@@ -254,7 +300,13 @@ function maskOf(el: LayoutNode, scope: SvgScope, ctx: SvgContext): SvgPath[] | u
     return undefined;
   }
   addDiagnostic(ctx.diagnostics, "approximated", "svg:mask", "svg mask → luminance mask");
-  const inner: SvgScope = { ...scope, ctm: multiply(scope.ctm, ownTransform(el, ctx.diagnostics)), attrs: inherit(scope.attrs, el.attrs), clip: undefined, mask: undefined };
+  const inner: SvgScope = {
+    ...scope,
+    ctm: multiply(scope.ctm, ownTransform(el, ctx.diagnostics)),
+    attrs: inherit(scope.attrs, el.attrs),
+    clip: undefined,
+    mask: undefined,
+  };
   const before = ctx.paths.length;
   visitChildren(el, inner, ctx);
   const paths = ctx.paths.splice(before);

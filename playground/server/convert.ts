@@ -28,7 +28,11 @@ export function convertHandler(store: ResultStore, json: Json) {
   let pending = 0;
   return async (body: unknown, options?: { admit?: () => boolean; signal?: AbortSignal }): Promise<Response> => {
     const parsed = conversionInput.safeParse(body);
-    if (!parsed.success) return json({ error: parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("\n") }, 400);
+    if (!parsed.success)
+      return json(
+        { error: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n") },
+        400,
+      );
     if (pending >= MAX_PENDING) return json({ error: "Converter is busy. Try again shortly." }, 429);
     if (options?.admit && !options.admit()) return json({ error: "Too many conversions. Try again in a minute." }, 429);
     pending++;
@@ -36,18 +40,42 @@ export function convertHandler(store: ResultStore, json: Json) {
       return await queue.run(async () => {
         if (options?.signal?.aborted) return json({ error: "Cancelled." }, 499);
         const { html, css, name, width, height, theme, mode } = parsed.data;
-        const result = await convertHtml(html, { css, name, viewport: { width, height }, theme, mode, untrustedInput: true });
+        const result = await convertHtml(html, {
+          css,
+          name,
+          viewport: { width, height },
+          theme,
+          mode,
+          untrustedInput: true,
+        });
         const id = await store.add(result);
         const labels: Record<string, string> = {};
         labelNodes(result.layout.root, labels);
         if (result.darkLayout) labelNodes(result.darkLayout.root, labels);
-        return json({ id, code: result.code, files: result.files, warnings: result.warnings, diagnostics: result.diagnostics, labels, width: result.layout.size.w, height: result.layout.size.h });
+        return json({
+          id,
+          code: result.code,
+          files: result.files,
+          warnings: result.warnings,
+          diagnostics: result.diagnostics,
+          labels,
+          width: result.layout.size.w,
+          height: result.layout.size.h,
+        });
       });
-    } finally { pending--; }
+    } finally {
+      pending--;
+    }
   };
 }
 
 export async function zipResponse(store: ResultStore, id: string, headers: Record<string, string>): Promise<Response> {
   const bundle = await store.download(id);
-  return new Response(bundle.file, { headers: { ...headers, "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${bundle.name}.zip"` } });
+  return new Response(bundle.file, {
+    headers: {
+      ...headers,
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${bundle.name}.zip"`,
+    },
+  });
 }

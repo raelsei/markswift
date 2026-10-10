@@ -3,14 +3,17 @@ import { hue, parseColor, TRANSPARENT } from "./color.ts";
 import type { Color, GradientStop, Paint } from "../model/values.ts";
 import { splitTop, round2 } from "./syntax.ts";
 
-
 /**
  * Re-express a gradient painted over `host` so that the same colours land on `sub` (both
  * boxes in one coordinate space): linear stops are projected onto `sub`'s span of the
  * gradient line and cut to 0..1; radial/conic centers move. Used for `background-clip:
  * text`, where the browser paints across the block but the glyph run is what gets filled.
  */
-export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h: number }, sub: { x: number; y: number; w: number; h: number }): Paint {
+export function paintWithin(
+  p: Paint,
+  host: { x: number; y: number; w: number; h: number },
+  sub: { x: number; y: number; w: number; h: number },
+): Paint {
   if (p.kind === "radial" || p.kind === "conic") {
     const center: [number, number] = [
       sub.w ? (host.x + p.center[0] * host.w - sub.x) / sub.w : 0.5,
@@ -21,32 +24,43 @@ export function paintWithin(p: Paint, host: { x: number; y: number; w: number; h
   if (p.kind !== "linear" || p.stops.length < 2) return p;
   // Unit direction of the gradient line (CSS: 0deg = up, clockwise) and the host line length.
   const rad = (p.angle * Math.PI) / 180;
-  const dx = Math.sin(rad), dy = -Math.cos(rad);
+  const dx = Math.sin(rad),
+    dy = -Math.cos(rad);
   const length = Math.abs(host.w * dx) + Math.abs(host.h * dy);
   if (length === 0) return p;
   // Host line start = host centre − ½·length along the direction; project sub's centre ± half-extent.
   const start = (host.x + host.w / 2) * dx + (host.y + host.h / 2) * dy - length / 2;
   const subHalf = (Math.abs(sub.w * dx) + Math.abs(sub.h * dy)) / 2;
   const subMid = (sub.x + sub.w / 2) * dx + (sub.y + sub.h / 2) * dy - start;
-  const t0 = (subMid - subHalf) / length, t1 = (subMid + subHalf) / length;
+  const t0 = (subMid - subHalf) / length,
+    t1 = (subMid + subHalf) / length;
   if (t1 <= t0) return p;
   const stops = p.stops.map((s) => ({ color: s.color, pos: ((s.pos ?? 0) - t0) / (t1 - t0) }));
   const at = (t: number): Color => {
     if (t <= stops[0]!.pos) return stops[0]!.color;
     for (let i = 1; i < stops.length; i++) {
-      const a = stops[i - 1]!, b = stops[i]!;
+      const a = stops[i - 1]!,
+        b = stops[i]!;
       if (t <= b.pos) {
         const k = b.pos === a.pos ? 1 : (t - a.pos) / (b.pos - a.pos);
         const mix = (u: number, v: number) => Math.round((u + (v - u) * k) * 1e4) / 1e4;
-        return { r: mix(a.color.r, b.color.r), g: mix(a.color.g, b.color.g), b: mix(a.color.b, b.color.b), a: mix(a.color.a, b.color.a) };
+        return {
+          r: mix(a.color.r, b.color.r),
+          g: mix(a.color.g, b.color.g),
+          b: mix(a.color.b, b.color.b),
+          a: mix(a.color.a, b.color.a),
+        };
       }
     }
     return stops[stops.length - 1]!.color;
   };
-  const cut: GradientStop[] = [{ color: at(0), pos: 0 }, ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })), { color: at(1), pos: 1 }];
+  const cut: GradientStop[] = [
+    { color: at(0), pos: 0 },
+    ...stops.filter((s) => s.pos > 0 && s.pos < 1).map((s) => ({ color: s.color, pos: Math.round(s.pos * 1e4) / 1e4 })),
+    { color: at(1), pos: 1 },
+  ];
   return { ...p, stops: cut };
 }
-
 
 /** Computed `background-image` → paints, bottom-most first. `dropped` collects the parts a gradient could not read. */
 export function parseBackgroundImage(s: string | undefined, dropped?: string[]): Paint[] {
@@ -54,7 +68,6 @@ export function parseBackgroundImage(s: string | undefined, dropped?: string[]):
   const layers = splitTop(s, ",").reverse();
   return layers.map((layer) => parseGradient(layer, dropped));
 }
-
 
 /**
  * One `background-image` layer: `[repeating-]{linear,radial,conic}-gradient(…)` or
@@ -71,9 +84,19 @@ function parseGradient(s: string, dropped?: string[]): Paint {
   const args = splitTop(m[3]!, ",");
   // `in <space> [<hue method> hue]` may sit anywhere in the prelude; strip it before reading the rest.
   let space: string | undefined;
-  const prelude = args[0] && !looksLikeColor(args[0])
-    ? args.shift()!.replace(/\bin\s+([a-z][a-z0-9-]*)(?:\s+(?:shorter|longer|increasing|decreasing)\s+hue)?/, (_, sp: string) => { space = sp; return ""; }).trim()
-    : "";
+  const prelude =
+    args[0] && !looksLikeColor(args[0])
+      ? args
+          .shift()!
+          .replace(
+            /\bin\s+([a-z][a-z0-9-]*)(?:\s+(?:shorter|longer|increasing|decreasing)\s+hue)?/,
+            (_, sp: string) => {
+              space = sp;
+              return "";
+            },
+          )
+          .trim()
+      : "";
   let paint: Paint;
   if (kind === "linear") {
     let angle = 180; // CSS default: to bottom
@@ -83,9 +106,10 @@ function parseGradient(s: string, dropped?: string[]): Paint {
       if (deg === undefined) return { kind: "unsupported", raw: s };
       angle = deg;
     } else if (prelude) {
-      const words = /^to\s+(.+)$/.exec(prelude)?.[1]!.split(/\s+/) ?? [];
+      const words = /^to\s+(.+)$/.exec(prelude)?.[1]?.split(/\s+/) ?? [];
       const side: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 };
-      const x = words.find((w) => w === "left" || w === "right"), y = words.find((w) => w === "top" || w === "bottom");
+      const x = words.find((w) => w === "left" || w === "right"),
+        y = words.find((w) => w === "top" || w === "bottom");
       if (words.length === 1 && side[words[0]!] !== undefined) angle = side[words[0]!]!;
       else if (words.length === 2 && x && y) {
         corner = [x === "right" ? 1 : -1, y === "bottom" ? 1 : -1];
@@ -100,7 +124,10 @@ function parseGradient(s: string, dropped?: string[]): Paint {
     if (prelude) {
       if (/\bcircle\b/.test(prelude)) ellipse = false;
       center = atPosition(prelude) ?? center;
-      const size = prelude.replace(/\bat\b.*$/, "").replace(/\b(circle|ellipse|farthest-corner)\b/g, "").trim();
+      const size = prelude
+        .replace(/\bat\b.*$/, "")
+        .replace(/\b(circle|ellipse|farthest-corner)\b/g, "")
+        .trim();
       if (size) dropped?.push(`radial-gradient prelude "${size.slice(0, 40)}"`);
     }
     paint = { kind: "radial", stops: parseStops(args, dropped), center, ellipse };
@@ -119,12 +146,12 @@ function parseGradient(s: string, dropped?: string[]): Paint {
   return paint;
 }
 
-
 /** `at <x> <y>` inside a gradient prelude → 0..1 fractions (percentages or side keywords). */
 function atPosition(prelude: string): [number, number] | undefined {
   const at = /\bat\s+(\S+)(?:\s+(\S+))?\s*$/.exec(prelude);
   if (!at) return undefined;
-  const x = fraction(at[1]!), y = at[2] === undefined ? 0.5 : fraction(at[2]);
+  const x = fraction(at[1]!),
+    y = at[2] === undefined ? 0.5 : fraction(at[2]);
   return x === undefined || y === undefined ? undefined : [x, y];
 }
 
@@ -143,14 +170,11 @@ export function fraction(t: string): number | undefined {
   return m ? +m[1]! / 100 : undefined;
 }
 
-
 export const COLOR_TOKEN = String.raw`(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[0-9a-f]+|transparent`;
-
 
 function looksLikeColor(s: string): boolean {
   return /^(rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\(|#|transparent$)/.test(s.trim());
 }
-
 
 function parseStops(args: string[], dropped?: string[]): GradientStop[] {
   const stops: GradientStop[] = [];
@@ -172,7 +196,6 @@ function parseStops(args: string[], dropped?: string[]): GradientStop[] {
   return stops;
 }
 
-
 /** Fill in undefined positions evenly (CSS rule, simplified: first 0, last 1, linear between). */
 function fillEvenly(stops: GradientStop[]): void {
   if (!stops.length) return;
@@ -192,7 +215,6 @@ function fillEvenly(stops: GradientStop[]): void {
     i = j;
   }
 }
-
 
 /**
  * Resolve a gradient's px stops against the box it paints: linear stops divide by the
@@ -216,7 +238,8 @@ export function resolvePaint(p: Paint, w: number, h: number): Paint {
     const rad = (p.angle * Math.PI) / 180;
     length = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
   } else {
-    const cx = p.center[0] * w, cy = p.center[1] * h;
+    const cx = p.center[0] * w,
+      cy = p.center[1] * h;
     length = Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy));
   }
   const stops = p.stops.map(({ color, pos, px }) => {

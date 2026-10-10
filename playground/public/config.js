@@ -1,1 +1,1 @@
-window.MARKSWIFT_CONFIG={apiBaseUrl:"",nativePreview:true};
+window.MARKSWIFT_CONFIG = { apiBaseUrl: "", nativePreview: true };

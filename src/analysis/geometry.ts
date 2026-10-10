@@ -20,7 +20,9 @@ export function hangsLeading(box: Rect, x: number): boolean {
 
 /** Any descendant that fills its width — such a subtree stays greedy inside a hugging container. */
 export function fillsWidthInside(n: SemNode): boolean {
-  return (n.kind === "stack" || n.kind === "grid") && n.children.some((c) => c.width.kind === "fill" || fillsWidthInside(c));
+  return (
+    (n.kind === "stack" || n.kind === "grid") && n.children.some((c) => c.width.kind === "fill" || fillsWidthInside(c))
+  );
 }
 
 /** Taken out of normal flow to one side, with the line boxes beside it shortened. */

@@ -13,12 +13,17 @@ import type { FontFace as FontFaceRecord } from "../model/layout.ts";
  * parsed from `sheetText` (response bodies by request URL, kept by the capture) into a
  * constructable sheet. A sheet with neither is returned in `unreadable`.
  */
-export async function collectFontFaces(page: Page, sheetText: Record<string, string>): Promise<{ faces: FontFaceRecord[]; unreadable: string[] }> {
+export async function collectFontFaces(
+  page: Page,
+  sheetText: Record<string, string>,
+): Promise<{ faces: FontFaceRecord[]; unreadable: string[] }> {
   return await page.evaluate((sheetText) => {
     const KEYWORD_WEIGHT: Record<string, number> = { normal: 400, bold: 700, lighter: 100, bolder: 700 };
     const weightRange = (s: string): [number, number] => {
       const parts = s.trim().split(/\s+/).filter(Boolean);
-      const nums = parts.map((p) => KEYWORD_WEIGHT[p.toLowerCase()] ?? Number.parseFloat(p)).filter((n) => Number.isFinite(n));
+      const nums = parts
+        .map((p) => KEYWORD_WEIGHT[p.toLowerCase()] ?? Number.parseFloat(p))
+        .filter((n) => Number.isFinite(n));
       if (!nums.length) return [400, 400];
       return [Math.min(...nums), Math.max(...nums)];
     };
@@ -26,7 +31,9 @@ export async function collectFontFaces(page: Page, sheetText: Record<string, str
     // quoted string are not separators, so the split has to track depth and quotes.
     const splitSrc = (s: string): string[] => {
       const out: string[] = [];
-      let depth = 0, quote = "", start = 0;
+      let depth = 0,
+        quote = "",
+        start = 0;
       for (let i = 0; i < s.length; i++) {
         const c = s[i]!;
         if (quote) {
@@ -42,13 +49,24 @@ export async function collectFontFaces(page: Page, sheetText: Record<string, str
       out.push(s.slice(start));
       return out.map((p) => p.trim()).filter(Boolean);
     };
-    const unquote = (s: string) => s.trim().replace(/^["']|["']$/g, "").trim();
+    const unquote = (s: string) =>
+      s
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .trim();
     const faces: FontFaceRecord[] = [];
     const unreadable: string[] = [];
     const rulesOf = (sheet: CSSStyleSheet): CSSRuleList | undefined => {
-      try { return sheet.cssRules; } catch { /* cross-origin */ }
+      try {
+        return sheet.cssRules;
+      } catch {
+        /* cross-origin */
+      }
       const text = sheet.href ? sheetText[sheet.href] : undefined;
-      if (text === undefined) { unreadable.push(sheet.href ?? "inline stylesheet"); return undefined; }
+      if (text === undefined) {
+        unreadable.push(sheet.href ?? "inline stylesheet");
+        return undefined;
+      }
       // ponytail: replaceSync drops @import inside a cross-origin sheet; follow them by text if a corpus needs it.
       const parsed = new CSSStyleSheet();
       parsed.replaceSync(text);
@@ -81,7 +99,10 @@ export async function collectFontFaces(page: Page, sheetText: Record<string, str
             loaded: false,
           });
         } else if (rule instanceof CSSImportRule) {
-          if (rule.styleSheet) { const r = rulesOf(rule.styleSheet); if (r) visit(r, rule.styleSheet.href ?? base); }
+          if (rule.styleSheet) {
+            const r = rulesOf(rule.styleSheet);
+            if (r) visit(r, rule.styleSheet.href ?? base);
+          }
         } else if ("cssRules" in rule) visit((rule as CSSGroupingRule).cssRules, base);
       }
     };
@@ -95,7 +116,9 @@ export async function collectFontFaces(page: Page, sheetText: Record<string, str
     document.fonts.forEach((f) => {
       if (f.status !== "loaded") return;
       const s = f.style.split(/\s+/)[0]!.toLowerCase();
-      loaded.add(`${unquote(f.family).toLowerCase()}|${s === "italic" || s === "oblique" ? s : "normal"}|${weightRange(f.weight).join(" ")}`);
+      loaded.add(
+        `${unquote(f.family).toLowerCase()}|${s === "italic" || s === "oblique" ? s : "normal"}|${weightRange(f.weight).join(" ")}`,
+      );
     });
     const seen = new Set<string>();
     const out: FontFaceRecord[] = [];
@@ -124,7 +147,11 @@ const MAX_FONT_BYTES = 25 * 1024 * 1024;
  * A source that cannot be read keeps its `url` and gets no `file` — packaging reports it rather
  * than guessing.
  */
-export async function readFontBytes(faces: FontFaceRecord[], allowRemote = true, signal?: AbortSignal): Promise<Array<{ file: string; bytes: Uint8Array }>> {
+export async function readFontBytes(
+  faces: FontFaceRecord[],
+  allowRemote = true,
+  signal?: AbortSignal,
+): Promise<Array<{ file: string; bytes: Uint8Array }>> {
   const files: Array<{ file: string; bytes: Uint8Array }> = [];
   const byHash: Record<string, string> = {};
   for (const face of faces) {

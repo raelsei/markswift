@@ -33,7 +33,11 @@ test("every standard element has an explicit compiler policy", () => {
 });
 
 test("native input selection and element classification share the same input table", () => {
-  expect(Object.keys(INPUT_CONTROLS).sort()).toEqual(`button checkbox color date datetime-local email file month number password radio range reset search submit tel text time url week`.split(" ").sort());
+  expect(Object.keys(INPUT_CONTROLS).sort()).toEqual(
+    `button checkbox color date datetime-local email file month number password radio range reset search submit tel text time url week`
+      .split(" ")
+      .sort(),
+  );
   for (const [type, kind] of Object.entries(INPUT_CONTROLS)) {
     expect(controlOf(element("input", { type }))?.control).toBe(kind);
     expect(classifyElement("input", { type }).route).toBe("control");

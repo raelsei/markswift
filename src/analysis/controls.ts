@@ -9,7 +9,15 @@ import type { LayoutNode } from "../model/layout.ts";
 import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../model/values.ts";
 import { parseColor } from "../css/index.ts";
-import { type ControlKind, type ControlNode, type Diagnostic, type FontSpec, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
+import {
+  type ControlKind,
+  type ControlNode,
+  type Diagnostic,
+  type FontSpec,
+  type SemBase,
+  type SemNode,
+  addDiagnostic,
+} from "../model/semantic.ts";
 import { textContent } from "./text-runs.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
@@ -58,7 +66,12 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       // design called the target so the placeholder says which link it was.
       if (!ABSOLUTE_URL.test(href)) {
         spec.action = a["onclick"] || `#${targetName(href, n)}`;
-        addDiagnostic(diagnostics, "approximated", "a", `<a href="${href}"> has no runtime destination → Button over a placeholder action`);
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "a",
+          `<a href="${href}"> has no runtime destination → Button over a placeholder action`,
+        );
       }
       return spec;
     }
@@ -84,8 +97,15 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       const shown = selected || options[0];
       if (shown) spec.value = shown;
       // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
-      if (!options.length) addDiagnostic(diagnostics, "approximated", "select", "<select> option labels are not in the snapshot → picker with no choices");
-      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1)) addDiagnostic(diagnostics, "approximated", "select", "<select multiple/size> list box → menu picker");
+      if (!options.length)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "select",
+          "<select> option labels are not in the snapshot → picker with no choices",
+        );
+      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1))
+        addDiagnostic(diagnostics, "approximated", "select", "<select multiple/size> list box → menu picker");
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -98,11 +118,24 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "meter": {
       const min = num(a["min"]) ?? 0;
       const max = num(a["max"]) ?? 1;
-      const spec: ControlSpec = { control: n.tag === "progress" ? "progress" : "gauge", range: { min, max: Math.max(max, min) }, diagnostics };
+      const spec: ControlSpec = {
+        control: n.tag === "progress" ? "progress" : "gauge",
+        range: { min, max: Math.max(max, min) },
+        diagnostics,
+      };
       const v = a["value"];
       if (v !== undefined && num(v) !== undefined) spec.value = v;
-      else if (n.tag === "progress") addDiagnostic(diagnostics, "approximated", "progress", "indeterminate <progress> → animated bar");
-      if (n.tag === "meter") spec.level = meterLevel(num(a["value"]) ?? 0, min, Math.max(max, min), num(a["low"]), num(a["high"]), num(a["optimum"]));
+      else if (n.tag === "progress")
+        addDiagnostic(diagnostics, "approximated", "progress", "indeterminate <progress> → animated bar");
+      if (n.tag === "meter")
+        spec.level = meterLevel(
+          num(a["value"]) ?? 0,
+          min,
+          Math.max(max, min),
+          num(a["low"]),
+          num(a["high"]),
+          num(a["optimum"]),
+        );
       return spec;
     }
     case "input": {
@@ -111,9 +144,16 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       // HTML's missing/invalid value default for `@type` is Text, so a type nobody recognises is
       // a text field — and the box the capture measured is the one Chrome gave a text field.
       const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
-      if (!Object.hasOwn(INPUT_CONTROLS, type)) addDiagnostic(diagnostics, "approximated", "input", `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
+      if (!Object.hasOwn(INPUT_CONTROLS, type))
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "input",
+          `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`,
+        );
       const spec: ControlSpec = { control, diagnostics };
-      if (/^(email|tel|url|number|search|password)$/.test(type)) spec.inputType = type as NonNullable<ControlNode["inputType"]>;
+      if (/^(email|tel|url|number|search|password)$/.test(type))
+        spec.inputType = type as NonNullable<ControlNode["inputType"]>;
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
         // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
@@ -132,12 +172,20 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       }
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (type === "file") {
-        const accept = (a["accept"] ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+        const accept = (a["accept"] ?? "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
         spec.files = { accept };
         if ("multiple" in a) spec.files.multiple = true;
         // Chrome draws the button caption and the chosen-file text in the input's shadow DOM,
         // which the snapshot cannot reach, so the generated button keeps the box and loses them.
-        addDiagnostic(diagnostics, "approximated", "input: file", '<input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach');
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "input: file",
+          '<input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach',
+        );
       }
       if (control === "button" && a["onclick"]) spec.action = a["onclick"];
       if (disabled) spec.disabled = true;
@@ -178,7 +226,9 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     return true;
   });
   // Document order is the DOM's; measured order is what the reader sees (CSS `order`, floats).
-  const content = [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const content = [...kids.map((c) => c.sem), ...parts.texts].sort(
+    (a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x,
+  );
   // A control whose whole content is its own text (a button's caption, a link's label): that text
   // is the element's line box, so it inherits the measured content box. Without it the control
   // would shrink to the glyphs and lose the browser's centring inside the box.
@@ -222,7 +272,8 @@ export function labelIndex(root: LayoutNode): LabelIndex {
       if (hit) return hit;
     }
   };
-  const textOf = (n: LayoutNode, skip: LayoutNode): string => (n === skip ? "" : n.tag === "#text" ? (n.text ?? "") : n.children.map((c) => textOf(c, skip)).join(""));
+  const textOf = (n: LayoutNode, skip: LayoutNode): string =>
+    n === skip ? "" : n.tag === "#text" ? (n.text ?? "") : n.children.map((c) => textOf(c, skip)).join("");
   for (const label of labels) {
     const target = label.attrs["for"] !== undefined ? byId.get(label.attrs["for"]) : firstControl(label);
     if (!target) continue;
@@ -256,7 +307,14 @@ function targetName(href: string, n: LayoutNode): string {
  * HTML's `<meter>` gauge algorithm: the value is in its optimum band, one band away, or in the
  * worst one. `low`/`high` default to the ends of the range, `optimum` to its middle.
  */
-function meterLevel(value: number, min: number, max: number, low?: number, high?: number, optimum?: number): NonNullable<ControlNode["level"]> {
+function meterLevel(
+  value: number,
+  min: number,
+  max: number,
+  low?: number,
+  high?: number,
+  optimum?: number,
+): NonNullable<ControlNode["level"]> {
   const lo = Math.min(Math.max(low ?? min, min), max);
   const hi = Math.min(Math.max(high ?? max, lo), max);
   const opt = Math.min(Math.max(optimum ?? (min + max) / 2, min), max);
@@ -267,7 +325,14 @@ function meterLevel(value: number, min: number, max: number, low?: number, high?
 }
 
 /** Controls that paint text of their own (from `value`/`placeholder`) rather than child nodes. */
-const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = { textField: true, secureField: true, textEditor: true, picker: true, datePicker: true, stepper: true };
+const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = {
+  textField: true,
+  secureField: true,
+  textEditor: true,
+  picker: true,
+  datePicker: true,
+  stepper: true,
+};
 
 /** `<option>` children, including those inside `<optgroup>`. */
 function optionsOf(n: LayoutNode): LayoutNode[] {

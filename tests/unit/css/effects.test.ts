@@ -2,12 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { parseClipPath, parseFilters } from "../../../src/css/index.ts";
 import type { ClipShape, Filter } from "../../../src/model/semantic.ts";
 
-
 describe("parseFilters", () => {
   test.each<[string, Filter[]]>([
     ["blur(3px)", [{ kind: "blur", radius: 3 }]],
     ["grayscale(1)", [{ kind: "grayscale", amount: 1 }]],
-    ["grayscale(0.5) blur(1px)", [{ kind: "grayscale", amount: 0.5 }, { kind: "blur", radius: 1 }]],
+    [
+      "grayscale(0.5) blur(1px)",
+      [
+        { kind: "grayscale", amount: 0.5 },
+        { kind: "blur", radius: 1 },
+      ],
+    ],
     ["brightness(1.4)", [{ kind: "brightness", amount: 1.4 }]],
     ["contrast(1.8)", [{ kind: "contrast", amount: 1.8 }]],
     ["saturate(2.5)", [{ kind: "saturate", amount: 2.5 }]],
@@ -18,16 +23,23 @@ describe("parseFilters", () => {
     ["opacity(0.5)", [{ kind: "opacity", amount: 0.5 }]],
     [
       "drop-shadow(rgba(0, 0, 0, 0.5) 0px 4px 6px)",
-      [{ kind: "drop-shadow", shadow: { color: { r: 0, g: 0, b: 0, a: 0.5 }, x: 0, y: 4, blur: 6, spread: 0, inset: false } }],
+      [
+        {
+          kind: "drop-shadow",
+          shadow: { color: { r: 0, g: 0, b: 0, a: 0.5 }, x: 0, y: 4, blur: 6, spread: 0, inset: false },
+        },
+      ],
     ],
     ["none", []],
   ])("%s", (input, want) => expect(parseFilters(input)).toEqual({ filters: want, unsupported: [] }));
 
   test("url() references are reported, the rest of the list still parses", () => {
-    expect(parseFilters('url("#goo") blur(2px)')).toEqual({ filters: [{ kind: "blur", radius: 2 }], unsupported: ['url("#goo")'] });
+    expect(parseFilters('url("#goo") blur(2px)')).toEqual({
+      filters: [{ kind: "blur", radius: 2 }],
+      unsupported: ['url("#goo")'],
+    });
   });
 });
-
 
 describe("parseClipPath", () => {
   test.each<[string, ClipShape | undefined]>([
@@ -43,9 +55,28 @@ describe("parseClipPath", () => {
     ["inset(1px 2px 3px 4px)", { kind: "inset", top: 1, right: 2, bottom: 3, left: 4 }],
     [
       "polygon(50% 0px, 100% 38%, 82% 100%, 18% 100%, 0px 38%)",
-      { kind: "polygon", points: [[100, 0], [200, 38], [164, 100], [36, 100], [0, 38]] },
+      {
+        kind: "polygon",
+        points: [
+          [100, 0],
+          [200, 38],
+          [164, 100],
+          [36, 100],
+          [0, 38],
+        ],
+      },
     ],
-    ["polygon(evenodd, 0px 0px, 100% 0px, 100% 100%)", { kind: "polygon", points: [[0, 0], [200, 0], [200, 100]] }],
+    [
+      "polygon(evenodd, 0px 0px, 100% 0px, 100% 100%)",
+      {
+        kind: "polygon",
+        points: [
+          [0, 0],
+          [200, 0],
+          [200, 100],
+        ],
+      },
+    ],
     ["none", undefined],
     ['path("M0 0 H100")', undefined],
     ['url("#clip")', undefined],

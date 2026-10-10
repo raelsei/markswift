@@ -17,7 +17,7 @@ let package = Package(
 /** Size, canvas colour and theme of the render, shared by the iOS and macOS templates. */
 function canvas(result: ConversionResult) {
   const { w, h } = result.layout.size;
-  if (![w, h].every(n => Number.isFinite(n) && n > 0 && n <= 4096)) {
+  if (![w, h].every((n) => Number.isFinite(n) && n > 0 && n <= 4096)) {
     throw new Error("Measured component size must be 1–4096 px; constrain the HTML width/height.");
   }
   const color = parseColor(result.layout.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };

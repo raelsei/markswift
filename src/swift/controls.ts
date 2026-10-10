@@ -45,8 +45,16 @@ export interface ControlDeps extends ColorCtx {
  * (`Color.markswift(light:dark:)` from MarkswiftRuntime.swift) for an adaptive view. Measured from Chrome 152.
  */
 const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
-  light: { accent: "Color.markswift(0.0, 0.459, 1.0)", track: "Color.markswift(0.937, 0.937, 0.937)", edge: "Color.markswift(0.698, 0.698, 0.698)" },
-  dark: { accent: "Color.markswift(0.6, 0.784, 1.0)", track: "Color.markswift(0.231, 0.231, 0.231)", edge: "Color.markswift(0.522, 0.522, 0.522)" },
+  light: {
+    accent: "Color.markswift(0.0, 0.459, 1.0)",
+    track: "Color.markswift(0.937, 0.937, 0.937)",
+    edge: "Color.markswift(0.698, 0.698, 0.698)",
+  },
+  dark: {
+    accent: "Color.markswift(0.6, 0.784, 1.0)",
+    track: "Color.markswift(0.231, 0.231, 0.231)",
+    edge: "Color.markswift(0.522, 0.522, 0.522)",
+  },
   adaptive: {
     accent: "Color.markswift(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
     track: "Color.markswift(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
@@ -111,11 +119,17 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
-      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
+      return [
+        `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+      ];
     case "secureField":
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
-      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
+      return [
+        `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+      ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
@@ -125,22 +139,42 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // A switch is the right control only when the design drew one: HTML checkboxes and radios
       // are small squares/circles, and an iOS switch would not fit their measured box.
       const ua = UA[deps.theme];
-      const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const style =
+        n.control === "radio"
+          ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})`
+          : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28
+            ? ".switch"
+            : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
       const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
       // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
       // (or `aria-label`); the representation does not inherit the visible style.
-      if (n.a11y?.label) out.push(".accessibilityRepresentation {", `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`, "}");
+      if (n.a11y?.label)
+        out.push(
+          ".accessibilityRepresentation {",
+          `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`,
+          "}",
+        );
       return out;
     }
     case "slider": {
       const r = n.range ?? { min: 0, max: 100 };
-      if (still) return [`MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${UA[deps.theme].accent}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`];
-      return [`Slider(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""})`];
+      if (still)
+        return [
+          `MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${UA[deps.theme].accent}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`,
+        ];
+      return [
+        `Slider(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""})`,
+      ];
     }
     case "stepper": {
       const r = n.range ?? { min: 0, max: 100 };
       if (still) return painted(n.value ?? "", ".leading");
-      return [`Stepper(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""}) {`, "    EmptyView()", "}", ".labelsHidden()"];
+      return [
+        `Stepper(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""}) {`,
+        "    EmptyView()",
+        "}",
+        ".labelsHidden()",
+      ];
     }
     case "picker": {
       // Closed, a picker shows its selection and a menu indicator — exactly what `<select>` paints.
@@ -165,10 +199,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "datePicker":
       if (still) return painted(n.value ?? "", ".leading");
-      return [`DatePicker(selection: ${binding}, displayedComponents: .date) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+      return [
+        `DatePicker(selection: ${binding}, displayedComponents: .date) {`,
+        ...indent(body(n, deps), 1),
+        "}",
+        ".labelsHidden()",
+      ];
     case "colorPicker": {
       const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
-      if (still) return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];
+      if (still)
+        return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];
       return [`ColorPicker(selection: ${binding}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
     }
     case "progress": {
@@ -272,11 +312,21 @@ function stackOfNodes(nodes: SemNode[], deps: ControlDeps): string[] {
   if (nodes.length === 1) return deps.child(nodes[0]!);
   let horizontal = true;
   for (let i = 1; i < nodes.length; i++) {
-    const a = nodes[i - 1]!.frame, b = nodes[i]!.frame;
+    const a = nodes[i - 1]!.frame,
+      b = nodes[i]!.frame;
     if (b.x < a.x + a.w - 0.5) horizontal = false;
   }
   const [a, b] = [nodes[0]!.frame, nodes[1]!.frame];
   const gap = Math.max(0, Math.round((horizontal ? b.x - (a.x + a.w) : b.y - (a.y + a.h)) * 100) / 100);
-  const open = horizontal ? `HStack(alignment: .center, spacing: ${num(gap)}) {` : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
-  return [open, ...indent(nodes.flatMap((c) => deps.child(c)), 1), "}"];
+  const open = horizontal
+    ? `HStack(alignment: .center, spacing: ${num(gap)}) {`
+    : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
+  return [
+    open,
+    ...indent(
+      nodes.flatMap((c) => deps.child(c)),
+      1,
+    ),
+    "}",
+  ];
 }

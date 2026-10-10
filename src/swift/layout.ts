@@ -9,7 +9,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
   else if (n.kind === "grid") {
-    out.push(`Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`);
+    out.push(
+      `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
+    );
     for (let i = 0; i < n.children.length; i += n.columns) {
       out.push("    GridRow {");
       for (const c of n.children.slice(i, i + n.columns)) out.push(...indent(ctx.renderNode(c), 2));
@@ -27,18 +29,33 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // Mode difference — HStack cross alignment. Fidelity: `.top` plus a per-child top padding
     // taken from the measured geometry, so placement does not depend on native text metrics.
     // App: the IR's cross alignment and no geometric padding; SwiftUI aligns natively.
-    const geometry = ctx.mode === "fidelity" && n.axis === "h" && (n.align !== "stretch" || kids.some((k) => k.selfAlignV !== undefined));
+    const geometry =
+      ctx.mode === "fidelity" &&
+      n.axis === "h" &&
+      (n.align !== "stretch" || kids.some((k) => k.selfAlignV !== undefined));
     // `stretch` (the CSS default) puts a fixed-cross-size item at flex-start; filling ones stretch anyway.
-    const align = n.axis === "v" ? horizontalAlignment(n.align) : geometry ? ".top" : n.align === "baseline" ? ".firstTextBaseline" : verticalAlignment(n.align);
-    const ctor = n.axis === "v" ? `VStack(alignment: ${align}, spacing: ${num(spacing)})` : `HStack(alignment: ${align}, spacing: ${num(spacing)})`;
+    const align =
+      n.axis === "v"
+        ? horizontalAlignment(n.align)
+        : geometry
+          ? ".top"
+          : n.align === "baseline"
+            ? ".firstTextBaseline"
+            : verticalAlignment(n.align);
+    const ctor =
+      n.axis === "v"
+        ? `VStack(alignment: ${align}, spacing: ${num(spacing)})`
+        : `HStack(alignment: ${align}, spacing: ${num(spacing)})`;
     out.push(`${ctor} {`);
     // Distribution as flexible spacers: `between` only between children; `around` one on each
     // side of every child (inner gaps twice the outer ones); `evenly` one before every child
     // plus one after the last (all gaps equal).
-    const around = n.distribution === "around", evenly = n.distribution === "evenly";
+    const around = n.distribution === "around",
+      evenly = n.distribution === "evenly";
     kids.forEach((c, i) => {
       if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
-      if ((i > 0 && n.distribution === "between") || around || evenly) out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
+      if ((i > 0 && n.distribution === "between") || around || evenly)
+        out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
       const lines = ctx.renderNode(c);
       const extra: string[] = [];
       if (geometry) {
@@ -46,8 +63,10 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
         if (dy > 0.5) extra.push(`.padding(.top, ${num(dy)})`);
       }
       // Negative when the first child hangs outside the content box (outside markers, negative margins).
-      if (i === 0 && n.leadInset !== 0 && !around && !evenly && !auto.has(0)) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
-      if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i)) extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
+      if (i === 0 && n.leadInset !== 0 && !around && !evenly && !auto.has(0))
+        extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
+      if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
+        extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
       out.push(...indent([...lines, ...extra], 1));
       if (around || (evenly && i === kids.length - 1)) out.push("    Spacer(minLength: 0)");
       if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
@@ -57,17 +76,29 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // consuming all available height (and `align-self` children their `maxHeight: .infinity`).
     // Fixed/fill rows already receive a height proposal; discarding it collapses overlay-only
     // Color children to their 10pt ideal height.
-    if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))) out.push(".fixedSize(horizontal: false, vertical: true)");
+    if (
+      n.axis === "h" &&
+      n.height.kind === "hug" &&
+      kids.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))
+    )
+      out.push(".fixedSize(horizontal: false, vertical: true)");
   }
   out.push(...modifiers(n, ctx));
   if (n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis,
     // with `position: fixed` overlays attached outside it so they stay put while content scrolls.
-    if (ctx.mode === "fidelity") return [...out, `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
+    if (ctx.mode === "fidelity")
+      return [
+        ...out,
+        `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`,
+        ".clipped()",
+      ];
     // Same chain order as `modifiers`: front-most background first.
-    const fixed = [...n.overlays.filter((o) => o.fixed && o.layer === "background").reverse(), ...n.overlays.filter((o) => o.fixed && o.layer === "overlay")]
-      .flatMap((o) => overlayModifier(o, o.layer, ctx));
+    const fixed = [
+      ...n.overlays.filter((o) => o.fixed && o.layer === "background").reverse(),
+      ...n.overlays.filter((o) => o.fixed && o.layer === "overlay"),
+    ].flatMap((o) => overlayModifier(o, o.layer, ctx));
     return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`, ...indent(out, 1), `}`, ...fixed];
   }
   return out;

@@ -6,15 +6,23 @@ import { ResultStore } from "./store.ts";
 import { SerialQueue } from "./queue.ts";
 
 type Status = "idle" | "queued" | "running" | "done" | "error";
-interface Job { status: Status; stage: string; error?: string }
+interface Job {
+  status: Status;
+  stage: string;
+  error?: string;
+}
 
 /** Startup probe for `/api/capabilities`: true only when a usable iOS Simulator exists. */
 export async function nativePreviewAvailable(): Promise<boolean> {
   try {
-    const inventory = JSON.parse(await command(["xcrun", "simctl", "list", "devices", "available", "-j"], undefined, 15_000)) as SimulatorInventory;
+    const inventory = JSON.parse(
+      await command(["xcrun", "simctl", "list", "devices", "available", "-j"], undefined, 15_000),
+    ) as SimulatorInventory;
     selectSimulator(inventory, process.env.MARKSWIFT_SIMULATOR);
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 export class NativeStore extends ResultStore {
@@ -42,7 +50,9 @@ export class NativeStore extends ResultStore {
     void this.queue.run(async () => {
       job.status = "running";
       try {
-        await renderNative(result, join(this.directory, "native"), join(this.directory, id, "preview.png"), stage => { job.stage = stage; });
+        await renderNative(result, join(this.directory, "native"), join(this.directory, id, "preview.png"), (stage) => {
+          job.stage = stage;
+        });
         job.status = "done";
       } catch (error) {
         job.status = "error";

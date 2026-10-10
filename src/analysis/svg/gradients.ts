@@ -59,15 +59,32 @@ export function gradientOf(raw: string, bbox: Rect, ctx: SvgContext): SvgGradien
     return v.trim().endsWith("%") ? (n / 100) * (obb ? 1 : span) : n;
   };
   if (el.tag === "lineargradient") {
-    return { kind: "linear", stops, start: toUser(len("x1", 0, vw), len("y1", 0, vh)), end: toUser(len("x2", obb ? 1 : vx + vw, vw), len("y2", 0, vh)) };
+    return {
+      kind: "linear",
+      stops,
+      start: toUser(len("x1", 0, vw), len("y1", 0, vh)),
+      end: toUser(len("x2", obb ? 1 : vx + vw, vw), len("y2", 0, vh)),
+    };
   }
   const diag = Math.hypot(vw, vh) / Math.SQRT2;
   const r = len("r", obb ? 0.5 : diag / 2, diag);
   const center = toUser(len("cx", obb ? 0.5 : vx + vw / 2, vw), len("cy", obb ? 0.5 : ctx.vb[1] + vh / 2, vh));
   const radius: [number, number] = obb ? [round2(r * bbox.w), round2(r * bbox.h)] : [round2(r), round2(r)];
-  if (!isIdentity(tf)) addDiagnostic(ctx.diagnostics, "approximated", "svg:radialGradient", "svg radialGradient gradientTransform → centre only");
+  if (!isIdentity(tf))
+    addDiagnostic(
+      ctx.diagnostics,
+      "approximated",
+      "svg:radialGradient",
+      "svg radialGradient gradientTransform → centre only",
+    );
   // Emitters draw an ellipse proportional to the frame or a circle; anything else is approximated.
   const proportional = Math.abs(bbox.w / vw - bbox.h / vh) < 0.005;
-  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01) addDiagnostic(ctx.diagnostics, "approximated", "svg:radialGradient", "svg radialGradient on a non-proportional bounding box → circular");
+  if (obb && !proportional && Math.abs(radius[0] - radius[1]) > 0.01)
+    addDiagnostic(
+      ctx.diagnostics,
+      "approximated",
+      "svg:radialGradient",
+      "svg radialGradient on a non-proportional bounding box → circular",
+    );
   return { kind: "radial", stops, center, radius };
 }

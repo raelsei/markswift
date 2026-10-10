@@ -1,20 +1,145 @@
 {
   "version": 1,
   "cases": [
-    { "id": "display-flex", "feature": "flex row", "tier": "native", "fixture": "css-layout/display--flex.html", "themes": ["light", "dark"], "diagnosticFamily": null, "anchors": ["#flex-row", "#flex-self"] },
-    { "id": "display-grid", "feature": "grid placement", "tier": "approximation", "fixture": "css-layout/display--grid.html", "themes": ["light", "dark"], "diagnosticFamily": "grid", "anchors": ["#grid-fixed"] },
-    { "id": "flex-wrap", "feature": "row wrapping", "tier": "approximation", "fixture": "css-layout/flex-wrap--wrap.html", "themes": ["light", "dark"], "diagnosticFamily": "flex-wrap", "anchors": ["#wrap-none"] },
-    { "id": "box-shadow", "feature": "box shadows", "tier": "approximation", "fixture": "css-paint/box-shadow.html", "themes": ["light", "dark"], "diagnosticFamily": "shadow", "anchors": ["#shadow-outer", "#shadow-inset"] },
-    { "id": "background-image", "feature": "background layers", "tier": "approximation", "fixture": "css-paint/background-image.html", "themes": ["light", "dark"], "diagnosticFamily": "gradient", "anchors": ["#bgi-gradients"] },
-    { "id": "font-family", "feature": "font substitution", "tier": "approximation", "fixture": "css-typography/font-family.html", "themes": ["light", "dark"], "diagnosticFamily": "font-family" },
-    { "id": "text-level", "feature": "inline semantics", "tier": "approximation", "fixture": "html/text-level-semantics.html", "themes": ["light", "dark"], "diagnosticFamily": "font-family" },
-    { "id": "image", "feature": "image fitting", "tier": "native", "fixture": "html/img.html", "themes": ["light", "dark"], "diagnosticFamily": null, "anchors": ["#fit"] },
-    { "id": "text-heading", "feature": "single-line heading", "tier": "native", "fixture": "css-typography/text-pilot--heading.html", "themes": ["light", "dark"], "diagnosticFamily": null, "expectedText": "Swift meets web", "expectedLines": { "320": 1, "390": 1 } },
-    { "id": "text-paragraph", "feature": "width-sensitive paragraph", "tier": "approximation", "fixture": "css-typography/text-pilot--paragraph.html", "themes": ["light", "dark"], "diagnosticFamily": "line break", "expectedText": "Measured text shifts nearby layout.", "expectedLines": { "320": 2, "390": 1 } },
-    { "id": "text-inline", "feature": "styled inline runs", "tier": "approximation", "fixture": "css-typography/text-pilot--inline.html", "themes": ["light", "dark"], "diagnosticFamily": "style boundary", "expectedText": "Read the strong word, an italic phrase, and a linked ending.", "expectedLines": { "320": 2, "390": 2 } },
-    { "id": "text-pre", "feature": "preserved whitespace", "tier": "approximation", "fixture": "css-typography/text-pilot--pre.html", "themes": ["light", "dark"], "diagnosticFamily": "whitespace", "expectedText": "one    two\n  indented line\nthree  four", "expectedLines": { "320": 3, "390": 3 } },
-    { "id": "text-rtl", "feature": "RTL punctuation", "tier": "approximation", "fixture": "css-typography/text-pilot--rtl.html", "themes": ["light", "dark"], "diagnosticFamily": "RTL order", "expectedText": "مرحباً بالعالم! السعر: 42 ريال، هل أنت جاهز؟", "expectedLines": { "320": 2, "390": 1 } },
-    { "id": "text-webfont", "feature": "bundled local webfont", "tier": "approximation", "fixture": "css-typography/text-pilot--webfont.html", "themes": ["light", "dark"], "diagnosticFamily": "font metrics", "expectedText": "Custom glyph widths alter where the final words land.", "expectedLines": { "320": 2, "390": 2 } },
-    { "id": "text-missing-font", "feature": "missing font fallback", "tier": "approximation", "fixture": "css-typography/text-pilot--missing-font.html", "themes": ["light", "dark"], "diagnosticFamily": "font-family", "expectedText": "Missing font bytes should reveal a fallback instead.", "expectedLines": { "320": 2, "390": 2 } }
+    {
+      "id": "display-flex",
+      "feature": "flex row",
+      "tier": "native",
+      "fixture": "css-layout/display--flex.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": null,
+      "anchors": ["#flex-row", "#flex-self"]
+    },
+    {
+      "id": "display-grid",
+      "feature": "grid placement",
+      "tier": "approximation",
+      "fixture": "css-layout/display--grid.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "grid",
+      "anchors": ["#grid-fixed"]
+    },
+    {
+      "id": "flex-wrap",
+      "feature": "row wrapping",
+      "tier": "approximation",
+      "fixture": "css-layout/flex-wrap--wrap.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "flex-wrap",
+      "anchors": ["#wrap-none"]
+    },
+    {
+      "id": "box-shadow",
+      "feature": "box shadows",
+      "tier": "approximation",
+      "fixture": "css-paint/box-shadow.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "shadow",
+      "anchors": ["#shadow-outer", "#shadow-inset"]
+    },
+    {
+      "id": "background-image",
+      "feature": "background layers",
+      "tier": "approximation",
+      "fixture": "css-paint/background-image.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "gradient",
+      "anchors": ["#bgi-gradients"]
+    },
+    {
+      "id": "font-family",
+      "feature": "font substitution",
+      "tier": "approximation",
+      "fixture": "css-typography/font-family.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "font-family"
+    },
+    {
+      "id": "text-level",
+      "feature": "inline semantics",
+      "tier": "approximation",
+      "fixture": "html/text-level-semantics.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "font-family"
+    },
+    {
+      "id": "image",
+      "feature": "image fitting",
+      "tier": "native",
+      "fixture": "html/img.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": null,
+      "anchors": ["#fit"]
+    },
+    {
+      "id": "text-heading",
+      "feature": "single-line heading",
+      "tier": "native",
+      "fixture": "css-typography/text-pilot--heading.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": null,
+      "expectedText": "Swift meets web",
+      "expectedLines": { "320": 1, "390": 1 }
+    },
+    {
+      "id": "text-paragraph",
+      "feature": "width-sensitive paragraph",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--paragraph.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "line break",
+      "expectedText": "Measured text shifts nearby layout.",
+      "expectedLines": { "320": 2, "390": 1 }
+    },
+    {
+      "id": "text-inline",
+      "feature": "styled inline runs",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--inline.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "style boundary",
+      "expectedText": "Read the strong word, an italic phrase, and a linked ending.",
+      "expectedLines": { "320": 2, "390": 2 }
+    },
+    {
+      "id": "text-pre",
+      "feature": "preserved whitespace",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--pre.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "whitespace",
+      "expectedText": "one    two\n  indented line\nthree  four",
+      "expectedLines": { "320": 3, "390": 3 }
+    },
+    {
+      "id": "text-rtl",
+      "feature": "RTL punctuation",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--rtl.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "RTL order",
+      "expectedText": "مرحباً بالعالم! السعر: 42 ريال، هل أنت جاهز؟",
+      "expectedLines": { "320": 2, "390": 1 }
+    },
+    {
+      "id": "text-webfont",
+      "feature": "bundled local webfont",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--webfont.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "font metrics",
+      "expectedText": "Custom glyph widths alter where the final words land.",
+      "expectedLines": { "320": 2, "390": 2 }
+    },
+    {
+      "id": "text-missing-font",
+      "feature": "missing font fallback",
+      "tier": "approximation",
+      "fixture": "css-typography/text-pilot--missing-font.html",
+      "themes": ["light", "dark"],
+      "diagnosticFamily": "font-family",
+      "expectedText": "Missing font bytes should reveal a fallback instead.",
+      "expectedLines": { "320": 2, "390": 2 }
+    }
   ]
 }

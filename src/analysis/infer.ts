@@ -1,6 +1,14 @@
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
-import { type Screen, type SemNode, type StackNode, type SemBase, type Overlay, type Axis, addDiagnostic } from "../model/semantic.ts";
+import {
+  type Screen,
+  type SemNode,
+  type StackNode,
+  type SemBase,
+  type Overlay,
+  type Axis,
+  addDiagnostic,
+} from "../model/semantic.ts";
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
@@ -19,12 +27,19 @@ import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis,
 import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
-  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {}, viewport: doc.viewport, labels: labelIndex(doc.root) };
+  const ctx: InferenceContext = {
+    root: doc.root,
+    fixed: [],
+    bundledFamilies: options.bundledFamilies ?? {},
+    viewport: doc.viewport,
+    labels: labelIndex(doc.root),
+  };
   const root = build(doc.root, ctx);
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };
   // A root as tall as the viewport (`min-h-screen`, `100vh`) already fills the screen: the device decides, not 844px.
-  if (doc.viewport && root.minHeight !== undefined && Math.abs(root.minHeight - doc.viewport.h) <= 0.5) delete root.minHeight;
+  if (doc.viewport && root.minHeight !== undefined && Math.abs(root.minHeight - doc.viewport.h) <= 0.5)
+    delete root.minHeight;
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
   // Building one can hoist fixed descendants of its own, so drain the list until it stops growing.
   // ponytail: each batch is paint-sorted on its own; a nested fixed node paints after its fixed
@@ -35,14 +50,16 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
     root.overlays.push(...buildOverlays(doc.root, batch, undefined, ctx));
   }
   // The document scrolled in the browser: content past the viewport must stay reachable.
-  if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
+  if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll)
+    root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
 function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
-  if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
+  if (policy.route === "svg")
+    return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
   // A data: svg source is parsed here; the emitter draws its vector.
   if (policy.route === "image") {
@@ -53,9 +70,18 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
-      ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
+      ...(n.attrs["alt"]
+        ? {
+            alt: n.attrs["alt"],
+            font: fontOf(n.styles, ctx.bundledFamilies),
+            ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
+          }
+        : n.attrs["alt"] !== undefined
+          ? { alt: n.attrs["alt"] }
+          : {}),
     });
-    if (svg?.vector) for (const d of svg.vector.diagnostics) addDiagnostic(node.diagnostics, d.level, d.feature, d.message);
+    if (svg?.vector)
+      for (const d of svg.vector.diagnostics) addDiagnostic(node.diagnostics, d.level, d.feature, d.message);
     else if (svg) addDiagnostic(node.diagnostics, "unmapped", "img", "img svg data: URL has no viewBox; layer dropped");
     imageFit(n, node);
     return node;
@@ -90,11 +116,22 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const spec = policy.route === "control" ? controlOf(n) : undefined;
   if (spec) {
     const childAxis = mainAxis(n);
-    const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: childAxis, parentDisplay: n.styles["display"] ?? "block", parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
+    const childCtx: InferenceContext = {
+      ...ctx,
+      parent: n,
+      parentAxis: childAxis,
+      parentDisplay: n.styles["display"] ?? "block",
+      parentAlign: crossAlign(n),
+      textClip: clipsText(n) ? n : ctx.textClip,
+    };
     const node = buildControl(spec, {
       base: makeBase(n, ctx, parseDeclared(n.attrs["style"])),
       children: flow.map((c) => ({ node: c, sem: build(c, childCtx) })),
-      texts: runs.length ? groupRuns(n, runs).map((g) => buildText(n, g, childCtx)).filter((t) => t.runs.length > 0) : [],
+      texts: runs.length
+        ? groupRuns(n, runs)
+            .map((g) => buildText(n, g, childCtx))
+            .filter((t) => t.runs.length > 0)
+        : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
     });
@@ -114,11 +151,19 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       // box (`mark`, `kbd`); absolutely positioned children come on top of those.
       t.overlays.push(...buildOverlays(n, abs, undefined, ctx));
       // A TextNode cannot host a ScrollView: report and clip, so the overflow at least stays inside its box.
-      const axis = scrollAxis(n, runs.map((r) => r.node.bounds).filter((b) => b.w > 0 || b.h > 0));
+      const axis = scrollAxis(
+        n,
+        runs.map((r) => r.node.bounds).filter((b) => b.w > 0 || b.h > 0),
+      );
       if (axis) {
         const prop = axis === "v" ? "overflow-y" : "overflow-x";
         t.style.clip = true;
-        addDiagnostic(t.diagnostics, "approximated", prop, `${prop} ${n.styles[prop]} on a text-only box → clipped; the text does not scroll`);
+        addDiagnostic(
+          t.diagnostics,
+          "approximated",
+          prop,
+          `${prop} ${n.styles[prop]} on a text-only box → clipped; the text does not scroll`,
+        );
         finish(t);
       }
       return t;
@@ -136,7 +181,14 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
   // Children in measured order (handles CSS `order`), text runs grouped between flow children.
   const items: AnalyzedChild[] = [];
-  const childCtx: InferenceContext = { ...ctx, parent: n, parentAxis: axis, parentDisplay: display, parentAlign: crossAlign(n), textClip: clipsText(n) ? n : ctx.textClip };
+  const childCtx: InferenceContext = {
+    ...ctx,
+    parent: n,
+    parentAxis: axis,
+    parentDisplay: display,
+    parentAlign: crossAlign(n),
+    textClip: clipsText(n) ? n : ctx.textClip,
+  };
   for (const c of flow) items.push({ node: c, sem: build(c, childCtx) });
   if (runs.length) {
     // Text interleaved with flow children (icon + label). Group consecutive runs into one text node.
@@ -146,7 +198,14 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
       if (t.runs.length === 0) continue;
       // Only the text's own geometry and paint order: the host's float, margins, flex and
       // alignment styles belong to the host box, not to one of its text groups.
-      const textItem: LayoutNode = { tag: n.tag, attrs: {}, styles: { display: "inline" }, bounds: t.frame, children: [], ...(n.paint !== undefined ? { paint: n.paint } : {}) };
+      const textItem: LayoutNode = {
+        tag: n.tag,
+        attrs: {},
+        styles: { display: "inline" },
+        bounds: t.frame,
+        children: [],
+        ...(n.paint !== undefined ? { paint: n.paint } : {}),
+      };
       items.push({ node: textItem, sem: t });
     }
   }
@@ -156,7 +215,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
   if (display === "grid" || display === "inline-grid") {
     const grid = buildGrid(n, base, items);
-    const scroll = scrollAxis(n, grid.children.map((c) => c.frame));
+    const scroll = scrollAxis(
+      n,
+      grid.children.map((c) => c.frame),
+    );
     if (scroll) grid.scroll = scroll;
     grid.overlays = buildOverlays(n, abs, flow[0], ctx);
     return finish(grid);
@@ -174,13 +236,24 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     stack = buildWrapping(n, base, items, axis, align, distribution);
   } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
-    if (lines[0]!.some((i) => floating(i.node))) addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
+    if (lines[0]!.some((i) => floating(i.node)))
+      addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
     stack = stackOf(base, "h", lines[0]!, "start", "start");
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
-    if (floats.length) addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
-    for (const d of new Set(flow.map((c) => c.styles.display).filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid")))
-      addDiagnostic(diagnostics, "approximated", `display: ${d}`, `${d} items → rows of the captured line division; they do not re-wrap at another width`);
+    if (floats.length)
+      addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
+    for (const d of new Set(
+      flow
+        .map((c) => c.styles.display)
+        .filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid"),
+    ))
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        `display: ${d}`,
+        `${d} items → rows of the captured line division; they do not re-wrap at another width`,
+      );
     const rows: AnalyzedChild[] = lines.map((line, i) => {
       if (line.length === 1) return line[0]!;
       const u = line.map((it) => it.sem.frame).reduce(unionRect);
@@ -207,7 +280,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     }
   }
 
-  const scroll = scrollAxis(n, stack.children.map((c) => c.frame));
+  const scroll = scrollAxis(
+    n,
+    stack.children.map((c) => c.frame),
+  );
   if (scroll) stack.scroll = scroll;
   stack.overlays = buildOverlays(n, abs, flow[0], ctx);
   return finish(stack);
@@ -215,7 +291,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
 
 /** `overflow: auto/scroll` the content needs (`scroll` always scrolls): the axis a ScrollView covers. Vertical wins. */
 function scrollAxis(n: LayoutNode, content: Rect[]): Axis | undefined {
-  const oy = n.styles["overflow-y"], ox = n.styles["overflow-x"];
+  const oy = n.styles["overflow-y"],
+    ox = n.styles["overflow-x"];
   if (oy === "auto" || oy === "scroll") {
     const bottom = Math.max(...content.map((f) => f.y + f.h), n.bounds.y);
     if (bottom > n.bounds.y + n.bounds.h + 0.5 || oy === "scroll") return "v";
@@ -231,22 +308,50 @@ function scrollAxis(n: LayoutNode, content: Rect[]): Axis | undefined {
 function imageFit(n: LayoutNode, node: SemNode): void {
   if (node.kind !== "image") return;
   const fit = n.styles["object-fit"] ?? "fill";
-  node.contentMode = fit === "cover" || fit === "none" || fit === "contain" ? fit : fit === "scale-down" ? "contain" : "fill";
-  if (fit === "scale-down") addDiagnostic(node.diagnostics, "approximated", "object-fit", "object-fit scale-down → contain (a source smaller than its box is enlarged)");
+  node.contentMode =
+    fit === "cover" || fit === "none" || fit === "contain" ? fit : fit === "scale-down" ? "contain" : "fill";
+  if (fit === "scale-down")
+    addDiagnostic(
+      node.diagnostics,
+      "approximated",
+      "object-fit",
+      "object-fit scale-down → contain (a source smaller than its box is enlarged)",
+    );
   const pos = n.styles["object-position"];
   const m = pos ? /^(-?[\d.]+)% (-?[\d.]+)%$/.exec(pos) : null;
   if (m && (m[1] !== "50" || m[2] !== "50")) node.position = [+m[1]! / 100, +m[2]! / 100];
-  else if (pos && !m) addDiagnostic(node.diagnostics, "approximated", "object-position", `object-position ${pos} → centred (only percentage/keyword positions map)`);
+  else if (pos && !m)
+    addDiagnostic(
+      node.diagnostics,
+      "approximated",
+      "object-position",
+      `object-position ${pos} → centred (only percentage/keyword positions map)`,
+    );
   finish(node);
 }
 
-function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNode | undefined, ctx: InferenceContext): Overlay[] {
+function buildOverlays(
+  host: LayoutNode,
+  abs: LayoutNode[],
+  firstFlow: LayoutNode | undefined,
+  ctx: InferenceContext,
+): Overlay[] {
   const out: Overlay[] = [];
   const flowPaint = firstFlow?.paint ?? Number.POSITIVE_INFINITY;
   // Stacking order = global paint order (accounts for z-index), not DOM order.
   for (const c of [...abs].sort((a, b) => (a.paint ?? 0) - (b.paint ?? 0))) {
-    const sem = build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport });
-    const covers = Math.abs(c.bounds.x - host.bounds.x) < 0.5 && Math.abs(c.bounds.y - host.bounds.y) < 0.5 && Math.abs(c.bounds.w - host.bounds.w) < 0.5 && Math.abs(c.bounds.h - host.bounds.h) < 0.5;
+    const sem = build(c, {
+      root: ctx.root,
+      fixed: ctx.fixed,
+      bundledFamilies: ctx.bundledFamilies,
+      parent: host,
+      viewport: ctx.viewport,
+    });
+    const covers =
+      Math.abs(c.bounds.x - host.bounds.x) < 0.5 &&
+      Math.abs(c.bounds.y - host.bounds.y) < 0.5 &&
+      Math.abs(c.bounds.w - host.bounds.w) < 0.5 &&
+      Math.abs(c.bounds.h - host.bounds.h) < 0.5;
     if (covers) {
       sem.width = { kind: "fill" };
       sem.height = { kind: "fill" };
@@ -259,13 +364,18 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
     const bottom = insets?.top === "auto" && insets.bottom !== "auto";
     // Fixed boxes resolve against the viewport, not their hoisting host (the whole page).
     const box = c.styles["position"] === "fixed" && ctx.viewport ? ctx.viewport : host.bounds;
-    const anchor = trailing || bottom ? {
-      corner: (bottom ? (trailing ? "bottomTrailing" : "bottomLeading") : "topTrailing") as NonNullable<Overlay["anchor"]>["corner"],
-      offset: [
-        round2(trailing ? c.bounds.x + c.bounds.w - (box.x + box.w) : c.bounds.x - box.x),
-        round2(bottom ? c.bounds.y + c.bounds.h - (box.y + box.h) : c.bounds.y - box.y),
-      ] as [number, number],
-    } : undefined;
+    const anchor =
+      trailing || bottom
+        ? {
+            corner: (bottom ? (trailing ? "bottomTrailing" : "bottomLeading") : "topTrailing") as NonNullable<
+              Overlay["anchor"]
+            >["corner"],
+            offset: [
+              round2(trailing ? c.bounds.x + c.bounds.w - (box.x + box.w) : c.bounds.x - box.x),
+              round2(bottom ? c.bounds.y + c.bounds.h - (box.y + box.h) : c.bounds.y - box.y),
+            ] as [number, number],
+          }
+        : undefined;
     out.push({
       node: sem,
       layer: (c.paint ?? 0) < flowPaint ? "background" : "overlay",
@@ -283,7 +393,13 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
     if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
     out.push({
-      node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport }),
+      node: build(c, {
+        root: ctx.root,
+        fixed: ctx.fixed,
+        bundledFamilies: ctx.bundledFamilies,
+        parent: host,
+        viewport: ctx.viewport,
+      }),
       layer: "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers: false,
@@ -291,4 +407,3 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
   }
   return out;
 }
-

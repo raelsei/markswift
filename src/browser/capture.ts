@@ -19,7 +19,8 @@ const ROOT_MARK = "data-markswift-root-capture";
 /** Stamped (after snapshot A) on every element whose `transform`/`translate`/`rotate`/`scale` is not `none`. */
 const TRANSFORMED_MARK = "data-markswift-transformed";
 /** Every property that moves paint without moving layout. */
-const NO_TRANSFORM = "transform: none !important; translate: none !important; rotate: none !important; scale: none !important;";
+const NO_TRANSFORM =
+  "transform: none !important; translate: none !important; rotate: none !important; scale: none !important;";
 
 /** The final URL of a response and every URL it was redirected from. */
 const requestURLs = (r: Response) => {
@@ -28,7 +29,8 @@ const requestURLs = (r: Response) => {
   return urls;
 };
 
-const UNCOMPILED_TAILWIND = /@tailwind\s+(base|components|utilities|variants)\b|@import\s+(url\(\s*)?["']tailwindcss["']|@apply\s/;
+const UNCOMPILED_TAILWIND =
+  /@tailwind\s+(base|components|utilities|variants)\b|@import\s+(url\(\s*)?["']tailwindcss["']|@apply\s/;
 
 /** Raster type of an image response served without an `image/*` content type, from its magic bytes. */
 function sniffImage(b: Buffer): string | undefined {
@@ -59,7 +61,15 @@ export class BrowserCapture {
   private context!: BrowserContext;
   private stopping?: Promise<void>;
 
-  constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string; restricted?: boolean; signal?: AbortSignal }) {}
+  constructor(
+    private readonly opts: {
+      dpr: number;
+      viewport: { width: number; height: number };
+      channel?: string;
+      restricted?: boolean;
+      signal?: AbortSignal;
+    },
+  ) {}
 
   async start(): Promise<void> {
     // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
@@ -74,7 +84,9 @@ export class BrowserCapture {
   }
 
   /** Version of the launched browser (e.g. `153.0.8010.12`). */
-  get version(): string { return this.browser.version(); }
+  get version(): string {
+    return this.browser.version();
+  }
 
   /**
    * Safe to call more than once and concurrently (the conversion deadline and its cleanup both
@@ -83,8 +95,11 @@ export class BrowserCapture {
   stop(): Promise<void> {
     if (!this.browser) return Promise.resolve();
     this.stopping ??= (async () => {
-      try { await this.context?.close(); }
-      finally { await this.browser.close(); }
+      try {
+        await this.context?.close();
+      } finally {
+        await this.browser.close();
+      }
     })();
     return this.stopping;
   }
@@ -111,15 +126,33 @@ export class BrowserCapture {
       if (r.status() >= 400 && !favicon(r.url())) errors.push(`${r.status()} ${r.url()}`);
       const mime = r.headers()["content-type"]?.split(";")[0];
       if (r.ok() && (mime?.startsWith("image/") || r.request().resourceType() === "image")) {
-        imageReads.push(r.body().then((bytes) => {
-          const type = mime?.startsWith("image/") ? mime : sniffImage(bytes);
-          if (!type) { errors.push(`Image response is not an image: ${r.url()}`); return; }
-          for (const u of requestURLs(r)) images.set(u, `data:${type};base64,${bytes.toString("base64")}`);
-        }).catch(() => { errors.push(`Could not capture image bytes: ${r.url()}`); }));
+        imageReads.push(
+          r
+            .body()
+            .then((bytes) => {
+              const type = mime?.startsWith("image/") ? mime : sniffImage(bytes);
+              if (!type) {
+                errors.push(`Image response is not an image: ${r.url()}`);
+                return;
+              }
+              for (const u of requestURLs(r)) images.set(u, `data:${type};base64,${bytes.toString("base64")}`);
+            })
+            .catch(() => {
+              errors.push(`Could not capture image bytes: ${r.url()}`);
+            }),
+        );
       }
       if (r.ok() && r.request().resourceType() === "stylesheet") {
-        sheetReads.push(r.text().then((text) => { for (const u of requestURLs(r)) sheets.set(u, text); })
-          .catch(() => { errors.push(`Could not read stylesheet: ${r.url()}`); }));
+        sheetReads.push(
+          r
+            .text()
+            .then((text) => {
+              for (const u of requestURLs(r)) sheets.set(u, text);
+            })
+            .catch(() => {
+              errors.push(`Could not read stylesheet: ${r.url()}`);
+            }),
+        );
       }
     });
     try {
@@ -128,13 +161,30 @@ export class BrowserCapture {
       // The exact document route below is registered last and fulfills that one request.
       // `aborted` (net::ERR_ABORTED) cancels a navigation (meta refresh, link) without committing
       // Chrome's error page, so the pasted document stays the one captured.
-      if (this.opts.restricted) await page.route("**/*", route => route.abort("aborted"));
+      if (this.opts.restricted) await page.route("**/*", (route) => route.abort("aborted"));
       if (spec.html !== undefined) {
-        const documentURL = new URL(spec.url); documentURL.hash = "";
-        await page.route((url) => url.href === documentURL.href, (route) => route.request().isNavigationRequest()
-          ? route.fulfill({ contentType: "text/html; charset=utf-8", body: spec.html!,
-            ...(this.opts.restricted ? { headers: { "Content-Security-Policy": "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'" } } : {}) })
-          : this.opts.restricted ? route.abort() : route.continue());
+        const documentURL = new URL(spec.url);
+        documentURL.hash = "";
+        await page.route(
+          (url) => url.href === documentURL.href,
+          (route) =>
+            route.request().isNavigationRequest()
+              ? route.fulfill({
+                  contentType: "text/html; charset=utf-8",
+                  body: spec.html!,
+                  ...(this.opts.restricted
+                    ? {
+                        headers: {
+                          "Content-Security-Policy":
+                            "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'",
+                        },
+                      }
+                    : {}),
+                })
+              : this.opts.restricted
+                ? route.abort()
+                : route.continue(),
+        );
       }
       await page.goto(spec.url, { waitUntil: "load" });
       await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
@@ -146,12 +196,18 @@ export class BrowserCapture {
       await settle(page);
       await Promise.all(sheetReads);
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
-      for (const href of unreadable) errors.push(`Stylesheet could not be read: ${href}; its @font-face rules were not collected.`);
-      const inlineStyles = await page.evaluate(() => [...document.querySelectorAll("style:not([data-markswift-harness])")].map((s) => s.textContent ?? ""));
+      for (const href of unreadable)
+        errors.push(`Stylesheet could not be read: ${href}; its @font-face rules were not collected.`);
+      const inlineStyles = await page.evaluate(() =>
+        [...document.querySelectorAll("style:not([data-markswift-harness])")].map((s) => s.textContent ?? ""),
+      );
       const tailwind = new Set<string>();
       for (const text of inlineStyles) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add("inline <style>");
       for (const [url, text] of sheets) if (UNCOMPILED_TAILWIND.test(text)) tailwind.add(url);
-      for (const label of tailwind) errors.push(`Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`);
+      for (const label of tailwind)
+        errors.push(
+          `Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`,
+        );
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
       const canvas = await page.evaluate(
         ({ sel, mark }) => {
@@ -168,7 +224,11 @@ export class BrowserCapture {
             if (!bg || bg === "transparent" || bg === "none") continue;
             const legacy = /^rgba?\(([^)]+)\)$/.exec(bg);
             const slash = /\/\s*([\d.]+)(%?)\s*\)\s*$/.exec(bg);
-            const alpha = legacy ? parseFloat((legacy[1]!.split(",")[3] ?? "1").trim()) : slash ? parseFloat(slash[1]!) / (slash[2] ? 100 : 1) : 1;
+            const alpha = legacy
+              ? parseFloat((legacy[1]!.split(",")[3] ?? "1").trim())
+              : slash
+                ? parseFloat(slash[1]!) / (slash[2] ? 100 : 1)
+                : 1;
             if (alpha > 0.5) {
               canvas = bg;
               break;
@@ -187,7 +247,8 @@ export class BrowserCapture {
       await page.evaluate((mark) => {
         for (const el of document.querySelectorAll("*")) {
           const cs = getComputedStyle(el);
-          if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none") el.setAttribute(mark, "");
+          if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
+            el.setAttribute(mark, "");
         }
       }, TRANSFORMED_MARK);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
@@ -217,7 +278,10 @@ export class BrowserCapture {
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
         const { x, y, w, h } = box;
-        if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0) throw new Error(`capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`);
+        if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0)
+          throw new Error(
+            `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
+          );
         // The reference shows the component at its layout box: ancestors' transforms are cancelled
         // (keeping their containing blocks), the root's own transform stays painted.
         await page.evaluate((css) => {

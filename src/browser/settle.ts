@@ -16,7 +16,8 @@ export async function settle(page: Page): Promise<void> {
     for (const el of document.querySelectorAll("*")) {
       const cv = getComputedStyle(el).contentVisibility;
       if (cv === "auto") (el as HTMLElement).style.setProperty("content-visibility", "visible", "important");
-      else if (cv === "hidden") for (const c of el.children) (c as HTMLElement).style.setProperty("display", "none", "important");
+      else if (cv === "hidden")
+        for (const c of el.children) (c as HTMLElement).style.setProperty("display", "none", "important");
     }
     for (const a of document.getAnimations()) {
       try {

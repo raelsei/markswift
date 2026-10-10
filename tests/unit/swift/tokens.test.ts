@@ -40,7 +40,11 @@ function box(over: { id?: string; style?: Style } = {}): SemNode {
 }
 
 function text(id: string, color: Color): SemNode {
-  const run: TextRun = { text: "x", color, font: { family: { kind: "system", design: "default" }, size: 14, weight: 400 } };
+  const run: TextRun = {
+    text: "x",
+    color,
+    font: { family: { kind: "system", design: "default" }, size: 14, weight: 400 },
+  };
   return { ...(box({ id }) as object), kind: "text", runs: [run], align: "leading", lines: 1 } as SemNode;
 }
 
@@ -172,7 +176,9 @@ describe("extractTokens", () => {
 describe("emitDesignTokens", () => {
   test("semantic tokens emit the pair, static ones a single colour", () => {
     const swift = emitDesignTokens(extractTokens(pair()), "V");
-    expect(swift).toContain("static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))");
+    expect(swift).toContain(
+      "static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))",
+    );
     expect(swift).toMatch(/static let fill\w+ = Color\.markswift\(0\.49, 0\.36, 0\.84\)\n/);
     expect(SWIFT_RUNTIME).toContain("static func markswift(light: Color, dark: Color)");
     expect(swift).not.toContain("extension Color");
@@ -209,8 +215,17 @@ function names(s: Screen): Record<string, Color> {
 describe("class hints name the slot their utility paints", () => {
   const SKY = rgb(0.05, 0.65, 0.91);
   const INDIGO500 = rgb(0.39, 0.4, 0.95);
-  const gradient = (...colors: Color[]) => (id: string) =>
-    box({ id, style: style({ fills: [{ kind: "linear", angle: 90, stops: colors.map((color, i) => ({ color, pos: i / (colors.length - 1) })) }] }) });
+  const gradient =
+    (...colors: Color[]) =>
+    (id: string) =>
+      box({
+        id,
+        style: style({
+          fills: [
+            { kind: "linear", angle: 90, stops: colors.map((color, i) => ({ color, pos: i / (colors.length - 1) })) },
+          ],
+        }),
+      });
 
   test("from-/to- name the first and last stop: sky → indigo", () => {
     const t = names(classScreen("bg-gradient-to-r from-sky-500 to-indigo-500", gradient(SKY, INDIGO500)));
@@ -225,14 +240,21 @@ describe("class hints name the slot their utility paints", () => {
   });
 
   test("via- names the middle stop", () => {
-    const t = names(classScreen("bg-linear-to-r from-sky-500 via-white to-indigo-500", gradient(SKY, WHITE, INDIGO500)));
+    const t = names(
+      classScreen("bg-linear-to-r from-sky-500 via-white to-indigo-500", gradient(SKY, WHITE, INDIGO500)),
+    );
     expect(t.sky500).toEqual(SKY);
     expect(t.white).toEqual(WHITE);
     expect(t.indigo500).toEqual(INDIGO500);
   });
 
   test("bg- names the fill and text- the run on one node", () => {
-    const t = names(classScreen("bg-white text-black", (id) => ({ ...text(id, rgb(0, 0, 0)), style: style({ fills: [{ kind: "solid", color: WHITE }] }) }) as SemNode));
+    const t = names(
+      classScreen(
+        "bg-white text-black",
+        (id) => ({ ...text(id, rgb(0, 0, 0)), style: style({ fills: [{ kind: "solid", color: WHITE }] }) }) as SemNode,
+      ),
+    );
     expect(t.white).toEqual(WHITE);
     expect(t.black).toEqual(rgb(0, 0, 0));
   });
@@ -248,7 +270,14 @@ describe("class hints name the slot their utility paints", () => {
   });
 
   test("two custom properties tied on one slot name nothing rather than the alphabetically first", () => {
-    const s = classScreen("", (id) => ({ ...text(id, NEAR_BLACK), style: style({ fills: [{ kind: "solid", color: WHITE }], tokens: ["surface", "ink"] }) }) as SemNode);
+    const s = classScreen(
+      "",
+      (id) =>
+        ({
+          ...text(id, NEAR_BLACK),
+          style: style({ fills: [{ kind: "solid", color: WHITE }], tokens: ["surface", "ink"] }),
+        }) as SemNode,
+    );
     const t = names(s);
     expect(t.ink).toBeUndefined();
     expect(t.surface).toBeUndefined();
@@ -264,13 +293,19 @@ function ambiguousPair(): Screen[] {
   nextId = 0;
   const light = screen(
     "light",
-    [box({ id: "card", style: style({ fills: [{ kind: "solid", color: WHITE }], border: white }) }), box({ id: "other", style: style({ border: white }) })],
+    [
+      box({ id: "card", style: style({ fills: [{ kind: "solid", color: WHITE }], border: white }) }),
+      box({ id: "other", style: style({ border: white }) }),
+    ],
     rgb(0.96, 0.96, 0.98),
   );
   nextId = 0;
   const dark = screen(
     "dark",
-    [box({ id: "card", style: style({ fills: [{ kind: "solid", color: NEAR_BLACK }], border: white }) }), box({ id: "other", style: style({ border: white }) })],
+    [
+      box({ id: "card", style: style({ fills: [{ kind: "solid", color: NEAR_BLACK }], border: white }) }),
+      box({ id: "other", style: style({ border: white }) }),
+    ],
     rgb(0.04, 0.05, 0.07),
   );
   return [light, dark];
@@ -286,13 +321,25 @@ describe("colorExpr", () => {
 
   const table: Array<[string, Color, string | undefined, ColorCtx, string]> = [
     ["a semantic token's light value, on the node that paints it", WHITE, "card", lightCtx, `Palette.${card.name}`],
-    ["the same token's dark value in the dark view — one name, both themes", NEAR_BLACK, "card", darkCtx, `Palette.${card.name}`],
+    [
+      "the same token's dark value in the dark view — one name, both themes",
+      NEAR_BLACK,
+      "card",
+      darkCtx,
+      `Palette.${card.name}`,
+    ],
     ["a static token on one of its nodes", INDIGO, "accent", lightCtx, `Palette.${accent.name}`],
     ["a token colour on a node that does not paint it", WHITE, "accent", lightCtx, "Color.markswift(1.0, 1.0, 1.0)"],
     ["a colour with no node to attribute it to", WHITE, undefined, lightCtx, "Color.markswift(1.0, 1.0, 1.0)"],
     ["a colour no token names", rgb(0.2, 0.7, 0.3), "card", lightCtx, "Color.markswift(0.2, 0.7, 0.3)"],
     ["a colour emitted without a token set", WHITE, "card", { mode: "fidelity" }, "Color.markswift(1.0, 1.0, 1.0)"],
-    ["translucency is part of the identity", rgb(1, 1, 1, 0.5), "card", lightCtx, "Color.markswift(1.0, 1.0, 1.0, 0.5)"],
+    [
+      "translucency is part of the identity",
+      rgb(1, 1, 1, 0.5),
+      "card",
+      lightCtx,
+      "Color.markswift(1.0, 1.0, 1.0, 0.5)",
+    ],
   ];
   for (const [name, c, id, ctx, expected] of table) {
     test(`${name} → ${expected}`, () => {
@@ -323,7 +370,10 @@ describe("views referencing tokens", () => {
     const body = (s: Screen, name: string) => {
       const view = emitSwift(s, name, { mode: "app", tokens: screenTokens(set, s) }).view;
       // The #Preview backdrop is a fixed page colour per theme, not a colour of the design.
-      return view.slice(0, view.indexOf("#Preview")).split("\n").filter((l) => l.includes("Color.") || l.includes("Palette."));
+      return view
+        .slice(0, view.indexOf("#Preview"))
+        .split("\n")
+        .filter((l) => l.includes("Color.") || l.includes("Palette."));
     };
     const lines = body(light!, "HomeView");
     expect(lines.length).toBeGreaterThan(0);
@@ -334,7 +384,8 @@ describe("views referencing tokens", () => {
   test("a colour outside the token set is still emitted as a literal", () => {
     const [light, dark] = pair();
     const lone = { kind: "solid" as const, color: rgb(0.2, 0.7, 0.3) };
-    for (const s of [light!, dark!]) (s.root as StackNode).children.push(box({ id: "lone", style: style({ fills: [lone] }) }));
+    for (const s of [light!, dark!])
+      (s.root as StackNode).children.push(box({ id: "lone", style: style({ fills: [lone] }) }));
     const set = extractTokens([light!, dark!]);
     const view = emitSwift(light!, "HomeView", { mode: "app", tokens: screenTokens(set, light!) }).view;
     expect(view).toContain("Color.markswift(0.2, 0.7, 0.3)");

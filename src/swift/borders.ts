@@ -63,13 +63,18 @@ export function borderSideModifiers(n: SemNode, ctx: ColorCtx): string[] {
 }
 
 /** Square-cornered edges: a bar per edge, `double` two bars a third of the width each. */
-function straightBorderSides(edges: Array<[Edge | undefined, string, "height" | "width"]>, n: SemNode, ctx: ColorCtx): string[] {
+function straightBorderSides(
+  edges: Array<[Edge | undefined, string, "height" | "width"]>,
+  n: SemNode,
+  ctx: ColorCtx,
+): string[] {
   const m: string[] = [];
   for (const [e, edge, dim] of edges) {
     if (!e || e.width <= 0 || e.color.a <= 0) continue;
     const color = colorExpr(e.color, ctx, n.id);
     const overlay = (view: string) => `.overlay(alignment: ${edge}) { ${view} }`;
-    const bar = (thickness: number, inset = 0) => `Rectangle().fill(${color}).frame(${dim}: ${num(thickness)})${inset ? `.padding(${edge}, ${num(inset)})` : ""}`;
+    const bar = (thickness: number, inset = 0) =>
+      `Rectangle().fill(${color}).frame(${dim}: ${num(thickness)})${inset ? `.padding(${edge}, ${num(inset)})` : ""}`;
     switch (e.style) {
       case "double": {
         const t = e.width / 3;
@@ -78,7 +83,11 @@ function straightBorderSides(edges: Array<[Edge | undefined, string, "height" | 
       }
       case "dashed":
       case "dotted":
-        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: ${strokeStyle(e.width, e.style)}).frame(${dim}: ${num(e.width)})`));
+        m.push(
+          overlay(
+            `MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: ${strokeStyle(e.width, e.style)}).frame(${dim}: ${num(e.width)})`,
+          ),
+        );
         break;
       default:
         m.push(overlay(bar(e.width)));

@@ -1,12 +1,10 @@
 import type { BundledFamily, BundledFamilies, FontMetrics } from "../model/fonts.ts";
 import type { FontPackage } from "./types.ts";
 
-
 /** Metrics captured by this package, isolated from all other conversions. */
 export function metricsForFonts(pkg: FontPackage): FontMetrics {
   return Object.fromEntries(pkg.faces.map((face) => [face.family.toLowerCase(), { ...face.metrics }]));
 }
-
 
 /** Families of a package, in the shape the inference pass resolves `font-family` against. */
 export function bundledFamilies(pkg: FontPackage): BundledFamilies {

@@ -1,7 +1,6 @@
 /** Pure radius interpretation of browser-resolved CSS values. */
 import { splitTop, resolveLength } from "./syntax.ts";
 
-
 /**
  * One `border-*-radius` corner → `[horizontal, vertical]` px. A single value applies to
  * both axes; `%` resolves against `refW` (horizontal) / `refH` (vertical) as in CSS.

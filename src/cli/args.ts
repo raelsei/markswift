@@ -43,20 +43,34 @@ Options:
 Requires Bun and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
-const valueFlags = new Set(["--out", "--url", "--css", "--name", "--root", "--width", "--height", "--theme", "--dark-class", "--mode"]);
+const valueFlags = new Set([
+  "--out",
+  "--url",
+  "--css",
+  "--name",
+  "--root",
+  "--width",
+  "--height",
+  "--theme",
+  "--dark-class",
+  "--mode",
+]);
 
 export function parseArgs(args: string[]): Command {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) return { kind: "help" };
   if (args.length === 1 && ["--version", "-v"].includes(args[0]!)) return { kind: "version" };
   if (args[0] !== "convert") throw new UsageError(`Unknown command: ${args[0]}`);
-  if (args.slice(1).some(arg => arg === "--help" || arg === "-h")) return { kind: "help" };
+  if (args.slice(1).some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
 
   const values = new Map<string, string>();
   const positional: string[] = [];
   let afterDoubleDash = false;
   for (let i = 1; i < args.length; i++) {
     const arg = args[i]!;
-    if (arg === "--" && !afterDoubleDash) { afterDoubleDash = true; continue; }
+    if (arg === "--" && !afterDoubleDash) {
+      afterDoubleDash = true;
+      continue;
+    }
     if (!afterDoubleDash && valueFlags.has(arg)) {
       if (values.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       const value = args[++i];
@@ -75,7 +89,9 @@ export function parseArgs(args: string[]): Command {
     try {
       const parsed = new URL(url);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("unsupported protocol");
-    } catch { throw new UsageError("--url requires an HTTP or HTTPS URL"); }
+    } catch {
+      throw new UsageError("--url requires an HTTP or HTTPS URL");
+    }
   }
   const source = url ? { url } : positional[0] === "-" ? { stdin: true as const } : { file: positional[0]! };
   const width = dimension(values.get("--width"), "--width", 390);
@@ -84,15 +100,23 @@ export function parseArgs(args: string[]): Command {
   const mode = values.get("--mode") ?? "app";
   const name = values.get("--name");
   if (name !== undefined) {
-    try { validateName(name); }
-    catch (error) { throw new UsageError(error instanceof Error ? error.message : String(error)); }
+    try {
+      validateName(name);
+    } catch (error) {
+      throw new UsageError(error instanceof Error ? error.message : String(error));
+    }
   }
-  if (theme !== "light" && theme !== "dark" && theme !== "adaptive") throw new UsageError("--theme must be adaptive, light or dark");
+  if (theme !== "light" && theme !== "dark" && theme !== "adaptive")
+    throw new UsageError("--theme must be adaptive, light or dark");
   const darkClass = values.get("--dark-class");
-  if (darkClass !== undefined && !/^\S+$/.test(darkClass)) throw new UsageError("--dark-class must be a single class name");
+  if (darkClass !== undefined && !/^\S+$/.test(darkClass))
+    throw new UsageError("--dark-class must be a single class name");
   if (mode !== "app" && mode !== "fidelity") throw new UsageError("--mode must be app or fidelity");
   return {
-    kind: "convert", source, outDir, cssPath: values.get("--css"),
+    kind: "convert",
+    source,
+    outDir,
+    cssPath: values.get("--css"),
     options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },
   };
 }
@@ -100,6 +124,7 @@ export function parseArgs(args: string[]): Command {
 function dimension(value: string | undefined, flag: string, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
-  if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0) throw new UsageError(`${flag} must be a positive integer`);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0)
+    throw new UsageError(`${flag} must be a positive integer`);
   return parsed;
 }

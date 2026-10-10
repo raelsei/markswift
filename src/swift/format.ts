@@ -82,7 +82,10 @@ export function dashPattern(style: "dashed" | "dotted", width: number): string {
 
 /** `StrokeStyle` for a CSS line style; styles other than dashed/dotted stroke solid. */
 export function strokeStyle(width: number, style: string): string {
-  const dash = style === "dashed" || style === "dotted" ? `${style === "dotted" ? ", lineCap: .round" : ""}, dash: ${dashPattern(style, width)}` : "";
+  const dash =
+    style === "dashed" || style === "dotted"
+      ? `${style === "dotted" ? ", lineCap: .round" : ""}, dash: ${dashPattern(style, width)}`
+      : "";
   return `StrokeStyle(lineWidth: ${num(width)}${dash})`;
 }
 
@@ -108,7 +111,14 @@ export function uniqueName(base: string, seen: Record<string, number>): string {
  * build (SE-0466) an unannotated struct would fail to conform in Swift 6 mode.
  */
 export function shapeStruct(name: string, shapes: Record<string, string>, body: () => string[]): string {
-  shapes[name] ??= [`nonisolated struct ${name}: Shape {`, "    func path(in rect: CGRect) -> Path {", ...indent(body(), 2), "    }", "}"].join("\n") + "\n";
+  shapes[name] ??=
+    [
+      `nonisolated struct ${name}: Shape {`,
+      "    func path(in rect: CGRect) -> Path {",
+      ...indent(body(), 2),
+      "    }",
+      "}",
+    ].join("\n") + "\n";
   return name;
 }
 
@@ -140,7 +150,9 @@ const TEXT_STYLE_SIZES: Array<[number, string]> = [
 
 /** The `Font.TextStyle` whose default size is nearest `size`: what an app-mode font scales with. */
 export function nearestTextStyle(size: number): string {
-  return TEXT_STYLE_SIZES.reduce((best, [s, name]) => (Math.abs(s - size) < Math.abs(best[0] - size) ? [s, name] : best))[1];
+  return TEXT_STYLE_SIZES.reduce((best, [s, name]) =>
+    Math.abs(s - size) < Math.abs(best[0] - size) ? [s, name] : best,
+  )[1];
 }
 
 /**
@@ -152,7 +164,10 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
   if (ctx.mode !== "app" || fixed || !ctx.scaledFonts || !(f.size > 0)) return num(f.size);
   const size = num(f.size);
   const name = `textSize${size.replace(/\.0$/, "").replace(".", "_")}`;
-  ctx.scaledFonts.set(name, `@ScaledMetric(relativeTo: .${nearestTextStyle(f.size)}) private var ${name}: CGFloat = ${size}`);
+  ctx.scaledFonts.set(
+    name,
+    `@ScaledMetric(relativeTo: .${nearestTextStyle(f.size)}) private var ${name}: CGFloat = ${size}`,
+  );
   return name;
 }
 
@@ -169,9 +184,12 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
  *   quantisation. Nothing in this mode is shipped.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
-  const weightName = WEIGHT_NAMES.reduce((best, [w, name]) => (Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best))[1];
+  const weightName = WEIGHT_NAMES.reduce((best, [w, name]) =>
+    Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best,
+  )[1];
   if (f.family.kind === "custom") {
-    if (ctx.mode === "fidelity") return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${num(f.opsz)}` : ""})`;
+    if (ctx.mode === "fidelity")
+      return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${num(f.opsz)}` : ""})`;
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;
   }
   return `.system(size: ${fontSizeExpr(f, ctx, fixed)}, weight: .${weightName}, design: .${f.family.design})`;

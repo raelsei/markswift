@@ -12,7 +12,7 @@ import { alignment } from "./format.ts";
 export const SYSTEM_LINE_HEIGHT = 1.193359;
 
 export function clipsFirstLine(n: TextNode): boolean {
-  const font = n.runs.find(run => run.gap === undefined)?.font;
+  const font = n.runs.find((run) => run.gap === undefined)?.font;
   const lineHeight = font?.lineHeight ?? (font ? font.size * SYSTEM_LINE_HEIGHT : 0);
   return n.maxHeight !== undefined && n.frame.h - n.padding[0] - n.padding[2] < lineHeight - 0.5;
 }

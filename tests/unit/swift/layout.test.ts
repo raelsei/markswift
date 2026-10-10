@@ -3,20 +3,56 @@ import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 
-function element(tag: string, x: number, y: number, w: number, h: number, styles: Record<string, string>, children: LayoutNode[] = []): LayoutNode {
+function element(
+  tag: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  styles: Record<string, string>,
+  children: LayoutNode[] = [],
+): LayoutNode {
   return { tag, attrs: {}, bounds: { x, y, w, h }, styles, children };
 }
 function measuredRow(intrinsic: boolean) {
-  const tile = (x: number) => element("div", x, 0, 174, 90, { display: "block", position: "relative", "background-color": "rgb(85, 153, 187)" }, [
-    element("div", x + 48, 25, 40, 40, { position: "absolute", "background-color": "rgb(238, 51, 68)" }),
-  ]);
-  const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 174, h: 90 }, text: "Intrinsic text", children: [] };
+  const tile = (x: number) =>
+    element("div", x, 0, 174, 90, { display: "block", position: "relative", "background-color": "rgb(85, 153, 187)" }, [
+      element("div", x + 48, 25, 40, 40, { position: "absolute", "background-color": "rgb(238, 51, 68)" }),
+    ]);
+  const text: LayoutNode = {
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x: 0, y: 0, w: 174, h: 90 },
+    text: "Intrinsic text",
+    children: [],
+  };
   const root = element("main", 0, 0, 393, 90, { display: "block" }, [
-    element("section", 0, 0, 360, 90, { display: "flex", "flex-direction": "row", "align-items": "stretch", gap: "12px" }, intrinsic ? [
-      element("p", 0, 0, 174, 90, { display: "block", "font-size": "16px", "line-height": "90px" }, [text]), tile(186),
-    ] : [tile(0), tile(186)]),
+    element(
+      "section",
+      0,
+      0,
+      360,
+      90,
+      { display: "flex", "flex-direction": "row", "align-items": "stretch", gap: "12px" },
+      intrinsic
+        ? [
+            element("p", 0, 0, 174, 90, { display: "block", "font-size": "16px", "line-height": "90px" }, [text]),
+            tile(186),
+          ]
+        : [tile(0), tile(186)],
+    ),
   ]);
-  const doc: LayoutDoc = { version: 2, source: "layout-test", combo: { screen: "row", theme: "light" }, size: { w: 393, h: 90 }, dpr: 3, canvas: "rgb(255,255,255)", fonts: [], root };
+  const doc: LayoutDoc = {
+    version: 2,
+    source: "layout-test",
+    combo: { screen: "row", theme: "light" },
+    size: { w: 393, h: 90 },
+    dpr: 3,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root,
+  };
   return inferScreen(doc, "row");
 }
 
@@ -27,7 +63,7 @@ test("a measured-height row passes its height proposal to overlay-only stretch c
   const row = screen.root.children[0]!;
   expect(row.height).toEqual({ kind: "fixed", px: 90 });
   if (row.kind !== "stack") throw new Error("expected row stack");
-  expect(row.children.map(n => n.height.kind)).toEqual(["fill", "fill"]);
+  expect(row.children.map((n) => n.height.kind)).toEqual(["fill", "fill"]);
   for (const mode of ["app", "fidelity"] as const) {
     expect(emitSwift(screen, "RowView", { mode }).view).not.toContain(".fixedSize(horizontal: false, vertical: true)");
   }
@@ -59,7 +95,16 @@ test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecat
   const root = element("main", 0, 0, 100, 50, { display: "block", "overflow-y": "auto" }, [
     element("div", 0, 0, 100, 200, { display: "block", "background-color": "rgb(255, 0, 0)" }),
   ]);
-  const doc: LayoutDoc = { version: 2, source: "layout-test", combo: { screen: "s", theme: "light" }, size: { w: 100, h: 50 }, dpr: 3, canvas: "rgb(255,255,255)", fonts: [], root };
+  const doc: LayoutDoc = {
+    version: 2,
+    source: "layout-test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: 100, h: 50 },
+    dpr: 3,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root,
+  };
   const view = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view;
   expect(view).toContain("ScrollView(.vertical) {");
   expect(view).not.toContain("showsIndicators");

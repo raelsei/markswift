@@ -21,13 +21,19 @@ export interface CompareResult {
 
 const MATCH = { threshold: 0.1, includeAA: false };
 
-export async function compare(refPath: string, testPath: string, diffPath: string, dpr: number): Promise<CompareResult> {
+export async function compare(
+  refPath: string,
+  testPath: string,
+  diffPath: string,
+  dpr: number,
+): Promise<CompareResult> {
   const t0 = performance.now();
   const ref = sharp(refPath);
   const [meta, testMeta] = await Promise.all([ref.metadata(), sharp(testPath).metadata()]);
   const width = meta.width!;
   const height = meta.height!;
-  if (testMeta.width !== width || testMeta.height !== height) throw new Error(`image dimensions differ: ${width}x${height} vs ${testMeta.width}x${testMeta.height}`);
+  if (testMeta.width !== width || testMeta.height !== height)
+    throw new Error(`image dimensions differ: ${width}x${height} vs ${testMeta.width}x${testMeta.height}`);
   const [a, b] = await Promise.all([
     ref.ensureAlpha().raw().toBuffer(),
     sharp(testPath).ensureAlpha().raw().toBuffer(),
@@ -50,18 +56,24 @@ export async function compare(refPath: string, testPath: string, diffPath: strin
     }
     return { data, width: w1, height: h1 };
   };
-  const scores = [0, 1, 2].map(c => ssim(channel(ca, c), channel(cb, c)).mssim);
+  const scores = [0, 1, 2].map((c) => ssim(channel(ca, c), channel(cb, c)).mssim);
   return { width, height, mismatch: bad / (width * height), ssim: Math.min(...scores), ms: performance.now() - t0 };
 }
 
 /** Pixelmatch mismatch inside one element's box (CSS px, scaled by `dpr`, clamped to the image). */
-export async function regionMismatch(refPath: string, testPath: string, rect: { x: number; y: number; w: number; h: number }, dpr: number): Promise<number> {
+export async function regionMismatch(
+  refPath: string,
+  testPath: string,
+  rect: { x: number; y: number; w: number; h: number },
+  dpr: number,
+): Promise<number> {
   const meta = await sharp(refPath).metadata();
   const left = Math.max(0, Math.round(rect.x * dpr));
   const top = Math.max(0, Math.round(rect.y * dpr));
   const width = Math.min(meta.width!, Math.round((rect.x + rect.w) * dpr)) - left;
   const height = Math.min(meta.height!, Math.round((rect.y + rect.h) * dpr)) - top;
-  if (width <= 0 || height <= 0) throw new Error(`region ${JSON.stringify(rect)} lies outside the ${meta.width}x${meta.height} image`);
+  if (width <= 0 || height <= 0)
+    throw new Error(`region ${JSON.stringify(rect)} lies outside the ${meta.width}x${meta.height} image`);
   const crop = (path: string) => sharp(path).extract({ left, top, width, height }).ensureAlpha().raw().toBuffer();
   const [a, b] = await Promise.all([crop(refPath), crop(testPath)]);
   return pixelmatch(a, b, undefined, width, height, MATCH) / (width * height);

@@ -12,26 +12,39 @@ export function ringOf(
   vb: [number, number, number, number],
 ): SvgPath["ring"] | undefined {
   if (dash.length !== 1 || dash[0]! < 2 * Math.PI * circle.r * 0.99) return undefined;
-  if (Math.abs(circle.cx - (vb[0] + vb[2] / 2)) > 0.01 || Math.abs(circle.cy - (vb[1] + vb[3] / 2)) > 0.01) return undefined;
+  if (Math.abs(circle.cx - (vb[0] + vb[2] / 2)) > 0.01 || Math.abs(circle.cy - (vb[1] + vb[3] / 2)) > 0.01)
+    return undefined;
   // The transform must be a pure rotation about the centre (or none): the ring is drawn as a native circle.
   const [a, b, c, d, e, f] = ctm;
   if (Math.abs(a - d) > 1e-6 || Math.abs(b + c) > 1e-6 || Math.abs(a * a + b * b - 1) > 1e-6) return undefined;
-  if (Math.abs(a * circle.cx + c * circle.cy + e - circle.cx) > 0.01 || Math.abs(b * circle.cx + d * circle.cy + f - circle.cy) > 0.01) return undefined;
-  return { r: circle.r, to: round2(Math.max(0, Math.min(1, 1 - phase / dash[0]!))), startAngle: round2((Math.atan2(b, a) * 180) / Math.PI) };
+  if (
+    Math.abs(a * circle.cx + c * circle.cy + e - circle.cx) > 0.01 ||
+    Math.abs(b * circle.cx + d * circle.cy + f - circle.cy) > 0.01
+  )
+    return undefined;
+  return {
+    r: circle.r,
+    to: round2(Math.max(0, Math.min(1, 1 - phase / dash[0]!))),
+    startAngle: round2((Math.atan2(b, a) * 180) / Math.PI),
+  };
 }
 
 // ---------- geometry ----------
 
 /** Bounding box of the path's geometry (exact for lines and Bézier curves). */
 export function pathBounds(path: PathSegment[]): Rect {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   const add = (x: number, y: number) => {
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
     if (y > maxY) maxY = y;
   };
-  let cx = 0, cy = 0;
+  let cx = 0,
+    cy = 0;
   for (const seg of path) {
     const [cmd, ...a] = seg as [string, ...number[]];
     switch (cmd) {
@@ -76,7 +89,9 @@ function cubicAt(p0: number, p1: number, p2: number, p3: number, t: number): num
 
 /** Interior parameters where the cubic's derivative is zero. */
 function cubicExtrema(p0: number, p1: number, p2: number, p3: number): number[] {
-  const a = -p0 + 3 * p1 - 3 * p2 + p3, b = 2 * (p0 - 2 * p1 + p2), c = p1 - p0;
+  const a = -p0 + 3 * p1 - 3 * p2 + p3,
+    b = 2 * (p0 - 2 * p1 + p2),
+    c = p1 - p0;
   const out: number[] = [];
   if (Math.abs(a) < 1e-12) {
     if (Math.abs(b) > 1e-12) out.push(-c / b);

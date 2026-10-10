@@ -11,18 +11,21 @@ export function outerShadowModifiers(n: SemNode, ctx: EmitContext): string[] {
   const result: string[] = [];
   const box = shapeExpr(n.style, n.frame.w, n.frame.h);
   // The first CSS shadow is on top. Each subsequent background modifier goes farther back.
-  for (const s of n.style.shadows.filter(s => !s.inset && s.color.a > 0)) {
+  for (const s of n.style.shadows.filter((s) => !s.inset && s.color.a > 0)) {
     const silhouette = insetShape(n, [-s.spread, -s.spread, -s.spread, -s.spread]);
     const body = [
       "ZStack {",
-      ...indent([
-        `${silhouette}.fill(${colorExpr(s.color, ctx, n.id)})`,
-        ...(s.spread ? [`.padding(${num(-s.spread)})`] : []),
-        ...(s.blur ? [`.blur(radius: ${num(s.blur / 2)})`] : []),
-        `.offset(x: ${num(s.x)}, y: ${num(s.y)})`,
-        `${box}.fill(Color.black)`,
-        ".blendMode(.destinationOut)",
-      ], 1),
+      ...indent(
+        [
+          `${silhouette}.fill(${colorExpr(s.color, ctx, n.id)})`,
+          ...(s.spread ? [`.padding(${num(-s.spread)})`] : []),
+          ...(s.blur ? [`.blur(radius: ${num(s.blur / 2)})`] : []),
+          `.offset(x: ${num(s.x)}, y: ${num(s.y)})`,
+          `${box}.fill(Color.black)`,
+          ".blendMode(.destinationOut)",
+        ],
+        1,
+      ),
       "}",
       ".compositingGroup()",
     ];
@@ -36,19 +39,22 @@ export function insetShadowModifiers(n: SemNode, ctx: EmitContext): string[] {
   const result: string[] = [];
   const edge = borderInsets(n.style);
   const mask = `${insetShape(n, edge)}.fill(Color.black)${padding(edge)}`;
-  for (const s of n.style.shadows.filter(s => s.inset && s.color.a > 0)) {
-    const hole = edge.map(v => v + s.spread) as Insets;
+  for (const s of n.style.shadows.filter((s) => s.inset && s.color.a > 0)) {
+    const hole = edge.map((v) => v + s.spread) as Insets;
     // A flood beyond the node models the infinite exterior of the inset shadow's hole.
     // Keep its edges farther away than the blur can reach, including shifted/expanded holes.
     const flood = Math.max(n.frame.w, n.frame.h) + Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.spread) + s.blur * 3;
     const body = [
       "ZStack {",
-      ...indent([
-        `Rectangle().fill(${colorExpr(s.color, ctx, n.id)}).padding(${num(-flood)})`,
-        `${insetShape(n, hole)}.fill(Color.black)${padding(hole)}`,
-        `.offset(x: ${num(s.x)}, y: ${num(s.y)})`,
-        ".blendMode(.destinationOut)",
-      ], 1),
+      ...indent(
+        [
+          `Rectangle().fill(${colorExpr(s.color, ctx, n.id)}).padding(${num(-flood)})`,
+          `${insetShape(n, hole)}.fill(Color.black)${padding(hole)}`,
+          `.offset(x: ${num(s.x)}, y: ${num(s.y)})`,
+          ".blendMode(.destinationOut)",
+        ],
+        1,
+      ),
       "}",
       ".compositingGroup()",
       ...(s.blur ? [`.blur(radius: ${num(s.blur / 2)})`] : []),
@@ -73,7 +79,7 @@ function insetShape(n: SemNode, inset: Insets): string {
   const st: Style = { ...n.style };
   if (st.radius) {
     const shrink = [Math.max(t, l), Math.max(t, r), Math.max(b, r), Math.max(b, l)];
-    st.radius = st.radius.map((v, i) => v > 0 ? Math.max(0, v - shrink[i]!) : 0) as Insets;
+    st.radius = st.radius.map((v, i) => (v > 0 ? Math.max(0, v - shrink[i]!) : 0)) as Insets;
   }
   return shapeExpr(st, Math.max(0, n.frame.w - l - r), Math.max(0, n.frame.h - t - b));
 }

@@ -3,7 +3,6 @@ import { round2 } from "./syntax.ts";
 import { hue } from "./color.ts";
 import type { Transform2D } from "../model/values.ts";
 
-
 /**
  * Computed `transform: matrix(a, b, c, d, tx, ty)` or `matrix3d(…)` → rotation/scale/skew/
  * translation (2 decimals). A 3D matrix keeps only its x/y affine part (orthographic
@@ -35,17 +34,29 @@ function matrixOf(s: string | undefined): { m: Matrix; flattened: boolean } | un
 
 /** CSS 2×3 product: x′ = a·x + c·y + e, y′ = b·x + d·y + f. */
 function mul([a1, b1, c1, d1, e1, f1]: Matrix, [a2, b2, c2, d2, e2, f2]: Matrix): Matrix {
-  return [a1 * a2 + c1 * b2, b1 * a2 + d1 * b2, a1 * c2 + c1 * d2, b1 * c2 + d1 * d2, a1 * e2 + c1 * f2 + e1, b1 * e2 + d1 * f2 + f1];
+  return [
+    a1 * a2 + c1 * b2,
+    b1 * a2 + d1 * b2,
+    a1 * c2 + c1 * d2,
+    b1 * c2 + d1 * d2,
+    a1 * e2 + c1 * f2 + e1,
+    b1 * e2 + d1 * f2 + f1,
+  ];
 }
 
-export interface TransformLoss { level: "approximated" | "unmapped"; feature: "translate" | "rotate" | "transform" | "transform: matrix3d()"; message: string }
+export interface TransformLoss {
+  level: "approximated" | "unmapped";
+  feature: "translate" | "rotate" | "transform" | "transform: matrix3d()";
+  message: string;
+}
 
 /** One `translate` component: `±Npx`/`±N%` terms, optionally in `calc(…)`; `%` of `ref`. */
 function translateLength(t: string, ref: number): number | undefined {
   const body = t.replace(/^calc\((.*)\)$/, "$1").replace(/\s+/g, "");
   if (!/^([+-]?[\d.]+(?:e[+-]?\d+)?(?:px|%))+$/i.test(body)) return undefined;
   let v = 0;
-  for (const [, n, unit] of body.matchAll(/([+-]?[\d.]+(?:e[+-]?\d+)?)(px|%)/gi)) v += unit === "%" ? (+n! * ref) / 100 : +n!;
+  for (const [, n, unit] of body.matchAll(/([+-]?[\d.]+(?:e[+-]?\d+)?)(px|%)/gi))
+    v += unit === "%" ? (+n! * ref) / 100 : +n!;
   return v;
 }
 
@@ -54,15 +65,21 @@ function translateLength(t: string, ref: number): number | undefined {
  * translate · rotate · scale · transform, all about one transform-origin.
  * `w`/`h` = border box (the reference box for % translations). `losses` = what could not be represented.
  */
-export function cssTransform(s: Record<string, string | undefined>, w: number, h: number): { transform?: Omit<Transform2D, "flattened"> & { origin?: [number, number] }; losses: TransformLoss[] } {
+export function cssTransform(
+  s: Record<string, string | undefined>,
+  w: number,
+  h: number,
+): { transform?: Omit<Transform2D, "flattened"> & { origin?: [number, number] }; losses: TransformLoss[] } {
   const losses: TransformLoss[] = [];
   let m: Matrix = [1, 0, 0, 1, 0, 0];
   const tr = s["translate"];
   if (tr && tr !== "none") {
     const parts = tr.trim().split(/\s+(?![^(]*\))/);
-    const x = translateLength(parts[0]!, w), y = parts[1] ? translateLength(parts[1], h) : 0;
+    const x = translateLength(parts[0]!, w),
+      y = parts[1] ? translateLength(parts[1], h) : 0;
     const z = parts[2] ? translateLength(parts[2], 0) : 0;
-    if (parts.length > 3 || x === undefined || y === undefined || z === undefined) losses.push({ level: "unmapped", feature: "translate", message: `translate ${tr}` });
+    if (parts.length > 3 || x === undefined || y === undefined || z === undefined)
+      losses.push({ level: "unmapped", feature: "translate", message: `translate ${tr}` });
     else {
       m = [1, 0, 0, 1, x, y];
       if (z !== 0) losses.push({ level: "approximated", feature: "translate", message: "translate z dropped" });
@@ -71,32 +88,56 @@ export function cssTransform(s: Record<string, string | undefined>, w: number, h
   const rot = s["rotate"];
   if (rot && rot !== "none") {
     const deg = /\s/.test(rot.trim()) ? undefined : hue(rot.trim());
-    if (deg === undefined) losses.push({ level: "unmapped", feature: "rotate", message: `rotate ${rot}${/\s/.test(rot.trim()) ? " (3D)" : ""}` });
+    if (deg === undefined)
+      losses.push({
+        level: "unmapped",
+        feature: "rotate",
+        message: `rotate ${rot}${/\s/.test(rot.trim()) ? " (3D)" : ""}`,
+      });
     else {
-      const r = (deg * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);
+      const r = (deg * Math.PI) / 180,
+        cos = Math.cos(r),
+        sin = Math.sin(r);
       m = mul(m, [cos, sin, -sin, cos, 0, 0]);
     }
   }
   const sc = s["scale"];
   if (sc && sc !== "none") {
     // A third (z) value is ignored: z-scale of a flat element is invisible.
-    const [sx, sy = sx] = sc.trim().split(/\s+/).map((v) => (v.endsWith("%") ? parseFloat(v) / 100 : parseFloat(v)));
+    const [sx, sy = sx] = sc
+      .trim()
+      .split(/\s+/)
+      .map((v) => (v.endsWith("%") ? parseFloat(v) / 100 : parseFloat(v)));
     if (Number.isFinite(sx) && Number.isFinite(sy)) m = mul(m, [sx!, 0, 0, sy!, 0, 0]);
   }
   const tf = s["transform"];
   const parsed = matrixOf(tf);
   if (parsed) {
-    if (parsed.flattened) losses.push({ level: "approximated", feature: "transform: matrix3d()", message: "transform matrix3d flattened to its x/y projection" });
+    if (parsed.flattened)
+      losses.push({
+        level: "approximated",
+        feature: "transform: matrix3d()",
+        message: "transform matrix3d flattened to its x/y projection",
+      });
     m = mul(m, parsed.m);
-  } else if (tf && tf !== "none") losses.push({ level: "unmapped", feature: "transform", message: `transform ${tf.slice(0, 40)}` });
+  } else if (tf && tf !== "none")
+    losses.push({ level: "unmapped", feature: "transform", message: `transform ${tf.slice(0, 40)}` });
   const t = decompose(...m);
-  if (t.rotate === 0 && t.scaleX === 1 && t.scaleY === 1 && t.tx === 0 && t.ty === 0 && t.skewX === undefined && t.skewY === undefined) return { losses };
+  if (
+    t.rotate === 0 &&
+    t.scaleX === 1 &&
+    t.scaleY === 1 &&
+    t.tx === 0 &&
+    t.ty === 0 &&
+    t.skewX === undefined &&
+    t.skewY === undefined
+  )
+    return { losses };
   const transform: Omit<Transform2D, "flattened"> & { origin?: [number, number] } = t;
   const origin = parseOrigin(s["transform-origin"]);
   if (origin) transform.origin = origin;
   return { transform, losses };
 }
-
 
 function decompose(a: number, b: number, c: number, d: number, tx: number, ty: number): Transform2D {
   const out: Transform2D = { rotate: 0, scaleX: 1, scaleY: 1, tx: round2(tx), ty: round2(ty) };
@@ -126,7 +167,6 @@ function decompose(a: number, b: number, c: number, d: number, tx: number, ty: n
   if (sheared) out.skewX = round2((Math.atan(shear / scaleY) * 180) / Math.PI);
   return out;
 }
-
 
 /** `transform-origin: 17px 158px` → px pair. */
 export function parseOrigin(s: string | undefined): [number, number] | undefined {

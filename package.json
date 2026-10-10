@@ -9,10 +9,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
-    "test": "bun test tests/unit tests/architecture tests/integration tests/conformance",
+    "lint": "biome ci .",
+    "format": "biome format --write .",
+    "test": "bun test tests/unit tests/architecture tests/integration tests/conformance playground/tests",
     "quality": "bun run tools/quality.ts",
     "pilot": "bun run tests/conformance/pilot-run.ts",
-    "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration",
+    "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration tests/conformance",
     "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/conformance/pilot-run.test.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture",
@@ -26,6 +28,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "^1.4.1",
     "@types/pngjs": "^6.0.5",
     "pixelmatch": "^7.1.0",

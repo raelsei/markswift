@@ -13,9 +13,15 @@ export async function buildStatic(outputDirectory: string, apiBaseUrl: string): 
   // GitHub Pages ignores `_headers`, so the CSP is a <meta> tag; the hosted API is the only other origin the page may call.
   const html = await readFile(join(import.meta.dir, "public/index.html"), "utf8");
   await writeFile(join(output, "index.html"), html.replace("connect-src 'self'", `connect-src 'self' ${origin}`));
-  await writeFile(join(output, "config.js"), `window.MARKSWIFT_CONFIG={apiBaseUrl:${JSON.stringify(origin)},nativePreview:false};\n`);
+  await writeFile(
+    join(output, "config.js"),
+    `window.MARKSWIFT_CONFIG={apiBaseUrl:${JSON.stringify(origin)},nativePreview:false};\n`,
+  );
   await writeFile(join(output, ".nojekyll"), "");
-  await writeFile(join(output, "_headers"), `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`);
+  await writeFile(
+    join(output, "_headers"),
+    `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`,
+  );
 }
 
 if (import.meta.main) {

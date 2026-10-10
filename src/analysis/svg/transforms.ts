@@ -31,7 +31,13 @@ export function isIdentity(m: SvgMatrix): boolean {
 export function ownTransform(c: LayoutNode, diagnostics: Diagnostic[]): SvgMatrix {
   for (const p of ["translate", "rotate", "scale"]) {
     const v = c.styles[p];
-    if (v && v !== "none") addDiagnostic(diagnostics, "approximated", "transform", `svg individual transform properties ignored (${p}: ${v})`);
+    if (v && v !== "none")
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        "transform",
+        `svg individual transform properties ignored (${p}: ${v})`,
+      );
   }
   const computed = c.styles["transform"];
   if (computed !== undefined) {
@@ -44,7 +50,8 @@ export function ownTransform(c: LayoutNode, diagnostics: Diagnostic[]): SvgMatri
     const v = m[1]!.split(",").map(Number) as SvgMatrix;
     const o = /^([-\d.]+)px\s+([-\d.]+)px/.exec(c.styles["transform-origin"] ?? "");
     if (!o) return v;
-    const ox = +o[1]!, oy = +o[2]!;
+    const ox = +o[1]!,
+      oy = +o[2]!;
     return multiply(multiply([1, 0, 0, 1, ox, oy], v), [1, 0, 0, 1, -ox, -oy]);
   }
   return transformAttr(c.attrs["transform"]);
@@ -54,7 +61,9 @@ export function ownTransform(c: LayoutNode, diagnostics: Diagnostic[]): SvgMatri
 export function transformAttr(attr: string | undefined): SvgMatrix {
   if (!attr) return IDENTITY;
   const pts: number[] = [];
-  svgpath("M0 0L1 0L0 1").transform(attr).iterate((seg) => pts.push(+seg[1]!, +seg[2]!));
+  svgpath("M0 0L1 0L0 1")
+    .transform(attr)
+    .iterate((seg) => pts.push(+seg[1]!, +seg[2]!));
   if (pts.length !== 6) return IDENTITY;
   return [pts[2]! - pts[0]!, pts[3]! - pts[1]!, pts[4]! - pts[0]!, pts[5]! - pts[1]!, pts[0]!, pts[1]!];
 }
@@ -66,9 +75,13 @@ export function bake(d: string, ctm: SvgMatrix): string {
 /** Path data → absolute segments, shorthands and arcs expanded: the IR's one path normalisation. */
 export function segments(d: string): PathSegment[] {
   const out: PathSegment[] = [];
-  svgpath(d).unshort().unarc().abs().iterate((seg) => {
-    out.push([...seg] as PathSegment);
-  });
+  svgpath(d)
+    .unshort()
+    .unarc()
+    .abs()
+    .iterate((seg) => {
+      out.push([...seg] as PathSegment);
+    });
   return out;
 }
 

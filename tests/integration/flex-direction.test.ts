@@ -24,9 +24,16 @@ function bySemId(n: SemNode, id: string): SemNode | undefined {
   return undefined;
 }
 
-browserTest("margin-left: auto is captured and becomes an auto gap", async () => {
-  const result = await convertHtml('<main data-markswift-root><nav id="n" style="display:flex;width:300px;gap:8px"><a id="a">Home</a><a id="b" style="margin-left:auto">Login</a></nav></main>', { css: "html,body{margin:0}", viewport: { width: 390, height: 844 } });
-  expect(byAttrId(result.layout.root, "b")?.preferredSize?.autoMargins).toEqual(["left"]);
-  const nav = bySemId(inferScreen(result.layout, "t").root, byAttrId(result.layout.root, "n")!.id!);
-  expect(nav?.kind === "stack" ? nav.autoGaps : undefined).toEqual([1]);
-}, 60000);
+browserTest(
+  "margin-left: auto is captured and becomes an auto gap",
+  async () => {
+    const result = await convertHtml(
+      '<main data-markswift-root><nav id="n" style="display:flex;width:300px;gap:8px"><a id="a">Home</a><a id="b" style="margin-left:auto">Login</a></nav></main>',
+      { css: "html,body{margin:0}", viewport: { width: 390, height: 844 } },
+    );
+    expect(byAttrId(result.layout.root, "b")?.preferredSize?.autoMargins).toEqual(["left"]);
+    const nav = bySemId(inferScreen(result.layout, "t").root, byAttrId(result.layout.root, "n")!.id!);
+    expect(nav?.kind === "stack" ? nav.autoGaps : undefined).toEqual([1]);
+  },
+  60000,
+);

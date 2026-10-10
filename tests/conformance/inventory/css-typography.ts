@@ -1,7 +1,8 @@
 import type { Inventory } from "./schema.ts";
 
 const MDN = "https://developer.mozilla.org/docs/Web/CSS/";
-const BLINK_PROPS = "https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/css_properties.json5";
+const BLINK_PROPS =
+  "https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/css_properties.json5";
 
 /**
  * Typography. The browser resolves the cascade; the IR reads computed values off the
@@ -80,7 +81,7 @@ export default {
       id: "font-family: <bundled family>",
       group: "Font",
       class: "mapped",
-      target: ".custom(\"Family-Weight\", size:, relativeTo:) (static instance)",
+      target: '.custom("Family-Weight", size:, relativeTo:) (static instance)',
       ir: "FontSpec.family{custom,name}",
       via: "style",
       impl: "partial",
@@ -675,7 +676,7 @@ export default {
       ir: "TextNode.truncate",
       via: "style",
       impl: "partial",
-      note: "Only `ellipsis` is read. A custom string (`text-overflow: \"…\"`) is not reproducible and falls back to the ellipsis.",
+      note: 'Only `ellipsis` is read. A custom string (`text-overflow: "…"`) is not reproducible and falls back to the ellipsis.',
       spec: `${MDN}text-overflow`,
     },
     {

@@ -36,16 +36,26 @@ async function softDeprecations(swiftDir: string): Promise<string[]> {
  * `swiftc -typecheck` every generated file together against the iOS 18 simulator SDK in Swift 6
  * language mode with complete strict concurrency and MainActor default isolation.
  */
-export async function typecheck(swiftDir: string): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
+export async function typecheck(
+  swiftDir: string,
+): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
   const files = (await readdir(swiftDir)).filter((f) => f.endsWith(".swift")).map((f) => join(swiftDir, f));
   const t0 = performance.now();
   const sdk = (await $`xcrun --sdk iphonesimulator --show-sdk-path`.text()).trim();
-  const r = await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete -default-isolation MainActor ${files}`.nothrow().quiet();
+  const r =
+    await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete -default-isolation MainActor ${files}`
+      .nothrow()
+      .quiet();
   const output = r.stderr.toString() + r.stdout.toString();
   // Deprecation warnings are failures: the emitter must never lean on APIs Apple is retiring.
   // Any warning fails: deprecations, isolation, unused — generated code ships warning-free.
   const deprecations = output.split("\n").filter((l) => /warning:/.test(l));
   const soft = await softDeprecations(swiftDir);
   const problems = [...deprecations, ...soft];
-  return { ok: r.exitCode === 0 && problems.length === 0, output: problems.length ? problems.join("\n") + "\n" + output : output, ms: performance.now() - t0, deprecations: problems.length };
+  return {
+    ok: r.exitCode === 0 && problems.length === 0,
+    output: problems.length ? problems.join("\n") + "\n" + output : output,
+    ms: performance.now() - t0,
+    deprecations: problems.length,
+  };
 }

@@ -19,7 +19,9 @@ export class ResultStore {
   private zips = new Map<string, Promise<string>>();
   constructor(protected directory: string) {}
   /** Entries in use (e.g. a queued native render) are never evicted. */
-  protected busy(_id: string): boolean { return false; }
+  protected busy(_id: string): boolean {
+    return false;
+  }
   protected async remove(id: string): Promise<void> {
     this.results.delete(id);
     this.zips.delete(id);
@@ -27,7 +29,7 @@ export class ResultStore {
   }
   async add(result: ConversionResult): Promise<string> {
     while (this.results.size >= 12) {
-      const oldest = [...this.results.keys()].find(id => !this.busy(id));
+      const oldest = [...this.results.keys()].find((id) => !this.busy(id));
       if (!oldest) throw new Error("Render queue is full. Wait for the current job to finish.");
       await this.remove(oldest);
     }

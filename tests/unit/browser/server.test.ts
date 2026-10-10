@@ -18,8 +18,12 @@ test("static server refuses foreign hosts, dotfiles and malformed paths", async 
     expect(await status("/%E0%A4%A")).toBe(400);
     const port = Number(new URL(server.origin).port);
     const foreign = await new Promise<number>((done, fail) => {
-      request({ host: "127.0.0.1", port, path: "/a.txt", headers: { Host: "evil.example" } }, (res) => { res.resume(); done(res.statusCode!); })
-        .on("error", fail).end();
+      request({ host: "127.0.0.1", port, path: "/a.txt", headers: { Host: "evil.example" } }, (res) => {
+        res.resume();
+        done(res.statusCode!);
+      })
+        .on("error", fail)
+        .end();
     });
     expect(foreign).toBe(403);
   } finally {

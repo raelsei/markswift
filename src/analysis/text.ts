@@ -1,11 +1,26 @@
 /** Construct semantic text nodes from measured inline runs. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
-import { type TextNode, type SemBase, type TextRun, type SemNode, type DiagnosticLevel, addDiagnostic } from "../model/semantic.ts";
+import {
+  type TextNode,
+  type SemBase,
+  type TextRun,
+  type SemNode,
+  type DiagnosticLevel,
+  addDiagnostic,
+} from "../model/semantic.ts";
 import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
-import { hostSpace, inlineChain, trimRun, markLineBreaks, markBaselineShifts, inlineFragments, withInlineGaps } from "./text-layout.ts";
+import {
+  hostSpace,
+  inlineChain,
+  trimRun,
+  markLineBreaks,
+  markBaselineShifts,
+  inlineFragments,
+  withInlineGaps,
+} from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
@@ -24,8 +39,19 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // are only the text: the host's decoration belongs to the host container.
   const base: SemBase = leaf
     ? makeBase(host, ctx, parseDeclared(host.attrs["style"]))
-    : { id: host.id ? `${host.id}#text` : "", frame: host.bounds, width: { kind: "hug" }, height: { kind: "hug" }, padding: [0, 0, 0, 0], style: { fills: [], shadows: [] }, confidence: "mapped", diagnostics: [], overlays: [] };
-  const note = (level: DiagnosticLevel, feature: string, message: string) => addDiagnostic(base.diagnostics, level, feature, message);
+    : {
+        id: host.id ? `${host.id}#text` : "",
+        frame: host.bounds,
+        width: { kind: "hug" },
+        height: { kind: "hug" },
+        padding: [0, 0, 0, 0],
+        style: { fills: [], shadows: [] },
+        confidence: "mapped",
+        diagnostics: [],
+        overlays: [],
+      };
+  const note = (level: DiagnosticLevel, feature: string, message: string) =>
+    addDiagnostic(base.diagnostics, level, feature, message);
   const out: TextRun[] = [];
   const built: MeasuredTextRun[] = [];
   const painted: LayoutNode[] = [];
@@ -98,7 +124,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         `font-family ${first} is a web font this run did not bundle → ${resolved === undefined ? "system default design" : `the fallback ${resolved} it names next`}; glyph advances differ from the reference`,
       );
     } else if (resolved !== undefined && /^(cursive|fantasy)$/i.test(resolved)) {
-      note("approximated", "font-family", `generic font-family ${resolved.toLowerCase()} has no system design → default`);
+      note(
+        "approximated",
+        "font-family",
+        `generic font-family ${resolved.toLowerCase()} has no system design → default`,
+      );
     } else if (resolved !== undefined) {
       // A non-default design is a substitution, not a match: `.monospaced`/`.serif`/`.rounded` are
       // the Apple system faces (SF Mono, New York, SF Pro Rounded), and no other engine resolves
@@ -113,7 +143,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           `font-family ${resolved} → SwiftUI .${design} design; glyph shapes and advances are the Apple system face, not the one the reference browser resolved`,
         );
       } else if (resolved === first && /^(arial|helvetica|helvetica neue)$/i.test(resolved)) {
-        note("approximated", "font-family", `font-family ${resolved} → SwiftUI .default design (SF Pro); glyph shapes and advances differ from the reference`);
+        note(
+          "approximated",
+          "font-family",
+          `font-family ${resolved} → SwiftUI .default design (SF Pro); glyph shapes and advances differ from the reference`,
+        );
       }
     }
     const ls = s["letter-spacing"];
@@ -129,10 +163,18 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     if (shadows.length > 1) note("approximated", "text-shadow", "multiple text-shadows → first only");
     const numeric = s["font-variant-numeric"] ?? "normal";
     if (/tabular-nums/.test(numeric)) run.tabularNums = true;
-    for (const v of numeric.split(/\s+/)) if (v && !NUMERIC_FEATURES[v]) note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
-    const clipEl = [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
+    for (const v of numeric.split(/\s+/))
+      if (v && !NUMERIC_FEATURES[v])
+        note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
+    const clipEl =
+      [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
     const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
-    if (clipEl && !paint && !hidden) note("unmapped", "background-clip", "background-clip: text without a gradient layer; the glyphs keep their own (often transparent) fill");
+    if (clipEl && !paint && !hidden)
+      note(
+        "unmapped",
+        "background-clip",
+        "background-clip: text without a gradient layer; the glyphs keep their own (often transparent) fill",
+      );
     if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
@@ -147,19 +189,26 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // the navigation is genuinely lost; what must not be lost is the record of losing it. This is
     // the most common link form in prose, and it used to report nothing at all.
     const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link) note("approximated", "a", `inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`);
+    if (link)
+      note(
+        "approximated",
+        "a",
+        `inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`,
+      );
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
     union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
   }
   if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
-  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse") trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
+  if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse")
+    trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
   const frame = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
   // `<center>`, `align=center` and friends compute to `-webkit-center/-left/-right`; the side is the same.
   const ta = (host.styles["text-align"] ?? "start").replace(/^-(webkit|internal)-/, "");
-  const side = ta === "start" ? (dir === "rtl" ? "right" : "left") : ta === "end" ? (dir === "rtl" ? "left" : "right") : ta;
+  const side =
+    ta === "start" ? (dir === "rtl" ? "right" : "left") : ta === "end" ? (dir === "rtl" ? "left" : "right") : ta;
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
@@ -182,7 +231,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
       const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
       const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
-      if (Math.abs(above - below) > 2) base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+      if (Math.abs(above - below) > 2)
+        base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -192,7 +242,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // to text: at a larger Dynamic Type size the glyphs grow and the frame does not. Hugging costs
   // nothing in fidelity, where the emitter pins the same height on the `Text` itself. A box the
   // browser clipped (`.sr-only`, `max-height`) is *shorter* than its text and keeps its frame.
-  if (leaf && base.height.kind === "fixed" && Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5) {
+  if (
+    leaf &&
+    base.height.kind === "fixed" &&
+    Math.abs(base.height.px - base.padding[0] - base.padding[2] - lines * lh) < 0.5
+  ) {
     base.height = { kind: "hug" };
   }
   markLineBreaks(built, note);
@@ -219,7 +273,12 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         diagnostics: [],
         overlays: [],
       };
-      base.overlays.push({ node: finish(box), layer: "background", offset: [round2(b.x - frame.x), round2(b.y - frame.y)], covers: false });
+      base.overlays.push({
+        node: finish(box),
+        layer: "background",
+        offset: [round2(b.x - frame.x), round2(b.y - frame.y)],
+        covers: false,
+      });
     });
   }
   const node: TextNode = {
@@ -229,9 +288,13 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     sourceTag: host.tag,
     runs: withInlineGaps(built, host),
     align:
-      ta === "center" || (isFlex(host.styles["display"]) && (mainAxis(host) === "h" ? distributionOf(host) : crossAlign(host)) === "center")
+      ta === "center" ||
+      (isFlex(host.styles["display"]) &&
+        (mainAxis(host) === "h" ? distributionOf(host) : crossAlign(host)) === "center")
         ? "center"
-        : side === "right" ? "trailing" : "leading",
+        : side === "right"
+          ? "trailing"
+          : "leading",
     lines,
   };
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
@@ -247,19 +310,25 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
   // so overriding the direction on a stack would mirror it a second time.
   if (dir === "rtl") node.layoutDirection = "rtl";
-  if (ta === "justify") note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  if (ta === "justify")
+    note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
   const wm = host.styles["writing-mode"];
-  if (wm && wm !== "horizontal-tb") note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
+  if (wm && wm !== "horizontal-tb")
+    note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
 }
 
 // ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.
 const ONE_WORD = /^[\p{L}\p{M}\p{N}.,:'’&$€£%]+$/u;
-const SPACE_FREE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const SPACE_FREE =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
 /** A single word CSS cannot soft-wrap: with `overflow-wrap: normal` it overflows its box instead. */
 function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
   if ((s["overflow-wrap"] ?? "normal") !== "normal" || /^break-(all|word)$/.test(s["word-break"] ?? "")) return false;
-  const text = runs.filter((r) => r.gap === undefined).map((r) => r.text).join("");
+  const text = runs
+    .filter((r) => r.gap === undefined)
+    .map((r) => r.text)
+    .join("");
   return ONE_WORD.test(text) && !SPACE_FREE.test(text);
 }

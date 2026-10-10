@@ -13,9 +13,11 @@ export function measuredLayoutOf(base: SemBase, children: SemNode[]): MeasuredLa
   return {
     width: round2(Math.max(0, base.frame.w - pl - pr)),
     height: round2(Math.max(0, base.frame.h - pt - pb)),
-    frames: children.map(child => ({
-      x: round2(child.frame.x - base.frame.x - pl), y: round2(child.frame.y - base.frame.y - pt),
-      w: round2(child.frame.w), h: round2(child.frame.h),
+    frames: children.map((child) => ({
+      x: round2(child.frame.x - base.frame.x - pl),
+      y: round2(child.frame.y - base.frame.y - pt),
+      w: round2(child.frame.w),
+      h: round2(child.frame.h),
     })),
   };
 }

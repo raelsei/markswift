@@ -7,30 +7,65 @@ const fixtureRoot = join(import.meta.dir, "fixtures");
 test("pilot manifest resolves the original eight plus seven text fixtures with explicit outcomes", async () => {
   const cases = await loadPilot();
   expect(cases).toHaveLength(15);
-  expect(new Set(cases.map(item => item.id)).size).toBe(15);
-  expect(cases.every(item => item.themes.includes("light") && item.themes.includes("dark"))).toBe(true);
-  expect(cases.every(item => item.tier && item.feature)).toBe(true);
-  const textCases = cases.filter(item => item.expectedText !== undefined);
+  expect(new Set(cases.map((item) => item.id)).size).toBe(15);
+  expect(cases.every((item) => item.themes.includes("light") && item.themes.includes("dark"))).toBe(true);
+  expect(cases.every((item) => item.tier && item.feature)).toBe(true);
+  const textCases = cases.filter((item) => item.expectedText !== undefined);
   expect(textCases).toHaveLength(7);
-  expect(textCases.every(item => item.expectedLines?.["320"] && item.expectedLines?.["390"])).toBe(true);
+  expect(textCases.every((item) => item.expectedLines?.["320"] && item.expectedLines?.["390"])).toBe(true);
 });
 
 test("pilot manifest rejects an unknown fixture rather than skipping it", async () => {
-  await expect(validatePilot({ version: 1, cases: [{ id: "missing", feature: "layout", tier: "native", fixture: "css-layout/no-such-case.html", themes: ["light"], diagnosticFamily: null }] }, fixtureRoot))
-    .rejects.toThrow("css-layout/no-such-case.html");
+  await expect(
+    validatePilot(
+      {
+        version: 1,
+        cases: [
+          {
+            id: "missing",
+            feature: "layout",
+            tier: "native",
+            fixture: "css-layout/no-such-case.html",
+            themes: ["light"],
+            diagnosticFamily: null,
+          },
+        ],
+      },
+      fixtureRoot,
+    ),
+  ).rejects.toThrow("css-layout/no-such-case.html");
 });
 
 test("pilot anchors are nonempty #ids, and only the geometry cases carry them", async () => {
-  const base = { id: "flex", feature: "layout", tier: "native", fixture: "css-layout/display--flex.html", themes: ["light"], diagnosticFamily: null };
+  const base = {
+    id: "flex",
+    feature: "layout",
+    tier: "native",
+    fixture: "css-layout/display--flex.html",
+    themes: ["light"],
+    diagnosticFamily: null,
+  };
   for (const anchors of [["flex-row"], []]) {
-    await expect(validatePilot({ version: 1, cases: [{ ...base, anchors }] }, fixtureRoot)).rejects.toThrow("pilot flex: invalid anchors");
+    await expect(validatePilot({ version: 1, cases: [{ ...base, anchors }] }, fixtureRoot)).rejects.toThrow(
+      "pilot flex: invalid anchors",
+    );
   }
-  const anchored = (await loadPilot()).filter(item => item.anchors);
-  expect(anchored.map(item => item.id)).toEqual(["display-flex", "display-grid", "flex-wrap", "box-shadow", "background-image", "image"]);
+  const anchored = (await loadPilot()).filter((item) => item.anchors);
+  expect(anchored.map((item) => item.id)).toEqual([
+    "display-flex",
+    "display-grid",
+    "flex-wrap",
+    "box-shadow",
+    "background-image",
+    "image",
+  ]);
 });
 
 test("pilot CLI validates cases without running capture", async () => {
-  const run = Bun.spawn([process.execPath, join(import.meta.dir, "pilot.ts"), "--validate"], { stdout: "pipe", stderr: "pipe" });
+  const run = Bun.spawn([process.execPath, join(import.meta.dir, "pilot.ts"), "--validate"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const output = await new Response(run.stdout).text();
   expect(await run.exited).toBe(0);
   expect(output.trim().split("\n")).toHaveLength(15);
@@ -39,6 +74,11 @@ test("pilot CLI validates cases without running capture", async () => {
 test("pilot expands each feature into two widths, themes and output modes without duplicate IDs", async () => {
   const matrix = buildMatrix(await loadPilot());
   expect(matrix).toHaveLength(120);
-  expect(new Set(matrix.map(item => item.key)).size).toBe(120);
-  expect(matrix.filter(item => item.case.id === "display-flex").map(item => item.width).sort()).toEqual([320, 320, 320, 320, 390, 390, 390, 390]);
+  expect(new Set(matrix.map((item) => item.key)).size).toBe(120);
+  expect(
+    matrix
+      .filter((item) => item.case.id === "display-flex")
+      .map((item) => item.width)
+      .sort(),
+  ).toEqual([320, 320, 320, 320, 390, 390, 390, 390]);
 });

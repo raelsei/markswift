@@ -10,12 +10,24 @@ import { isFlex, mainAxis } from "./geometry.ts";
 function crossValue(v: string, container: LayoutNode): CrossAlign | undefined {
   const mirrored = mainAxis(container) === "v" && container.styles["direction"] === "rtl";
   switch (v) {
-    case "center": return "center";
-    case "flex-start": case "start": case "self-start": return mirrored ? "end" : "start";
-    case "flex-end": case "end": case "self-end": return mirrored ? "start" : "end";
-    case "baseline": case "first baseline": return "baseline";
-    case "normal": case "stretch": return "stretch";
-    default: return undefined;
+    case "center":
+      return "center";
+    case "flex-start":
+    case "start":
+    case "self-start":
+      return mirrored ? "end" : "start";
+    case "flex-end":
+    case "end":
+    case "self-end":
+      return mirrored ? "start" : "end";
+    case "baseline":
+    case "first baseline":
+      return "baseline";
+    case "normal":
+    case "stretch":
+      return "stretch";
+    default:
+      return undefined;
   }
 }
 
@@ -44,15 +56,25 @@ export function distributionOf(n: LayoutNode): Distribution {
   const flexReversed = row ? (dir === "row-reverse") !== rtl : dir === "column-reverse";
   const inlineReversed = row && rtl;
   switch (n.styles["justify-content"] ?? "normal") {
-    case "center": return "center";
-    case "space-between": return "between";
-    case "space-around": return "around";
-    case "space-evenly": return "evenly";
-    case "flex-end": return flexReversed ? "start" : "end";
-    case "end": return inlineReversed ? "start" : "end";
-    case "start": return inlineReversed ? "end" : "start";
-    case "right": return row ? "end" : "start";
-    case "left": return "start";
-    default: return flexReversed ? "end" : "start"; // normal, flex-start, stretch
+    case "center":
+      return "center";
+    case "space-between":
+      return "between";
+    case "space-around":
+      return "around";
+    case "space-evenly":
+      return "evenly";
+    case "flex-end":
+      return flexReversed ? "start" : "end";
+    case "end":
+      return inlineReversed ? "start" : "end";
+    case "start":
+      return inlineReversed ? "end" : "start";
+    case "right":
+      return row ? "end" : "start";
+    case "left":
+      return "start";
+    default:
+      return flexReversed ? "end" : "start"; // normal, flex-start, stretch
   }
 }
