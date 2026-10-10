@@ -9,6 +9,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
+    "lint": "biome ci .",
+    "format": "biome format --write .",
     "test": "bun test tests/unit tests/architecture tests/integration tests/conformance",
     "quality": "bun run tools/quality.ts",
     "pilot": "bun run tests/conformance/pilot-run.ts",
@@ -26,6 +28,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "^1.4.1",
     "@types/pngjs": "^6.0.5",
     "pixelmatch": "^7.1.0",
