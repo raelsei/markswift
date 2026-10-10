@@ -77,7 +77,7 @@ export default {
       ir: "GridNode",
       via: "style",
       impl: "partial",
-      note: "Column count comes from the px tracks Chrome reports in `grid-template-columns`; track widths, spans, areas and `grid-auto-flow: column` are not read, and every grid is flagged `approximated: grid mapped to fixed-column Grid` in notes.",
+      note: "Column count comes from the px tracks Chrome reports in `grid-template-columns`; track widths, spans, areas and `grid-auto-flow: column` are not read. Regular equal-fill grids map to native `Grid` without a diagnostic; unequal tracks report `approximated` on `grid-template-columns`, and placed/irregular grids keep captured positions with an `approximated` `display: grid` diagnostic.",
       spec: mdn("display"),
     },
     {
