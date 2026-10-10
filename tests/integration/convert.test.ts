@@ -30,8 +30,11 @@ browserTest("file and inline assetsDir inputs embed local image resources before
   const directory = await mkdtemp(join(tmpdir(), "markswift-api-test-"));
   try {
     await Bun.write(join(directory, "photo.svg"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20" fill="red"/></svg>');
+    const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+    await Bun.write(join(directory, "photo.png"), photo);
+    await Bun.write(join(directory, "outside.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
     await Bun.write(join(directory, "style.css"), "body{margin:0}main{width:100px;height:100px;background-image:url(photo.svg)}img{width:20px;height:20px}");
-    const html = '<link rel="stylesheet" href="style.css"><main data-markswift-root><img src="photo.svg"></main>';
+    const html = '<link rel="stylesheet" href="style.css"><main data-markswift-root><img src="photo.svg"><img src="photo.png"><img src="photo.png"></main><img src="outside.png">';
     const file = join(directory, "card with spaces.html");
     await Bun.write(file, html);
     for (const source of [{ file }, { html, assetsDir: directory }]) {
@@ -41,6 +44,11 @@ browserTest("file and inline assetsDir inputs embed local image resources before
       expect(result.code).not.toContain("127.0.0.1");
       expect(JSON.stringify(result.layout)).toContain("data:image/svg+xml;base64,");
       expect(result.files["LocalCard+Shapes.swift"]).toContain("Shape");
+      const images = Object.keys(result.assets).filter((k) => k.startsWith("Images/"));
+      expect(images).toHaveLength(1);
+      expect(result.assets[images[0]!]).toEqual(new Uint8Array(photo));
+      expect(result.code).toContain("Image.markswiftAsset(");
+      expect(result.code).not.toContain("iVBOR");
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 60000);
