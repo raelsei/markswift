@@ -1,7 +1,7 @@
 /** Visual effects, clipping, visibility and design-token hints. */
 import type { LayoutNode } from "../model/layout.ts";
 import { type Style, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
-import { parseColor, px, parseFilters, parseTransform, parseOrigin, parseBlendMode, parseClipPath, parseBackgroundImage, resolvePaint } from "../css/index.ts";
+import { parseColor, px, parseFilters, cssTransform, parseBlendMode, parseClipPath, parseBackgroundImage, resolvePaint } from "../css/index.ts";
 import { classColorHints } from "./class-hints.ts";
 import { imagePaint } from "./style-background.ts";
 
@@ -20,14 +20,9 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
   for (const f of filters) if (f.kind === "drop-shadow" || f.kind === "sepia") addDiagnostic(diagnostics, "approximated", `filter: ${f.kind}()`, `filter ${f.kind}`);
   const bf = s["backdrop-filter"];
   if (bf && bf !== "none") addDiagnostic(diagnostics, "approximated", "backdrop-filter", "backdrop-filter → translucent fill only (no blur)");
-  const tf = parseTransform(s["transform"]);
-  if (tf?.flattened) addDiagnostic(diagnostics, "approximated", "transform: matrix3d()", "transform matrix3d flattened to its x/y projection");
-  if (tf && (tf.rotate !== 0 || tf.scaleX !== 1 || tf.scaleY !== 1 || tf.tx !== 0 || tf.ty !== 0 || tf.skewX !== undefined || tf.skewY !== undefined)) {
-    const { flattened: _, ...affine } = tf;
-    style.transform = affine;
-    const origin = parseOrigin(s["transform-origin"]);
-    if (origin) style.transform.origin = origin;
-  } else if (s["transform"] && s["transform"] !== "none" && !tf) addDiagnostic(diagnostics, "unmapped", "transform", `transform ${s["transform"].slice(0, 40)}`);
+  const { transform, losses } = cssTransform(s, w, h);
+  for (const l of losses) addDiagnostic(diagnostics, l.level, l.feature, l.message);
+  if (transform) style.transform = transform;
   if (style.shadows.some(sh => sh.inset && sh.blur > 0)) addDiagnostic(diagnostics, "approximated", "box-shadow: inset", "inset shadow blur → native Gaussian blur");
   // Every CSS `<blend-mode>` is a PDF blend function, and so is every SwiftUI `BlendMode`, so a
   // recognised keyword maps by name with no loss; the emitter does the naming. Anything outside

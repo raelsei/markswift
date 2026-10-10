@@ -31,6 +31,8 @@ const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: 
   { feature: "mix-blend-mode", level: "unmapped", node: box({ "mix-blend-mode": "plus-darker-bogus" }) },
   { feature: "clip-path", level: "unmapped", node: box({ "clip-path": "url(#c)" }) },
   { feature: "transform", level: "unmapped", node: box({ transform: "bogus(1)" }) },
+  { feature: "translate", level: "unmapped", node: box({ translate: "bogus(1)" }) },
+  { feature: "rotate", level: "unmapped", node: box({ rotate: "x 45deg" }) },
   { feature: "mask-image", level: "unmapped", node: box({ "mask-image": "image-set(url(a.png) 1x)" }) },
   { feature: "background-image", level: "unmapped", node: box({ "background-image": "image-set(url(a.png) 1x)" }) },
   { feature: "background-image", level: "approximated", node: box({ "background-image": "linear-gradient(rgb(255, 0, 0), 50%, rgb(0, 0, 255))" }) },
