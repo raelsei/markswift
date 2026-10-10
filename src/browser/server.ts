@@ -7,15 +7,26 @@ export interface StaticServer {
   stop(): void;
 }
 
-/** Serve `rootDir` on an ephemeral port. Requests resolving outside it are refused. */
+/**
+ * Serve `rootDir` on an ephemeral port. Refused: a Host other than this server's own
+ * `127.0.0.1:<port>` (403, DNS rebinding), malformed percent-encoding (400), any dot-segment
+ * such as `.env` or `.git/` (404), and paths resolving outside the root (403).
+ */
 export function serveDir(rootDir: string): StaticServer {
   const root = resolve(rootDir);
 
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    async fetch(req) {
-      const path = decodeURIComponent(new URL(req.url).pathname);
+    async fetch(req, server) {
+      if (req.headers.get("host") !== `127.0.0.1:${server.port}`) return new Response("forbidden", { status: 403 });
+      let path: string;
+      try {
+        path = decodeURIComponent(new URL(req.url).pathname);
+      } catch {
+        return new Response("bad request", { status: 400 });
+      }
+      if (path.split("/").some((s) => s.startsWith("."))) return new Response("not found", { status: 404 });
       const local = resolve(root, "." + path);
       if (local !== root && !local.startsWith(root + "/")) return new Response("forbidden", { status: 403 });
       return fileResponse(local);
