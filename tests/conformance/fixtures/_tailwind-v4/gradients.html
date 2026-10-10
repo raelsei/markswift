@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="background-image: linear-gradient(); background-image: radial-gradient(); background-image: conic-gradient(); background-clip: text">
+<meta name="markswift-themes" content="light,dark">
+<title>tailwind-v4 gradients</title>
+<!-- tailwind-v4 -->
+</head>
+<body>
+<main data-markswift-root class="grid w-[393px] grid-cols-2 gap-3 bg-white p-4 font-sans dark:bg-neutral-950">
+  <div id="to-r" class="h-16 rounded-lg bg-linear-to-r from-sky-500 to-indigo-500"></div>
+  <div id="to-r-hex" class="h-16 rounded-lg bg-linear-to-r from-[#ef4444] to-[#3b82f6]"></div>
+  <div id="to-b-hex" class="h-16 rounded-lg bg-linear-to-b from-[#ef4444] to-[#3b82f6]"></div>
+  <div id="deg-45" class="h-16 rounded-lg bg-linear-45 from-[#22c55e] to-[#0ea5e9]"></div>
+  <div id="to-br" class="col-span-2 h-16 rounded-lg bg-linear-to-br from-pink-500 to-orange-400"></div>
+  <div id="via" class="h-16 rounded-lg bg-linear-to-r from-emerald-400 via-cyan-400 to-blue-500"></div>
+  <div id="srgb" class="h-16 rounded-lg bg-linear-to-r/srgb from-sky-500 to-indigo-500"></div>
+  <div id="radial" class="h-16 rounded-lg bg-radial-[at_25%_25%] from-white to-zinc-900 to-75%"></div>
+  <div id="conic" class="h-16 rounded-lg bg-conic-180 from-indigo-600 via-indigo-50 to-indigo-600"></div>
+  <p id="clip-text" class="col-span-2 bg-linear-to-r from-[#ef4444] to-[#3b82f6] bg-clip-text text-2xl font-bold text-transparent">Gradient text</p>
+</main>
+</body>
+</html>
