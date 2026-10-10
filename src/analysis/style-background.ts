@@ -52,7 +52,9 @@ export function backgroundFills(s: Record<string, string>, w: number, h: number,
   const fills: Paint[] = [];
   const bg = parseColor(s["background-color"]);
   if (bg && bg.a > 0) fills.push({ kind: "solid", color: bg });
-  const layers = parseBackgroundImage(s["background-image"]);
+  const dropped: string[] = [];
+  const layers = parseBackgroundImage(s["background-image"], dropped);
+  for (const x of dropped) addDiagnostic(diagnostics, "approximated", "background-image", `${x} ignored`);
   for (let i = 0; i < layers.length; i++) {
     const p = layers[i]!;
     const top = layers.length - 1 - i;

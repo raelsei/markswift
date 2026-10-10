@@ -112,6 +112,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           /^ui-(monospace|rounded|serif)$/i.test(resolved) ? `font-family: ${resolved.toLowerCase()}` : "font-family",
           `font-family ${resolved} → SwiftUI .${design} design; glyph shapes and advances are the Apple system face, not the one the reference browser resolved`,
         );
+      } else if (resolved === first && /^(arial|helvetica|helvetica neue)$/i.test(resolved)) {
+        note("approximated", "font-family", `font-family ${resolved} → SwiftUI .default design (SF Pro); glyph shapes and advances differ from the reference`);
       }
     }
     const ls = s["letter-spacing"];
@@ -120,7 +122,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     if (tt === "uppercase" || tt === "lowercase" || tt === "capitalize") run.transform = tt;
     if (/^(italic|oblique)/.test(s["font-style"] ?? "")) run.italic = true;
     if (deco) run.decoration = deco;
-    const shadows = parseShadows(s["text-shadow"]);
+    const droppedShadows: string[] = [];
+    const shadows = parseShadows(s["text-shadow"], droppedShadows);
+    for (const x of droppedShadows) note("unmapped", "text-shadow", `shadow ${x} could not be parsed; dropped`);
     if (shadows[0]) run.shadow = shadows[0];
     if (shadows.length > 1) note("approximated", "text-shadow", "multiple text-shadows → first only");
     const numeric = s["font-variant-numeric"] ?? "normal";

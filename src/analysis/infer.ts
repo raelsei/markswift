@@ -144,6 +144,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
     if (floats.length) addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
+    for (const d of new Set(flow.map((c) => c.styles.display).filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid")))
+      addDiagnostic(diagnostics, "approximated", `display: ${d}`, `${d} items → rows of the captured line division; they do not re-wrap at another width`);
     const rows: AnalyzedChild[] = lines.map((line, i) => {
       if (line.length === 1) return line[0]!;
       const u = line.map((it) => it.sem.frame).reduce(unionRect);

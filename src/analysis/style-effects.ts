@@ -46,7 +46,9 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
   }
   const mi = s["mask-image"];
   if (mi && mi !== "none") {
-    const masks = parseBackgroundImage(mi);
+    const dropped: string[] = [];
+    const masks = parseBackgroundImage(mi, dropped);
+    for (const x of dropped) addDiagnostic(diagnostics, "approximated", "mask-image", `${x} ignored`);
     const first = masks[masks.length - 1]!;
     if (masks.length > 1) addDiagnostic(diagnostics, "approximated", "mask-image", "mask-image first layer only");
     if (first.kind === "unsupported") addDiagnostic(diagnostics, "unmapped", "mask-image", `mask-image ${first.raw.slice(0, 40)}`);
@@ -58,6 +60,8 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
     style.hidden = true;
     if (vis === "collapse") addDiagnostic(diagnostics, "approximated", "visibility: collapse", "visibility: collapse → hidden (space kept)");
   }
+  const animation = s["animation-name"];
+  if (animation && animation !== "none") addDiagnostic(diagnostics, "unmapped", "animation-name", `animation ${animation.slice(0, 40)} → animated element rendered at end state (infinite animations at their base state); no motion is generated`);
   if (s["position"] === "sticky") addDiagnostic(diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
   const os = s["outline-style"];
   const ow = px(s["outline-width"]);

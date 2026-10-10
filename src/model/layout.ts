@@ -129,6 +129,7 @@ export const STYLE_WHITELIST = [
   "align-content",
   "align-items",
   "align-self",
+  "animation-name",
   "aspect-ratio",
   "backdrop-filter",
   "background-blend-mode",

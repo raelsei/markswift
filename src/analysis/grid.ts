@@ -47,6 +47,8 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     if (item.sem.height.kind === "fill") item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
     return item.sem;
   });
-  addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", "regular captured tracks mapped to native Grid; responsive track definitions are not reconstructed");
+  // ponytail: an equal-fill grid is reported exact; repeat(auto-fill|auto-fit, …) changes its column
+  // count at other widths, which the computed px tracks cannot reveal. Capture the authored template to report it.
+  if (!equalFill) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", "regular captured tracks mapped to native Grid with fixed column widths; columns do not resize at another width");
   return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
 }

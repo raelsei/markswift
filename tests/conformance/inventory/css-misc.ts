@@ -95,10 +95,10 @@ export default {
       group: "Animation",
       class: "unmapped",
       target: "—",
-      ir: "SemBase.notes (unmapped: animation-name <name>)",
+      ir: "SemBase.diagnostics (unmapped, feature animation-name)",
       via: "style",
-      impl: "partial",
-      note: "Motion in the design has no v1 equivalent: the element ships at its end state (finish(); infinite ones cancelled to base state) and the pipeline must report `animated element rendered at end state` once per node so the designer knows. Today settle() produces the end state but the property is not whitelisted, so nothing is reported. A future mapping of simple keyframes (opacity/transform between two stops) to `.animation(_:value:)` + `.onAppear` is possible but out of scope.",
+      impl: "yes",
+      note: "Motion in the design has no v1 equivalent: the element ships at its end state (finish(); infinite ones cancelled to base state) and the pipeline must report `animated element rendered at end state` once per node so the designer knows. A future mapping of simple keyframes (opacity/transform between two stops) to `.animation(_:value:)` + `.onAppear` is possible but out of scope.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-name",
     },
     {
