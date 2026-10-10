@@ -39,13 +39,16 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg") return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
-  if (policy.route === "image")
-    return withBase(n, ctx, {
+  if (policy.route === "image") {
+    const node = withBase(n, ctx, {
       kind: "image",
       src: n.currentSrc ?? n.attrs["src"] ?? "",
-      contentMode: n.styles["object-fit"] === "contain" ? "fit" : "fill",
+      contentMode: "fill",
       ...(n.attrs["alt"] ? { alt: n.attrs["alt"], font: fontOf(n.styles, ctx.bundledFamilies), ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}) } : n.attrs["alt"] !== undefined ? { alt: n.attrs["alt"] } : {}),
     });
+    imageFit(n, node);
+    return node;
+  }
 
   const flow: LayoutNode[] = [];
   const abs: LayoutNode[] = [];
@@ -207,6 +210,19 @@ function scrollAxis(n: LayoutNode, content: Rect[]): Axis | undefined {
     if (right > n.bounds.x + n.bounds.w + 0.5 || ox === "scroll") return "h";
   }
   return undefined;
+}
+
+/** `object-fit` / `object-position` → ImageNode fields. Percent positions are the browser's computed form (`top` → `50% 0%`). */
+function imageFit(n: LayoutNode, node: SemNode): void {
+  if (node.kind !== "image") return;
+  const fit = n.styles["object-fit"] ?? "fill";
+  node.contentMode = fit === "cover" || fit === "none" || fit === "contain" ? fit : fit === "scale-down" ? "contain" : "fill";
+  if (fit === "scale-down") addDiagnostic(node.diagnostics, "approximated", "object-fit", "object-fit scale-down → contain (a source smaller than its box is enlarged)");
+  const pos = n.styles["object-position"];
+  const m = pos ? /^(-?[\d.]+)% (-?[\d.]+)%$/.exec(pos) : null;
+  if (m && (m[1] !== "50" || m[2] !== "50")) node.position = [+m[1]! / 100, +m[2]! / 100];
+  else if (pos && !m) addDiagnostic(node.diagnostics, "approximated", "object-position", `object-position ${pos} → centred (only percentage/keyword positions map)`);
+  finish(node);
 }
 
 function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNode | undefined, ctx: InferenceContext): Overlay[] {

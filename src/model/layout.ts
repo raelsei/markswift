@@ -200,6 +200,7 @@ export const STYLE_WHITELIST = [
   "min-width",
   "mix-blend-mode",
   "object-fit",
+  "object-position",
   "opacity",
   "order",
   "outline-color",

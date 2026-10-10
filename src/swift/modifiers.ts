@@ -16,8 +16,8 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     else m.push(`.padding(${edgeInsets(n.padding)})`);
   }
   m.push(...frameModifier(n, ctx));
-  // `object-fit: cover` overflows its box; the browser clips it to the img box.
-  if (n.kind === "image" && n.contentMode === "fill" && !st.clip) m.push(".clipped()");
+  // `object-fit: cover` overflows its box and `none` can; the browser clips both to the img box.
+  if (n.kind === "image" && (n.contentMode === "cover" || n.contentMode === "none") && !st.clip) m.push(".clipped()");
   const shape = shapeExpr(st, n.frame.w, n.frame.h);
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
   // puts B behind A, so apply the front-most background first.

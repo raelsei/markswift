@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Paint } from "../css/index.ts";
 import type { SemNode, ImageNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, fontExpr, indent, num, str } from "./format.ts";
+import { alignment, colorExpr, fontExpr, indent, num, str } from "./format.ts";
 import { svgFromMarkup } from "../analysis/svg/markup.ts";
 import { svgExpr } from "./svg.ts";
 import { note } from "./diagnostics.ts";
@@ -167,10 +167,24 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
       ...a11y,
     ];
   }
-  if (src.kind === "raster") return [src.expr(`.resizable().aspectRatio(contentMode: .${n.contentMode})`), ...a11y];
-  // Vector: `fit` draws inside the box (the SVG centres itself); `fill` scales to cover it and
-  // relies on the `.clipped()` the modifier chain adds for covering images.
-  const [vw, vh] = src.size;
-  const s = n.contentMode === "fill" ? Math.max(n.frame.w / vw, n.frame.h / vh) : Math.min(n.frame.w / vw, n.frame.h / vh);
-  return [...src.view(vw * s, vh * s), ...a11y];
+  // CSS object-fit. `fill` stretches to the box (plain `.resizable()`); contain/cover keep the
+  // aspect ratio; `none` keeps the natural size. A non-centred object-position places the
+  // picture inside a box-filling `Color.clear` (the `imageLayer` pattern).
+  const fit = n.contentMode;
+  let view: string[];
+  if (src.kind === "raster") {
+    view = [src.expr(fit === "fill" ? ".resizable()" : fit === "none" ? "" : `.resizable().aspectRatio(contentMode: .${fit === "cover" ? "fill" : "fit"})`)];
+  } else {
+    // An SVG document letterboxes itself (`meet`), so CSS `fill` on a vector draws like `contain` in the full box.
+    const [vw, vh] = src.size;
+    if (fit === "fill") view = src.view(n.frame.w, n.frame.h);
+    else {
+      const s = fit === "cover" ? Math.max(n.frame.w / vw, n.frame.h / vh) : fit === "none" ? 1 : Math.min(n.frame.w / vw, n.frame.h / vh);
+      view = src.view(vw * s, vh * s);
+    }
+  }
+  if (!n.position || fit === "fill") return [...view, ...a11y];
+  const third = (f: number) => (f < 1 / 3 ? "start" : f > 2 / 3 ? "end" : "center");
+  if (n.position.some((f) => f !== 0 && f !== 0.5 && f !== 1)) note(n, "approximated", "object-position", "object-position → nearest edge/centre alignment");
+  return ["Color.clear", `.overlay(alignment: ${alignment(third(n.position[0]), third(n.position[1]))}) {`, ...indent(view, 1), "}", ...a11y];
 }

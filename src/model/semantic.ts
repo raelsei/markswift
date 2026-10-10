@@ -331,7 +331,10 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
   kind: "image";
   src: string;
-  contentMode: "fill" | "fit";
+  /** CSS `object-fit` (`scale-down` arrives as `contain`, noted): fill stretches, contain letterboxes, cover crops, none keeps the natural size. */
+  contentMode: "fill" | "contain" | "cover" | "none";
+  /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
+  position?: [number, number];
   /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
   alt?: string;
   /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
