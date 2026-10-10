@@ -74,6 +74,45 @@ test("a finite width cap stays on the painted box rather than being expanded by 
   }
 });
 
+test("an overflow-hidden row takes its parent's width and clips overflowing items instead of growing to them", () => {
+  // flex-wrap--wrap #wrap-none: chips cannot shrink below their single word, so Chrome lets them
+  // overflow the 200px card and clips them. A bare `maxWidth: .infinity` frame grows to the
+  // HStack's ideal width instead, widening every ancestor (and the whole page) before the clip.
+  const chip = (id: string, x: number, text: string) => ({
+    id,
+    tag: "span",
+    attrs: {},
+    styles: { display: "block", "font-family": "system-ui", "font-size": "13px", "line-height": "16px" },
+    bounds: { x, y: 0, w: 150, h: 16 },
+    children: [{ tag: "#text", attrs: {}, styles: {}, bounds: { x, y: 0, w: 150, h: 16 }, text, children: [] }],
+  });
+  const input = capturedText({});
+  input.root.children = [
+    {
+      id: "row",
+      tag: "div",
+      attrs: {},
+      styles: {
+        display: "flex",
+        "flex-wrap": "nowrap",
+        "column-gap": "8px",
+        "overflow-x": "hidden",
+        "overflow-y": "hidden",
+      },
+      bounds: { x: 0, y: 0, w: 200, h: 16 },
+      children: [chip("a", 0, "Engineering"), chip("b", 158, "Marketing")],
+    },
+  ];
+  const screen = inferScreen(input, "constraints");
+  for (const mode of ["app", "fidelity"] as const) {
+    const code = emitSwift(screen, "ConstraintView", { mode }).view;
+    const row = code.slice(code.indexOf("private var v_row"));
+    expect(row).toContain(
+      ".frame(minWidth: 0.0, maxWidth: .infinity, alignment: .topLeading)\n        .clipShape(Rectangle())",
+    );
+  }
+});
+
 test("finite caps preserve intrinsic dimensions before background paint", () => {
   const screen = inferScreen(capturedText({ "background-color": "rgb(220, 80, 60)" }), "constraints");
   if (screen.root.kind !== "stack") throw new Error("expected stack");
