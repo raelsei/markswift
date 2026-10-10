@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { BrowserCapture } from "../../src/browser/capture.ts";
-import { serveDir } from "../../src/browser/server.ts";
+import { serveDir } from "../../src/input/server.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import { packageFonts } from "../../src/fonts/package.ts";
