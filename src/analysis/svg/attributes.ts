@@ -35,7 +35,10 @@ export function inherit(parent: Record<string, string>, own: Record<string, stri
 export function styleProp(c: LayoutNode, attrs: Record<string, string>, k: string, scope: SvgScope): string | undefined {
   const declared = attrs[k];
   if (scope.useColor && declared === "currentColor") return scope.useColor;
-  return c.styles[k] ?? declared;
+  const v = c.styles[k] ?? declared;
+  // Markup-only SVG has no computed style: `currentColor` is the inherited `color` attribute, and
+  // an SVG document's initial colour is black. Captured inline SVG never reaches this (computed values are resolved).
+  return v?.toLowerCase() === "currentcolor" ? (attrs["color"] ?? "black") : v;
 }
 
 /** `url(#id)` target from an attribute or the inline `style` (non-whitelisted properties such as `clip-path`/`mask`). */

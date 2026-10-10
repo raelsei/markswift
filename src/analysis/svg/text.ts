@@ -19,7 +19,8 @@ export function collectText(el: LayoutNode, scope: SvgScope, pos: { x: number; y
       const text = c.text ?? "";
       if (!text.trim()) continue;
       const fill = parseColor(styleProp(el, attrs, "fill", scope)) ?? { r: 0, g: 0, b: 0, a: 1 };
-      const font = fontOf(el.styles, ctx.bundledFamilies);
+      // Markup has no computed style (no `font-size`): the font comes from the presentation attributes.
+      const font = fontOf(el.styles["font-size"] === undefined ? { "font-size": `${num(styleProp(el, attrs, "font-size", scope), 16)}px`, "font-family": attrs["font-family"] ?? "serif", "font-weight": attrs["font-weight"] ?? "400" } : el.styles, ctx.bundledFamilies);
       const box = c.bounds.w > 0 ? { x: round2(c.bounds.x - ctx.frame.x), y: round2(c.bounds.y - ctx.frame.y), w: round2(c.bounds.w), h: round2(c.bounds.h) } : derivedBox(text, at, anchor, el, attrs, scope, ctx);
       ctx.texts.push({ text, x: at.x, y: at.y, anchor, font, fill, box });
     } else if (c.tag === "tspan" || c.tag === "a") collectText(c, { ...scope, attrs: inherit(scope.attrs, el.attrs) }, at, ctx);

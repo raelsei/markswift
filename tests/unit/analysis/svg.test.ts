@@ -1,7 +1,8 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
+import { svgFromMarkup } from "../../../src/analysis/svg/markup.ts";
 
 test("SVG chart labels and nested tspans use the conversion's bundled fonts", () => {
   const styles = { "font-family": '"Geist Variable", sans-serif', "font-size": "12px", "font-weight": "400", fill: "rgb(0, 0, 0)" };
@@ -22,4 +23,34 @@ test("SVG chart labels and nested tspans use the conversion's bundled fonts", ()
   ]);
   expect(fallback.root.texts?.every((t) => t.font.family.kind === "system")).toBe(true);
   expect(emitSwift(custom, "ChartView", { mode: "app" }).view).toContain('.custom("Geist Variable"');
+});
+
+describe("BUG-03 markup SVG paints like the browser", () => {
+  // Markup (`<img src=*.svg>`, data: backgrounds) has no computed style: the SVG initial values,
+  // named colours, `currentColor` and inline `style` have to be resolved from attributes.
+  const FRAME = { x: 0, y: 0, w: 10, h: 10 };
+  const BLACK = { r: 0, g: 0, b: 0, a: 1 };
+  const draw = (markup: string) => svgFromMarkup(markup, FRAME)!;
+
+  test("an unfilled shape paints black", () => {
+    expect(draw('<svg viewBox="0 0 10 10"><path d="M0 0H10V10Z"/></svg>').paths[0]!.fill).toEqual(BLACK);
+  });
+  test("named colours resolve", () => {
+    expect(draw('<svg viewBox="0 0 10 10"><rect width="5" height="5" fill="white"/></svg>').paths[0]!.fill).toEqual({ r: 1, g: 1, b: 1, a: 1 });
+  });
+  test("currentColor follows the inherited color attribute, black by default", () => {
+    expect(draw('<svg viewBox="0 0 10 10"><path d="M0 0L10 10" fill="none" stroke="currentColor"/></svg>').paths[0]!.stroke).toEqual(BLACK);
+    expect(draw('<svg viewBox="0 0 10 10"><g color="red"><path d="M0 0L10 10" fill="none" stroke="currentColor"/></g></svg>').paths[0]!.stroke).toEqual({ r: 1, g: 0, b: 0, a: 1 });
+  });
+  test("an inline style declaration applies", () => {
+    expect(draw('<svg viewBox="0 0 10 10"><path d="M0 0H10V10Z" style="fill:#ff0000"/></svg>').paths[0]!.fill).toEqual({ r: 1, g: 0, b: 0, a: 1 });
+  });
+  test("<style> rules and classes are reported", () => {
+    const node = draw('<svg viewBox="0 0 10 10"><style>.a{fill:red}</style><path class="a" d="M0 0H10V10Z"/></svg>');
+    expect(node.confidence).toBe("unmapped");
+    expect(node.diagnostics).toContainEqual(expect.objectContaining({ level: "unmapped", feature: "style" }));
+  });
+  test("text takes its font size from attributes", () => {
+    expect(svgFromMarkup('<svg viewBox="0 0 100 20"><text x="0" y="15" font-size="12">Hi</text></svg>', { x: 0, y: 0, w: 100, h: 20 })!.texts![0]!.font.size).toBe(12);
+  });
 });
