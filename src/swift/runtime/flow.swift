@@ -49,7 +49,9 @@ struct MarkswiftFlow: Layout {
         var result: [Row] = []
         var row = Row()
         for (index, subview) in subviews.enumerated() {
-            let measured = subview.sizeThatFits(.unspecified)
+            var measured = subview.sizeThatFits(.unspecified)
+            // CSS shrinks an item wider than the line down to the line (flex-shrink: 1); text re-wraps instead of overflowing.
+            if measured.width > width { measured = subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
             let size = CGSize(width: measured.width.isFinite ? max(0, measured.width) : 0,
                               height: measured.height.isFinite ? max(0, measured.height) : 0)
             let gap = row.items.isEmpty ? 0 : columnGap
