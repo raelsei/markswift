@@ -80,6 +80,34 @@ nativeTest("009: silent-loss fixes emit compilable Swift in both modes", async (
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
 
+nativeTest("010: app-sizing output compiles in both modes", async () => {
+  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, extra: Partial<LayoutNode> = {}): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
+  const image = (x: number, fit: string, position?: string) => node("img", { x, y: 0, w: 70, h: 100 }, { display: "inline", "object-fit": fit, ...(position ? { "object-position": position } : {}) }, { attrs: { src: "photo.png" }, currentSrc: PNG, paint: 1 });
+  const root = node("main", { x: 0, y: 0, w: 390, h: 2000 }, { display: "block", position: "relative" }, {
+    paint: 0,
+    children: [
+      node("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block" }, { paint: 1, children: [image(0, "fill"), image(70, "cover", "50% 0%"), image(140, "contain"), image(210, "none"), image(280, "scale-down")] }),
+      node("input", { x: 0, y: 100, w: 200, h: 38 }, { display: "inline-block" }, { attrs: { type: "text", value: "a" }, paint: 1 }),
+      node("div", { x: 0, y: 138, w: 390, h: 1862 }, { display: "block", "background-color": "rgb(240, 240, 240)" }, { paint: 1 }),
+      node("div", { x: 354, y: 8, w: 20, h: 20 }, { display: "block", position: "absolute", "background-color": "rgb(255, 0, 0)" }, { paint: 2, preferredSize: { width: "20px", height: "20px", insets: { top: "8px", right: "16px", bottom: "auto", left: "auto" } } }),
+      node("div", { x: 0, y: 784, w: 390, h: 60 }, { display: "block", position: "fixed", "background-color": "rgb(0, 0, 255)" }, { paint: 3, preferredSize: { width: "390px", height: "60px", insets: { top: "auto", right: "0px", bottom: "0px", left: "0px" } } }),
+    ],
+  });
+  const doc: LayoutDoc = { version: 2, source: "app-sizing", combo: { screen: "s", theme: "light" }, size: { w: 390, h: 2000 }, viewport: { x: 0, y: 0, w: 390, h: 844 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
+  const directory = await mkdtemp(join(tmpdir(), "markswift-native-010-"));
+  try {
+    for (const mode of ["app", "fidelity"] as const) {
+      const result = compileLayout(doc, { name: "AppSizing", mode });
+      if (mode === "app") for (const marker of ["ScrollView(.vertical", ".overlay(alignment: .bottomLeading)", "minHeight: 38.0"]) expect(result.code).toContain(marker);
+      const output = join(directory, mode);
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+      const check = await typecheck(output);
+      if (!check.ok) throw new Error(check.output);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 120000);
+
 const ASSETS = join(import.meta.dir, "../conformance/fixtures/assets");
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const SHARED = '<div style="width:40px;height:20px;background:var(--primary)"></div><div style="width:40px;height:20px;background:var(--primary)"></div><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2h16v16H2z" fill="#16a34a"/></svg>';

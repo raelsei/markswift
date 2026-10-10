@@ -261,6 +261,9 @@ including padding, borders, percentage width limits and simple `calc()` expressi
 retains cascaded width/height intent, so fixed stylesheet sizes and overridden inline sizes use
 the same rules as compiled utility selectors. Finite caps preserve intrinsic boxes without
 expanding their backgrounds; height floors and clipping preserve block text's top placement.
+In app mode, bottom slack from min-height or flex alignment is placement, not padding; a
+viewport-high root fills the device; text-bearing controls treat their measured height as a
+floor; a page taller than the viewport scrolls, with fixed overlays outside the scroll view.
 Chrome sizing tests cover 320, 390 and 768px in both themes.
 
 Equal flex allocations can use native fill sizing. Unequal growth, bases or measured sizes,
