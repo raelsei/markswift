@@ -241,7 +241,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   else if (host.styles["text-wrap-mode"] === "nowrap") {
     node.noWrap = true;
     node.lineLimit = 1 + out.reduce((n, r) => n + (r.text.match(/\n/g)?.length ?? 0) + (r.breaks?.length ?? 0), 0);
-  }
+  } else if (lines === 1 && unbreakable(node.runs, host.styles)) node.unbreakable = true;
   if (host.styles["text-overflow"] === "ellipsis") node.truncate = true;
   // Only text needs the base writing direction: CoreText resolves neutral characters against it
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
@@ -251,4 +251,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb") note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+
+// ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.
+const ONE_WORD = /^[\p{L}\p{M}\p{N}.,:'’&$€£%]+$/u;
+const SPACE_FREE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+/** A single word CSS cannot soft-wrap: with `overflow-wrap: normal` it overflows its box instead. */
+function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
+  if ((s["overflow-wrap"] ?? "normal") !== "normal" || /^break-(all|word)$/.test(s["word-break"] ?? "")) return false;
+  const text = runs.filter((r) => r.gap === undefined).map((r) => r.text).join("");
+  return ONE_WORD.test(text) && !SPACE_FREE.test(text);
 }

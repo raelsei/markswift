@@ -314,6 +314,8 @@ export interface TextNode extends SemBase {
    * re-flowing. Unset means normal wrapping.
    */
   noWrap?: true;
+  /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
+  unbreakable?: true;
   /** A font-family of this text resolved to a face other than the one the reference painted. */
   fontSubstituted?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */

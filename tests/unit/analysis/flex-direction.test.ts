@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { crossAlign, distributionOf } from "../../../src/analysis/alignment.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
 import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
 
@@ -130,5 +131,49 @@ describe("Step 2 text alignment", () => {
   test("a flex row aligned to flex-end puts the surplus above the text", () => {
     const t = leafText(el("div", { x: 0, y: 0, w: 200, h: 60 }, { display: "flex", "align-items": "flex-end" }, [textNode("Hi", { x: 0, y: 43, w: 20, h: 14 })]));
     expect(t.padding).toEqual([40, 0, 0, 0]);
+  });
+});
+
+/** `main > div(nowrap flex row, overflow-x hidden) > span#c(block, padded) > #text`. */
+function chipDoc(text: string, styles: Record<string, string> = {}, h = 28, glyphH = 14): LayoutDoc {
+  const span = el("span", { x: 0, y: 0, w: 60, h }, { display: "block", "padding-top": "4px", "padding-bottom": "4px", "padding-left": "12px", "padding-right": "12px", ...styles }, [textNode(text, { x: 12, y: 7, w: 36, h: glyphH })], { id: "c" });
+  const row = el("div", { x: 0, y: 0, w: 120, h }, { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" }, [span]);
+  return doc(el("main", { x: 0, y: 0, w: 120, h }, { display: "block" }, [row]));
+}
+
+function chipText(d: LayoutDoc): TextNode {
+  const t = flatten(inferScreen(d, "t").root).find((n) => n.kind === "text");
+  if (t?.kind !== "text") throw new Error("expected a text node");
+  return t;
+}
+
+describe("Step 3 unbreakable words", () => {
+  test("a single word never soft-wraps in app mode", () => {
+    const d = chipDoc("Design");
+    expect(chipText(d).unbreakable).toBe(true);
+    const code = compileLayout(d, { name: "Chip", mode: "app" }).code;
+    const at = code.indexOf('Text(verbatim: "Design")');
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(code.slice(at, code.indexOf(".fixedSize(", at) + 60)).toContain(".fixedSize(horizontal: true, vertical: true)");
+  });
+
+  test("words with a space between them can wrap", () => {
+    expect(chipText(chipDoc("Get started")).unbreakable).toBeUndefined();
+  });
+
+  test("space-free scripts break between characters", () => {
+    expect(chipText(chipDoc("設計")).unbreakable).toBeUndefined();
+  });
+
+  test("overflow-wrap and word-break that break inside words keep wrapping", () => {
+    expect(chipText(chipDoc("Design", { "overflow-wrap": "anywhere" })).unbreakable).toBeUndefined();
+    expect(chipText(chipDoc("Design", { "word-break": "break-all" })).unbreakable).toBeUndefined();
+  });
+
+  test("a word the browser did break stays measured", () => {
+    const d = chipDoc("Design", { "padding-top": "0px", "padding-bottom": "0px" }, 40, 34);
+    const t = chipText(d);
+    expect(t.lines).toBe(2);
+    expect(t.unbreakable).toBeUndefined();
   });
 });
