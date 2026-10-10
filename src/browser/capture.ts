@@ -58,7 +58,10 @@ export class BrowserCapture {
   constructor(private readonly opts: { dpr: number; viewport: { width: number; height: number }; channel?: string; restricted?: boolean; signal?: AbortSignal }) {}
 
   async start(): Promise<void> {
-    this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome" });
+    // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
+    // that slips past `page.route` cannot reach the network. The document itself is fulfilled by the route.
+    const args = this.opts.restricted ? ["--host-resolver-rules=MAP * ~NOTFOUND"] : [];
+    this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome", args });
     this.context = await this.browser.newContext({
       viewport: this.opts.viewport,
       deviceScaleFactor: this.opts.dpr,
@@ -116,7 +119,9 @@ export class BrowserCapture {
       await page.emulateMedia({ colorScheme: spec.theme });
       // Public pasted markup is captured as a document, but cannot reach the host's network.
       // The exact document route below is registered last and fulfills that one request.
-      if (this.opts.restricted) await page.route("**/*", route => route.abort());
+      // `aborted` (net::ERR_ABORTED) cancels a navigation (meta refresh, link) without committing
+      // Chrome's error page, so the pasted document stays the one captured.
+      if (this.opts.restricted) await page.route("**/*", route => route.abort("aborted"));
       if (spec.html !== undefined) {
         const documentURL = new URL(spec.url); documentURL.hash = "";
         await page.route((url) => url.href === documentURL.href, (route) => route.request().isNavigationRequest()

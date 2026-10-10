@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convert, convertHtml } from "../../src/index.ts";
 import type { Browser } from "playwright-core";
+import type { LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const css = "html,body{margin:0} .card,.p-4,._card_ab12{box-sizing:border-box;width:240px;height:80px;padding:16px;background:rgb(255,0,0);font:16px system-ui}";
@@ -137,18 +138,27 @@ browserTest("redirected, mistyped and lazy images are embedded", async () => {
 }, 60000);
 
 browserTest("restricted pasted HTML cannot run scripts or request server-side resources", async () => {
-  let requests = 0;
-  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => { requests++; return new Response("blocked"); } });
+  // Raw TCP: connections that never send an HTTP request (preconnect) are counted too.
+  let connects = 0;
+  const listener = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { open() { connects++; }, data() {} } });
   try {
-    const remote = `http://127.0.0.1:${server.port}`;
-    const html = `<style>@font-face{font-family:Probe;src:url(${remote}/font.woff2)}main{font-family:Probe}</style>`
-      + `<main data-markswift-root style="width:180px;height:80px">Original<img src="${remote}/pixel.png"></main>`
+    const remote = `http://127.0.0.1:${listener.port}`;
+    const html = `<style>@import url(${remote}/import.css);@font-face{font-family:Probe;src:url(${remote}/font.woff2)}main{font-family:Probe}</style>`
+      + `<link rel=stylesheet href=${remote}/link.css><link rel=preconnect href=${remote}><link rel=dns-prefetch href=${remote}><link rel=prefetch href=${remote}/prefetch>`
+      + `<meta http-equiv=refresh content="0;url=${remote}/refresh">`
+      + `<main data-markswift-root style="width:180px;height:80px">Original<img src="${remote}/pixel.png"><img src="file:///etc/hosts">`
+      + `<iframe src=${remote}/frame></iframe><svg width=10 height=10><image href=${remote}/svg.png width=10 height=10 /></svg><a href=${remote}/anchor>link</a></main>`
       + `<script>document.querySelector("main").textContent="Executed";fetch("${remote}/script")</script>`;
     const result = await convertHtml(html, { name: "RestrictedView", untrustedInput: true });
+    await Bun.sleep(300); // a connect that never happens has no event to await; give late ones a window
     expect(result.code).toContain("Original");
     expect(result.code).not.toContain("Executed");
-    expect(requests).toBe(0);
-  } finally { server.stop(true); }
+    expect(connects).toBe(0);
+    const embedded: string[] = [];
+    const visit = (n: LayoutNode) => { if (n.tag === "img" && n.currentSrc?.startsWith("data:")) embedded.push(n.currentSrc); n.children.forEach(visit); };
+    visit(result.layout.root);
+    expect(embedded).toEqual([]);
+  } finally { listener.stop(true); }
 }, 30000);
 
 browserTest("a failed preparation closes the browser and local asset server", async () => {
