@@ -73,6 +73,9 @@ export class BrowserCapture {
     });
   }
 
+  /** Version of the launched browser (e.g. `153.0.8010.12`). */
+  get version(): string { return this.browser.version(); }
+
   /**
    * Safe to call more than once and concurrently (the conversion deadline and its cleanup both
    * call it): one close runs. Before `start` has a browser it does nothing, so a later call still closes it.

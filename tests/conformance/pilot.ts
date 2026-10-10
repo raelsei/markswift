@@ -10,6 +10,8 @@ export interface PilotCase {
   diagnosticFamily: string | null;
   expectedText?: string;
   expectedLines?: { "320": number; "390": number };
+  /** Element ids (`#id`) whose browser vs native region mismatch the gate records. */
+  anchors?: string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -27,6 +29,8 @@ export async function validatePilot(raw: unknown, fixtureRoot: string): Promise<
     if (entry.expectedText !== undefined && (typeof entry.expectedText !== "string" || !entry.expectedText.length)) throw new Error(`pilot ${entry.id}: invalid expected text`);
     const lines = entry.expectedLines;
     if (lines !== undefined && (!isRecord(lines) || !["320", "390"].every(width => Number.isInteger(lines[width]) && Number(lines[width]) > 0))) throw new Error(`pilot ${entry.id}: invalid expected lines`);
+    const anchors = entry.anchors;
+    if (anchors !== undefined && (!Array.isArray(anchors) || !anchors.length || new Set(anchors).size !== anchors.length || anchors.some(a => typeof a !== "string" || !/^#[a-z][a-z0-9-]*$/.test(a)))) throw new Error(`pilot ${entry.id}: invalid anchors`);
     if (entry.tier !== "native" && !entry.diagnosticFamily) throw new Error(`pilot ${entry.id}: expected diagnostic family`);
     if (!Array.isArray(entry.themes) || !entry.themes.length || entry.themes.some(theme => theme !== "light" && theme !== "dark") || new Set(entry.themes).size !== entry.themes.length) throw new Error(`pilot ${entry.id}: invalid themes`);
     if (typeof entry.fixture !== "string" || !/^[a-z0-9-]+\/[a-z0-9-]+\.html$/.test(entry.fixture)) throw new Error(`pilot ${entry.id}: invalid fixture path`);
@@ -44,7 +48,7 @@ export async function loadPilot(path = join(import.meta.dir, "pilot.json")): Pro
 }
 
 /** What the runner needs from a case; pilot.json cases add feature, tier and diagnostic expectations. */
-export type RunCase = Pick<PilotCase, "id" | "fixture" | "themes" | "expectedText" | "expectedLines">;
+export type RunCase = Pick<PilotCase, "id" | "fixture" | "themes" | "expectedText" | "expectedLines" | "anchors">;
 
 /** Every `fixtures/<domain>/*.html` (`_`-prefixed dirs excluded). Pilot cases keep their id and expectations;
  * the rest are named by file stem and use the themes in `<meta name="markswift-themes">` (default light). */

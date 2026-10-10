@@ -20,6 +20,15 @@ test("pilot manifest rejects an unknown fixture rather than skipping it", async 
     .rejects.toThrow("css-layout/no-such-case.html");
 });
 
+test("pilot anchors are nonempty #ids, and only the geometry cases carry them", async () => {
+  const base = { id: "flex", feature: "layout", tier: "native", fixture: "css-layout/display--flex.html", themes: ["light"], diagnosticFamily: null };
+  for (const anchors of [["flex-row"], []]) {
+    await expect(validatePilot({ version: 1, cases: [{ ...base, anchors }] }, fixtureRoot)).rejects.toThrow("pilot flex: invalid anchors");
+  }
+  const anchored = (await loadPilot()).filter(item => item.anchors);
+  expect(anchored.map(item => item.id)).toEqual(["display-flex", "display-grid", "flex-wrap", "box-shadow", "background-image", "image"]);
+});
+
 test("pilot CLI validates cases without running capture", async () => {
   const run = Bun.spawn([process.execPath, join(import.meta.dir, "pilot.ts"), "--validate"], { stdout: "pipe", stderr: "pipe" });
   const output = await new Response(run.stdout).text();
