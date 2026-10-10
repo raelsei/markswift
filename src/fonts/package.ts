@@ -5,7 +5,7 @@ import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
 import { coversLatin, srcBytes, sanitize, WEIGHT_SUBFAMILY } from "./source.ts";
 import { runFontTool } from "./converter.ts";
-import { plistFragment, registrationSwift } from "./registration.ts";
+import { plistFragment } from "./registration.ts";
 
 
 /**
@@ -22,7 +22,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
   await rm(fontsDir, { recursive: true, force: true });
   const notes: string[] = [];
   const packaged: PackagedFace[] = [];
-  if (!faces.length) return { faces: [], plist: "", swift: "", notes };
+  if (!faces.length) return { faces: [], plist: "", notes };
 
   // (family, style, weight range) is one bundled face; several `unicode-range` subsets of the
   // same key are the same font cut up, and iOS can only hold one of them.
@@ -98,5 +98,5 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     }
   }
   const files = packaged.map((f) => f.file).sort();
-  return { faces: packaged, plist: plistFragment(files), swift: files.length ? registrationSwift(packaged) : "", notes };
+  return { faces: packaged, plist: plistFragment(files), notes };
 }

@@ -24,8 +24,6 @@ export interface FontPackage {
   faces: PackagedFace[];
   /** `Info.plist` `UIAppFonts` fragment; empty when nothing was packaged. */
   plist: string;
-  /** `Font+Markswift.swift` source; empty when nothing was packaged. */
-  swift: string;
   /** What the design asked for and did not get, one line each. */
   notes: string[];
 }

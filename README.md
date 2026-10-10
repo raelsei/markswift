@@ -70,8 +70,8 @@ for (const [path, bytes] of Object.entries(result.assets)) {
 ```
 
 Add **all generated `.swift` files** to the same iOS target, not just `result.code`.
-When fonts are returned, add `Fonts/` resources and merge `UIAppFonts.plist.fragment` into
-the app's Info.plist, or call `MarkswiftBundledFonts.register(in:)` with the resource bundle before rendering.
+When fonts are returned, add `Fonts/` resources and merge `<View>+UIAppFonts.plist.fragment` into
+the app's Info.plist, or call `<View>.BundledFonts.register(in:)` with the resource bundle before rendering.
 One conversion returns one standalone set of shared helper/token definitions. Combining
 independent conversion results into the same target needs shared-file/token merging; do not
 blindly copy duplicate helpers. Multi-component bundle generation remains a roadmap item.

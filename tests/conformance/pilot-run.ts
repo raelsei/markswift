@@ -7,6 +7,7 @@ import { serveDir } from "../../src/browser/server.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import { packageFonts } from "../../src/fonts/package.ts";
+import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { renderNative, selectSimulator, type SimulatorInventory } from "../../tools/verify/native.ts";
@@ -139,8 +140,8 @@ async function run() {
               const assets: Record<string, Uint8Array> = {};
               for (const face of fonts.faces) assets[`Fonts/${face.file}`] = new Uint8Array(await Bun.file(join(swiftDir, "Fonts", face.file)).arrayBuffer());
               if (fonts.faces.length) {
-                compiled.files["Font+Markswift.swift"] = fonts.swift;
-                compiled.files["UIAppFonts.plist.fragment"] = fonts.plist;
+                compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
+                compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
               }
               result.diagnostics = compiled.diagnostics.length;
               await Bun.write(join(dir, "diagnostics.json"), JSON.stringify(compiled.diagnostics, null, 2));
