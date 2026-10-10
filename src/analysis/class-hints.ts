@@ -57,9 +57,11 @@ const NOT_A_COLOR_FAMILY = ["bg-clip-", "bg-blend-", "bg-origin-", "bg-gradient-
  * `text-muted-foreground` → `muted-foreground`, `bg-blue-500` → `blue-500`, which `tokens.ts`
  * camelizes into `Palette.blue500`).
  *
- * `dark:` is kept because it paints the dark counterpart of the same slot; other variants
- * (`hover:`, `md:`, `focus:`) name states the static capture never sees. Arbitrary values
- * (`bg-[#0f172a]`) carry no name and are dropped.
+ * Every variant (`dark:`, `hover:`, `md:`, `focus:`) is dropped. `hover:`/`md:` name states the
+ * static capture never sees; a `dark:` utility names the *dark* value of the slot, and one hint
+ * list per node cannot say which theme a hint belongs to, so using it would name the light colour
+ * after its dark counterpart (`text-slate-500 dark:text-slate-400` → `slate400`). Arbitrary
+ * values (`bg-[#0f172a]`) carry no name and are dropped.
  */
 export function classColorHints(attrs: Record<string, string>): string[] {
   const out: string[] = [];
@@ -68,7 +70,7 @@ export function classColorHints(attrs: Record<string, string>): string[] {
     const parts = raw.split(":");
     // Tailwind v3 writes the important marker as a leading `!`, v4 as a trailing one.
     const util = parts[parts.length - 1]!.replace(/^!/, "").replace(/!$/, "");
-    if (parts.length > 1 && !parts.slice(0, -1).every((v) => v === "dark")) continue;
+    if (parts.length > 1) continue;
     if (util.includes("[")) continue;
     const hint = colorHint(util);
     if (hint && !out.includes(hint)) out.push(hint);
