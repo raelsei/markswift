@@ -27,12 +27,12 @@ function page(theme: "light" | "dark", card: string, edge?: string): LayoutDoc {
 const light = page("light", "rgb(255, 255, 255)", "rgb(255, 0, 0)");
 const dark = page("dark", "rgb(0, 0, 0)");
 const adaptive = compileLayout(light, { name: "CardView", dark });
-const tokens = adaptive.files["MarkswiftTokens.swift"]!;
+const tokens = adaptive.files["CardView+Tokens.swift"]!;
 
 test("a single-use colour that differs in dark becomes an adaptive token the view references", () => {
-  const name = /static let (\w+) = Color\(light: \.markswift\(1\.0, 1\.0, 1\.0\), dark: \.markswift\(0\.0, 0\.0, 0\.0\)\)/.exec(tokens)?.[1];
+  const name = /static let (\w+) = Color\.markswift\(light: \.markswift\(1\.0, 1\.0, 1\.0\), dark: \.markswift\(0\.0, 0\.0, 0\.0\)\)/.exec(tokens)?.[1];
   expect(name).toBeDefined();
-  expect(adaptive.code).toContain(`Color.${name}`);
+  expect(adaptive.code).toContain(`Palette.${name}`);
   expect(adaptive.code).not.toContain("Color.markswift(1.0, 1.0, 1.0)");
   expect(tokens).toContain("// 2 tokens: 1 adaptive (light/dark pairs), 1 static.");
 });
@@ -55,7 +55,7 @@ test("adaptive output previews both schemes; single-theme output keeps one previ
   const single = compileLayout(light, { name: "CardView" });
   expect(single.warnings).toEqual([]);
   expect(single.code.match(/#Preview/g)).toHaveLength(1);
-  expect(single.files["MarkswiftTokens.swift"]).toContain("tokens, all static.");
+  expect(single.files["CardView+Tokens.swift"]).toContain("tokens, all static.");
 });
 
 test("geometry that moves between themes is reported", () => {

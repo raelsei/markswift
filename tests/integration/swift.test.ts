@@ -36,8 +36,8 @@ nativeTest("adaptive light/dark conversion compiles", async () => {
       name: "AdaptiveCard",
       css: "body{margin:0} main{width:280px;padding:16px;font:16px system-ui;background:#fff;color:#111} .note{color:#555} @media (prefers-color-scheme: dark){main{background:#16181d;color:#f2f2f2}.note{color:#a0a4ab}}",
     });
-    expect(result.files["MarkswiftTokens.swift"]).toContain("= Color(light:");
-    expect(result.code).toContain("Color(light: Color.markswift(");
+    expect(result.files["AdaptiveCard+Tokens.swift"]).toContain("= Color.markswift(light:");
+    expect(result.code).toContain("Color.markswift(light: Color.markswift(");
     for (const [file, content] of Object.entries(result.files)) await Bun.write(join(directory, file), content);
     const check = await typecheck(directory);
     if (!check.ok) throw new Error(check.output);

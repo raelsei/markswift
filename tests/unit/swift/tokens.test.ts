@@ -1,11 +1,12 @@
 /**
- * Token extraction: what a consumer of `MarkswiftTokens.swift` observes — which colours become
+ * Token extraction: what a consumer of `<View>+Tokens.swift` observes — which colours become
  * named tokens, whether a name follows the design's own vocabulary, and that two runs of the
  * same design produce the same file.
  */
 import { describe, expect, test } from "bun:test";
 import { extractTokens, emitDesignTokens, camelize, screenBase, screenTokens } from "../../../src/swift/tokens.ts";
 import { colorExpr } from "../../../src/swift/format.ts";
+import { SWIFT_RUNTIME } from "../../../src/swift/runtime.ts";
 import type { ColorCtx } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import type { Color } from "../../../src/css/index.ts";
@@ -156,7 +157,7 @@ describe("extractTokens", () => {
   });
 
   test("the same design emits the same file twice", () => {
-    expect(emitDesignTokens(extractTokens(pair()))).toBe(emitDesignTokens(extractTokens(pair())));
+    expect(emitDesignTokens(extractTokens(pair()), "V")).toBe(emitDesignTokens(extractTokens(pair()), "V"));
   });
 
   test("a colour that flips with the theme is semantic even on a single slot", () => {
@@ -169,10 +170,11 @@ describe("extractTokens", () => {
 
 describe("emitDesignTokens", () => {
   test("semantic tokens emit the pair, static ones a single colour", () => {
-    const swift = emitDesignTokens(extractTokens(pair()));
-    expect(swift).toContain("static let canvas = Color(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))");
+    const swift = emitDesignTokens(extractTokens(pair()), "V");
+    expect(swift).toContain("static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))");
     expect(swift).toMatch(/static let fill\w+ = Color\.markswift\(0\.49, 0\.36, 0\.84\)\n/);
-    expect(swift).toContain("nonisolated init(light: Color, dark: Color)");
+    expect(SWIFT_RUNTIME).toContain("static func markswift(light: Color, dark: Color)");
+    expect(swift).not.toContain("extension Color");
   });
 });
 
@@ -221,9 +223,9 @@ describe("colorExpr", () => {
   const darkCtx: ColorCtx = { tokens: screenTokens(set, dark!), mode: "fidelity" };
 
   const table: Array<[string, Color, string | undefined, ColorCtx, string]> = [
-    ["a semantic token's light value, on the node that paints it", WHITE, "card", lightCtx, `Color.${card.name}`],
-    ["the same token's dark value in the dark view — one name, both themes", NEAR_BLACK, "card", darkCtx, `Color.${card.name}`],
-    ["a static token on one of its nodes", INDIGO, "accent", lightCtx, `Color.${accent.name}`],
+    ["a semantic token's light value, on the node that paints it", WHITE, "card", lightCtx, `Palette.${card.name}`],
+    ["the same token's dark value in the dark view — one name, both themes", NEAR_BLACK, "card", darkCtx, `Palette.${card.name}`],
+    ["a static token on one of its nodes", INDIGO, "accent", lightCtx, `Palette.${accent.name}`],
     ["a token colour on a node that does not paint it", WHITE, "accent", lightCtx, "Color.markswift(1.0, 1.0, 1.0)"],
     ["a colour with no node to attribute it to", WHITE, undefined, lightCtx, "Color.markswift(1.0, 1.0, 1.0)"],
     ["a colour no token names", rgb(0.2, 0.7, 0.3), "card", lightCtx, "Color.markswift(0.2, 0.7, 0.3)"],
@@ -243,10 +245,10 @@ describe("colorExpr", () => {
     const border = amb.tokens.find((t) => t.kind === "static" && t.role === "border")!;
     const card = amb.tokens.find((t) => t.kind === "semantic" && t.role === "fill")!;
     expect(colorExpr(WHITE, ctx, "card")).toBe("Color.markswift(1.0, 1.0, 1.0)");
-    expect(colorExpr(WHITE, ctx, "other")).toBe(`Color.${border.name}`);
+    expect(colorExpr(WHITE, ctx, "other")).toBe(`Palette.${border.name}`);
     // A call site that names the slot resolves each slot to its own token.
-    expect(colorExpr(WHITE, ctx, "card", "fill0")).toBe(`Color.${card.name}`);
-    expect(colorExpr(WHITE, ctx, "card", "border")).toBe(`Color.${border.name}`);
+    expect(colorExpr(WHITE, ctx, "card", "fill0")).toBe(`Palette.${card.name}`);
+    expect(colorExpr(WHITE, ctx, "card", "border")).toBe(`Palette.${border.name}`);
     expect(colorExpr(WHITE, ctx, "card", "outline")).toBe("Color.markswift(1.0, 1.0, 1.0)");
   });
 });
@@ -259,7 +261,7 @@ describe("views referencing tokens", () => {
     const body = (s: Screen, name: string) => {
       const view = emitSwift(s, name, { mode: "app", tokens: screenTokens(set, s) }).view;
       // The #Preview backdrop is a fixed page colour per theme, not a colour of the design.
-      return view.slice(0, view.indexOf("#Preview")).split("\n").filter((l) => l.includes("Color."));
+      return view.slice(0, view.indexOf("#Preview")).split("\n").filter((l) => l.includes("Color.") || l.includes("Palette."));
     };
     const lines = body(light!, "HomeView");
     expect(lines.length).toBeGreaterThan(0);
@@ -276,15 +278,15 @@ describe("views referencing tokens", () => {
     expect(view).toContain("Color.markswift(0.2, 0.7, 0.3)");
   });
 
-  test("every token a view references is declared in MarkswiftTokens.swift", () => {
+  test("every token a view references is declared in <View>+Tokens.swift", () => {
     const [light, dark] = pair();
     const set = extractTokens([light!, dark!]);
-    const swift = emitDesignTokens(set);
+    const swift = emitDesignTokens(set, "V");
     for (const s of [light!, dark!]) {
       const view = emitSwift(s, "V", { mode: "fidelity", tokens: screenTokens(set, s) }).view;
-      const referenced = [...view.matchAll(/Color\.([a-z][A-Za-z0-9]*)/g)].map((m) => m[1]!).filter((n) => !n.startsWith("markswift") && n !== "clear");
+      const referenced = [...view.matchAll(/Palette\.([a-z][A-Za-z0-9]*)/g)].map((m) => m[1]!);
       expect(referenced.length).toBeGreaterThan(0);
-      for (const name of new Set(referenced)) expect(swift).toContain(`    static let ${name} = `);
+      for (const name of new Set(referenced)) expect(swift).toContain(`        static let ${name} = `);
     }
   });
 });

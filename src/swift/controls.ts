@@ -38,15 +38,15 @@ export interface ControlDeps {
  * Chrome's palette for the widgets it paints itself. The page's CSS never mentions these colours
  * yet they are part of the design's pixels, so the generated view carries them the same way it
  * carries every other measured colour: resolved for the screen's theme, or as a light/dark pair
- * (`Color(light:dark:)` from MarkswiftTokens.swift) for an adaptive view. Measured from Chrome 152.
+ * (`Color.markswift(light:dark:)` from MarkswiftRuntime.swift) for an adaptive view. Measured from Chrome 152.
  */
 const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
   light: { accent: "Color.markswift(0.0, 0.459, 1.0)", track: "Color.markswift(0.937, 0.937, 0.937)", edge: "Color.markswift(0.698, 0.698, 0.698)" },
   dark: { accent: "Color.markswift(0.6, 0.784, 1.0)", track: "Color.markswift(0.231, 0.231, 0.231)", edge: "Color.markswift(0.522, 0.522, 0.522)" },
   adaptive: {
-    accent: "Color(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
-    track: "Color(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
-    edge: "Color(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
+    accent: "Color.markswift(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
+    track: "Color.markswift(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
+    edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
   },
 };
 

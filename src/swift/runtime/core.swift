@@ -7,6 +7,13 @@ extension Color {
     nonisolated static func markswift(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> Color {
         Color(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
+
+    /// Light/dark pair as one colour, resolved per `UITraitCollection.userInterfaceStyle`: it
+    /// follows the system appearance, `.preferredColorScheme` and `\.colorScheme`.
+    nonisolated static func markswift(light: Color, dark: Color) -> Color {
+        let l = UIColor(light), d = UIColor(dark)
+        return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? d : l })
+    }
 }
 
 extension Font {

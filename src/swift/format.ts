@@ -11,7 +11,7 @@ export function colorArgs(c: Color): string {
 }
 
 /**
- * The one place a colour becomes Swift: `Color.surfaceRaised` when this node's colour is a
+ * The one place a colour becomes Swift: `Palette.surfaceRaised` when this node's colour is a
  * token of the screen, else the literal `Color.markswift(…)`.
  *
  * `id` is the node painting the colour; the lookup is (screen, theme, node, colour value)
@@ -23,7 +23,7 @@ export function colorArgs(c: Color): string {
  */
 export function colorExpr(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
   const token = ctx.tokens?.name(c, id, slot);
-  return token ? `Color.${token}` : `Color.markswift(${colorArgs(c)})`;
+  return token ? `Palette.${token}` : `Color.markswift(${colorArgs(c)})`;
 }
 
 /** Swift `Double` literal: 3 decimals, always with a fraction so type inference stays `Double`. */

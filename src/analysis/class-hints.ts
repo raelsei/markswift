@@ -55,7 +55,7 @@ const NOT_A_COLOR_FAMILY = ["bg-clip-", "bg-blend-", "bg-origin-", "bg-gradient-
  * Token-hint channel for the emit pass: the *semantic* part of a node's colour utilities, in
  * the same shape `Style.tokens` already carries CSS custom-property names (`bg-card` → `card`,
  * `text-muted-foreground` → `muted-foreground`, `bg-blue-500` → `blue-500`, which `tokens.ts`
- * camelizes into `Color.blue500`).
+ * camelizes into `Palette.blue500`).
  *
  * `dark:` is kept because it paints the dark counterpart of the same slot; other variants
  * (`hover:`, `md:`, `focus:`) name states the static capture never sees. Arbitrary values

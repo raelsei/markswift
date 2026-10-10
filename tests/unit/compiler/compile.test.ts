@@ -14,7 +14,7 @@ test("captured-layout compilation is deterministic and does not mutate the input
   expect(layout).toEqual(before);
   expect(first.files["CardView.swift"]).toBe(first.code);
   expect(first.code).toContain("struct CardView: View");
-  expect(Object.keys(first.files)).toEqual(["CardView.swift", "MarkswiftRuntime.swift", "MarkswiftTokens.swift"]);
+  expect(Object.keys(first.files)).toEqual(["CardView.swift", "MarkswiftRuntime.swift", "CardView+Tokens.swift"]);
 });
 
 test("serialized CSS sizing intent survives public compilation", () => {
