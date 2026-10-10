@@ -183,7 +183,7 @@ export default {
       ir: "FontSpec.size",
       via: "style",
       impl: "yes",
-      note: "Computed px is emitted as points 1:1. App mode should add `relativeTo:` (the closest text style) for Dynamic Type scaling.",
+      note: "Computed px is emitted as points 1:1 at the default text size. App mode scales system fonts (`@ScaledMetric(relativeTo:)`) and custom fonts (`.custom(_, size:, relativeTo:)`) relative to the nearest text style, so text follows Dynamic Type; fidelity and SVG text stay fixed.",
       spec: `${MDN}font-size`,
     },
     {

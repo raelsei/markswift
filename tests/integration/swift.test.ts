@@ -31,6 +31,25 @@ nativeTest("public conversion produces complete Swift compilable in both modes",
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
 
+nativeTest("accessible forms compile in both modes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-native-a11y-"));
+  try {
+    const fixture = await Bun.file(join(import.meta.dir, "../conformance/fixtures/html/input.html")).text();
+    const css = /<style>([\s\S]*)<\/style>/.exec(fixture)![1]!;
+    const main = /<main[\s\S]*<\/main>/.exec(fixture)![0]!.replace("</main>", '<button aria-label="Close">×</button><h2>Settings</h2><input type="email" aria-label="Work email"></main>');
+    for (const mode of ["app", "fidelity"] as const) {
+      const result = await convertHtml(main, { name: "AccessibleForm", mode, css });
+      if (mode === "app") {
+        for (const s of ['.accessibilityLabel("Close")', ".accessibilityHeading(.h2)", ".markswiftSelects(", ".keyboardType(.emailAddress)", "@ScaledMetric(relativeTo:"]) expect(result.code).toContain(s);
+      }
+      const output = join(directory, mode);
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+      const check = await typecheck(output);
+      if (!check.ok) throw new Error(check.output);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 120000);
+
 nativeTest("adaptive light/dark conversion compiles", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-native-adaptive-"));
   try {
