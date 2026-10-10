@@ -1,6 +1,6 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, edgeInsets, horizontalAlignment, indent, num, strokeStyle, verticalAlignment } from "./format.ts";
+import { colorExpr, edgeInsets, horizontalAlignment, indent, num, str, strokeStyle, verticalAlignment } from "./format.ts";
 import { frameModifier } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
@@ -8,6 +8,11 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
+  return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
+}
+
+/** The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area. */
+export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
   const st = n.style;
   const [pt, pr, pb, pl] = n.padding;
@@ -67,6 +72,17 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
     const mode = swiftBlend(st.blend);
     if (mode) m.push(`.blendMode(${mode})`);
   }
+  return m;
+}
+
+/**
+ * Where the finished box sits and what it is: transform, self-alignment, visibility, a `<label>`'s
+ * tap, accessibility. Nothing that paints or sizes the box: a button's box modifiers go inside its
+ * label, and these stay outside it.
+ */
+export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
+  const m: string[] = [];
+  const st = n.style;
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
@@ -83,6 +99,22 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   // Fidelity rows already place every child by measured offset (layout.ts `geometry`).
   if (n.selfAlignV && ctx.mode === "app") m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
   if (st.hidden) m.push(".hidden()");
+  // A `<label>` tap changes its checkbox or radio, anywhere in the label's box.
+  const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
+  if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
+  const a = n.a11y;
+  if (a) {
+    const container = n.kind === "stack" || n.kind === "grid";
+    // A heading container reads as one element; a labelled one names its group.
+    if (container && a.heading) m.push(".accessibilityElement(children: .combine)");
+    else if (container && a.label) m.push(".accessibilityElement(children: .contain)");
+    // A checkbox or radio is named by its `.accessibilityRepresentation` (controls.ts).
+    const toggle = n.kind === "control" && (n.control === "toggle" || n.control === "radio");
+    if (a.label && !toggle) m.push(`.accessibilityLabel(${str(a.label)})`);
+    if (a.heading) m.push(".accessibilityAddTraits(.isHeader)", `.accessibilityHeading(.h${a.heading})`);
+    if (a.trait) m.push(`.accessibilityAddTraits(.${a.trait})`);
+    if (a.hidden) m.push(".accessibilityHidden(true)");
+  }
   return m;
 }
 export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {

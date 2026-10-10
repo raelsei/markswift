@@ -14,24 +14,29 @@
 import { parseColor } from "../css/index.ts";
 import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
-import type { EmitMode, ScreenTokens } from "./context.ts";
+import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
+import { shapeExpr } from "./paint.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
-export interface ControlDeps {
+export interface ControlDeps extends ColorCtx {
   /** Emits a child node the way the surrounding view would (containers → their property). */
   child: (n: SemNode) => string[];
   /** Control → `@State` property name; built by `controlMembers`. */
   stateOf: Map<SemNode, string>;
   /** `onclick` source → callback property name; built by `controlMembers`. */
   actionOf: Map<string, string>;
+  /** Grouped radio → its tag in the group's selection; built by `controlMembers`. */
+  radioTag: Map<SemNode, string>;
   mode: EmitMode;
   /** The screen's colour scheme (`adaptive`: both): `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
   theme: Theme | "adaptive";
   /** This screen's colour → token lookup, and the control node its colours belong to. */
   tokens?: ScreenTokens;
   id?: string;
+  /** The node's box modifiers, emitted inside a pressable control's label. */
+  box?: string[];
 }
 
 /**
@@ -69,7 +74,8 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
 
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
-  const binding = state ? `$${state}` : "";
+  const tag = deps.radioTag.get(n);
+  const binding = !state ? "" : tag !== undefined ? `$${state}.markswiftSelects(${str(tag)})` : `$${state}`;
   const still = deps.mode === "fidelity";
   switch (n.control) {
     case "button": {
@@ -83,14 +89,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "Button {",
           `    ${state} = true`,
           "} label: {",
-          ...indent(body(n, deps), 1),
+          ...indent(pressable(n, deps), 1),
           "}",
           ".buttonStyle(.plain)",
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+      return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -100,17 +106,17 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       const href = n.href ?? "";
       if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
         const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
-        return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+        return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
-      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, body(n, deps), ["}"]);
+      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, pressable(n, deps), ["}"]);
     }
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
-      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
     case "secureField":
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
-      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
@@ -121,7 +127,11 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // are small squares/circles, and an iOS switch would not fit their measured box.
       const ua = UA[deps.theme];
       const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
-      return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
+      // (or `aria-label`); the representation does not inherit the visible style.
+      if (n.a11y?.label) out.push(".accessibilityRepresentation {", `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`, "}");
+      return out;
     }
     case "slider": {
       const r = n.range ?? { min: 0, max: 100 };
@@ -190,6 +200,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   }
 }
 
+/** What iOS Safari gives the same input: keyboard, autofill type, and no auto-capitalisation for addresses. */
+const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
+  email: [".keyboardType(.emailAddress)", ".textContentType(.emailAddress)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
+  tel: [".keyboardType(.phonePad)", ".textContentType(.telephoneNumber)"],
+  url: [".keyboardType(.URL)", ".textContentType(.URL)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
+  number: [".keyboardType(.decimalPad)"],
+  search: [".keyboardType(.webSearch)", ".submitLabel(.search)"],
+  password: [".textContentType(.password)"],
+};
+
 /**
  * `<meter>` state colours, as every browser paints them: the value sits in its optimum band, one
  * band away, or in the worst band.
@@ -226,6 +246,18 @@ function barHeight(n: ControlNode): number {
 function body(n: ControlNode, deps: ControlDeps): string[] {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
   return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
+}
+
+/**
+ * A button's or link's label with the node's box inside it, closed by the box shape: the whole box
+ * is the hit and press area, not only the glyphs. `EmptyView` takes no padding or frame, so an
+ * empty label with a box becomes `Color.clear`.
+ */
+function pressable(n: ControlNode, deps: ControlDeps): string[] {
+  const label = body(n, deps);
+  if (!deps.box) return label;
+  const lines = deps.box.length && label.length === 1 && label[0] === "EmptyView()" ? ["Color.clear"] : label;
+  return [...lines, ...deps.box, `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`];
 }
 
 function wrap(open: string, inner: string[], close: string[]): string[] {

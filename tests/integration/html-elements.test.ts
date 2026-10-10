@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { convertHtml } from "../../src/index.ts";
+import { convert, convertHtml } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../src/model/layout.ts";
+import { join } from "node:path";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const CONTAINERS = ["article", "section", "nav", "main", "aside", "header", "footer", "search", "div"] as const;
@@ -127,4 +128,10 @@ browserTest("an unsupported inline object retains its visible fallback and repor
   expect(result.code).toContain("Visible fallback");
   expect(result.code).toContain("Before");
   expect(result.code).toContain("After");
+}, 30000);
+
+browserTest("aria-label and aria-hidden from a captured page reach the generated view", async () => {
+  const result = await convert({ file: join(import.meta.dir, "../conformance/fixtures/attribute/attr-aria-.html") }, { name: "AriaFixture" });
+  expect(result.code).toContain('.accessibilityLabel("Search")');
+  expect(result.code).toContain(".accessibilityHidden(true)");
 }, 30000);

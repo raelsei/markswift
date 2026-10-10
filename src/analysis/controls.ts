@@ -16,7 +16,9 @@ export interface ControlSpec {
   control: ControlKind;
   value?: string;
   placeholder?: string;
+  inputType?: ControlNode["inputType"];
   checked?: boolean;
+  group?: string;
   disabled?: boolean;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
@@ -109,8 +111,14 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
       if (!Object.hasOwn(INPUT_CONTROLS, type)) addDiagnostic(diagnostics, "approximated", "input", `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
       const spec: ControlSpec = { control, diagnostics };
+      if (/^(email|tel|url|number|search|password)$/.test(type)) spec.inputType = type as NonNullable<ControlNode["inputType"]>;
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
+        // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
+        if (control === "radio") {
+          if (a["name"]) spec.group = a["name"];
+          spec.value = a["value"] ?? "on";
+        }
       } else if (a["value"] !== undefined) spec.value = a["value"];
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;
@@ -184,6 +192,44 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     if (parts.color) node.color = parts.color;
   }
   return node;
+}
+
+/** `<label>` ↔ control (HTML: `for` names an element id; otherwise the first control inside). */
+export interface LabelIndex {
+  /** Control element → its label's text (the label's text content without the control's own). */
+  text: Map<LayoutNode, string>;
+  /** Label element → the enabled toggle/radio element a tap on the label changes. */
+  activates: Map<LayoutNode, LayoutNode>;
+}
+
+export function labelIndex(root: LayoutNode): LabelIndex {
+  const byId = new Map<string, LayoutNode>();
+  const labels: LayoutNode[] = [];
+  const index = (n: LayoutNode) => {
+    const id = n.attrs["id"];
+    if (id && !byId.has(id)) byId.set(id, n);
+    if (n.tag === "label") labels.push(n);
+    n.children.forEach(index);
+  };
+  index(root);
+  const out: LabelIndex = { text: new Map(), activates: new Map() };
+  const firstControl = (n: LayoutNode): LayoutNode | undefined => {
+    for (const c of n.children) {
+      const hit = controlOf(c) ? c : firstControl(c);
+      if (hit) return hit;
+    }
+  };
+  const textOf = (n: LayoutNode, skip: LayoutNode): string => (n === skip ? "" : n.tag === "#text" ? (n.text ?? "") : n.children.map((c) => textOf(c, skip)).join(""));
+  for (const label of labels) {
+    const target = label.attrs["for"] !== undefined ? byId.get(label.attrs["for"]) : firstControl(label);
+    if (!target) continue;
+    // ponytail: first label wins when several name one control; HTML concatenates them. Join them if a design needs it.
+    const text = textOf(label, target).replace(/\s+/g, " ").trim();
+    if (text && !out.text.has(target)) out.text.set(target, text);
+    const spec = controlOf(target);
+    if ((spec?.control === "toggle" || spec?.control === "radio") && !spec.disabled) out.activates.set(label, target);
+  }
+  return out;
 }
 
 /** A URL with a scheme: the only `href` the generated view can hand to the system. */

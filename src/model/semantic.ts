@@ -272,6 +272,19 @@ export interface SemBase extends SizeConstraints {
   confidence: Confidence;
   diagnostics: Diagnostic[];
   overlays: Overlay[];
+  /** What assistive technology is told about this node, beyond what the element itself implies. */
+  a11y?: {
+    /** `aria-label`, else the text of the `<label>` that names this control. */
+    label?: string;
+    /** `aria-hidden="true"`. */
+    hidden?: true;
+    /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
+    heading?: 1 | 2 | 3 | 4 | 5 | 6;
+    /** `role` = button | link | img on an element that is not already that control. */
+    trait?: "isButton" | "isLink" | "isImage";
+  };
+  /** `<label>`: id of the toggle/radio its tap changes. */
+  labelFor?: string;
 }
 
 export interface StackNode extends SemBase {
@@ -322,8 +335,6 @@ export interface TextNode extends SemBase {
   noWrap?: true;
   /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
   unbreakable?: true;
-  /** A font-family of this text resolved to a face other than the one the reference painted. */
-  fontSubstituted?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
 }
@@ -400,8 +411,12 @@ export interface ControlNode extends SemBase {
   value?: string;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
+  inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
+  /** Radio `@name`; radios with the same group share one selection. */
+  group?: string;
   /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
   disabled?: boolean;
   /** Numeric domain of a slider/progress/gauge, resolved from `@min`/`@max`/`@step`. */

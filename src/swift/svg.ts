@@ -37,7 +37,8 @@ export function svgExpr(n: SvgNode, shapes: Record<string, string>, ctx: ColorCt
   for (const t of n.texts ?? []) layers.push(textLine(t, view));
   const out = layers.length === 0 ? ["Color.clear"] : layers.length === 1 ? [layers[0]!] : ["ZStack {", ...indent(layers, 1), "}"];
   if (Math.abs(cw - n.frame.w) > 0.01 || Math.abs(ch - n.frame.h) > 0.01) out.push(`.frame(width: ${num(cw)}, height: ${num(ch)})`);
-  if (n.label) out.push(`.accessibilityLabel(${str(n.label)})`);
+  // An `aria-label` (emitted by `placementModifiers`) wins over `<title>`.
+  if (n.label && !n.a11y?.label) out.push(`.accessibilityLabel(${str(n.label)})`);
   return out;
 }
 
@@ -107,7 +108,7 @@ function gradientExpr(g: SvgGradient, box: [number, number, number, number], vie
 function textLine(t: SvgText, view: View): string {
   const font = { ...t.font, size: t.font.size * view.scale };
   const cx = t.box.x + t.box.w / 2 - view.offset[0], cy = t.box.y + t.box.h / 2 - view.offset[1];
-  return `Text(verbatim: ${str(t.text)}).font(${fontExpr(font, view.ctx)}).foregroundStyle(${colorExpr(t.fill, view.ctx, view.id)}).fixedSize().position(x: ${num(cx)}, y: ${num(cy)})`;
+  return `Text(verbatim: ${str(t.text)}).font(${fontExpr(font, view.ctx, true)}).foregroundStyle(${colorExpr(t.fill, view.ctx, view.id)}).fixedSize().position(x: ${num(cx)}, y: ${num(cy)})`;
 }
 
 /** One Shape struct per unique (path, viewBox); returns its name. */

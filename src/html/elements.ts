@@ -25,7 +25,7 @@ export const HTML_ELEMENTS: Readonly<Record<string, ElementPolicy>> = Object.fre
   ...family("table tbody td tfoot th thead tr col colgroup", "flow", "approximated", "→ measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated"),
   ...family("ruby rt", "flow", "approximated", "→ measured annotation boxes; ruby associations and paragraph reflow are not translated"),
   ...family("form", "flow", "approximated", "→ measured content; browser form submission and validation are not translated"),
-  ...family("label", "text", "approximated", "→ styled text; label-to-control focus behavior is not translated"),
+  ...family("label", "text", "approximated", "→ styled text; tapping it toggles its checkbox/radio; focusing a text field from its label is not translated"),
   ...family("dialog", "flow", "approximated", "→ captured visibility; modal presentation and lifecycle are not translated"),
   ...family("map", "flow", "approximated", "→ measured content; image-map hit regions and navigation are not translated"),
   ...family("slot selectedcontent", "flow", "approximated", "→ captured content; live slot distribution or selected-content updates are not translated"),

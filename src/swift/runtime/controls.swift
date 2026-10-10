@@ -35,6 +35,13 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
     return out.isEmpty ? [.item] : out
 }
 
+/// One radio of a group: on when the group's selection is this radio's tag; turning it on selects it.
+extension Binding where Value == String {
+    func markswiftSelects(_ tag: String) -> Binding<Bool> {
+        Binding<Bool>(get: { wrappedValue == tag }, set: { if $0 { wrappedValue = tag } })
+    }
+}
+
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
 nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {

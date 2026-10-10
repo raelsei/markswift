@@ -138,9 +138,27 @@ const TEXT_STYLE_SIZES: Array<[number, string]> = [
   [11, "caption2"],
 ];
 
+/** The `Font.TextStyle` whose default size is nearest `size`: what an app-mode font scales with. */
+export function nearestTextStyle(size: number): string {
+  return TEXT_STYLE_SIZES.reduce((best, [s, name]) => (Math.abs(s - size) < Math.abs(best[0] - size) ? [s, name] : best))[1];
+}
+
+/**
+ * A system font's point size. App mode names an `@ScaledMetric` property (registered in
+ * `ctx.scaledFonts`, declared once per view) so the text follows Dynamic Type; fidelity, and
+ * `fixed` text placed in absolute coordinates, keep the literal.
+ */
+export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
+  if (ctx.mode !== "app" || fixed || !ctx.scaledFonts || !(f.size > 0)) return num(f.size);
+  const size = num(f.size);
+  const name = `textSize${size.replace(/\.0$/, "").replace(".", "_")}`;
+  ctx.scaledFonts.set(name, `@ScaledMetric(relativeTo: .${nearestTextStyle(f.size)}) private var ${name}: CGFloat = ${size}`);
+  return name;
+}
+
 /**
  * Swift `Font` expression for a run's font. A system family is its design plus the nearest
- * named weight in both modes; a bundled family differs by mode:
+ * named weight in both modes, sized by `fontSizeExpr`; a bundled family differs by mode:
  *
  * - **app** — `.custom(family, size:, relativeTo:)` plus an explicit `.weight(…)`: the shipped
  *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a
@@ -150,14 +168,13 @@ const TEXT_STYLE_SIZES: Array<[number, string]> = [
  *   actually rendered, so an SSIM against the reference measures the design and not a weight
  *   quantisation. Nothing in this mode is shipped.
  */
-export function fontExpr(f: FontSpec, ctx: ColorCtx): string {
+export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) => (Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best))[1];
   if (f.family.kind === "custom") {
     if (ctx.mode === "fidelity") return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${num(f.opsz)}` : ""})`;
-    const style = TEXT_STYLE_SIZES.reduce((best, [s, name]) => (Math.abs(s - f.size) < Math.abs(best[0] - f.size) ? [s, name] : best))[1];
-    return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${style}).weight(.${weightName})`;
+    return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;
   }
-  return `.system(size: ${num(f.size)}, weight: .${weightName}, design: .${f.family.design})`;
+  return `.system(size: ${fontSizeExpr(f, ctx, fixed)}, weight: .${weightName}, design: .${f.family.design})`;
 }
 
 /** FNV-1a 32-bit, hex — stable names for generated shapes. */
