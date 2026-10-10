@@ -291,6 +291,8 @@ export interface GridNode extends SemBase {
   hSpacing: number;
   vSpacing: number;
   measured?: MeasuredLayout;
+  /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
+  scroll?: Axis;
   children: SemNode[];
 }
 

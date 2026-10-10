@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import { normalizeWhitespace, collectRuns, groupRuns } from "../../../src/analysis/text-runs.ts";
 import type { SourceTextRun } from "../../../src/analysis/context.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
@@ -170,5 +171,28 @@ describe("BUG-06 nested background-clip text", () => {
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 40 }, { display: "block" }, [h1])), "S");
     const diags = flatten(screen.root).flatMap((n) => n.diagnostics);
     expect(diags).toContainEqual(expect.objectContaining({ level: "unmapped", feature: "background-clip" }));
+  });
+});
+
+describe("BUG-15 overflow containers", () => {
+  // Scroll detection ran only on the stack path: grids and text-only boxes spilled their overflow.
+  test("an overflowing grid scrolls in app mode and clips in fidelity", () => {
+    const g = el("div", { x: 0, y: 0, w: 300, h: 50 }, { display: "grid", "grid-template-columns": "300px", "grid-template-rows": "30px 30px 30px", "row-gap": "0px", "overflow-y": "auto" }, [0, 30, 60].map((y) => el("div", { x: 0, y, w: 300, h: 30 }, { display: "block", "background-color": "rgb(255, 0, 0)" })));
+    g.id = "#g";
+    const d = doc(el("main", { x: 0, y: 0, w: 300, h: 200 }, { display: "block" }, [g]));
+    const sem = flatten(inferScreen(d, "G").root).find((n) => n.id === "#g");
+    expect(sem?.kind).toBe("grid");
+    expect(sem?.kind === "grid" ? sem.scroll : undefined).toBe("v");
+    expect(compileLayout(d, { name: "G", mode: "app" }).code).toContain("ScrollView(.vertical");
+    expect(compileLayout(d, { name: "G", mode: "fidelity" }).code).toContain(".clipped()");
+  });
+
+  test("an overflowing text-only box clips and reports", () => {
+    const pre = el("pre", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "white-space-collapse": "preserve", "text-wrap-mode": "nowrap", "overflow-x": "auto" }, [textNode("a long line of code that overflows", { x: 0, y: 3, w: 320, h: 14 })]);
+    pre.id = "#p";
+    const sem = flatten(inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [pre])), "S").root).find((n) => n.id === "#p");
+    expect(sem?.kind).toBe("text");
+    expect(sem?.style.clip).toBe(true);
+    expect(sem?.diagnostics).toContainEqual(expect.objectContaining({ feature: "overflow-x" }));
   });
 });

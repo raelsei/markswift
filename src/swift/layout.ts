@@ -54,7 +54,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     if (n.axis === "h" && n.height.kind === "hug" && kids.some((k) => k.height.kind === "fill")) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
   out.push(...modifiers(n, ctx));
-  if (n.kind === "stack" && n.scroll) {
+  if (n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis.
     if (ctx.mode === "fidelity") return [...out, `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`, ".clipped()"];
