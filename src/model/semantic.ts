@@ -403,6 +403,8 @@ export interface ControlNode extends SemBase {
   value?: string;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
+  inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
   /** Radio `@name`; radios with the same group share one selection. */

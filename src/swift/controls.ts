@@ -112,11 +112,11 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
-      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
     case "secureField":
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
-      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`, ...(n.inputType ? INPUT_TRAITS[n.inputType] : [])];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
@@ -199,6 +199,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
   }
 }
+
+/** What iOS Safari gives the same input: keyboard, autofill type, and no auto-capitalisation for addresses. */
+const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
+  email: [".keyboardType(.emailAddress)", ".textContentType(.emailAddress)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
+  tel: [".keyboardType(.phonePad)", ".textContentType(.telephoneNumber)"],
+  url: [".keyboardType(.URL)", ".textContentType(.URL)", ".textInputAutocapitalization(.never)", ".autocorrectionDisabled()"],
+  number: [".keyboardType(.decimalPad)"],
+  search: [".keyboardType(.webSearch)", ".submitLabel(.search)"],
+  password: [".textContentType(.password)"],
+};
 
 /**
  * `<meter>` state colours, as every browser paints them: the value sits in its optimum band, one

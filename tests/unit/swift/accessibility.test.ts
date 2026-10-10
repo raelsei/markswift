@@ -157,3 +157,12 @@ test("radios sharing a name hold one selection", () => {
 
   expect(swift([radio("lone", {}, 0)], "app")).toContain("@State private var s_lone: Bool = false");
 });
+
+test("input types choose the keyboard and content type in app mode", () => {
+  const field = (type: string) => [el("input", { id: "f", type }, { x: 0, y: 0, w: 320, h: 30 }, [], { display: "inline-block" })];
+  expect(swift(field("email"), "app")).toContain(".keyboardType(.emailAddress)");
+  expect(swift(field("email"), "fidelity")).not.toContain(".keyboardType(.emailAddress)");
+  const password = swift(field("password"), "app");
+  expect(password.indexOf("SecureField(")).toBeGreaterThan(-1);
+  expect(password.indexOf("SecureField(")).toBeLessThan(password.indexOf(".textContentType(.password)"));
+});

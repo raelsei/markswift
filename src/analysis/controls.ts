@@ -16,6 +16,7 @@ export interface ControlSpec {
   control: ControlKind;
   value?: string;
   placeholder?: string;
+  inputType?: ControlNode["inputType"];
   checked?: boolean;
   group?: string;
   disabled?: boolean;
@@ -110,6 +111,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
       if (!Object.hasOwn(INPUT_CONTROLS, type)) addDiagnostic(diagnostics, "approximated", "input", `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
       const spec: ControlSpec = { control, diagnostics };
+      if (/^(email|tel|url|number|search|password)$/.test(type)) spec.inputType = type as NonNullable<ControlNode["inputType"]>;
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
         // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
