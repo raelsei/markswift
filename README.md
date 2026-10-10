@@ -11,9 +11,12 @@ Swift, not to perform conversion. The generated code targets SwiftUI on iOS 18+.
 
 ```sh
 bun install --frozen-lockfile
+bun run lint        # Biome: formatting + correctness rules (bun run format rewrites)
 bun run typecheck
 bun run test
 ```
+
+CI (`.github/workflows/ci.yml`) also runs `test:browser`, `test:native` and the conformance pilot on a macOS runner.
 
 ## Command-line conversion
 
