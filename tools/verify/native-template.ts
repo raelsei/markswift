@@ -8,7 +8,7 @@ let package = Package(
     platforms: [.iOS("18.0")],
     products: [.library(name: "Generated", targets: ["Generated"])],
     targets: [
-        .target(name: "Generated", resources: [.copy("Fonts")]),
+        .target(name: "Generated", resources: [.copy("Fonts"), .copy("Images")]),
         .testTarget(name: "PreviewTests", dependencies: ["Generated"])
     ]
 )
@@ -31,6 +31,7 @@ final class PreviewTests: XCTestCase {
         let fonts = try FileManager.default.contentsOfDirectory(at: fontDirectory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "ttf" || $0.pathExtension == "otf" }
         MarkswiftFonts.register(urls: fonts)
+        MarkswiftAssets.bundle = MarkswiftPreviewResources.bundle
         let content = ${result.name}()
             .frame(width: ${w}, height: ${h}, alignment: .topLeading)
             .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
