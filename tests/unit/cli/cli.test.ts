@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { inlineRelativeUrls } from "../../../src/cli/css.ts";
 
 const entry = join(import.meta.dir, "../../../src/cli.ts");
 
@@ -103,4 +104,18 @@ test("CLI theme defaults to adaptive and passes the dark class through", async (
   const result = await invoke("convert", "card.html", "--theme", "both", "--out", "generated");
   expect(result.code).toBe(2);
   expect(result.stderr).toContain("--theme must be adaptive, light or dark");
+});
+
+test("--css url()s relative to the CSS file are inlined as data URLs", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-cli-css-"));
+  try {
+    await Bun.write(join(directory, "dist/fonts/x.woff2"), "wOF2");
+    await Bun.write(join(directory, "dist/img/bg.png"), "png");
+    const kept = ["url(data:image/png;base64,AA)", "url(https://cdn/x.png)", "url(/abs.png)", "url(missing.png)"];
+    const { css, missing } = await inlineRelativeUrls(`a{src:url(./fonts/x.woff2)}b{background:url("img/bg.png")}${kept.join(" ")}`, join(directory, "dist/app.css"));
+    expect(css).toContain(`url("data:font/woff2;base64,${btoa("wOF2")}")`);
+    expect(css).toContain(`url("data:image/png;base64,${btoa("png")}")`);
+    for (const k of kept) expect(css).toContain(k);
+    expect(missing).toEqual(["missing.png"]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
