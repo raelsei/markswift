@@ -7,6 +7,7 @@ import {
   type SemBase,
   type Overlay,
   type Axis,
+  type Diagnostic,
   addDiagnostic,
 } from "../model/semantic.ts";
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
@@ -238,22 +239,13 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
     if (lines[0]!.some((i) => floating(i.node)))
       addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
+    reportInlineRows(diagnostics, flow);
     stack = stackOf(base, "h", lines[0]!, "start", "start");
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
     if (floats.length)
       addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
-    for (const d of new Set(
-      flow
-        .map((c) => c.styles.display)
-        .filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid"),
-    ))
-      addDiagnostic(
-        diagnostics,
-        "approximated",
-        `display: ${d}`,
-        `${d} items → rows of the captured line division; they do not re-wrap at another width`,
-      );
+    reportInlineRows(diagnostics, flow);
     const rows: AnalyzedChild[] = lines.map((line, i) => {
       if (line.length === 1) return line[0]!;
       const u = line.map((it) => it.sem.frame).reduce(unionRect);
@@ -287,6 +279,19 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (scroll) stack.scroll = scroll;
   stack.overlays = buildOverlays(n, abs, flow[0], ctx);
   return finish(stack);
+}
+
+/** Inline-level boxes laid out as captured rows never re-wrap natively, whether they filled one line or several. */
+function reportInlineRows(diagnostics: Diagnostic[], flow: LayoutNode[]): void {
+  for (const d of new Set(
+    flow.map((c) => c.styles.display).filter((d) => d === "inline-block" || d === "inline-flex" || d === "inline-grid"),
+  ))
+    addDiagnostic(
+      diagnostics,
+      "approximated",
+      `display: ${d}`,
+      `${d} items → rows of the captured line division; they do not re-wrap at another width`,
+    );
 }
 
 /** `overflow: auto/scroll` the content needs (`scroll` always scrolls): the axis a ScrollView covers. Vertical wins. */

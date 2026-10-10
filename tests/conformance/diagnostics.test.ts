@@ -156,6 +156,12 @@ test("an emit-time unmapped loss grades its node unmapped", () => {
   expect(compileLayout(doc(IMG)).diagnostics.find((r) => r.id === "probe")?.confidence).toBe("unmapped");
 });
 
+test("one captured line of inline-blocks also reports that it does not re-wrap", () => {
+  const row = box({}, { children: [inlineBlock(0, 0), inlineBlock(50, 0), inlineBlock(100, 0)] });
+  const found = compileLayout(doc(row)).diagnostics.flatMap((r) => r.diagnostics);
+  expect(found).toContainEqual(expect.objectContaining({ level: "approximated", feature: "display: inline-block" }));
+});
+
 test("every literal feature in src names an inventory row, and every literal unmapped feature has a case above", async () => {
   // Matches `addDiagnostic(list, "unmapped", "svg:use"` / `note(n, "approximated", `float`` / text's `note("approximated", "a"`;
   // skips interpolated features. Anchored on the call so `family(tags, route, "approximated", "→ …")` is not a diagnostic.
