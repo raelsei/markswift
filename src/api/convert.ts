@@ -44,9 +44,14 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     restricted: options.untrustedInput,
     signal: deadline,
   });
-  // Closing Chrome rejects whatever is pending in it (goto, evaluate, fonts.ready, image decode).
+  // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
+  // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.
   const stopOnTimeout = () => void renderer.stop().catch(() => {});
   deadline.addEventListener("abort", stopOnTimeout, { once: true });
+  const timedOut = new Promise<never>((_, reject) =>
+    deadline.addEventListener("abort", () => reject(deadline.reason), { once: true }),
+  );
+  timedOut.catch(() => {}); // the deadline may fire with no capture awaiting it
   try {
     prepared = await resolveSource(source);
     const { html, url, label } = prepared;
@@ -56,24 +61,27 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     // :has is resolved by Chromium. A fragment and a full document use identical root rules.
     const root = options.root ?? DEFAULT_ROOT;
     const shot = (scheme: Theme) =>
-      renderer.capture(
-        {
-          screen: name,
-          theme: scheme,
-          url,
-          html,
-          root,
-          waitFor: options.waitFor,
-          async prepare(page) {
-            if (options.css) await page.addStyleTag({ content: options.css });
-            if (scheme === "dark" && options.darkClass)
-              await page.evaluate((c) => document.documentElement.classList.add(c), options.darkClass);
-            await options.prepare?.(page);
+      Promise.race([
+        renderer.capture(
+          {
+            screen: name,
+            theme: scheme,
+            url,
+            html,
+            root,
+            waitFor: options.waitFor,
+            async prepare(page) {
+              if (options.css) await page.addStyleTag({ content: options.css });
+              if (scheme === "dark" && options.darkClass)
+                await page.evaluate((c) => document.documentElement.classList.add(c), options.darkClass);
+              await options.prepare?.(page);
+            },
           },
-        },
-        htmlIdentity,
-        label,
-      );
+          htmlIdentity,
+          label,
+        ),
+        timedOut,
+      ]);
     // Adaptive: two captures in one browser session; the light one is emitted, the dark one pairs its colours.
     const capture = await shot(theme === "dark" ? "dark" : "light");
     const dark = theme === "adaptive" ? await shot("dark") : undefined;
