@@ -29,8 +29,9 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
   // the spec's list is reported rather than silently painted `normal`.
   const blend = s["mix-blend-mode"];
   if (blend && blend !== "normal") {
-    if (parseBlendMode(blend)) style.blend = blend;
-    else addDiagnostic(diagnostics, "unmapped", "mix-blend-mode", `mix-blend-mode ${blend}`);
+    const mode = parseBlendMode(blend);
+    if (!mode) addDiagnostic(diagnostics, "unmapped", "mix-blend-mode", `mix-blend-mode ${blend}`);
+    else if (mode !== "normal") style.blend = mode;
   }
 
   const cp = s["clip-path"];

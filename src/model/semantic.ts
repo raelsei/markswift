@@ -4,7 +4,7 @@
  * plus a `confidence` telling emitters how faithful the mapping is.
  * No SwiftUI / Compose vocabulary here.
  */
-import type { Color, Paint, Shadow, Transform2D } from "./values.ts";
+import type { BlendMode, Color, Paint, Shadow, Transform2D } from "./values.ts";
 import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
@@ -97,7 +97,8 @@ export interface Style {
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
   transform?: Transform2D & { origin?: [number, number] };
-  blend?: string;
+  /** `mix-blend-mode`, never `normal`. */
+  blend?: BlendMode;
   /** `clip-path` basic shape. */
   clipPath?: ClipShape;
   /** `mask-image` gradient (luminance/alpha mask). */
