@@ -108,6 +108,40 @@ nativeTest("010: app-sizing output compiles in both modes", async () => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 }, 120000);
 
+nativeTest("011: flex and direction output compiles in both modes", async () => {
+  const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
+  const node = (tag: string, bounds: LayoutNode["bounds"], styles: Record<string, string>, extra: Partial<LayoutNode> = {}): LayoutNode => ({ tag, attrs: {}, styles: { ...BASE, ...styles }, bounds, children: [], ...extra });
+  const box = (x: number, y: number, w: number, h: number, styles: Record<string, string> = {}, extra: Partial<LayoutNode> = {}) => node("div", { x, y, w, h }, { display: "block", "background-color": "rgb(255, 0, 0)", ...styles }, extra);
+  const text = (value: string, bounds: LayoutNode["bounds"]): LayoutNode => node("#text", bounds, {}, { text: value });
+  const chip = (x: number, y: number) => node("span", { x, y, w: 60, h: 28 }, { display: "block", "flex-shrink": "1", "padding-left": "12px", "padding-right": "12px", "padding-top": "4px", "padding-bottom": "4px" }, { preferredSize: { width: "auto", height: "auto" }, children: [text("Design", { x: x + 12, y: y + 7, w: 36, h: 14 })] });
+  const fixedWidth = (w: number, h = "auto") => ({ preferredSize: { width: `${w}px`, height: h } });
+  const root = node("main", { x: 0, y: 0, w: 390, h: 634 }, { display: "block" }, {
+    children: [
+      node("div", { x: 0, y: 0, w: 300, h: 40 }, { display: "flex", "flex-direction": "row-reverse", "justify-content": "flex-end" }, { children: [box(50, 0, 50, 40), box(0, 0, 50, 40)] }),
+      node("div", { x: 0, y: 40, w: 300, h: 40 }, { display: "flex", "align-items": "flex-start" }, { children: [box(0, 40, 50, 40), box(60, 60, 50, 20, { "align-self": "flex-end" })] }),
+      node("div", { x: 0, y: 80, w: 300, h: 100 }, { display: "flex", "flex-direction": "column", "align-items": "stretch" }, { children: [box(125, 80, 50, 20, { "align-self": "center" })] }),
+      node("div", { x: 0, y: 180, w: 180, h: 66 }, { display: "flex", "flex-wrap": "wrap", "column-gap": "10px", "row-gap": "10px", "align-items": "flex-start" }, { ...fixedWidth(180), children: [chip(0, 180), chip(70, 180), chip(0, 218)] }),
+      node("nav", { x: 0, y: 246, w: 300, h: 20 }, { display: "flex", "column-gap": "8px" }, { ...fixedWidth(300), children: [box(0, 246, 40, 20), box(262, 246, 38, 20, { "margin-left": "214px" }, { preferredSize: { width: "auto", height: "auto", autoMargins: ["left"] } })] }),
+      node("div", { x: 0, y: 266, w: 200, h: 300 }, { display: "flex", "flex-direction": "column" }, { ...fixedWidth(200, "300px"), children: [box(0, 266, 200, 20), box(0, 536, 200, 30, { "margin-top": "250px" }, { preferredSize: { width: "auto", height: "auto", autoMargins: ["top"] } })] }),
+      node("div", { x: 0, y: 566, w: 300, h: 20 }, { display: "flex", "justify-content": "space-between", "column-gap": "16px" }, { ...fixedWidth(300), children: [box(0, 566, 40, 20), box(260, 566, 40, 20)] }),
+      node("div", { x: 0, y: 586, w: 120, h: 28 }, { display: "flex", "flex-wrap": "nowrap", "overflow-x": "hidden" }, { children: [chip(0, 586)] }),
+      node("div", { x: 0, y: 614, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, { children: [text("Hi", { x: 90, y: 617, w: 20, h: 14 })] }),
+    ],
+  });
+  const doc: LayoutDoc = { version: 2, source: "flex-direction", combo: { screen: "s", theme: "light" }, size: { w: 390, h: 634 }, dpr: 1, canvas: "rgb(255, 255, 255)", fonts: [], root };
+  const directory = await mkdtemp(join(tmpdir(), "markswift-native-011-"));
+  try {
+    for (const mode of ["app", "fidelity"] as const) {
+      const result = compileLayout(doc, { name: "FlexDirection", mode });
+      if (mode === "app") for (const marker of ["MarkswiftFlow(", "Spacer(minLength: 8.0)", "Spacer(minLength: 16.0)", "maxHeight: .infinity, alignment: .bottom", ".fixedSize(horizontal: true, vertical: true)"]) expect(result.code).toContain(marker);
+      const output = join(directory, mode);
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+      const check = await typecheck(output);
+      if (!check.ok) throw new Error(check.output);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 120000);
+
 const ASSETS = join(import.meta.dir, "../conformance/fixtures/assets");
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const SHARED = '<div style="width:40px;height:20px;background:var(--primary)"></div><div style="width:40px;height:20px;background:var(--primary)"></div><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 2h16v16H2z" fill="#16a34a"/></svg>';

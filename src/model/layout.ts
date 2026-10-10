@@ -13,6 +13,8 @@ export const PreferredSize = z.object({
   height: z.string(),
   /** Typed-OM computed insets of an absolute/fixed box: `auto` survives here (DOMSnapshot reports used px), and says which edge the author anchored. */
   insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
+  /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
+  autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
 

@@ -57,12 +57,13 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     if (shadow.color.a > 0) out.push(`.shadow(color: ${colorExpr(shadow.color, ctx, n.id)}, radius: ${num(shadow.blur / 2)}, x: ${num(shadow.x)}, y: ${num(shadow.y)})`);
     if (!glyphs.every((r) => r.shadow === undefined || JSON.stringify(r.shadow) === JSON.stringify(shadow))) note(n, "approximated", "text-shadow", "text-shadow of the first shadowed run applied to the whole text");
   }
-  // Soft wrapping is off for `nowrap` text and, in fidelity, whenever the browser's line
-  // division is known (baked-in breaks, or a single line that fit). Ellipsised text (overflow
-  // or line clamp) keeps a flexible width. App mode never bakes breaks into the literal.
+  // Soft wrapping is off for `nowrap` text, a single word CSS cannot break and, in fidelity,
+  // whenever the browser's line division is known (baked-in breaks, or a single line that fit).
+  // Ellipsised text (overflow or line clamp) keeps a flexible width. App mode never bakes breaks
+  // into the literal.
   const clamped = n.lineLimit !== undefined && n.noWrap !== true;
   const divided = n.noWrap === true || (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length));
-  const noSoftWrap = !n.truncate && !clamped && (divided || (ctx.mode === "fidelity" && n.lines === 1));
+  const noSoftWrap = !n.truncate && !clamped && (divided || n.unbreakable === true || (ctx.mode === "fidelity" && n.lines === 1));
   out.push(`.fixedSize(horizontal: ${noSoftWrap}, vertical: true)`);
   // Fidelity pins the browser's line box (native line heights would drift the vertical rhythm).
   // App lets native metrics decide; alignment comes from `frameModifier`.

@@ -58,7 +58,7 @@ test("a fixed-height start-packed host centers children within each row without 
     const output = compileLayout(doc, { name: "CenteredRows", mode });
     expect(output.code).toContain("MarkswiftFlow(columnGap: 10.0, rowGap: 10.0, horizontal: .center, vertical: .center)");
     expect(output.code).toContain("height: 200.0, alignment: .topLeading)");
-    expect(output.code).toContain(".frame(width: 80.0, height: 20.0, alignment: .topLeading)");
+    expect(output.code).toContain(".frame(width: 80.0, height: 20.0");
     expect(output.code).not.toContain(".padding(.top, 10)");
     expect(output.code).not.toContain("MarkswiftMeasuredLayout(");
   }

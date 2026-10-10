@@ -279,11 +279,11 @@ Unequal tracks and captured positions report that columns do not resize at anoth
 equal-fill regular grids reproduce `repeat(n, 1fr)` and are reported exact.
 
 Row wrapping now uses a native layout that chooses rows again at the component's available
-width. It supports captured fixed-size items with growth and shrink disabled, pixel gaps,
-and start/center/end alignment. It does not reevaluate source CSS or media queries. Reverse
-and column wrapping, intrinsic sizes, grow/shrink allocation, margins, baseline alignment,
-CSS order and unsupported cross-row distribution retain captured positions with an explicit
-reflow limitation. Chrome regression tests cover these cases at three widths in both themes.
+width. It supports fixed and intrinsically sized items with the default `flex-shrink`, pixel
+gaps, and start/center/end alignment. It does not reevaluate source CSS or media queries. An
+item already filling its line, any growth, margins, baseline alignment, `align-self`, CSS order,
+reverse, column and RTL wrapping and unsupported cross-row distribution keep captured positions
+with an explicit reflow limitation. Chrome regression tests cover these cases at three widths in both themes.
 
 Development proceeds by feature family, with reusable fixtures and regression checks:
 
