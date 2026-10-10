@@ -216,6 +216,8 @@ export class BrowserCapture {
           source,
           combo: { screen: spec.screen, theme: spec.theme },
           size: { w: Math.round(rootRect.w), h: Math.round(rootRect.h) },
+          // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
+          viewport: { x: -rootRect.x || 0, y: -rootRect.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
           dpr: this.opts.dpr,
           canvas: rootRect.canvas,
           fonts,

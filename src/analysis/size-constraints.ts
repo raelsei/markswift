@@ -33,6 +33,11 @@ export function constraintsOf(n: LayoutNode, declared: Record<string, string>, c
       addDiagnostic(diagnostics, "approximated", property, `${property} ${raw} → captured border-box ${round2(measured)}px; ${unresolved ? "containing-block sizing is not established" : "intrinsic/complex constraint is not reconstructed"}`);
     } else {
       result[key] = round2(Math.max(insets, resolved + (n.styles["box-sizing"] === "border-box" ? 0 : insets)));
+      // Computed `100vh` is already px. A non-root floor equal to the capture viewport is very
+      // likely viewport-relative; it stays a fixed floor, which a shorter or taller screen does not follow.
+      if (key === "minHeight" && ctx.parent && ctx.viewport && Math.abs(resolved - ctx.viewport.h) <= 0.5) {
+        addDiagnostic(diagnostics, "approximated", "min-height", `min-height ${raw} equals the ${ctx.viewport.h}px capture viewport (likely 100vh) → fixed floor; not relative to other screen heights`);
+      }
     }
   }
   // CSS minimum sizing wins when a declared maximum is smaller than the minimum.

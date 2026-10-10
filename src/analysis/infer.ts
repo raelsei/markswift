@@ -18,10 +18,12 @@ import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis,
 import { clipsText } from "./style-background.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
-  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {} };
+  const ctx: InferenceContext = { root: doc.root, fixed: [], bundledFamilies: options.bundledFamilies ?? {}, viewport: doc.viewport };
   const root = build(doc.root, ctx);
   root.width = { kind: "fill" };
   root.height = { kind: "fill" };
+  // A root as tall as the viewport (`min-h-screen`, `100vh`) already fills the screen: the device decides, not 844px.
+  if (doc.viewport && root.minHeight !== undefined && Math.abs(root.minHeight - doc.viewport.h) <= 0.5) delete root.minHeight;
   // Fixed-position nodes do not scroll with content: they overlay the screen, not their DOM parent.
   // Building one can hoist fixed descendants of its own, so drain the list until it stops growing.
   // ponytail: each batch is paint-sorted on its own; a nested fixed node paints after its fixed
@@ -230,7 +232,7 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
   const flowPaint = firstFlow?.paint ?? Number.POSITIVE_INFINITY;
   // Stacking order = global paint order (accounts for z-index), not DOM order.
   for (const c of [...abs].sort((a, b) => (a.paint ?? 0) - (b.paint ?? 0))) {
-    const sem = build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host });
+    const sem = build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport });
     const covers = Math.abs(c.bounds.x - host.bounds.x) < 0.5 && Math.abs(c.bounds.y - host.bounds.y) < 0.5 && Math.abs(c.bounds.w - host.bounds.w) < 0.5 && Math.abs(c.bounds.h - host.bounds.h) < 0.5;
     if (covers) {
       sem.width = { kind: "fill" };
@@ -254,7 +256,7 @@ function buildOverlays(host: LayoutNode, abs: LayoutNode[], firstFlow: LayoutNod
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
     if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
     out.push({
-      node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host }),
+      node: build(c, { root: ctx.root, fixed: ctx.fixed, bundledFamilies: ctx.bundledFamilies, parent: host, viewport: ctx.viewport }),
       layer: "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers: false,

@@ -115,6 +115,8 @@ export const LayoutDoc = z.object({
   combo: Combo,
   /** CSS px size of the capture root (the phone's content area). */
   size: z.object({ w: z.number(), h: z.number() }),
+  /** The browser viewport in capture-root coordinates (the root's top-left is 0,0): what `100vh` and `position: fixed` resolved against. Absent in hand-built docs. */
+  viewport: Rect.optional(),
   dpr: z.number(),
   /** Effective background behind the root (computed color string). */
   canvas: z.string().default("rgb(255, 255, 255)"),

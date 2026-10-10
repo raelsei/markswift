@@ -130,3 +130,32 @@ describe("Step 3 trailing inset", () => {
     expect(p.padding[2]).toBe(0);
   });
 });
+
+describe("Step 4 viewport", () => {
+  const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
+  const RED = { "background-color": "rgb(255, 0, 0)" };
+  const tallRoot = () => el("main", { x: 0, y: 0, w: 390, h: 844 }, { display: "block", "min-height": "844px" }, [
+    el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED }),
+  ]);
+
+  test("a viewport-high root min-height is dropped", () => {
+    const root = inferScreen(doc(tallRoot(), VIEWPORT), "s").root;
+    expect(root.minHeight).toBeUndefined();
+    expect(features(root)).not.toContain("approximated:min-height");
+  });
+
+  test("a viewport-high non-root min-height stays a floor and is reported", () => {
+    const root = el("main", { x: 0, y: 0, w: 390, h: 1000 }, { display: "block" }, [
+      el("section", { x: 0, y: 0, w: 390, h: 844 }, { display: "block", "min-height": "844px", ...RED }, [
+        el("div", { x: 0, y: 0, w: 390, h: 100 }, { display: "block", ...RED }),
+      ], { id: "s" }),
+    ]);
+    const s = byId(inferScreen(doc(root, VIEWPORT), "s").root, "s");
+    expect(s.minHeight).toBe(844);
+    expect(features(s)).toContain("approximated:min-height");
+  });
+
+  test("without a recorded viewport the root keeps its min-height", () => {
+    expect(inferScreen(doc(tallRoot()), "s").root.minHeight).toBe(844);
+  });
+});
