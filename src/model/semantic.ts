@@ -270,6 +270,17 @@ export interface SemBase extends SizeConstraints {
   confidence: Confidence;
   diagnostics: Diagnostic[];
   overlays: Overlay[];
+  /** What assistive technology is told about this node, beyond what the element itself implies. */
+  a11y?: {
+    /** `aria-label`, else the text of the `<label>` that names this control. */
+    label?: string;
+    /** `aria-hidden="true"`. */
+    hidden?: true;
+    /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
+    heading?: 1 | 2 | 3 | 4 | 5 | 6;
+    /** `role` = button | link | img on an element that is not already that control. */
+    trait?: "isButton" | "isLink" | "isImage";
+  };
 }
 
 export interface StackNode extends SemBase {

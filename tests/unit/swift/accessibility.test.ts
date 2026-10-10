@@ -74,3 +74,33 @@ test("a button's and a link's box is inside the label, so it is the hit and pres
     expect(pad).toBeLessThan(a.indexOf(".contentShape(Rectangle())"));
   }
 });
+
+function el(tag: string, attrs: Record<string, string>, bounds: LayoutNode["bounds"], children: LayoutNode[] = [], styles: Record<string, string> = {}): LayoutNode {
+  return { tag, id: attrs["id"] ?? tag, attrs, styles: { ...FONT, display: "block", ...styles }, bounds, children };
+}
+
+test("aria-label, aria-hidden, headings and roles reach VoiceOver", () => {
+  const close = swift([el("button", { "aria-label": "Close dialog" }, { x: 0, y: 0, w: 30, h: 30 }, [text("×", 10, 4, 10, 22)], { display: "inline-block" })], "app");
+  expect(close.indexOf('.accessibilityLabel("Close dialog")')).toBeGreaterThan(close.indexOf(".buttonStyle(.plain)"));
+
+  const h2 = swift([el("h2", {}, { x: 0, y: 0, w: 320, h: 22 }, [text("Title", 0, 0, 40, 22)])], "app");
+  expect(h2).toContain(".accessibilityAddTraits(.isHeader)");
+  expect(h2).toContain(".accessibilityHeading(.h2)");
+
+  const icon: LayoutNode = { tag: "svg", id: "icon", attrs: { viewbox: "0 0 10 10" }, styles: { display: "inline-block" }, bounds: { x: 0, y: 0, w: 10, h: 10 }, children: [] };
+  const span = el("span", {}, { x: 14, y: 0, w: 40, h: 22 }, [text("Icons", 14, 0, 40, 22)], { display: "inline" });
+  const group = swift([el("div", { id: "group", role: "heading", "aria-level": "3" }, { x: 0, y: 0, w: 320, h: 22 }, [icon, span], { display: "flex" })], "app");
+  const combine = group.indexOf(".accessibilityElement(children: .combine)");
+  expect(combine).toBeGreaterThan(-1);
+  expect(combine).toBeLessThan(group.indexOf(".accessibilityHeading(.h3)"));
+
+  const hidden = swift([el("div", { "aria-hidden": "true" }, { x: 0, y: 0, w: 10, h: 10 }, [], { width: "10px", height: "10px", "background-color": "rgb(255, 0, 0)" })], "app");
+  expect(hidden).toContain(".accessibilityHidden(true)");
+
+  const role = swift([el("div", { role: "button", tabindex: "0" }, { x: 0, y: 0, w: 320, h: 22 }, [text("Confirm", 0, 0, 60, 22)])], "app");
+  expect(role).toContain(".accessibilityAddTraits(.isButton)");
+
+  const img = swift([el("img", { alt: "Logo", "aria-label": "Company logo", src: "https://example.com/logo.png" }, { x: 0, y: 0, w: 40, h: 40 }, [], { display: "inline" })], "app");
+  expect(img).toContain("Company logo");
+  expect(img).not.toContain('.accessibilityLabel("Logo")');
+});

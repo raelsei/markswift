@@ -1,6 +1,6 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
-import { colorExpr, edgeInsets, indent, num, strokeStyle } from "./format.ts";
+import { colorExpr, edgeInsets, indent, num, str, strokeStyle } from "./format.ts";
 import { frameModifier } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
@@ -93,6 +93,19 @@ export function placementModifiers(n: SemNode, _ctx: EmitContext): string[] {
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${n.selfAlign === "center" ? ".center" : ".trailing"})`);
   if (st.hidden) m.push(".hidden()");
+  const a = n.a11y;
+  if (a) {
+    const container = n.kind === "stack" || n.kind === "grid";
+    // A heading container reads as one element; a labelled one names its group.
+    if (container && a.heading) m.push(".accessibilityElement(children: .combine)");
+    else if (container && a.label) m.push(".accessibilityElement(children: .contain)");
+    // A checkbox or radio is named by its `.accessibilityRepresentation` (controls.ts).
+    const toggle = n.kind === "control" && (n.control === "toggle" || n.control === "radio");
+    if (a.label && !toggle) m.push(`.accessibilityLabel(${str(a.label)})`);
+    if (a.heading) m.push(".accessibilityAddTraits(.isHeader)", `.accessibilityHeading(.h${a.heading})`);
+    if (a.trait) m.push(`.accessibilityAddTraits(.${a.trait})`);
+    if (a.hidden) m.push(".accessibilityHidden(true)");
+  }
   return m;
 }
 export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {

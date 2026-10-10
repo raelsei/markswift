@@ -37,7 +37,8 @@ export function svgExpr(n: SvgNode, shapes: Record<string, string>, ctx: ColorCt
   for (const t of n.texts ?? []) layers.push(textLine(t, view));
   const out = layers.length === 0 ? ["Color.clear"] : layers.length === 1 ? [layers[0]!] : ["ZStack {", ...indent(layers, 1), "}"];
   if (Math.abs(cw - n.frame.w) > 0.01 || Math.abs(ch - n.frame.h) > 0.01) out.push(`.frame(width: ${num(cw)}, height: ${num(ch)})`);
-  if (n.label) out.push(`.accessibilityLabel(${str(n.label)})`);
+  // An `aria-label` (emitted by `placementModifiers`) wins over `<title>`.
+  if (n.label && !n.a11y?.label) out.push(`.accessibilityLabel(${str(n.label)})`);
   return out;
 }
 

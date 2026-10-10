@@ -26,6 +26,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const { width, height, selfAlign, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
+  const a11y = a11yOf(n);
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -38,5 +39,23 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     confidence: "mapped",
     diagnostics,
     overlays: [],
+    ...(a11y ? { a11y } : {}),
   };
+}
+
+/** ARIA attributes and heading tags; undefined when the element says nothing beyond itself. */
+function a11yOf(n: LayoutNode): SemBase["a11y"] {
+  const a = n.attrs;
+  const out: NonNullable<SemBase["a11y"]> = {};
+  const label = a["aria-label"]?.replace(/\s+/g, " ").trim();
+  if (label) out.label = label;
+  if (a["aria-hidden"] === "true") out.hidden = true;
+  const role = a["role"]?.trim().toLowerCase();
+  const tag = /^h([1-6])$/.exec(n.tag);
+  const level = tag ? Number(tag[1]) : role === "heading" ? parseInt(a["aria-level"] ?? "", 10) || 2 : undefined;
+  if (level !== undefined) out.heading = Math.min(6, Math.max(1, level)) as NonNullable<typeof out.heading>;
+  if (role === "button" && n.tag !== "button") out.trait = "isButton";
+  else if (role === "link" && n.tag !== "a") out.trait = "isLink";
+  else if (role === "img") out.trait = "isImage";
+  return Object.keys(out).length ? out : undefined;
 }

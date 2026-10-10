@@ -152,7 +152,8 @@ function decodable(url: string): boolean {
  * accessibility label, and `alt=""` marks the image decorative.
  */
 export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
-  const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : [`.accessibilityLabel(${str(n.alt)})`];
+  // An `aria-label` (emitted by `placementModifiers`) wins over `alt`; `alt=""` still marks the image decorative.
+  const a11y = n.alt === undefined ? [] : n.alt === "" ? [".accessibilityHidden(true)"] : n.a11y?.label ? [] : [`.accessibilityLabel(${str(n.alt)})`];
   const src = decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
   if (!src) {
     if (n.src && !n.src.startsWith("data:")) dropNote(n.src, n, "img");
