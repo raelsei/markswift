@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convert, convertHtml } from "../../src/index.ts";
@@ -7,6 +7,7 @@ import type { Browser } from "playwright-core";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const css = "html,body{margin:0} .card,.p-4,._card_ab12{box-sizing:border-box;width:240px;height:80px;padding:16px;background:rgb(255,0,0);font:16px system-ui}";
+const GEORGIA = "/System/Library/Fonts/Supplemental/Georgia.ttf";
 
 browserTest("documents, fragments, compiled utility and module CSS use the same conversion", async () => {
   const sources = [
@@ -58,6 +59,19 @@ browserTest("resource failures are returned to the caller", async () => {
   const result = await convertHtml('<main data-markswift-root style="width:100px;height:50px"><img src="/missing.png" width="20" height="20" alt="Missing"></main>');
   expect(result.warnings.some(message => message.includes("missing.png"))).toBe(true);
 }, 30000);
+
+browserTest("faces without an explicit font-weight are reported as loaded", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-font-test-"));
+  try {
+    await copyFile(GEORGIA, join(directory, "face.ttf"));
+    const file = join(directory, "page.html");
+    await Bun.write(file, '<style>@font-face{font-family:"MyFace";src:url(face.ttf)}@font-face{font-family:"MyFace";font-weight:bold;src:url(face.ttf)}main{font-family:MyFace}</style><main data-markswift-root style="width:200px;height:40px">Hello <b>bold</b></main>');
+    const result = await convert({ file });
+    expect(result.layout.fonts).toHaveLength(2);
+    expect(result.layout.fonts.every((f) => f.loaded)).toBe(true);
+    expect(result.warnings.filter((w) => w.includes("never loaded"))).toEqual([]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 60000);
 
 browserTest("restricted pasted HTML cannot run scripts or request server-side resources", async () => {
   let requests = 0;

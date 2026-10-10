@@ -84,7 +84,9 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
     // `document.fonts` holds the same faces as live objects; a loaded one is what painted.
     const loaded = new Set<string>();
     document.fonts.forEach((f) => {
-      if (f.status === "loaded") loaded.add(`${unquote(f.family).toLowerCase()}|${f.style}|${f.weight}`);
+      if (f.status !== "loaded") return;
+      const s = f.style.split(/\s+/)[0]!.toLowerCase();
+      loaded.add(`${unquote(f.family).toLowerCase()}|${s === "italic" || s === "oblique" ? s : "normal"}|${weightRange(f.weight).join(" ")}`);
     });
     const seen = new Set<string>();
     const out: FontFaceRecord[] = [];
@@ -93,8 +95,7 @@ export async function collectFontFaces(page: Page): Promise<FontFaceRecord[]> {
       const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const w = f.weight[0] === f.weight[1] ? String(f.weight[0]) : `${f.weight[0]} ${f.weight[1]}`;
-      out.push({ ...f, loaded: loaded.has(`${f.family.toLowerCase()}|${f.style}|${w}`) });
+      out.push({ ...f, loaded: loaded.has(`${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}`) });
     }
     return out;
   });
