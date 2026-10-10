@@ -33,9 +33,25 @@ export function num(v: number): string {
   return s.includes(".") || s.includes("e") ? s : s + ".0";
 }
 
-/** Swift string literal (JSON escaping is a valid subset). */
+/**
+ * Swift string literal. Swift accepts only `\0 \\ \t \n \r \" \' \u{…}` escapes and no lone
+ * surrogates, so JSON escaping (`\b`, `\f`, `\u000b`, `\ud800`) does not compile. Control
+ * characters (C0, DEL, C1) and U+2028/U+2029 become `\u{hex}`; a lone surrogate becomes U+FFFD.
+ */
 export function str(s: string): string {
-  return JSON.stringify(s);
+  let out = '"';
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    if (ch === "\\") out += "\\\\";
+    else if (ch === '"') out += '\\"';
+    else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else if (c >= 0xd800 && c <= 0xdfff) out += "\uFFFD";
+    else if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029) out += `\\u{${c.toString(16)}}`;
+    else out += ch;
+  }
+  return out + '"';
 }
 
 export function indent(lines: string[], n: number): string[] {
