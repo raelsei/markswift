@@ -120,7 +120,8 @@ test("027: inline links are link runs; in-app hrefs route to members", () => {
   expect(code).toContain('Text.markswiftLink("docs", "https://e.com",');
   expect(code).toContain('case "#faq": onFaq(); return .handled');
   expect(code).toContain("default: return .systemAction");
-  expect(diagnostics.map((d) => d.message).join("\n")).not.toContain("destination dropped");
+  // An inline link loses nothing: no `a` diagnostic (only a block in-app link reports its placeholder).
+  expect(diagnostics.filter((d) => d.feature === "a")).toEqual([]);
 });
 
 test("027: an inline link with background-clip: text is reported as one colour", () => {
