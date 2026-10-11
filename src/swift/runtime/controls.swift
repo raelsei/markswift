@@ -278,3 +278,40 @@ extension View {
         #endif
     }
 }
+
+/// Interaction states a render harness forces on every element at once (the browser reference forces the same).
+nonisolated struct MarkswiftForcedStates: OptionSet, Sendable {
+    let rawValue: Int
+    static let pressed = MarkswiftForcedStates(rawValue: 1)
+    static let focused = MarkswiftForcedStates(rawValue: 2)
+}
+
+extension EnvironmentValues {
+    @Entry var markswiftForcedStates: MarkswiftForcedStates = []
+}
+
+/// Whether one design element is pressed: the live press (bound by `MarkswiftPressStyle`), or forced by a harness.
+@propertyWrapper struct MarkswiftPressed: DynamicProperty {
+    @State private var live = false
+    @Environment(\.markswiftForcedStates) private var forced
+    init() {}
+    var wrappedValue: Bool { live || forced.contains(.pressed) }
+    var projectedValue: Binding<Bool> { $live }
+}
+
+/// Whether one text field has focus: the live focus (bound with `.focused($…)`), or forced by a harness.
+@propertyWrapper struct MarkswiftFocused: DynamicProperty {
+    @FocusState private var live: Bool
+    @Environment(\.markswiftForcedStates) private var forced
+    init() {}
+    var wrappedValue: Bool { live || forced.contains(.focused) }
+    var projectedValue: FocusState<Bool>.Binding { $live }
+}
+
+/// A plain button that reports its press, so the label can draw the design's pressed look instead of system dimming.
+nonisolated struct MarkswiftPressStyle: ButtonStyle {
+    let isPressed: Binding<Bool>
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.onChange(of: configuration.isPressed) { _, pressed in isPressed.wrappedValue = pressed }
+    }
+}

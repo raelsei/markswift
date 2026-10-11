@@ -126,6 +126,14 @@ export interface Style {
   tokens?: string[];
 }
 
+/**
+ * Paint deltas of an interaction state on top of `style`; only changed fields are present; a field the state
+ * removes is present in its transparent/identity form. `runColors` is index-aligned with a text node's runs.
+ */
+export type StateStyle = Partial<
+  Pick<Style, "fills" | "border" | "borderSides" | "outline" | "shadows" | "opacity" | "transform" | "filters">
+> & { runColors?: Array<Color | undefined> };
+
 export interface FontSpec {
   /** `system` families map to platform fonts by design; `custom` is a bundled family name. */
   family: { kind: "system"; design: "default" | "rounded" | "monospaced" | "serif" } | { kind: "custom"; name: string };
@@ -340,6 +348,8 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
+  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
+  states?: { pressed?: StateStyle; focused?: StateStyle };
 }
 
 export interface StackNode extends SemBase {

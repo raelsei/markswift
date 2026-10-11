@@ -20,8 +20,18 @@ export function colorArgs(c: Color): string {
  * light colour is two tokens on the node. Omitting `id` — an SVG inlined through an `<img>`, a
  * control's own value — yields the literal: a colour the extractor never enumerated cannot
  * claim a token.
+ *
+ * A colour the node's pressed/focused look changes (`ctx.statePaint`, `states.ts`) becomes
+ * `(isSavePressed ? state : rest)`, each side resolved the same way.
  */
 export function colorExpr(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
+  const paint = id !== undefined ? ctx.statePaint?.get(id) : undefined;
+  const pair = paint && ((slot !== undefined ? paint.colors.get(slot) : undefined) ?? paint.colors.get(colorArgs(c)));
+  if (pair) return `(${paint.cond} ? ${restingColor(pair.state, ctx, id)} : ${restingColor(pair.rest, ctx, id, slot)})`;
+  return restingColor(c, ctx, id, slot);
+}
+
+function restingColor(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
   const token = ctx.tokens?.name(c, id, slot);
   return token ? `Palette.${token}` : `Color.markswift(${colorArgs(c)})`;
 }

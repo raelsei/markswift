@@ -104,6 +104,20 @@ describe("extractTokens", () => {
     expect(card?.dark).toEqual(NEAR_BLACK);
   });
 
+  test("029: a pressed colour that flips with the theme becomes a semantic token the ternary names", () => {
+    const [light, dark] = pair();
+    const pressedLight = rgb(0.9, 0.9, 0.92);
+    const pressedDark = rgb(0.15, 0.16, 0.18);
+    (light!.root as StackNode).children[0]!.states = { pressed: { fills: [{ kind: "solid", color: pressedLight }] } };
+    (dark!.root as StackNode).children[0]!.states = { pressed: { fills: [{ kind: "solid", color: pressedDark }] } };
+    const set = extractTokens([light!, dark!]);
+    const token = set.tokens.find(
+      (t) => t.kind === "semantic" && JSON.stringify(t.light) === JSON.stringify(pressedLight),
+    );
+    expect(token?.dark).toEqual(pressedDark);
+    expect(screenTokens(set, light!).name(pressedLight, "card")).toBe(token!.name);
+  });
+
   test("a theme-independent colour used twice becomes a static token with both nodes listed", () => {
     const set = extractTokens(pair());
     const accent = set.tokens.find((t) => t.uses.includes("accent"));

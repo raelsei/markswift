@@ -1,5 +1,5 @@
 import type { Color } from "../model/values.ts";
-import type { Confidence, Diagnostic, Screen, SemNode } from "../model/semantic.ts";
+import type { Confidence, Diagnostic, Screen, SemNode, Style } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
@@ -67,6 +67,18 @@ export interface ScreenTokens {
   opaque(c: Color, id: string | undefined): boolean;
 }
 
+/** How one node paints in an interaction state, on top of its resting look (`states.ts` `pairStyle`). */
+export interface StatePaint {
+  /** The owner's member name (`isSavePressed`, `isEmailFocused`): the ternaries' condition. */
+  cond: string;
+  /** The style the box is emitted with: rest geometry plus anything only the state paints. */
+  style: Style;
+  /** Keyed by `colorArgs(c)` of the colour the emitter will be asked for, or by a run slot `run<i>`. */
+  colors: Map<string, { rest: Color; state: Color }>;
+  opacity?: { rest: number; state: number };
+  scale?: { rest: [number, number]; state: [number, number] };
+}
+
 /**
  * The part of an emitter's context a colour or a font needs. `EmitContext` and `ControlDeps` both
  * satisfy it.
@@ -78,6 +90,8 @@ export interface ColorCtx {
   mode: EmitMode;
   /** App mode: `@ScaledMetric` font sizes used so far, property name → declaration; emitted once per view. */
   scaledFonts?: Map<string, string>;
+  /** Node id → its interaction-state paint; `colorExpr` turns a paired colour into a ternary. */
+  statePaint?: Map<string, StatePaint>;
 }
 
 /** The view-level members a screen's controls need, in emission order. */
@@ -97,4 +111,10 @@ export interface ControlMembers {
   activate: Map<string, string>;
   /** Grouped radio → its tag in the group's `String` selection (its `stateOf` name). */
   radioTag: Map<SemNode, string>;
+  /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
+  statePaint: Map<string, StatePaint>;
+  /** Pressable owner → its `@MarkswiftPressed` member. */
+  pressOf: Map<SemNode, string>;
+  /** Text field → its `@MarkswiftFocused` member. */
+  focusOf: Map<SemNode, string>;
 }

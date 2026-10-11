@@ -202,7 +202,12 @@ export async function renderNative(
  * iOS renderer uses drawHierarchy and can.
  */
 // ponytail: one swiftc build per capture (≈ 3–5 s); batch captures per build if the per-PR job outgrows ~20 min.
-export async function renderMac(result: ConversionResult, work: string, output: string): Promise<void> {
+export async function renderMac(
+  result: ConversionResult,
+  work: string,
+  output: string,
+  forced?: "pressed" | "focused",
+): Promise<void> {
   await rm(work, { recursive: true, force: true });
   await mkdir(work, { recursive: true });
   const sources: string[] = [];
@@ -212,7 +217,7 @@ export async function renderMac(result: ConversionResult, work: string, output: 
     sources.push(join(work, file));
   }
   for (const [file, value] of Object.entries(result.assets)) await Bun.write(join(work, file), value);
-  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output));
+  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output, forced));
   sources.push(join(work, "main.swift"));
   const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
   await command(
