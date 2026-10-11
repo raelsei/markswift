@@ -70,6 +70,19 @@ browserTest(
 );
 
 browserTest(
+  "a fractional root gives one integer size for the screenshot and the native frame",
+  async () => {
+    const { layout, png } = await capture(
+      `<!doctype html><body style="margin:0"><main data-markswift-root style="width:200.5px;height:165.56px;background:rgb(255,0,0)"></main></body>`,
+    );
+    expect(layout.size).toEqual({ w: 200, h: 165 });
+    const view = new DataView(png!.buffer, png!.byteOffset);
+    expect([view.getUint32(16), view.getUint32(20)]).toEqual([layout.size.w * 2, layout.size.h * 2]);
+  },
+  60000,
+);
+
+browserTest(
   "Tailwind v4 fixtures convert without silent gradient or transform loss",
   async () => {
     const dir = join(import.meta.dir, "../conformance/fixtures/tailwind-v4");

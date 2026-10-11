@@ -285,10 +285,12 @@ export class BrowserCapture {
       const box = rootRaw.bounds;
       const root = box && toLayout(rootRaw, { x: box.x, y: box.y }, identity);
       if (!box || !root) throw new Error(`capture root ${spec.root} has no layout`);
+      // One integer size for the screenshot clip and the native frame: Chrome floors a fractional clip.
+      const size = { w: Math.floor(box.w), h: Math.floor(box.h) };
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
         const { x, y, w, h } = box;
-        if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0)
+        if (!(size.w > 0 && size.h > 0) || x + w <= 0 || y + h <= 0)
           throw new Error(
             `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
           );
@@ -300,7 +302,7 @@ export class BrowserCapture {
           document.body.appendChild(s);
         }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }`);
         png = await page.screenshot({
-          clip: { x, y, width: w, height: h },
+          clip: { x, y, width: size.w, height: size.h },
           scale: "device",
           animations: "disabled",
           caret: "hide",
@@ -315,7 +317,7 @@ export class BrowserCapture {
           version: LAYOUT_DOC_VERSION,
           source,
           combo: { screen: spec.screen, theme: spec.theme },
-          size: { w: Math.round(box.w), h: Math.round(box.h) },
+          size,
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
           viewport: { x: -box.x || 0, y: -box.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
           dpr: this.opts.dpr,

@@ -11,6 +11,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - npm package runnable with Node.js ≥ 20 (`npx markswift`, `import "markswift"`); a `v*` tag publishes it with npm provenance after a smoke test that installs the packed tarball without Bun.
 - Every activatable element exposes a camelCase `on<Name>: () -> Void` action (buttons, `role=button`/`onclick` elements as real `Button`s, input buttons, in-app links, `form onsubmit` → `.onSubmit`); inline links are tappable `Text` runs in the design's colour.
 - VoiceOver: `aria-labelledby`, `aria-describedby`, values (`aria-valuenow/valuetext/expanded`), selected/toggle traits and `aria-disabled`; iOS keyboards from `autocomplete`, `inputmode` and `enterkeyhint`.
+- Tracked component corpus (`tests/conformance/fixtures/components/`, 21 shadcn/ui components, a 24-row list and 3 Tailwind pages, compiled offline with Tailwind 4.1); iOS visual baselines; per-family regression floors (`families`, `bun run quality --ratchet`) with reviewed per-capture `exceptions`; `bun run quality --readme` regenerates the README evidence block; release tags gate every fixture on iOS.
 - Pressed and focused looks: `:hover`/`:active` and `:focus-visible` paint captured as paint-only state snapshots and emitted as `@MarkswiftPressed`/`@MarkswiftFocused` members driving colour, opacity and scale; state colours join the Palette tokens.
 
 ### Changed
