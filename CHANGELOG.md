@@ -14,6 +14,9 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 - Generated views are tool-owned: the header says how to regenerate and customise instead of "do not edit"; every output directory contains `.markswift.json`.
 - `--renderer ios` renders through UIHostingController + drawHierarchy in a batched simulator app, so text fields, editors and scroll views are drawn instead of ImageRenderer's yellow placeholder; the pinned simulator (`MARKSWIFT_SIMULATOR`, default `iPhone 17`) is created on the newest iOS runtime when missing.
 
+### Changed (breaking)
+- `ConversionResult.warnings` and `CompileResult.warnings` are `ConversionWarning` objects (`source`, `level?`, `feature?`, `component?`, `message`); the CLI prints `Warning: <level> <feature>: <message>`.
+
 ### Fixed
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
 

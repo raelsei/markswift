@@ -8,7 +8,8 @@ import { extractTokens, emitDesignTokens, screenTokens, themeDrift } from "../sw
 import type { ScreenTokens } from "../swift/context.ts";
 import { indent } from "../swift/format.ts";
 import type { FaceMetrics, BundledFamily } from "../model/fonts.ts";
-export type { Diagnostic, DiagnosticLevel, Confidence } from "../model/semantic.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
+export type { Diagnostic, DiagnosticLevel, Confidence, ConversionWarning } from "../model/semantic.ts";
 
 export interface CompileOptions {
   /** Complete Swift type name, e.g. ProfileCard. ASCII identifiers starting with uppercase. */
@@ -32,7 +33,7 @@ export interface CompileResult {
   /** Binary resources referenced by the generated Swift (relative bundle path → bytes), e.g. `Images/<hash>.png`. Add these resources to the iOS target. */
   assets: Record<string, Uint8Array>;
   /** Light/dark pairing limitations; empty for a single-theme compile. */
-  warnings: string[];
+  warnings: ConversionWarning[];
 }
 
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
@@ -78,14 +79,17 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     fontMetrics: options.fontMetrics,
     adaptive: !!dark,
   });
-  const warnings: string[] = [];
+  const warnings: ConversionWarning[] = [];
   if (dark) {
     const sample = (ids: string[]) => ids.slice(0, 5).join(", ") + (ids.length > 5 ? ", …" : "");
     const drift = themeDrift(screen, dark);
     if (drift.length) {
-      warnings.push(
-        `adaptive: ${drift.length} node(s) differ between the light and dark captures beyond colour (present in one theme only, different colour slots, or geometry moved more than 0.5px); the view keeps their light values: ${sample(drift)}`,
-      );
+      warnings.push({
+        source: "adaptive",
+        level: "approximated",
+        feature: "color-scheme",
+        message: `${drift.length} node(s) differ between the light and dark captures beyond colour (present in one theme only, different colour slots, or geometry moved more than 0.5px); the view keeps their light values: ${sample(drift)}`,
+      });
     }
     const unbound = new Set<string>();
     for (const t of tokens.tokens) {
@@ -95,9 +99,12 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
         if (!bound.has(`${id}\u0000${t.name}`) && missed.has(`${id}\u0000${light}`)) unbound.add(id);
     }
     if (unbound.size) {
-      warnings.push(
-        `adaptive: ${unbound.size} node(s) paint a colour that changes in dark but could not be bound to an adaptive token (the same light colour pairs with two dark colours on the node); the view keeps the light colour: ${sample([...unbound])}`,
-      );
+      warnings.push({
+        source: "adaptive",
+        level: "approximated",
+        feature: "color-scheme",
+        message: `${unbound.size} node(s) paint a colour that changes in dark but could not be bound to an adaptive token (the same light colour pairs with two dark colours on the node); the view keeps the light colour: ${sample([...unbound])}`,
+      });
     }
   }
   const shapes = Object.keys(result.shapes)

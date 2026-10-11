@@ -109,7 +109,8 @@ for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`gene
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion).
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
-  `warnings`, `layout` and, for adaptive conversions, `darkLayout`.
+  `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
+  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`.
 
 ## Modes
 

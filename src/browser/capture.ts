@@ -12,6 +12,7 @@ import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/la
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
@@ -42,8 +43,8 @@ function sniffImage(b: Buffer): string | undefined {
 }
 
 export interface Capture {
-  /** Resource failures and page errors observed while preparing this capture. */
-  warnings: string[];
+  /** Resource failures, page errors and viewport-dependent CSS observed while preparing this capture. */
+  warnings: ConversionWarning[];
   layout: LayoutDoc;
   /** Set only when `CaptureRequest.screenshot` is true. */
   png?: Uint8Array;
@@ -300,7 +301,7 @@ export class BrowserCapture {
       await Promise.all(imageReads);
       errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
       return {
-        warnings: errors,
+        warnings: errors.map((message) => ({ source: "capture" as const, message })),
         layout: {
           version: LAYOUT_DOC_VERSION,
           source,

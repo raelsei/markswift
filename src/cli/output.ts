@@ -1,7 +1,7 @@
 import { lstat, mkdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { ConversionResult } from "../api/types.ts";
-import type { Diagnostic } from "../model/semantic.ts";
+import type { ConversionWarning, Diagnostic } from "../model/semantic.ts";
 import {
   EditedFilesError,
   editedFiles,
@@ -148,6 +148,12 @@ export async function updateBundle(
   await writeFile(tmp, serializeManifest(manifestFor(Object.fromEntries(entries), options.version)));
   await rename(tmp, join(output, MANIFEST));
   return [...fresh].sort();
+}
+
+/** A warning as one stderr line: `[<component>] <level> <feature>: <message>`; each prefix only when set. */
+export function formatWarning(w: ConversionWarning): string {
+  const loss = w.level && w.feature ? `${w.level} ${w.feature}: ` : "";
+  return `${w.component ? `[${w.component}] ` : ""}${loss}${w.message}`;
 }
 
 /** One line per distinct (level, feature, message), unmapped first, naming the nodes it affects. */

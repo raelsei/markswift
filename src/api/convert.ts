@@ -106,7 +106,9 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
       compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
     }
-    const pageWarnings = dark ? [...new Set([...capture.warnings, ...dark.warnings])] : capture.warnings;
+    const pageWarnings = dark
+      ? [...new Map([...capture.warnings, ...dark.warnings].map((w) => [w.message, w])).values()]
+      : capture.warnings;
     return {
       ...compiled,
       assets,

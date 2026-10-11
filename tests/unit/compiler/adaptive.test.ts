@@ -66,7 +66,8 @@ test("colours identical in both themes stay static: shared ones as a token, sing
 test("a slot only one theme paints keeps its light value and is reported once", () => {
   expect(adaptive.code).toContain("Color.markswift(1.0, 0.0, 0.0)");
   expect(adaptive.warnings).toHaveLength(1);
-  expect(adaptive.warnings[0]).toMatch(/^adaptive: 1 node\(s\) differ .*: edge$/);
+  expect(adaptive.warnings[0]).toMatchObject({ source: "adaptive", level: "approximated", feature: "color-scheme" });
+  expect(adaptive.warnings[0]!.message).toMatch(/^1 node\(s\) differ .*: edge$/);
 });
 
 test("adaptive output previews both schemes; single-theme output keeps one preview and no warnings", () => {
@@ -82,7 +83,11 @@ test("adaptive output previews both schemes; single-theme output keeps one previ
 test("geometry that moves between themes is reported", () => {
   const moved = structuredClone(dark);
   moved.root.children[1]!.bounds.y += 1;
-  expect(compileLayout(light, { dark: moved }).warnings.join("\n")).toContain("accent");
+  expect(
+    compileLayout(light, { dark: moved })
+      .warnings.map((w) => w.message)
+      .join("\n"),
+  ).toContain("accent");
 });
 
 test("the dark layout must be the dark capture of the same screen", () => {
@@ -100,5 +105,8 @@ test("one light colour that pairs with two dark colours on a node is reported, n
     },
   });
   const result = compileLayout(doc("light", "rgb(255, 255, 255)"), { dark: doc("dark", "rgb(0, 0, 0)") });
-  expect(result.warnings.join("\n")).toMatch(/adaptive: 1 node\(s\) paint a colour that changes in dark .*: card$/);
+  expect(result.warnings.every((w) => w.source === "adaptive" && w.feature === "color-scheme")).toBe(true);
+  expect(result.warnings.map((w) => w.message).join("\n")).toMatch(
+    /1 node\(s\) paint a colour that changes in dark .*: card$/,
+  );
 });

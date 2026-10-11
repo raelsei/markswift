@@ -1,4 +1,5 @@
 import type { FontFace } from "../model/layout.ts";
+import type { DiagnosticLevel } from "../model/semantic.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
 import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
@@ -19,7 +20,9 @@ export async function packageFonts(
   convert: FontConverter = pythonFontConverter,
   signal?: AbortSignal,
 ): Promise<FontPackage> {
-  const notes: string[] = [];
+  const notes: FontPackage["notes"] = [];
+  const note = (level: DiagnosticLevel, message: string) =>
+    notes.push({ source: "fonts", level, feature: "font-family", message });
   const packaged: PackagedFace[] = [];
   const assets: Record<string, Uint8Array> = {};
   if (!faces.length) return { faces: [], assets, plist: "", notes };
@@ -37,14 +40,13 @@ export async function packageFonts(
     const latin = group.filter((f) => coversLatin(f.unicodeRange));
     const chosen = (latin.length ? latin : group).find((f) => f.loaded) ?? (latin.length ? latin[0]! : group[0]!);
     if (group.length > 1) {
-      notes.push(
-        `approximated: font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
+      note(
+        "approximated",
+        `font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
       );
     }
     if (!latin.length)
-      notes.push(
-        `unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`,
-      );
+      note("unmapped", `font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`);
 
     let bytes: Uint8Array | undefined;
     let usedSrc: FontFace["src"][number] | undefined;
@@ -56,8 +58,9 @@ export async function packageFonts(
       }
     }
     if (!bytes?.length || !usedSrc) {
-      notes.push(
-        `unmapped: font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`,
+      note(
+        "unmapped",
+        `font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`,
       );
       continue;
     }
@@ -72,8 +75,9 @@ export async function packageFonts(
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
     const stem = fontFileStem(chosen.family, subfamily, claimed);
     if (stem === undefined) {
-      notes.push(
-        `approximated: font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`,
+      note(
+        "approximated",
+        `font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`,
       );
       continue;
     }
@@ -82,8 +86,9 @@ export async function packageFonts(
     if (typeof tool === "string") {
       // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
-      notes.push(
-        `unmapped: font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
+      note(
+        "unmapped",
+        `font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
           (sig === "wOF2" || sig === "wOFF"
             ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli`
             : ""),
@@ -110,8 +115,9 @@ export async function packageFonts(
     });
     claimed.set(stem.toLowerCase(), chosen.family);
     if (!chosen.loaded)
-      notes.push(
-        `approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`,
+      note(
+        "approximated",
+        `font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`,
       );
   }
 
@@ -120,8 +126,9 @@ export async function packageFonts(
   // has no instance for is a synthetic (smeared) weight and has to be reported once.
   for (const f of packaged) {
     if (!f.axes["wght"] && f.weight[0] !== f.weight[1]) {
-      notes.push(
-        `approximated: font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`,
+      note(
+        "approximated",
+        `font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`,
       );
     }
   }
