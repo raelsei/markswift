@@ -36,6 +36,7 @@ export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[]
     ...indent([...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`], 1),
     "}",
     ".buttonStyle(.plain)",
+    ...(ctx.mode === "app" && n.a11y?.disabled ? [".disabled(true)"] : []),
     ...placementModifiers(n, ctx),
   ];
 }
@@ -100,8 +101,11 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A disabled control's dimming is expressed twice over: the design's own `:disabled` opacity
   // and SwiftUI's automatic dimming from `.disabled(true)`. App mode keeps the native one (a
   // live control must dim the way the platform dims); fidelity keeps the design's number and
-  // omits `.disabled` entirely, since nothing interacts with a rendered image.
-  const nativeDim = ctx.mode === "app" && n.kind === "control" && n.disabled === true;
+  // omits `.disabled` entirely, since nothing interacts with a rendered image. `aria-disabled` on an
+  // element emitted as a Button dims the same way.
+  const nativeDim =
+    ctx.mode === "app" &&
+    ((n.kind === "control" && n.disabled === true) || (!!n.action && !n.action.gesture && n.a11y?.disabled === true));
   if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
   if (st.blur !== undefined) m.push(`.blur(radius: ${num(st.blur)})`);
   if (st.blend) {
@@ -153,6 +157,14 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     if (a.label && !toggle) m.push(`.accessibilityLabel(${str(a.label)})`);
     if (a.heading) m.push(".accessibilityAddTraits(.isHeader)", `.accessibilityHeading(.h${a.heading})`);
     if (a.trait) m.push(`.accessibilityAddTraits(.${a.trait})`);
+    // A link-like Button (role=link) announces a link, not a button.
+    if (a.trait === "isLink" && n.action && !n.action.gesture) m.push(".accessibilityRemoveTraits(.isButton)");
+    if (a.toggle) m.push(".accessibilityAddTraits(.isToggle)");
+    if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
+    // Plan 025's disclosure style and select menu already announce their own state; never add a second value there.
+    const ownsValue = n.kind === "control" && (n.control === "disclosure" || n.control === "picker");
+    if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
+    if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
   }
   return m;

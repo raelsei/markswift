@@ -97,6 +97,9 @@ export interface ControlSpec {
   swatch?: Color;
   placeholder?: string;
   inputType?: ControlNode["inputType"];
+  autofill?: string;
+  inputMode?: string;
+  enterKey?: string;
   checked?: boolean;
   group?: string;
   disabled?: boolean;
@@ -112,6 +115,37 @@ export interface ControlSpec {
   diagnostics: Diagnostic[];
 }
 
+/** HTML's `inputmode` and `enterkeyhint` keywords; anything else is ignored, as the browser ignores it. */
+const INPUT_MODES: Readonly<Record<string, true>> = {
+  none: true,
+  text: true,
+  decimal: true,
+  numeric: true,
+  tel: true,
+  search: true,
+  email: true,
+  url: true,
+};
+const ENTER_KEYS: Readonly<Record<string, true>> = {
+  enter: true,
+  done: true,
+  go: true,
+  next: true,
+  previous: true,
+  search: true,
+  send: true,
+};
+/** The field name of an `autocomplete` value (`section-a shipping street-address` → `street-address`); undefined for on/off/empty. */
+function autofillField(v: string | undefined): string | undefined {
+  const last = (v ?? "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t && t !== "webauthn")
+    .at(-1);
+  return last && last !== "on" && last !== "off" ? last : undefined;
+}
+
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
  * caller supplies the measured base and the built children.
@@ -119,7 +153,8 @@ export interface ControlSpec {
 export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undefined {
   const a = n.attrs;
   const diagnostics: Diagnostic[] = [];
-  const disabled = "disabled" in a ? true : undefined;
+  // A native control the design marks disabled for assistive technology behaves disabled.
+  const disabled = "disabled" in a || a["aria-disabled"] === "true" ? true : undefined;
   switch (n.tag) {
     case "button": {
       const spec: ControlSpec = { control: "button", diagnostics };
@@ -276,9 +311,17 @@ export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undef
         const caption = a["value"] ?? (type === "submit" ? "Submit" : type === "reset" ? "Reset" : "");
         spec.action = elementAction(n, caption, type === "submit" ? form : undefined);
       }
-      if ((control === "textField" || control === "secureField") && form) {
-        const submit = submitAction(form);
-        if (submit) spec.action = submit;
+      if (control === "textField" || control === "secureField") {
+        if (form) {
+          const submit = submitAction(form);
+          if (submit) spec.action = submit;
+        }
+        const autofill = autofillField(a["autocomplete"]);
+        if (autofill) spec.autofill = autofill;
+        const mode = a["inputmode"]?.trim().toLowerCase();
+        if (mode && Object.hasOwn(INPUT_MODES, mode)) spec.inputMode = mode;
+        const enter = a["enterkeyhint"]?.trim().toLowerCase();
+        if (enter && Object.hasOwn(ENTER_KEYS, enter)) spec.enterKey = enter;
       }
       if (disabled) spec.disabled = true;
       return spec;
@@ -363,6 +406,8 @@ export interface LabelIndex {
   activates: Map<LayoutNode, LayoutNode>;
   /** Control element → its nearest ancestor `<form onsubmit>`. */
   forms: Map<LayoutNode, LayoutNode>;
+  /** First element per DOM `id`. */
+  byId: Map<string, LayoutNode>;
 }
 
 export function labelIndex(root: LayoutNode): LabelIndex {
@@ -378,7 +423,7 @@ export function labelIndex(root: LayoutNode): LabelIndex {
     for (const c of n.children) index(c, owner);
   };
   index(root);
-  const out: LabelIndex = { text: new Map(), activates: new Map(), forms };
+  const out: LabelIndex = { text: new Map(), activates: new Map(), forms, byId };
   const firstControl = (n: LayoutNode): LayoutNode | undefined => {
     for (const c of n.children) {
       const hit = controlOf(c) ? c : firstControl(c);

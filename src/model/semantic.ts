@@ -314,7 +314,7 @@ export interface SemBase extends SizeConstraints {
   overlays: Overlay[];
   /** What assistive technology is told about this node, beyond what the element itself implies. */
   a11y?: {
-    /** `aria-label`, else the text of the `<label>` that names this control. */
+    /** `aria-labelledby` text, else `aria-label`, else the text of the `<label>` that names this control. */
     label?: string;
     /** `aria-hidden="true"`. */
     hidden?: true;
@@ -322,6 +322,16 @@ export interface SemBase extends SizeConstraints {
     heading?: 1 | 2 | 3 | 4 | 5 | 6;
     /** `role` = button | link | img on an element that is not already that control. */
     trait?: "isButton" | "isLink" | "isImage";
+    /** `aria-valuetext`, else `aria-valuenow`; `aria-expanded` → `expanded`/`collapsed`, `aria-checked=mixed` → `mixed` when there is no value. */
+    value?: string;
+    /** Text of the `aria-describedby` elements, else `aria-description`. */
+    hint?: string;
+    /** `aria-selected`/`aria-checked`/`aria-pressed` = `true`, or an `aria-current` other than `false`. */
+    selected?: true;
+    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio. */
+    toggle?: true;
+    /** `aria-disabled="true"`. */
+    disabled?: true;
   };
   /** `<label>`: id of the toggle/radio its tap changes. */
   labelFor?: string;
@@ -469,6 +479,12 @@ export interface ControlNode extends SemBase {
   placeholder?: string;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
   inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
+  /** WHATWG autofill field name from `autocomplete`, e.g. `one-time-code`. */
+  autofill?: string;
+  /** `@inputmode`: the virtual keyboard the design asks for. */
+  inputMode?: string;
+  /** `@enterkeyhint`: the Return key's label. */
+  enterKey?: string;
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
   /** Radio `@name`; radios with the same group share one selection. */

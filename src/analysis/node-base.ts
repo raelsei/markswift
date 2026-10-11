@@ -8,6 +8,16 @@ import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
+import { textContent } from "./text-runs.ts";
+
+/** Roles whose element AT announces as a toggle. */
+const TOGGLE_ROLES: Readonly<Record<string, true>> = {
+  checkbox: true,
+  switch: true,
+  radio: true,
+  menuitemcheckbox: true,
+  menuitemradio: true,
+};
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -64,11 +74,39 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
 function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
   const a = n.attrs;
   const out: NonNullable<SemBase["a11y"]> = {};
-  // ARIA wins over the `<label>`.
-  const label = a["aria-label"]?.replace(/\s+/g, " ").trim() || ctx.labels?.text.get(n);
-  if (label) out.label = label;
-  if (a["aria-hidden"] === "true") out.hidden = true;
   const role = a["role"]?.trim().toLowerCase();
+  const clean = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+  const byIds = (ids: string | undefined) =>
+    clean(
+      clean(ids)
+        .split(" ")
+        .map((id) => (id ? textContent(ctx.labels?.byId.get(id)) : ""))
+        .join(" "),
+    );
+  // accname order: aria-labelledby, then aria-label, then the <label>.
+  const label = byIds(a["aria-labelledby"]) || clean(a["aria-label"]) || ctx.labels?.text.get(n);
+  if (label) out.label = label;
+  const hint = byIds(a["aria-describedby"]) || clean(a["aria-description"]);
+  if (hint) out.hint = hint;
+  const value =
+    clean(a["aria-valuetext"]) ||
+    clean(a["aria-valuenow"]) ||
+    (a["aria-checked"] === "mixed"
+      ? "mixed"
+      : a["aria-expanded"] === "true"
+        ? "expanded"
+        : a["aria-expanded"] === "false"
+          ? "collapsed"
+          : "");
+  if (value) out.value = value;
+  if (
+    [a["aria-selected"], a["aria-checked"], a["aria-pressed"]].includes("true") ||
+    (a["aria-current"] !== undefined && a["aria-current"] !== "false")
+  )
+    out.selected = true;
+  if (role && Object.hasOwn(TOGGLE_ROLES, role)) out.toggle = true;
+  if (a["aria-disabled"] === "true") out.disabled = true;
+  if (a["aria-hidden"] === "true") out.hidden = true;
   const tag = /^h([1-6])$/.exec(n.tag);
   const level = tag ? Number(tag[1]) : role === "heading" ? parseInt(a["aria-level"] ?? "", 10) || 2 : undefined;
   if (level !== undefined) out.heading = Math.min(6, Math.max(1, level)) as NonNullable<typeof out.heading>;
