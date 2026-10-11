@@ -185,6 +185,29 @@ nativeTest(
 );
 
 nativeTest(
+  "028: ARIA and input traits compile in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-028-"));
+    const html =
+      '<main data-markswift-root><span id="t1">Billing</span> <span id="t2">address</span><input aria-labelledby="t1 t2" aria-label="X"><p id="h">We never share it</p><input aria-describedby="h"><div aria-description="Opens in a sheet">Details</div><div role="progressbar" aria-valuenow="40" aria-valuetext="40 percent">40%</div><button role="tab" aria-selected="true">Plans</button><a href="/x" aria-current="page" style="display:block">Home</a><div role="checkbox" aria-checked="true">Agree</div><button aria-disabled="true">Pay</button><div role="button" onclick="pay()" aria-disabled="true">Pay now</div><button aria-expanded="false">More</button><input autocomplete="shipping given-name"><input type="email" autocomplete="email"><input autocomplete="one-time-code"><input inputmode="numeric"><input enterkeyhint="send"><input type="password" autocomplete="new-password" enterkeyhint="go"><span role="link" onclick="go()" style="display:inline-block">Go</span><a href="#faq" style="display:block">FAQ</a></main>';
+    const css = "body{margin:0} main{width:300px;padding:16px;font:16px system-ui;background:#fff}";
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml(html, { name: "Aria028", mode, css });
+        if (mode === "app") expect(result.code).toContain('autofill: "one-time-code"');
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
+
+nativeTest(
   "adaptive light/dark conversion compiles",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-adaptive-"));
