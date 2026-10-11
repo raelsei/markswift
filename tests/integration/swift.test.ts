@@ -84,7 +84,8 @@ nativeTest(
         const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
         const find = (n: LayoutNode, hit: (n: LayoutNode) => boolean): LayoutNode | undefined =>
           hit(n) ? n : n.children.map((c) => find(c, hit)).find(Boolean);
-        const dpr = result.layout.dpr;
+        // The render's own scale (the macOS renderer draws at 2× whatever the capture's dpr was).
+        const dpr = info.width / result.layout.size.w;
         // The most frequent saturated red-ish colour inside a box: the link glyphs / the swatch.
         const dominant = (n: LayoutNode | undefined): number[] => {
           if (!n) throw new Error("box not found");
