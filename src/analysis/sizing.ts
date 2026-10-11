@@ -164,8 +164,8 @@ export function sizeOf(
   else width = measuredW;
   // A width the native stacks keep at the captured size is reported, not silent: a percentage
   // resolves against this container only, and a px width the layout shrank or clamped is pinned
-  // at the laid-out size.
-  if (declW && width.kind === "fixed" && s["display"] !== "inline") {
+  // at the laid-out size. The root always fills the screen (inferScreen), so it pins nothing.
+  if (declW && ctx.parent && width.kind === "fixed" && s["display"] !== "inline") {
     if (declW.includes("%"))
       addDiagnostic(
         diagnostics,

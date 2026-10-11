@@ -196,3 +196,8 @@ test("a px width laid out at its own size is not reported", () => {
   };
   expect(widthNotes(n, row)).toEqual([]);
 });
+
+test("the root's width is not reported: the screen sizes it", () => {
+  const n = { ...element(390, 40, { display: "block" }), preferredSize: { width: "100%", height: "auto" } };
+  expect(widthNotes(n, { root: n, bundledFamilies: {}, fixed: [] })).toEqual([]);
+});
