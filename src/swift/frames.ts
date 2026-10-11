@@ -20,7 +20,9 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
   const w = n.width.kind === "fixed" ? n.width.px : undefined;
-  const h = n.height.kind === "fixed" ? n.height.px : undefined;
+  // App: a disclosure grows when it opens, so its captured (closed or open) height is not kept.
+  const h =
+    n.height.kind === "fixed" && !(app && n.kind === "control" && n.control === "disclosure") ? n.height.px : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
   const floor =
     app &&

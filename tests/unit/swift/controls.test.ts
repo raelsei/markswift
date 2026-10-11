@@ -1,0 +1,210 @@
+/**
+ * Form controls: the CSS look on native behaviour. Hand-built layout docs, so no browser is needed.
+ */
+import { expect, test } from "bun:test";
+import { inferScreen } from "../../../src/analysis/infer.ts";
+import type { EmitMode } from "../../../src/swift/context.ts";
+import { emitSwift } from "../../../src/swift/emit.ts";
+import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
+
+const FONT = {
+  "font-family": "system-ui",
+  "font-size": "15px",
+  "font-weight": "400",
+  "line-height": "20px",
+  color: "rgb(17, 24, 39)",
+};
+const SIDES = ["top", "right", "bottom", "left"];
+const BOX = {
+  "background-color": "rgb(255, 255, 255)",
+  ...Object.fromEntries(
+    SIDES.flatMap((s) => [
+      [`border-${s}-style`, "solid"],
+      [`border-${s}-width`, "1px"],
+      [`border-${s}-color`, "rgb(255, 0, 0)"],
+    ]),
+  ),
+};
+
+function el(
+  tag: string,
+  attrs: Record<string, string>,
+  bounds: LayoutNode["bounds"],
+  children: LayoutNode[] = [],
+  styles: Record<string, string> = {},
+): LayoutNode {
+  return { tag, id: attrs["id"] ?? tag, attrs, styles: { ...FONT, display: "block", ...styles }, bounds, children };
+}
+function text(value: string, x: number, y: number, w: number, h: number): LayoutNode {
+  return { tag: "#text", attrs: {}, styles: {}, bounds: { x, y, w, h }, text: value, children: [] };
+}
+function swift(children: LayoutNode[], mode: EmitMode = "app"): { view: string; diagnostics: string[] } {
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "controls.html",
+    combo: { screen: "controls", theme: "light" },
+    size: { w: 320, h: 600 },
+    dpr: 2,
+    canvas: "white",
+    fonts: [],
+    root: {
+      tag: "main",
+      id: "root",
+      attrs: {},
+      styles: { display: "block" },
+      bounds: { x: 0, y: 0, w: 320, h: 600 },
+      children,
+    },
+  };
+  const screen = inferScreen(doc, "Controls");
+  const diagnostics: string[] = [];
+  const visit = (n: { diagnostics: { feature: string; message: string }[] } & Record<string, unknown>) => {
+    for (const d of n.diagnostics) diagnostics.push(`${d.feature}: ${d.message}`);
+    for (const c of [...((n["children"] as never[]) ?? []), ...((n["content"] as never[]) ?? [])]) visit(c);
+  };
+  visit(screen.root as never);
+  return { view: emitSwift(screen, "ControlsView", { mode }).view, diagnostics };
+}
+const field = (tag: string, attrs: Record<string, string>, y: number, h = 38, children: LayoutNode[] = []) =>
+  el(tag, attrs, { x: 0, y, w: 320, h }, children, { display: "inline-block", ...BOX });
+const option = (label: string, attrs: Record<string, string> = {}) =>
+  el("option", attrs, { x: 0, y: 0, w: 0, h: 0 }, [text(label, 0, 0, 0, 0)]);
+
+test("text fields, select and textarea keep the CSS box and native behaviour", () => {
+  const { view } = swift([
+    field("input", { id: "name", type: "text", value: "Ada" }, 0),
+    field("input", { id: "pw", type: "password" }, 40),
+    field("select", { id: "country" }, 80, 38, [
+      option("Canada"),
+      option("Germany", { selected: "" }),
+      option("Japan"),
+    ]),
+    field("textarea", { id: "bio" }, 120, 72, [text("Designer and developer.", 0, 0, 0, 0)]),
+    field("textarea", { id: "note", placeholder: "Add a note" }, 200, 54),
+  ]);
+  expect(view.split(".textFieldStyle(.plain)").length - 1).toBe(2);
+  expect(view).toContain("Menu {");
+  expect(view).toContain(".pickerStyle(.inline)");
+  expect(view).toContain("Text(verbatim: s_country)");
+  expect(view).not.toContain("size: 0.0");
+  expect(view).not.toContain('Text(verbatim: "Canada")');
+  expect(view).toContain('@State private var s_bio: String = "Designer and developer."');
+  expect(view.split(".markswiftTextEditorInsets()").length - 1).toBe(2);
+  expect(view).toContain("if s_note.isEmpty {");
+  expect(view).toContain('Text(verbatim: "Add a note")');
+});
+
+test("appearance: none removes the select arrow; native checkboxes and ranges drop the author's box paint", () => {
+  expect(swift([field("select", { id: "s" }, 0, 38, [option("One")])]).view).toContain(
+    'Image(systemName: "chevron.down")',
+  );
+  const none = swift([
+    el("select", { id: "s" }, { x: 0, y: 0, w: 320, h: 38 }, [option("One")], { ...BOX, appearance: "none" }),
+  ]);
+  expect(none.view).not.toContain('Image(systemName: "chevron.down")');
+  const native = swift([
+    el("input", { id: "c", type: "checkbox" }, { x: 0, y: 0, w: 13, h: 13 }, [], {
+      display: "inline-block",
+      ...BOX,
+      appearance: "auto",
+    }),
+    el("input", { id: "r", type: "range" }, { x: 0, y: 20, w: 200, h: 16 }, [], {
+      display: "inline-block",
+      ...BOX,
+      appearance: "auto",
+    }),
+  ]).view;
+  expect(native).not.toContain("strokeBorder(");
+  // The #Preview has a `.background(` of its own; look for the box's white fill.
+  expect(native).not.toContain(".background(Color.markswift(1.0, 1.0, 1.0)");
+  const drawn = swift([
+    el("input", { id: "c", type: "checkbox" }, { x: 0, y: 0, w: 13, h: 13 }, [], {
+      display: "inline-block",
+      ...BOX,
+      appearance: "none",
+    }),
+  ]).view;
+  expect(drawn).toContain("strokeBorder(");
+  expect(drawn).toContain(".background(Color.markswift(1.0, 1.0, 1.0)");
+});
+
+test("accent-color tints checkboxes, ranges and progress bars", () => {
+  const accent = { display: "inline-block", "accent-color": "rgb(225, 29, 72)" };
+  const { view } = swift([
+    el("input", { id: "c", type: "checkbox", checked: "" }, { x: 0, y: 0, w: 13, h: 13 }, [], accent),
+    el("input", { id: "r", type: "range", value: "30" }, { x: 0, y: 20, w: 200, h: 16 }, [], accent),
+    el("progress", { id: "p", value: "40", max: "100" }, { x: 0, y: 40, w: 150, h: 15 }, [], accent),
+  ]);
+  expect(view).not.toContain("tint: Color.markswift(0.0, 0.459, 1.0)");
+  expect(view).toContain(".tint(");
+  expect(view.split("Color.markswift(0.882, 0.114, 0.282)").length - 1).toBe(3);
+});
+
+test("input buttons paint their caption; Chrome's defaults fill a missing value", () => {
+  const button = (type: string, value: string | undefined, y: number) =>
+    el("input", { id: `${type}${y}`, type, ...(value !== undefined ? { value } : {}) }, { x: 0, y, w: 80, h: 21 }, [], {
+      display: "inline-block",
+      ...BOX,
+    });
+  const { view } = swift([
+    button("submit", "Send", 0),
+    button("submit", undefined, 30),
+    button("reset", undefined, 60),
+    button("button", "Go", 90),
+  ]);
+  for (const caption of ["Send", "Submit", "Reset", "Go"]) expect(view).toContain(`Text(verbatim: "${caption}")`);
+  expect(view).not.toContain("Color.clear");
+});
+
+test("date inputs show their components and start at their value, deterministically", () => {
+  const date = (type: string, value: string | undefined, y: number) =>
+    el("input", { id: type.replace("-", ""), type, ...(value ? { value } : {}) }, { x: 0, y, w: 200, h: 24 }, [], {
+      display: "inline-block",
+    });
+  const page = [
+    date("time", "10:30", 0),
+    date("datetime-local", "2026-10-10T09:15", 30),
+    date("date", "2026-10-10", 60),
+    date("week", "2026-W41", 90),
+    date("month", "2026-10", 120),
+  ];
+  const first = swift(page);
+  expect(first.view).toBe(swift(page).view);
+  expect(first.view).toContain("displayedComponents: .hourAndMinute");
+  expect(first.view).toContain("displayedComponents: [.date, .hourAndMinute]");
+  expect(first.view).toContain("Date = .markswift(year: 2000, month: 1, day: 1, hour: 10, minute: 30, second: 0)");
+  expect(first.view).toContain("Date = .markswift(year: 2026, month: 10, day: 10, hour: 9, minute: 15, second: 0)");
+  expect(first.view).toContain("Date = .markswift(year: 2026, month: 10, day: 5, hour: 0, minute: 0, second: 0)");
+  expect(first.view).toContain("Date = .markswift(year: 2026, month: 10, day: 1, hour: 0, minute: 0, second: 0)");
+  expect(first.view).not.toContain("= .now");
+  expect(first.diagnostics.filter((d) => d.startsWith("input: date:"))).toHaveLength(2);
+  expect(swift([date("date", undefined, 0)]).view).toContain("Date = .now");
+  expect(swift([date("date", "2026-02-30", 0)]).view).toContain("Date = .now");
+});
+
+test("details draw the captured summary and marker, no system chevron, no pinned height", () => {
+  const marker: LayoutNode = {
+    tag: "::marker",
+    attrs: {},
+    styles: { ...FONT, "font-variant-numeric": "tabular-nums" },
+    bounds: { x: 13, y: 10, w: 10, h: 18 },
+    children: [text("▸ ", 13, 10, 10, 18)],
+  };
+  const details = el(
+    "details",
+    { id: "d" },
+    { x: 0, y: 0, w: 320, h: 38 },
+    [
+      el("summary", {}, { x: 13, y: 9, w: 294, h: 20 }, [marker, text("Returns", 29, 10, 56, 18)], {
+        display: "list-item",
+      }),
+      el("p", {}, { x: 13, y: 37, w: 294, h: 20 }, [text("Free returns within 30 days.", 13, 38, 190, 18)]),
+    ],
+    { ...BOX, "padding-top": "8px", "padding-bottom": "8px", "padding-left": "12px", "padding-right": "12px" },
+  );
+  const { view } = swift([details]);
+  expect(view).toContain(".disclosureGroupStyle(MarkswiftDisclosureStyle(spacing: 8.0))");
+  expect(view).toContain('Text(verbatim: s_d ? "▾ " : "▸ ")');
+  const group = view.slice(view.indexOf("DisclosureGroup("));
+  expect(group.slice(0, group.indexOf(".disclosureGroupStyle(") + 200)).not.toContain(".frame(height:");
+});

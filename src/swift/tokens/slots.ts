@@ -89,6 +89,7 @@ function colorSlots(n: SemNode): Slot[] {
   // alt text of a broken image. Both land in the view as a `.foregroundStyle`, so both are
   // literals a token can replace.
   if (n.kind === "control" && visible(n.color)) out.push({ key: "control", role: "text", color: n.color });
+  if (n.kind === "control" && visible(n.accent)) out.push({ key: "accent", role: "fill", color: n.accent });
   if (n.kind === "image" && visible(n.color)) out.push({ key: "alt", role: "text", color: n.color });
   return out;
 }

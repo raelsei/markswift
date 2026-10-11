@@ -37,6 +37,7 @@ export interface ControlSpec {
   action?: string;
   expanded?: boolean;
   files?: ControlNode["files"];
+  dateKind?: ControlNode["dateKind"];
   /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
   diagnostics: Diagnostic[];
 }
@@ -162,6 +163,19 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
           spec.value = a["value"] ?? "on";
         }
       } else if (a["value"] !== undefined) spec.value = a["value"];
+      // Chrome paints a submit/reset button's caption from `@value`, else its own default label.
+      if ((type === "submit" || type === "reset") && spec.value === undefined)
+        spec.value = type === "submit" ? "Submit" : "Reset";
+      if (control === "datePicker") {
+        spec.dateKind = type as NonNullable<ControlNode["dateKind"]>;
+        if (type === "month" || type === "week")
+          addDiagnostic(
+            diagnostics,
+            "approximated",
+            "input: date",
+            `<input type="${type}"> → DatePicker(.date); iOS has no ${type} picker`,
+          );
+      }
       if (control === "colorPicker") spec.swatch = parseColor(a["value"]) ?? { r: 0, g: 0, b: 0, a: 1 };
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;
@@ -207,6 +221,9 @@ export interface ControlParts {
   /** Font and colour of the element's own text, for the value the control draws itself. */
   font?: FontSpec;
   color?: Color;
+  /** Computed `appearance` and `accent-color` of the element. */
+  appearance?: string;
+  accent?: Color;
 }
 
 /**
@@ -226,9 +243,11 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     return true;
   });
   // Document order is the DOM's; measured order is what the reader sees (CSS `order`, floats).
-  const content = [...kids.map((c) => c.sem), ...parts.texts].sort(
-    (a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x,
-  );
+  // A picker's options and a text area's text are already its `options`/`value`: no content.
+  const content =
+    control === "picker" || control === "textEditor"
+      ? []
+      : [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
   // A control whose whole content is its own text (a button's caption, a link's label): that text
   // is the element's line box, so it inherits the measured content box. Without it the control
   // would shrink to the glyphs and lose the browser's centring inside the box.
@@ -240,10 +259,21 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
   }
   const node: ControlNode = { ...base, kind: "control", control, content, ...state };
   if (label) node.label = label;
-  if (parts.font && SELF_DRAWN_TEXT[control]) {
+  // An input button's caption is its `value`, painted by the control itself.
+  const caption = control === "button" && state.value !== undefined && !state.files;
+  if (parts.font && (SELF_DRAWN_TEXT[control] || caption)) {
     node.font = parts.font;
     if (parts.color) node.color = parts.color;
   }
+  // Checkboxes, radios and ranges with native appearance ignore the author's box paint (Chrome
+  // draws its own widget there); `appearance: none` hands the box back to CSS.
+  if (parts.appearance === "none") node.appearance = "none";
+  else if (control === "toggle" || control === "radio" || control === "slider") {
+    node.style = { ...node.style, fills: [] };
+    delete node.style.border;
+    delete node.style.borderSides;
+  }
+  if (parts.accent) node.accent = parts.accent;
   return node;
 }
 

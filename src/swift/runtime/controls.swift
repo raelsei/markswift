@@ -182,3 +182,45 @@ nonisolated struct MarkswiftSliderTrack: View {
         }
     }
 }
+
+/// `<details>` as the browser draws it: the captured `<summary>` (its `::marker` included) is the
+/// whole tap target, the content follows at the measured gap, and there is no system chevron.
+nonisolated struct MarkswiftDisclosureStyle: DisclosureGroupStyle {
+    let spacing: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                configuration.label.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(configuration.isExpanded ? Text("Expanded") : Text("Collapsed"))
+            if configuration.isExpanded { configuration.content }
+        }
+    }
+}
+
+extension Date {
+    /// A date/time `<input>` value as the wall-clock time the design wrote, in the user's time zone.
+    nonisolated static func markswift(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second)) ?? .now
+    }
+}
+
+extension View {
+    /// `TextEditor` insets its text inside its frame (UITextView: 8 pt above and below, 5 pt line
+    /// fragment padding at the sides); the CSS padding already placed it, so the editor overhangs
+    /// its frame by exactly those insets.
+    // ponytail: UIKit default insets as constants; recalibrate from an iOS render (Step 10) if an SDK changes them.
+    @ViewBuilder func markswiftTextEditorInsets() -> some View {
+        #if os(iOS)
+        padding(EdgeInsets(top: -8, leading: -5, bottom: -8, trailing: -5))
+        #else
+        self
+        #endif
+    }
+}

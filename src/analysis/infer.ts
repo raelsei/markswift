@@ -136,6 +136,8 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
         : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
+      ...(n.styles["appearance"] !== undefined ? { appearance: n.styles["appearance"] } : {}),
+      ...(parseColor(n.styles["accent-color"]) ? { accent: parseColor(n.styles["accent-color"]) } : {}),
     });
     node.overlays = buildOverlays(n, abs, flow[0], ctx);
     return finish(node);
