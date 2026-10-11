@@ -2,6 +2,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { ConversionResult } from "../../src/index.ts";
 import { writeBundle } from "../../src/cli/output.ts";
+import { VERSION } from "../../src/model/version.ts";
 import { command } from "../../tools/verify/process.ts";
 
 const RESULT_DIRECTORY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -57,7 +58,7 @@ export class ResultStore {
     const folder = join(this.directory, id, "bundle");
     const zip = join(this.directory, id, "component.zip");
     try {
-      await writeBundle(result, folder);
+      await writeBundle(result, folder, { version: VERSION });
       await command(["/usr/bin/zip", "-qr", zip, "."], folder, 15_000);
       return zip;
     } catch (error) {
