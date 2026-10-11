@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- Own test page; compiled offline with Tailwind 4.1 by tests/conformance/tailwind-v4.ts (dark: = prefers-color-scheme). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>Team</title>
+    <meta name="markswift-themes" content="light,dark" />
+    <!-- tailwind-v4 -->
+  </head>
+  <body class="bg-slate-50 dark:bg-slate-950">
+    <main data-markswift-root class="w-[393px] min-h-[760px] bg-slate-50 px-5 py-6 font-sans dark:bg-slate-950">
+      <header class="mb-6">
+        <p class="text-xs font-medium uppercase tracking-widest text-blue-600 dark:text-blue-400">Workspace</p>
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Team members</h1>
+        <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Invite people to collaborate on this project.</p>
+      </header>
+
+      <div class="flex flex-col gap-4">
+        <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex items-center gap-3">
+            <img
+              class="h-10 w-10 shrink-0 rounded-full bg-blue-100"
+              alt=""
+              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20rx%3D%2220%22%20fill%3D%22%232563eb%22%2F%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2216%22%20r%3D%226%22%20fill%3D%22%23dbeafe%22%2F%3E%3Cpath%20d%3D%22M8%2036c2-7%206-10%2012-10s10%203%2012%2010%22%20fill%3D%22%23dbeafe%22%2F%3E%3C%2Fsvg%3E"
+            />
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">Ada Lovelace</h2>
+              <p class="truncate text-xs text-slate-500 dark:text-slate-400">ada@example.com</p>
+            </div>
+            <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Owner</span>
+          </div>
+          <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">Full access to billing, members and deploys.</p>
+          <div class="mt-4 flex items-center gap-2">
+            <button class="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white">Message</button>
+            <button class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">Manage</button>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex items-center gap-3">
+            <img
+              class="h-10 w-10 shrink-0 rounded-full bg-violet-100"
+              alt=""
+              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20rx%3D%2220%22%20fill%3D%22%237c3aed%22%2F%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2216%22%20r%3D%226%22%20fill%3D%22%23ede9fe%22%2F%3E%3Cpath%20d%3D%22M8%2036c2-7%206-10%2012-10s10%203%2012%2010%22%20fill%3D%22%23ede9fe%22%2F%3E%3C%2Fsvg%3E"
+            />
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">Grace Hopper</h2>
+              <p class="truncate text-xs text-slate-500 dark:text-slate-400">grace@example.com</p>
+            </div>
+            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">Editor</span>
+          </div>
+          <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">Can edit content and open pull requests.</p>
+          <div class="mt-4 flex items-center gap-2">
+            <button class="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white">Message</button>
+            <button class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">Manage</button>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">+</div>
+            <div class="min-w-0 flex-1">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Invite a teammate</h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Seats remaining: 3</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </main>
+  </body>
+</html>

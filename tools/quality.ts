@@ -16,6 +16,13 @@ export interface QualityPolicy {
   anchorMaxMismatch?: number;
   cases?: Record<string, CasePolicy>;
   features?: Record<string, CasePolicy>;
+  /** `families` keys are `<domain>@<app|fidelity>`, domain = first path segment of a capture's `fixture`; a floor for
+   * every capture of that family. Raised only by `--ratchet`, never lowered by hand. */
+  families?: Record<string, CasePolicy>;
+  /** Key: a capture key (`shadcn-card-390-light-app`) or `<caseId>@<app|fidelity>`; value: why it is excepted and who
+   * owns it. An excepted capture skips its `families` floor and the 1.0 `components@app` ≥ 0.95 target, never the
+   * per-capture drop rule. */
+  exceptions?: Record<string, string>;
   requireEvidence?: boolean;
   expectedSourceRevision?: string;
 }
@@ -78,6 +85,14 @@ function validRule(rule: unknown): rule is CasePolicy {
     [rule.maxDrop, rule.minSsim, rule.maxMismatch].every((value) => value === undefined || score(value))
   );
 }
+
+/** Reason a capture is exempt from family floors and the 1.0 component target, if any. */
+export const exceptionOf = (policy: Record<string, unknown>, key: string, c: Record<string, unknown>) =>
+  ((policy.exceptions ?? {}) as Record<string, string>)[key] ??
+  ((policy.exceptions ?? {}) as Record<string, string>)[`${String(c.caseId)}@${String(c.mode)}`];
+
+/** Family of a capture: `<first fixture path segment>@<mode>`. */
+const familyOf = (c: Record<string, unknown>) => `${String(c.fixture).split("/")[0]}@${String(c.mode)}`;
 
 /** Anchor regions of a capture; absent means none. `undefined` when malformed. */
 function anchorsOf(value: Record<string, unknown>): Anchor[] | undefined {
@@ -177,6 +192,8 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
           "anchorMaxMismatch",
           "cases",
           "features",
+          "families",
+          "exceptions",
           "requireEvidence",
           "expectedSourceRevision",
         ].includes(k),
@@ -186,6 +203,9 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
     (policy.minSsim !== undefined && !score(policy.minSsim)) ||
     (policy.cases !== undefined && !record(policy.cases)) ||
     (policy.features !== undefined && !record(policy.features)) ||
+    (policy.families !== undefined && !record(policy.families)) ||
+    (policy.exceptions !== undefined &&
+      !(record(policy.exceptions) && Object.values(policy.exceptions).every(nonempty))) ||
     (policy.requireEvidence !== undefined && typeof policy.requireEvidence !== "boolean") ||
     (policy.expectedSourceRevision !== undefined && !/^[a-f0-9]{40}$/i.test(String(policy.expectedSourceRevision)))
   ) {
@@ -213,6 +233,16 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
       issues.push({
         code: "policy",
         message: `Feature policy ${feature} must be <caseId>@<app|fidelity> naming a baseline case and mode, with maxDrop/minSsim/maxMismatch in [0,1].`,
+      });
+    }
+  }
+  const families = (policy.families ?? {}) as Record<string, unknown>;
+  for (const [family, rule] of Object.entries(families)) {
+    // Not required in the baseline: the pilot scope shares the policy file and lacks most families.
+    if (!/^[a-z0-9-]+@(app|fidelity)$/.test(family) || !validRule(rule)) {
+      issues.push({
+        code: "policy",
+        message: `Family policy ${family} must be <domain>@<app|fidelity> with maxDrop/minSsim/maxMismatch in [0,1].`,
       });
     }
   }
@@ -280,7 +310,11 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
         message: `SSIM ${before.ssim} → ${after.ssim}; allowed drop ${allowed}.`,
       });
     }
-    const floor = caseRule.minSsim ?? featureRule?.minSsim ?? (policy.minSsim as number | undefined);
+    const familyRule = exceptionOf(policy, capture, after)
+      ? undefined
+      : (families[familyOf(after)] as CasePolicy | undefined);
+    const floor =
+      caseRule.minSsim ?? featureRule?.minSsim ?? familyRule?.minSsim ?? (policy.minSsim as number | undefined);
     if (floor !== undefined && after.ssim + 1e-12 < floor) {
       issues.push({ code: "floor", capture, message: `SSIM ${after.ssim} is below required floor ${floor}.` });
     }
@@ -429,24 +463,26 @@ async function writeBaseline(runDir: string, path: string) {
   console.log(`wrote ${keys.length} captures to ${path}`);
 }
 
-/** Markdown: per fixture domain × mode, then per case × mode; `app` rows first. */
-function summarize(manifest: unknown): string {
+/** Captures grouped by `<mode>\t<keyOf(capture)>`, groups sorted (`app` first). */
+function groupBy(manifest: unknown, keyOf: (c: Record<string, unknown>) => string) {
   if (!record(manifest)) throw new Error("summary needs a capture manifest object");
-  const groups = (keyOf: (c: Record<string, unknown>) => string) => {
-    const out = new Map<string, Array<[string, Record<string, unknown>]>>();
-    for (const [key, c] of Object.entries(manifest)) {
-      if (!record(c) || !score(c.ssim) || !score(c.mismatch)) throw new Error(`capture ${key} lacks ssim/mismatch`);
-      const group = `${String(c.mode)}\t${keyOf(c)}`;
-      out.set(group, [...(out.get(group) ?? []), [key, c]]);
-    }
-    return [...out].sort(([a], [b]) => a.localeCompare(b));
-  };
-  const mean = (values: number[]) => (values.reduce((a, b) => a + b, 0) / values.length).toFixed(4);
+  const out = new Map<string, Array<[string, Record<string, unknown>]>>();
+  for (const [key, c] of Object.entries(manifest)) {
+    if (!record(c) || !score(c.ssim) || !score(c.mismatch)) throw new Error(`capture ${key} lacks ssim/mismatch`);
+    const group = `${String(c.mode)}\t${keyOf(c)}`;
+    out.set(group, [...(out.get(group) ?? []), [key, c]]);
+  }
+  return [...out].sort(([a], [b]) => a.localeCompare(b));
+}
+const mean = (values: number[]) => (values.reduce((a, b) => a + b, 0) / values.length).toFixed(4);
+
+/** Markdown for the README evidence block: per fixture domain × mode, then the policy's exceptions if any. */
+export function readmeSummary(manifest: unknown, policy: Record<string, unknown> = {}): string {
   const lines = [
     "| domain | mode | n | mean ssim | min ssim | mean mismatch | anchors ok |",
     "|---|---|---|---|---|---|---|",
   ];
-  for (const [group, rows] of groups((c) => String(c.fixture).split("/")[0]!)) {
+  for (const [group, rows] of groupBy(manifest, (c) => String(c.fixture).split("/")[0]!)) {
     const [mode, domain] = group.split("\t");
     const [minKey, min] = rows.reduce((lo, row) => ((row[1].ssim as number) < (lo[1].ssim as number) ? row : lo));
     const anchors = rows.flatMap(([, c]) => anchorsOf(c) ?? []);
@@ -454,8 +490,28 @@ function summarize(manifest: unknown): string {
       `| ${domain} | ${mode} | ${rows.length} | ${mean(rows.map(([, c]) => c.ssim as number))} | ${(min.ssim as number).toFixed(4)} (${minKey}) | ${mean(rows.map(([, c]) => c.mismatch as number))} | ${anchors.filter((a) => a.mismatch <= DEFAULT_ANCHOR_MAX_MISMATCH).length}/${anchors.length} |`,
     );
   }
-  lines.push("", "| case | mode | n | min ssim | mean ssim | max mismatch |", "|---|---|---|---|---|---|");
-  for (const [group, rows] of groups((c) => String(c.caseId))) {
+  const exceptions = Object.entries((policy.exceptions ?? {}) as Record<string, string>).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  if (exceptions.length)
+    lines.push(
+      "",
+      "Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):",
+      "",
+      ...exceptions.map(([key, reason]) => `- \`${key}\`: ${reason}`),
+    );
+  return lines.join("\n");
+}
+
+/** Markdown: the README block, then per case × mode; `app` rows first. */
+export function summarize(manifest: unknown, policy: Record<string, unknown> = {}): string {
+  const lines = [
+    readmeSummary(manifest, policy),
+    "",
+    "| case | mode | n | min ssim | mean ssim | max mismatch |",
+    "|---|---|---|---|---|---|",
+  ];
+  for (const [group, rows] of groupBy(manifest, (c) => String(c.caseId))) {
     const [mode, caseId] = group.split("\t");
     const ssims = rows.map(([, c]) => c.ssim as number);
     lines.push(
@@ -465,9 +521,33 @@ function summarize(manifest: unknown): string {
   return lines.join("\n");
 }
 
+/** Family floors at (measured minimum − 0.005) rounded down to 0.01, so the per-capture 0.005 drop allowance never
+ * trips a floor; an existing higher floor is kept; excepted captures do not count. Never lowers. */
+export function ratchetFamilies(policy: Record<string, unknown>, manifest: Record<string, unknown>) {
+  const old = (policy.families ?? {}) as Record<string, CasePolicy>;
+  const mins = new Map<string, number>();
+  for (const [key, c] of Object.entries(manifest)) {
+    if (!record(c) || !score(c.ssim)) throw new Error(`capture ${key} lacks ssim`);
+    if (exceptionOf(policy, key, c)) continue;
+    const family = familyOf(c);
+    mins.set(family, Math.min(mins.get(family) ?? 1, c.ssim));
+  }
+  const families: Record<string, CasePolicy> = { ...old };
+  for (const [family, min] of mins) {
+    const computed = Math.max(0, Math.floor((min - 0.005) * 100) / 100);
+    families[family] = { ...old[family], minSsim: Math.max(old[family]?.minSsim ?? 0, computed) };
+  }
+  return {
+    ...policy,
+    families: Object.fromEntries(Object.entries(families).sort(([a], [b]) => a.localeCompare(b))),
+  };
+}
+
 const USAGE = `Usage: bun run tools/quality.ts <baseline-dir|manifest.json> <current-dir> [policy.json]
        bun run tools/quality.ts --write-baseline <run-dir> <manifest.json>
-       bun run tools/quality.ts --summary <manifest.json>`;
+       bun run tools/quality.ts --summary <manifest.json> [policy.json]
+       bun run tools/quality.ts --ratchet <policy.json> <manifest.json>
+       bun run tools/quality.ts --readme <manifest.json> <policy.json>`;
 
 if (import.meta.main) {
   try {
@@ -476,8 +556,29 @@ if (import.meta.main) {
       if (args.length !== 3) throw new Error(USAGE);
       await writeBaseline(args[1]!, args[2]!);
     } else if (args[0] === "--summary") {
-      if (args.length !== 2) throw new Error(USAGE);
-      console.log(summarize(await Bun.file(args[1]!).json()));
+      if (args.length !== 2 && args.length !== 3) throw new Error(USAGE);
+      const policy = args[2] ? await Bun.file(args[2]).json() : {};
+      console.log(summarize(await Bun.file(args[1]!).json(), policy));
+    } else if (args[0] === "--ratchet") {
+      if (args.length !== 3) throw new Error(USAGE);
+      const policy = (await Bun.file(args[1]!).json()) as Record<string, unknown>;
+      const next = ratchetFamilies(policy, await Bun.file(args[2]!).json());
+      await Bun.write(args[1]!, `${JSON.stringify(next, null, 2)}\n`);
+      const before = (policy.families ?? {}) as Record<string, CasePolicy>;
+      for (const [family, rule] of Object.entries(next.families)) {
+        const was = before[family]?.minSsim;
+        if (was === undefined) console.log(`${family}: new ${rule.minSsim}`);
+        else if (was !== rule.minSsim) console.log(`${family}: ${was} → ${rule.minSsim}`);
+      }
+    } else if (args[0] === "--readme") {
+      if (args.length !== 3) throw new Error(USAGE);
+      const [open, close] = [`<!-- quality-summary ${args[1]} -->`, "<!-- /quality-summary -->"];
+      const readme = await Bun.file("README.md").text();
+      const start = readme.indexOf(open),
+        end = readme.indexOf(close, start);
+      if (start < 0 || end < 0) throw new Error(`README.md lacks the ${open} … ${close} markers`);
+      const block = readmeSummary(await Bun.file(args[1]!).json(), await Bun.file(args[2]!).json());
+      await Bun.write("README.md", `${readme.slice(0, start + open.length)}\n${block}\n${readme.slice(end)}`);
     } else {
       if (args.length < 2 || args.length > 3) throw new Error(USAGE);
       const [baseline, current] = await Promise.all([loadComparisons(args[0]!), loadComparisons(args[1]!)]);

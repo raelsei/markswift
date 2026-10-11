@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Own test page; compiled offline with Tailwind 4.1 by tests/conformance/tailwind-v4.ts (dark: = prefers-color-scheme). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>New project</title>
+    <meta name="markswift-themes" content="light,dark" />
+    <!-- tailwind-v4 -->
+  </head>
+  <body class="bg-neutral-50 dark:bg-neutral-950">
+    <main data-markswift-root class="w-[393px] min-h-[700px] bg-neutral-50 px-5 py-6 font-sans dark:bg-neutral-950">
+      <h1 class="text-xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">New project</h1>
+      <p class="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Projects hold your deployments and environment variables.</p>
+
+      <form class="mt-6 flex flex-col gap-5">
+        <div class="flex flex-col gap-1.5">
+          <label for="name" class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Project name</label>
+          <input
+            id="name"
+            type="text"
+            value="atlas-web"
+            class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          />
+          <p class="text-xs text-neutral-500 dark:text-neutral-400">Lowercase letters, numbers and dashes.</p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="region" class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Region</label>
+          <select
+            id="region"
+            class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          >
+            <option selected>Frankfurt (eu-central-1)</option>
+            <option>Oregon (us-west-2)</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="notes" class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Notes</label>
+          <textarea
+            id="notes"
+            rows="3"
+            class="w-full resize-none rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm leading-6 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          >Marketing site rewrite.</textarea
+          >
+        </div>
+
+        <div class="flex items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+          <input id="preview" type="checkbox" checked class="mt-0.5 h-4 w-4 rounded border-neutral-300 accent-blue-500" />
+          <div class="flex flex-col gap-0.5">
+            <label for="preview" class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Preview deployments</label>
+            <p class="text-xs leading-5 text-neutral-500 dark:text-neutral-400">Build every branch and comment the URL on the pull request.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button type="submit" class="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white">Create project</button>
+          <button type="button" class="rounded-xl px-4 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">Cancel</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
