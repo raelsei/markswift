@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { assessQuality, driftHint, loadComparisons } from "../../../tools/quality.ts";
+import { assessQuality, driftHint, loadComparisons, ratchetFamilies, readmeSummary } from "../../../tools/quality.ts";
 
 const baseline = { "card-light": { ssim: 0.95 }, "card-dark": { ssim: 0.94 } };
 test("allows the boundary drop per capture, never hiding a regression with an improved average", () => {
@@ -420,4 +420,87 @@ test("CLI --write-baseline refuses an incomplete run and --summary prints domain
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+const flex = (ssim: number) => ({ a: evidence({ fixture: "css-layout/display--flex.html", ssim }) });
+const codes = (r: { issues: Array<{ code: string }> }) => r.issues.map((i) => i.code);
+
+test("family floors apply to every capture of <domain>@<mode> only", () => {
+  const low = flex(0.9);
+  expect(codes(assessQuality(low, low, { families: { "css-layout@app": { minSsim: 0.95 } } }))).toEqual(["floor"]);
+  expect(assessQuality(low, low, { families: { "css-paint@app": { minSsim: 0.95 } } }).ok).toBe(true);
+  expect(assessQuality(low, low, { families: { "css-layout@fidelity": { minSsim: 0.95 } } }).ok).toBe(true);
+});
+
+test("family keys must be <domain>@<mode>; a family absent from the baseline is accepted", () => {
+  const a = flex(0.98);
+  for (const key of ["css layout@app", "css-layout"])
+    expect(codes(assessQuality(a, a, { families: { [key]: { minSsim: 0.5 } } }))).toEqual(["policy"]);
+  expect(assessQuality(a, a, { families: { "svg@fidelity": { minSsim: 0.5 } } }).ok).toBe(true);
+  expect(codes(assessQuality(a, a, { families: { "svg@app": { minSsim: 2 } } }))).toEqual(["policy"]);
+});
+
+test("a case floor overrides the family floor", () => {
+  const low = flex(0.9);
+  const policy = { families: { "css-layout@app": { minSsim: 0.95 } }, cases: { a: { minSsim: 0.85 } } };
+  expect(assessQuality(low, low, policy).ok).toBe(true);
+});
+
+test("exceptions skip the family floor by capture key or <caseId>@<mode>", () => {
+  const low = flex(0.9);
+  const families = { "css-layout@app": { minSsim: 0.95 } };
+  expect(assessQuality(low, low, { families, exceptions: { a: "r" } }).ok).toBe(true);
+  expect(assessQuality(low, low, { families, exceptions: { "display-flex@app": "r" } }).ok).toBe(true);
+  expect(codes(assessQuality(low, low, { families, exceptions: { "display-flex@fidelity": "r" } }))).toEqual(["floor"]);
+});
+
+test("exceptions never relax the drop rule, and an empty reason is a policy error", () => {
+  const low = flex(0.9);
+  const families = { "css-layout@app": { minSsim: 0.95 } };
+  expect(codes(assessQuality(low, flex(0.89), { families, exceptions: { a: "r" } }))).toEqual(["regression"]);
+  expect(codes(assessQuality(low, low, { exceptions: { a: "" } }))).toEqual(["policy"]);
+});
+
+test("ratchetFamilies floors at min − 0.005 rounded down to 0.01, never lowers, sorted, ignores exceptions", () => {
+  const m = (ssim: number, fixture = "css-layout/x.html", caseId = "x") => evidence({ ssim, fixture, caseId });
+  expect(ratchetFamilies({}, { a: m(0.5437) }).families).toEqual({ "css-layout@app": { minSsim: 0.53 } });
+  expect(ratchetFamilies({ families: { "css-layout@app": { minSsim: 0.6 } } }, { a: m(0.5437) }).families).toEqual({
+    "css-layout@app": { minSsim: 0.6 },
+  });
+  expect(ratchetFamilies({ families: { "css-layout@app": { minSsim: 0.95 } } }, { a: m(0.9871) }).families).toEqual({
+    "css-layout@app": { minSsim: 0.98 },
+  });
+  const next = ratchetFamilies(
+    { maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } },
+    { b: m(0.9, "svg/a.html"), a: m(0.7, "html/a.html"), c: m(0.4, "svg/b.html", "low") },
+  );
+  expect(Object.keys(next.families)).toEqual(["html@app", "svg@app"]);
+  expect(next.families["svg@app"]).toEqual({ minSsim: 0.89 });
+  expect(next).toMatchObject({ maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } });
+});
+
+test("readmeSummary lists exceptions sorted after the domain table, and nothing without them", () => {
+  const manifest = flex(0.9);
+  expect(readmeSummary(manifest)).not.toContain("Exceptions");
+  const lines = readmeSummary(manifest, { exceptions: { z: "zed", "display-flex@app": "owner: plan 042" } }).split(
+    "\n",
+  );
+  expect(lines.slice(-2)).toEqual(["- `display-flex@app`: owner: plan 042", "- `z`: zed"]);
+  expect(lines).toContain(
+    "Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):",
+  );
+});
+
+test("README evidence table is the generated iOS summary", async () => {
+  const root = join(import.meta.dir, "../../..");
+  const readme = await Bun.file(join(root, "README.md")).text();
+  const open = "<!-- quality-summary tests/conformance/baselines/visual-all-ios.json -->";
+  const block = readme.slice(readme.indexOf(open) + open.length, readme.indexOf("<!-- /quality-summary -->"));
+  expect(readme).toContain(open);
+  expect(block.trim()).toBe(
+    readmeSummary(
+      await Bun.file(join(root, "tests/conformance/baselines/visual-all-ios.json")).json(),
+      await Bun.file(join(root, "tests/conformance/visual-policy-ios.json")).json(),
+    ),
+  );
 });

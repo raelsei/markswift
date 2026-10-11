@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- Own test page; compiled offline with Tailwind 4.1 by tests/conformance/tailwind-v4.ts (dark: = prefers-color-scheme). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>Settings</title>
+    <meta name="markswift-themes" content="light,dark" />
+    <!-- tailwind-v4 -->
+  </head>
+  <body class="bg-stone-50 dark:bg-stone-950">
+    <main data-markswift-root class="w-[393px] min-h-[740px] bg-stone-50 px-5 py-6 font-sans dark:bg-stone-950">
+      <h1 class="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-50">Settings</h1>
+
+      <section class="mt-6">
+        <h2 class="px-1 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">Notifications</h2>
+        <div class="mt-2 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+          <div class="flex items-center justify-between gap-4 border-b border-stone-200 px-4 py-3.5 dark:border-stone-800">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-stone-900 dark:text-stone-100">Push notifications</p>
+              <p class="mt-0.5 text-xs leading-5 text-stone-500 dark:text-stone-400">Deploys, failures and mentions.</p>
+            </div>
+            <div class="flex h-6 w-11 shrink-0 items-center justify-end rounded-full bg-blue-500 p-0.5">
+              <div class="h-5 w-5 rounded-full bg-white"></div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-4 px-4 py-3.5">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-stone-900 dark:text-stone-100">Weekly digest</p>
+              <p class="mt-0.5 text-xs leading-5 text-stone-500 dark:text-stone-400">A summary every Monday morning.</p>
+            </div>
+            <div class="flex h-6 w-11 shrink-0 items-center justify-start rounded-full bg-stone-300 p-0.5 dark:bg-stone-700">
+              <div class="h-5 w-5 rounded-full bg-white"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-6">
+        <h2 class="px-1 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">Account</h2>
+        <div class="mt-2 divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:divide-stone-800 dark:border-stone-800 dark:bg-stone-900">
+          <div class="flex items-center justify-between px-4 py-3.5">
+            <span class="text-sm text-stone-700 dark:text-stone-200">Email</span>
+            <span class="text-sm text-stone-500 dark:text-stone-400">ada@example.com</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3.5">
+            <span class="text-sm text-stone-700 dark:text-stone-200">Plan</span>
+            <span class="rounded-md bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-800 dark:text-stone-200">Pro</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3.5">
+            <span class="text-sm text-stone-700 dark:text-stone-200">Two-factor auth</span>
+            <span class="text-sm font-medium text-emerald-600 dark:text-emerald-400">On</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="mt-8 flex flex-col gap-3">
+        <button class="rounded-xl bg-blue-500 px-4 py-2 text-sm font-medium text-white">Save changes</button>
+        <button class="rounded-xl border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 dark:border-rose-900 dark:text-rose-400">
+          Delete account
+        </button>
+      </div>
+    </main>
+  </body>
+</html>
