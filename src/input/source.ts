@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { serveDir } from "./server.ts";
 import type { HtmlSource } from "./types.ts";
@@ -17,8 +18,8 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
   }
   if ("file" in source) {
     const file = resolve(source.file);
-    const html = await Bun.file(file).text();
-    const server = serveDir(dirname(file));
+    const html = await readFile(file, "utf8");
+    const server = await serveDir(dirname(file));
     return {
       html,
       url: `${server.origin}/${encodeURIComponent(basename(file))}`,
@@ -27,7 +28,7 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
     };
   }
   if (source.baseURL && source.assetsDir) throw new Error("choose baseURL or assetsDir, not both");
-  const server = source.assetsDir ? serveDir(resolve(source.assetsDir)) : undefined;
+  const server = source.assetsDir ? await serveDir(resolve(source.assetsDir)) : undefined;
   return {
     html: source.html,
     url: source.baseURL ? httpURL(source.baseURL) : `${server?.origin ?? "http://markswift.invalid"}/index.html`,
