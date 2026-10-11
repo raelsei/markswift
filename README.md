@@ -117,6 +117,8 @@ for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`gene
 - `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
   System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`); text-bearing
   controls treat their measured height as a floor; pages taller than the viewport scroll.
+  CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
+  compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
 - `fidelity` keeps the captured geometry and line division at fixed sizes. It exists for visual
   verification.
 

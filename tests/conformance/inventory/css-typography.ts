@@ -437,11 +437,12 @@ export default {
       id: "line-height",
       group: "Text spacing",
       class: "mapped",
-      target: ".lineSpacing(lineHeight − naturalLineHeight) + app half-leading padding",
+      target:
+        "`.markswiftLineHeight` (iOS 26+ `.lineHeight(.multiple)`, iOS 18–25 `.lineSpacing` + half-leading padding); fidelity `.lineSpacing` + pinned frame",
       ir: "FontSpec.lineHeight",
       via: "style",
       impl: "partial",
-      note: "Natural line height comes from packaged font metrics (measured SF metrics for system fonts). App mode adds half-leading as vertical padding and releases line-box-derived fixed heights; fidelity retains measured frames. Tighter-than-natural leading is reported because SwiftUI clamps negative lineSpacing.",
+      note: "Natural line height comes from packaged font metrics (measured SF metrics for system fonts); the baseline follows the browser's rounded ascent/descent. App mode releases line-box-derived fixed heights; fidelity retains measured frames. Tighter-than-natural leading compresses on iOS 26+ and is reported, because iOS 18–25 clamps it.",
       spec: `${MDN}line-height`,
     },
     {
