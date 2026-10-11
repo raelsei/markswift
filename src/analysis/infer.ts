@@ -57,7 +57,8 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
-function build(n: LayoutNode, ctx: InferenceContext): SemNode {
+function build(input: LayoutNode, ctx: InferenceContext): SemNode {
+  const n = input.tag === "table" ? captionOutside(input) : input;
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
@@ -279,6 +280,40 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (scroll) stack.scroll = scroll;
   stack.overlays = buildOverlays(n, abs, flow[0], ctx);
   return finish(stack);
+}
+
+/**
+ * Chrome's table box includes its `<caption>`, but the table's own paint (background, border,
+ * radius, shadow) covers only the row groups. The rows move into an anonymous block that carries
+ * that paint; the table keeps its layout and loses its paint.
+ */
+// ponytail: caption margins are not subtracted from the rows box; measure them if a design spaces its caption.
+function captionOutside(n: LayoutNode): LayoutNode {
+  const first = n.children[0];
+  const last = n.children[n.children.length - 1];
+  const caption = first?.tag === "caption" ? first : last?.tag === "caption" ? last : undefined;
+  if (!caption || n.children.length < 2) return n;
+  const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
+  if (!paint.length) return n;
+  const rest = n.children.filter((c) => c !== caption);
+  const top = caption === first;
+  const bounds = {
+    x: n.bounds.x,
+    y: top ? caption.bounds.y + caption.bounds.h : n.bounds.y,
+    w: n.bounds.w,
+    h: n.bounds.h - caption.bounds.h,
+  };
+  const rows: LayoutNode = {
+    tag: "div",
+    attrs: {},
+    styles: { display: "block", ...Object.fromEntries(paint.map((k) => [k, n.styles[k]!])) },
+    bounds,
+    children: rest,
+    ...(n.id !== undefined ? { id: `${n.id}/rows` } : {}),
+    ...(n.paint !== undefined ? { paint: n.paint } : {}),
+  };
+  const styles = Object.fromEntries(Object.entries(n.styles).filter(([k]) => !paint.includes(k)));
+  return { ...n, styles, children: top ? [caption, rows] : [rows, caption] };
 }
 
 /** Inline-level boxes laid out as captured rows never re-wrap natively, whether they filled one line or several. */
