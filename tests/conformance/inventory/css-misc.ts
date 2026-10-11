@@ -19,6 +19,7 @@ import type { Inventory } from "./schema.ts";
  * `user-select` stays non-visual: SwiftUI `Text` is not selectable by default,
  * so `none` is already the platform behaviour and `.textSelection(.disabled)`
  * would be a no-op; opting text INTO selection is an app decision, not a design one.
+ * Capture-time conditions (`media-query`, `container-query`, `:invalid`) are reported, never evaluated twice.
  */
 export default {
   domain: "css-misc",
@@ -576,6 +577,43 @@ export default {
       impl: "yes",
       note: "Hover/focus 'interest invoker' timing for popovers; interaction-only.",
       spec: "https://open-ui.org/components/interest-invokers.explainer/",
+    },
+
+    // ---------- Pseudo-classes ----------
+    {
+      id: ":invalid",
+      group: "Pseudo-classes",
+      class: "approximated",
+      target: "—",
+      ir: "SemBase.diagnostics",
+      via: "attribute",
+      impl: "yes",
+      note: "Also covers :valid/:user-invalid/:user-valid. Elements an author rule styles through validation state are marked at capture (data-markswift-validation) and reported; the captured state is the resting look. Validation variants are post-1.0.",
+      spec: "https://developer.mozilla.org/docs/Web/CSS/:invalid",
+    },
+
+    // ---------- Conditional rules ----------
+    {
+      id: "media-query",
+      group: "Conditional rules",
+      class: "approximated",
+      target: "—",
+      ir: "ConversionWarning",
+      via: "none",
+      impl: "yes",
+      note: "One viewport per capture. `@media` rules with a width/height/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning; breakpoint branching is post-1.0.",
+      spec: "https://developer.mozilla.org/docs/Web/CSS/@media",
+    },
+    {
+      id: "container-query",
+      group: "Conditional rules",
+      class: "approximated",
+      target: "—",
+      ir: "ConversionWarning",
+      via: "none",
+      impl: "yes",
+      note: "One viewport per capture. `@container` rules with a width/height/inline-size/block-size/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning; breakpoint branching is post-1.0.",
+      spec: "https://developer.mozilla.org/docs/Web/CSS/@container",
     },
 
     // ---------- Aliases ----------

@@ -123,6 +123,9 @@ export type Theme = Combo["theme"];
  * tests/architecture/layout-doc.test.ts, which pins the schema to it) later changes re-pin its fingerprint. */
 export const LAYOUT_DOC_VERSION = 3;
 
+/** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
+export const VALIDATION_MARK = "data-markswift-validation";
+
 export const LayoutDoc = z.object({
   version: z.literal(LAYOUT_DOC_VERSION),
   source: z.string(),

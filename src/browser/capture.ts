@@ -11,6 +11,7 @@ import { chromium, type Browser, type BrowserContext, type Response } from "play
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
+import { readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
@@ -240,6 +241,7 @@ export class BrowserCapture {
         { sel: spec.root, mark: ROOT_MARK },
       );
       const cdp = await this.context.newCDPSession(page);
+      const conditional = await readConditionalRules(page, spec.root, this.opts.viewport.width);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
@@ -301,7 +303,7 @@ export class BrowserCapture {
       await Promise.all(imageReads);
       errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
       return {
-        warnings: errors.map((message) => ({ source: "capture" as const, message })),
+        warnings: [...errors.map((message) => ({ source: "capture" as const, message })), ...conditional],
         layout: {
           version: LAYOUT_DOC_VERSION,
           source,
