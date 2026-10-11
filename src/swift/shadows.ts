@@ -1,5 +1,6 @@
 /** CSS box shadows paint the box silhouette, independently of its children and other shadows. */
 import type { SemNode, Style } from "../model/semantic.ts";
+import type { Paint } from "../model/values.ts";
 import type { EmitContext } from "./context.ts";
 import { colorExpr, indent, num } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
@@ -10,8 +11,26 @@ type Insets = [number, number, number, number];
 export function outerShadowModifiers(n: SemNode, ctx: EmitContext): string[] {
   const result: string[] = [];
   const box = shapeExpr(n.style, n.frame.w, n.frame.h);
+  // An opaque fill over the whole border box hides the shadow's interior, so the knockout pass is unnecessary.
+  const cover = n.style.fills.find(
+    (f): f is Extract<Paint, { kind: "solid" }> =>
+      f.kind === "solid" &&
+      f.color.a === 1 &&
+      !f.blend &&
+      !f.inset?.some((v) => v !== 0) &&
+      (ctx.tokens ? ctx.tokens.opaque(f.color, n.id) : true),
+  );
   // The first CSS shadow is on top. Each subsequent background modifier goes farther back.
   for (const s of n.style.shadows.filter((s) => !s.inset && s.color.a > 0)) {
+    if (cover && s.spread === 0) {
+      // The caster is a copy of the box behind the real fill: `.shadow` on the node would shadow every child.
+      const caster = [
+        `${box}.fill(${colorExpr(cover.color, ctx, n.id)})`,
+        `.shadow(color: ${colorExpr(s.color, ctx, n.id)}, radius: ${num(s.blur / 2)}, x: ${num(s.x)}, y: ${num(s.y)})`,
+      ];
+      result.push(".background {", ...indent(caster, 1), "}");
+      continue;
+    }
     const silhouette = insetShape(n, [-s.spread, -s.spread, -s.spread, -s.spread]);
     const body = [
       "ZStack {",

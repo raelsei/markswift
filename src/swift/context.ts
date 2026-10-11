@@ -63,6 +63,8 @@ export interface EmitContext extends ColorCtx {
 export interface ScreenTokens {
   /** Token for the colour `id` paints (at `slot`, when the call site knows it), or undefined when the colour must stay a literal. */
   name(c: Color, id: string | undefined, slot?: string): string | undefined;
+  /** True when the colour `id` paints is opaque in every theme this view renders (a semantic token checks its dark value too). */
+  opaque(c: Color, id: string | undefined): boolean;
 }
 
 /** How one node paints in an interaction state, on top of its resting look (`states.ts` `pairStyle`). */
