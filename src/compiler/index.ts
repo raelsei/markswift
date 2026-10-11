@@ -74,6 +74,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
       else missed.add(`${id}\u0000${c.r},${c.g},${c.b},${c.a}`);
       return token;
     },
+    opaque: (c, id) => lookup.opaque(c, id),
   };
   const result = emitSwift(screen, name, {
     mode: options.mode ?? "app",

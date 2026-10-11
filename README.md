@@ -169,9 +169,9 @@ per-fixture table, e.g. for the per-PR macOS numbers in
 | components | app | 100 | 0.9151 | 0.4877 (shadcn-accordion-320-dark-app) | 0.0215 | 0/0 |
 | css-layout | app | 52 | 0.9820 | 0.8424 (display--contents-320-light-app) | 0.0116 | 16/16 |
 | css-misc | app | 8 | 0.9622 | 0.9352 (animation-name-390-dark-app) | 0.0193 | 0/0 |
-| css-paint | app | 80 | 0.9539 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
+| css-paint | app | 80 | 0.9540 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
 | css-typography | app | 100 | 0.9305 | 0.5713 (word-break-320-dark-app) | 0.0289 | 0/0 |
-| html | app | 60 | 0.9267 | 0.7571 (input-320-dark-app) | 0.0275 | 4/4 |
+| html | app | 60 | 0.9273 | 0.7571 (input-320-dark-app) | 0.0273 | 4/4 |
 | svg | app | 40 | 0.9761 | 0.9326 (svg-lineargradient-320-dark-app) | 0.0164 | 0/0 |
 | tailwind-v4 | app | 8 | 0.9491 | 0.8750 (gradients-390-dark-app) | 0.0269 | 0/0 |
 | attribute | fidelity | 14 | 0.9361 | 0.8417 (attr-alt-320-light-fidelity) | 0.0243 | 0/0 |
@@ -180,7 +180,7 @@ per-fixture table, e.g. for the per-PR macOS numbers in
 | css-misc | fidelity | 8 | 0.9491 | 0.9312 (pointer-events--none-390-light-fidelity) | 0.0245 | 0/0 |
 | css-paint | fidelity | 80 | 0.9521 | 0.8923 (list-style-type-320-dark-fidelity) | 0.0236 | 12/12 |
 | css-typography | fidelity | 100 | 0.9201 | 0.6544 (font-family-320-dark-fidelity) | 0.0336 | 0/0 |
-| html | fidelity | 60 | 0.9203 | 0.7662 (text-level-320-light-fidelity) | 0.0308 | 4/4 |
+| html | fidelity | 60 | 0.9208 | 0.7662 (text-level-320-light-fidelity) | 0.0306 | 4/4 |
 | svg | fidelity | 40 | 0.9627 | 0.9112 (svg-lineargradient-320-dark-fidelity) | 0.0204 | 0/0 |
 | tailwind-v4 | fidelity | 8 | 0.9484 | 0.8748 (gradients-390-dark-fidelity) | 0.0272 | 0/0 |
 <!-- /quality-summary -->

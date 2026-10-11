@@ -100,5 +100,11 @@ export function screenTokens(set: TokenSet, screen: Screen): ScreenTokens {
       id === undefined
         ? undefined
         : set.index.get(`${prefix}${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`),
+    // A literal is the same colour in both themes (an adaptive slot always becomes a semantic token).
+    opaque(c, id) {
+      const token = id === undefined ? undefined : set.index.get(`${prefix}${id}\u0000${colorKey(c)}`);
+      const t = token === undefined ? undefined : set.tokens.find((t) => t.name === token);
+      return t ? t.light.a === 1 && t.dark.a === 1 : c.a === 1;
+    },
   };
 }

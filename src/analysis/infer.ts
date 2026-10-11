@@ -26,6 +26,7 @@ import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 import { clipsText } from "./style-background.ts";
+import { dropInvisible } from "./invisible.ts";
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = {
@@ -54,6 +55,7 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll)
     root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
+  dropInvisible(root);
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
