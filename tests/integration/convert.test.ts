@@ -345,6 +345,7 @@ browserTest(
       const started = performance.now();
       // ponytail: plain await, not `expect(p).rejects` — Bun 1.4.3 never fires the test timeout while
       // `.rejects` awaits a promise that never settles, so a regression here would hang the suite, not fail it.
+      // (upstream: https://github.com/oven-sh/bun/issues/19130)
       const error = await convert({ url: `http://127.0.0.1:${server.port}/` }, { timeoutMs: 2000 }).catch((e) => e);
       expect(String(error)).toMatch(/timed out after 2000 ms/);
       expect(performance.now() - started).toBeLessThan(10_000);

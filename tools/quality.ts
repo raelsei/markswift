@@ -259,7 +259,11 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
       }
       for (const key of configuration) {
         if (before[key] !== after[key])
-          issues.push({ code: "provenance", capture, message: `Capture configuration changed: ${key}.` });
+          issues.push({
+            code: "provenance",
+            capture,
+            message: `Capture configuration changed: ${key} (${JSON.stringify(before[key])} → ${JSON.stringify(after[key])}).`,
+          });
       }
       if (before.width !== after.width || before.height !== after.height) {
         issues.push({ code: "dimensions", capture, message: "Baseline and current image dimensions differ." });
@@ -322,6 +326,23 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
     issues.push({ code: "provenance", message: "A run must come from one source revision." });
   }
   return result();
+}
+
+/** Toolchain keys a runner-image, Chromium or Xcode bump changes; the baseline then needs a reviewed rebaseline. */
+const TOOLCHAIN = /^Capture configuration changed: (chrome|xcode|renderer) /;
+
+/** Next step for a reader when the runner toolchain differs from the tracked baseline's; undefined otherwise. */
+export function driftHint(assessment: QualityAssessment): string | undefined {
+  const drift = assessment.issues.filter((i) => i.code === "provenance" && TOOLCHAIN.test(i.message));
+  if (!drift.length) return undefined;
+  const changes = [...new Set(drift.map((i) => i.message.replace("Capture configuration changed: ", "")))];
+  const only = assessment.issues.every((i) => i.code === "provenance");
+  return [
+    `Toolchain drift: ${changes.join("; ")}`,
+    only
+      ? "Only provenance differs. Rebaseline: dispatch the Visual workflow with the same renderer and scope and rebaseline=true, review the candidate artifact, then commit it with `bun run quality --write-baseline`."
+      : "Scores were compared across toolchains; review the diffs before rebaselining (Visual dispatch with rebaseline=true).",
+  ].join("\n");
 }
 
 /** Load a manifest, or immediate <capture>/compare.json children of an output directory.
@@ -463,6 +484,8 @@ if (import.meta.main) {
       const policy: unknown = args[2] ? await Bun.file(args[2]).json() : {};
       const assessment = assessQuality(baseline, current, policy);
       console.log(JSON.stringify(assessment, null, 2));
+      const hint = driftHint(assessment);
+      if (hint) console.error(hint);
       process.exitCode = assessment.ok ? 0 : 1;
     }
   } catch (error) {

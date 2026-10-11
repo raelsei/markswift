@@ -9,6 +9,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
+- The quality gate names the old and new value of a changed capture configuration and prints a rebaseline hint on toolchain drift; the Visual Toolchain step lists simulator runtimes; a missing tracked baseline fails with instructions.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

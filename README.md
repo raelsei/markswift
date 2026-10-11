@@ -239,8 +239,9 @@ bun run quality tests/conformance/baselines/visual-pilot-mac.json tests/conforma
 ```
 
 Baselines change only through `bun run quality --write-baseline <run-dir> <manifest.json>`,
-reviewed and committed by hand. `.github/workflows/ci.yml` (every suite) and `visual.yml` (the
-visual gate) are validated locally but have not run on GitHub yet.
+reviewed and committed by hand. `.github/workflows/ci.yml` runs every suite and `visual.yml` the
+visual gate on pull requests, pushes to `main` and nightly; dispatch Visual with `renderer`, `scope`
+and `rebaseline` to produce a candidate baseline.
 
 | Path | Responsibility |
 | --- | --- |

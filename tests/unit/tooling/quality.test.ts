@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { assessQuality, loadComparisons } from "../../../tools/quality.ts";
+import { assessQuality, driftHint, loadComparisons } from "../../../tools/quality.ts";
 
 const baseline = { "card-light": { ssim: 0.95 }, "card-dark": { ssim: 0.94 } };
 test("allows the boundary drop per capture, never hiding a regression with an improved average", () => {
@@ -199,6 +199,23 @@ test("strict gate rejects missing provenance, stale revision and changed capture
   ).toBe(true);
 });
 
+test("toolchain-only drift prints a rebaseline hint naming the changed values", () => {
+  const r = assessQuality({ a: evidence() }, { a: evidence({ xcode: "Xcode 27.1" }) }, { requireEvidence: true });
+  expect(r.ok).toBe(false);
+  expect(driftHint(r)).toContain('xcode ("Xcode 26" → "Xcode 27.1")');
+  expect(driftHint(r)).toContain("rebaseline=true");
+});
+
+test("drift with a score regression asks for review, and no drift gives no hint", () => {
+  const policy = { requireEvidence: true };
+  const before = { a: evidence() };
+  expect(driftHint(assessQuality(before, { a: evidence({ renderer: "iPhone iOS-27", ssim: 0.9 }) }, policy))).toContain(
+    "review the diffs",
+  );
+  expect(driftHint(assessQuality(before, { a: evidence({ ssim: 0.9 }) }, policy))).toBeUndefined();
+  expect(driftHint(assessQuality(before, { a: evidence({ fixtureHash: "e".repeat(64) }) }, policy))).toBeUndefined();
+});
+
 test("strict gate binds comparison scores to exact artifact contents", () => {
   const before = { a: evidence() };
   const altered = evidence({ _hashes: { ...artifactHashes, "native.png": "b".repeat(64) } });
@@ -280,7 +297,7 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
       { stdout: "pipe", stderr: "pipe" },
     );
     const output = JSON.parse(await new Response(run.stdout).text());
-    return { exit: await run.exited, output };
+    return { exit: await run.exited, output, stderr: await new Response(run.stderr).text() };
   };
   try {
     await create(before, evidence());
@@ -309,7 +326,9 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
       join(after, "a", "compare.json"),
       JSON.stringify(evidence({ sourceRevision: revision, chrome: "Chrome 141", artifactHashes: afterHashes })),
     );
-    expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
+    const drifted = await invoke();
+    expect(drifted.output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
+    expect(drifted.stderr).toContain("Toolchain drift: chrome");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

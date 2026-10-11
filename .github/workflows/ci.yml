@@ -31,14 +31,16 @@ jobs:
           python-version: "3.13"
       - name: Install font tooling
         run: python -m pip install fonttools==4.60.2 brotli==1.2.0
+      - run: bun install --frozen-lockfile
+      - run: ./node_modules/.bin/playwright-core install --no-shell chromium
       - name: Toolchain
         run: |
           bun --version
           xcodebuild -version
           "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
           python3 -c "import fontTools, brotli; print('fontTools', fontTools.version)"
-      - run: bun install --frozen-lockfile
-      - run: ./node_modules/.bin/playwright-core install --no-shell chromium
+          ./node_modules/.bin/playwright-core --version
+          xcrun simctl list runtimes available
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
