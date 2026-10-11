@@ -26,6 +26,8 @@ import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex, mainAxis } from "./geometry.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
+import { linkAction } from "./controls.ts";
+import { isActivatableRole } from "../model/interactive.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -185,16 +187,24 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
     }
     // A link inside a sentence never reaches `controlOf` — it is an inline element, so it arrives
-    // here as a run and leaves as decoration. SwiftUI's `Text` has no per-run destination (an
-    // `AttributedString` link would, but then the whole paragraph stops being a run chain), so
-    // the navigation is genuinely lost; what must not be lost is the record of losing it. This is
-    // the most common link form in prose, and it used to report nothing at all.
-    const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link)
+    // here as a run. It stays a run: `Text(AttributedString)` with `.link` concatenates like any
+    // other run (`Text.markswiftLink`). An absolute URL opens; an in-app href carries the same
+    // action a block link would get and the paragraph's `openURL` handler calls it.
+    const chain = inlineChain(host, el);
+    const link = chain.find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
+    if (link && !hidden) {
+      const action = linkAction(link);
+      run.link = action ? { href: link.attrs["href"]!, action } : { href: link.attrs["href"]! };
+    }
+    // An inline handler that is not a link has no per-run tap target.
+    const handler = link
+      ? undefined
+      : chain.find((e) => e.attrs["onclick"]?.trim() || isActivatableRole(e.attrs["role"]));
+    if (handler)
       note(
         "approximated",
-        "a",
-        `inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`,
+        handler.attrs["onclick"] ? "@onclick" : "@role",
+        `inline <${handler.tag}> handler inside running text → styled text run, not tappable`,
       );
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });

@@ -20,6 +20,26 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
 }
 
+/**
+ * A node's view: its core lines plus modifiers. An element the design made activatable
+ * (`SemBase.action` on a non-control) becomes a Button whose label is the painted box — the box is
+ * the hit and press area — with placement and accessibility outside, like a native button. One that
+ * contains another control keeps its view and gains a tap gesture instead.
+ */
+export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[] {
+  const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
+  if (!name) return [...core, ...modifiers(n, ctx)];
+  if (n.action!.gesture)
+    return [...core, ...modifiers(n, ctx), ".contentShape(Rectangle())", `.onTapGesture { ${name}() }`];
+  return [
+    `Button(action: ${name}) {`,
+    ...indent([...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`], 1),
+    "}",
+    ".buttonStyle(.plain)",
+    ...placementModifiers(n, ctx),
+  ];
+}
+
 /** The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area. */
 export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];

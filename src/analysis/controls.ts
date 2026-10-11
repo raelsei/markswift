@@ -10,6 +10,7 @@ import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
 import type { Color } from "../model/values.ts";
 import { parseColor } from "../css/index.ts";
 import {
+  type Action,
   type ControlKind,
   type ControlNode,
   type Diagnostic,
@@ -18,7 +19,76 @@ import {
   type SemNode,
   addDiagnostic,
 } from "../model/semantic.ts";
+import { isActivatableRole } from "../model/interactive.ts";
 import { textContent } from "./text-runs.ts";
+
+/** `save()` / `return app.save(event)` → `save` / `app.save`; "" when the handler is not a plain call. */
+function handlerName(src: string): string {
+  return /^\s*(?:return\s+)?([A-Za-z_$][\w$.]*)\s*\(/.exec(src)?.[1] ?? "";
+}
+const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** An element's own action: its `onclick`, else the submit handler of its form, else a member of its own. */
+export function elementAction(n: LayoutNode, caption: string, form?: LayoutNode): Action {
+  const onclick = n.attrs["onclick"]?.trim();
+  if (onclick)
+    return {
+      key: onclick,
+      words: handlerName(onclick) || n.attrs["id"] || caption,
+      origin: `\`onclick="${oneLine(onclick)}"\` in the design.`,
+    };
+  const submit = form && submitAction(form);
+  if (submit) return submit;
+  const role = n.attrs["role"] ? ` role="${oneLine(n.attrs["role"])}"` : "";
+  const quoted = caption ? ` "${oneLine(caption).slice(0, 40)}"` : "";
+  return {
+    key: `node:${n.id ?? ""}`,
+    words: n.attrs["id"] || n.attrs["aria-label"] || caption,
+    origin: `\`<${n.tag}${role}>\`${quoted} in the design has no handler; fill in what it does.`,
+  };
+}
+
+/** `<form onsubmit>`: what its submit buttons and Return in its fields run. */
+export function submitAction(form: LayoutNode): Action | undefined {
+  const src = form.attrs["onsubmit"]?.trim();
+  if (!src) return undefined;
+  return {
+    key: src,
+    words: handlerName(src) || form.attrs["id"] || "submit",
+    origin: `\`<form onsubmit="${oneLine(src)}">\` in the design: its submit button and Return in its fields.`,
+  };
+}
+
+/** An `<a href>` the app must resolve itself (fragment, relative path); undefined for an absolute URL. */
+export function linkAction(a: LayoutNode): Action | undefined {
+  const href = a.attrs["href"] ?? "";
+  if (ABSOLUTE_URL.test(href)) return undefined;
+  if (a.attrs["onclick"]?.trim()) return elementAction(a, "");
+  const target = targetName(href, a);
+  return {
+    key: `#${target}`,
+    words: target,
+    origin: `\`<a href="${oneLine(href)}">\` → \`${oneLine(target)}\` in the design: in-page navigation; fill in the destination.`,
+  };
+}
+
+/** `onclick`, or an activatable ARIA role, on an element that is not itself a control. */
+function activatable(n: LayoutNode): boolean {
+  return !!n.attrs["onclick"]?.trim() || isActivatableRole(n.attrs["role"]);
+}
+function containsControl(n: LayoutNode): boolean {
+  return n.children.some((c) => controlOf(c) !== undefined || activatable(c) || containsControl(c));
+}
+/**
+ * The action of an element the design makes activatable without being a control (`<div role=button
+ * onclick>`, `<li onclick>`). It stays the view it is — same layout — and the emitter wraps it in a
+ * Button; one that contains another control gets a tap gesture instead.
+ */
+export function activatableAction(n: LayoutNode): Action | undefined {
+  if (!activatable(n)) return undefined;
+  const action = elementAction(n, textContent(n).trim());
+  return containsControl(n) ? { ...action, gesture: true } : action;
+}
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
 export interface ControlSpec {
@@ -34,7 +104,7 @@ export interface ControlSpec {
   level?: ControlNode["level"];
   options?: string[];
   href?: string;
-  action?: string;
+  action?: Action;
   expanded?: boolean;
   files?: ControlNode["files"];
   dateKind?: ControlNode["dateKind"];
@@ -46,14 +116,15 @@ export interface ControlSpec {
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
  * caller supplies the measured base and the built children.
  */
-export function controlOf(n: LayoutNode): ControlSpec | undefined {
+export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undefined {
   const a = n.attrs;
   const diagnostics: Diagnostic[] = [];
   const disabled = "disabled" in a ? true : undefined;
   switch (n.tag) {
     case "button": {
       const spec: ControlSpec = { control: "button", diagnostics };
-      if (a["onclick"]) spec.action = a["onclick"];
+      // HTML: a `<button>` without `type` submits.
+      spec.action = elementAction(n, textContent(n).trim(), /^(submit)?$/i.test(a["type"] ?? "") ? form : undefined);
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -66,7 +137,7 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       // becomes a button over the same callback an `onclick` would get, named after whatever the
       // design called the target so the placeholder says which link it was.
       if (!ABSOLUTE_URL.test(href)) {
-        spec.action = a["onclick"] || `#${targetName(href, n)}`;
+        spec.action = linkAction(n);
         addDiagnostic(
           diagnostics,
           "approximated",
@@ -201,7 +272,14 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
           '<input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach',
         );
       }
-      if (control === "button" && a["onclick"]) spec.action = a["onclick"];
+      if (control === "button" && type !== "file") {
+        const caption = a["value"] ?? (type === "submit" ? "Submit" : type === "reset" ? "Reset" : "");
+        spec.action = elementAction(n, caption, type === "submit" ? form : undefined);
+      }
+      if ((control === "textField" || control === "secureField") && form) {
+        const submit = submitAction(form);
+        if (submit) spec.action = submit;
+      }
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -283,19 +361,24 @@ export interface LabelIndex {
   text: Map<LayoutNode, string>;
   /** Label element → the enabled toggle/radio element a tap on the label changes. */
   activates: Map<LayoutNode, LayoutNode>;
+  /** Control element → its nearest ancestor `<form onsubmit>`. */
+  forms: Map<LayoutNode, LayoutNode>;
 }
 
 export function labelIndex(root: LayoutNode): LabelIndex {
   const byId = new Map<string, LayoutNode>();
   const labels: LayoutNode[] = [];
-  const index = (n: LayoutNode) => {
+  const forms = new Map<LayoutNode, LayoutNode>();
+  const index = (n: LayoutNode, form?: LayoutNode) => {
     const id = n.attrs["id"];
     if (id && !byId.has(id)) byId.set(id, n);
     if (n.tag === "label") labels.push(n);
-    n.children.forEach(index);
+    const owner = n.tag === "form" && n.attrs["onsubmit"]?.trim() ? n : form;
+    if (owner && (n.tag === "button" || n.tag === "input")) forms.set(n, owner);
+    for (const c of n.children) index(c, owner);
   };
   index(root);
-  const out: LabelIndex = { text: new Map(), activates: new Map() };
+  const out: LabelIndex = { text: new Map(), activates: new Map(), forms };
   const firstControl = (n: LayoutNode): LayoutNode | undefined => {
     for (const c of n.children) {
       const hit = controlOf(c) ? c : firstControl(c);

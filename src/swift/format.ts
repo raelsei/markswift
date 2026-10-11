@@ -105,6 +105,34 @@ export function uniqueName(base: string, seen: Record<string, number>): string {
   return k === 1 ? base : `${base}_r${k}`;
 }
 
+/** Design words → PascalCase ASCII (`openMenu` → `OpenMenu`, `save-btn` → `SaveBtn`, `Gönder` → `Gonder`); at most 4 words, "" when none survive. */
+export function pascalWords(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1).toLowerCase())
+    .join("");
+}
+
+/** K1 member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`. Registered in `seen`. */
+export function memberName(
+  prefix: string,
+  words: string,
+  seen: Record<string, number>,
+  fallback: string,
+  suffix = "",
+): string {
+  const base = prefix + (pascalWords(words) || fallback) + suffix;
+  let name = base;
+  for (let k = 2; seen[name]; k++) name = `${base}${k}`;
+  seen[name] = 1;
+  return name;
+}
+
 /**
  * Registers a `Shape` struct once under `name`; `body` gives the lines of `path(in:)`.
  * `nonisolated`: Shape's requirements are nonisolated; under a MainActor default-isolation

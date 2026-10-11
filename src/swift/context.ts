@@ -82,7 +82,14 @@ export interface ColorCtx {
 export interface ControlMembers {
   /** `@State` / callback declarations to put before `var body`. Empty when the screen has none. */
   decls: string[];
+  /**
+   * Every member in emission order; `value` = design state (`@State private`), `action` =
+   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029). `decls` is
+   * `members.flatMap(m => m.decl)`.
+   */
+  members: Array<{ name: string; kind: "value" | "action" | "ephemeral"; type: string; decl: string[] }>;
   stateOf: Map<SemNode, string>;
+  /** `Action.key` → callback member. */
   actionOf: Map<string, string>;
   /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
   activate: Map<string, string>;

@@ -1,7 +1,7 @@
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers } from "./context.ts";
-import { colorArgs, identifier, num, str, uniqueName } from "./format.ts";
+import { colorArgs, identifier, memberName, num, str, uniqueName } from "./format.ts";
 /**
  * Controls whose value the user changes, and the Swift type and seed of that value. `suffix`
  * names storage that is not the control's value (a file button's presentation flag).
@@ -41,7 +41,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
 export function controlMembers(root: SemNode): ControlMembers {
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
-  const decls: string[] = [];
+  const members: ControlMembers["members"] = [];
   const activate = new Map<string, string>();
   const radioTag = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
@@ -57,6 +57,20 @@ export function controlMembers(root: SemNode): ControlMembers {
   });
   const groupState = new Map<string, string>();
   walk(root, (n) => {
+    // A handler used by several elements is one callback: the design calls the same function, or
+    // links to the same place. Different keys that name alike are deduplicated `onEdit`, `onEdit2`.
+    const actions = [n.action, ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : [])];
+    for (const a of actions) {
+      if (!a || actionOf.has(a.key)) continue;
+      const name = memberName("on", a.words, seen, "Action");
+      actionOf.set(a.key, name);
+      members.push({
+        name,
+        kind: "action",
+        type: "() -> Void",
+        decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
+      });
+    }
     if (n.kind !== "control") return;
     const key = n.control === "radio" ? n.group : undefined;
     const group = key !== undefined ? groups.get(key) : undefined;
@@ -68,7 +82,12 @@ export function controlMembers(root: SemNode): ControlMembers {
         name = uniqueName(`s_${identifier(key) || "group"}`, seen);
         groupState.set(key, name);
         const checked = group.findLastIndex((r) => r.checked);
-        decls.push(`@State private var ${name}: String = ${str(checked >= 0 ? tags[checked]! : "")}`);
+        members.push({
+          name,
+          kind: "value",
+          type: "String",
+          decl: [`@State private var ${name}: String = ${str(checked >= 0 ? tags[checked]! : "")}`],
+        });
       }
       const tag = tags[group.indexOf(n)]!;
       stateOf.set(n, name);
@@ -80,29 +99,18 @@ export function controlMembers(root: SemNode): ControlMembers {
     if (decl) {
       const name = uniqueName(`s_${identifier(n.id) || "control"}${decl.suffix ?? ""}`, seen);
       stateOf.set(n, name);
-      decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
+      members.push({
+        name,
+        kind: "value",
+        type: decl.type,
+        decl: [`@State private var ${name}: ${decl.type} = ${decl.value}`],
+      });
       // What a tap on the control's `<label>` does: a checkbox flips, a lone radio turns on.
       if (!n.disabled && n.control === "toggle") activate.set(n.id, `${name}.toggle()`);
       else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
-    // A handler used by several controls is one callback: the design calls the same function.
-    // Two callbacks can still mangle to one name (`#docs` and a link captioned `Docs`), so the
-    // property names are deduplicated the same way the state names are.
-    if (n.action !== undefined && !actionOf.has(n.action)) {
-      const name = uniqueName(`on_${identifier(n.action.replace(/\(.*$/s, "")) || "action"}`, seen);
-      actionOf.set(n.action, name);
-      // A destination-less `<a>` carries `#<target>` rather than a handler's source: the design
-      // named a place, and the developer supplies the navigation that goes there.
-      const target = n.control === "link" && n.action.startsWith("#") ? n.action.slice(1) : undefined;
-      decls.push(
-        target !== undefined
-          ? `/// \`<a href="${oneLine(n.href ?? "")}">\` → \`${oneLine(target)}\` in the design: in-page navigation; fill in the destination.`
-          : `/// \`onclick="${oneLine(n.action)}"\` in the design.`,
-      );
-      decls.push(`var ${name}: () -> Void = {}`);
-    }
   });
-  return { decls, stateOf, actionOf, activate, radioTag };
+  return { decls: members.flatMap((m) => m.decl), members, stateOf, actionOf, activate, radioTag };
 }
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */
@@ -110,11 +118,6 @@ export function numericValue(n: ControlNode): number {
   const r = n.range ?? { min: 0, max: 100 };
   const v = Number(n.value ?? "");
   return Number.isFinite(v) ? Math.min(r.max, Math.max(r.min, v)) : r.min;
-}
-
-/** A design string on one line, for the doc comments that quote the design's own markup. */
-function oneLine(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
 }
 
 /**
