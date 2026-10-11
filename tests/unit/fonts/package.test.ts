@@ -4,6 +4,8 @@ import type { FontFace } from "../../../src/model/layout.ts";
 import type { FontConverter, FontToolResult } from "../../../src/fonts/converter.ts";
 import { packageFonts } from "../../../src/fonts/package.ts";
 import { fontFileStem } from "../../../src/fonts/source.ts";
+import { plistFragment, registrationSwift } from "../../../src/fonts/registration.ts";
+import { GENERATED_BY } from "../../../src/model/version.ts";
 
 const METRICS: FontToolResult = {
   upem: 1000,
@@ -106,4 +108,9 @@ test("packaged font file stems never collide", () => {
   expect(fontFileStem("Inter", "Italic", new Map([["inter-italic", "Inter"]]))).toBeUndefined();
   expect(fontFileStem("Ab", "Regular", new Map())).toBe("Ab");
   expect(fontFileStem("AB", "Regular", new Map([["ab", "Ab"]]))).toBe("AB-2");
+});
+
+test("the plist fragment and +Fonts.swift name the Markswift version", () => {
+  expect(plistFragment(["Geist.ttf"])).toContain(GENERATED_BY);
+  expect(registrationSwift([], "CardView")).toContain(GENERATED_BY);
 });
