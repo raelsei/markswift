@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { str } from "../../../src/swift/format.ts";
+import { memberName, pascalWords, str } from "../../../src/swift/format.ts";
 
 describe("str", () => {
   const table: Array<[string, string, string]> = [
@@ -25,4 +25,16 @@ describe("str", () => {
       expect(str(input)).toBe(expected);
     });
   }
+});
+
+test("pascalWords and memberName build K1 member names", () => {
+  expect(pascalWords("openMenu")).toBe("OpenMenu");
+  expect(pascalWords("save-btn")).toBe("SaveBtn");
+  expect(pascalWords("Gönder")).toBe("Gonder");
+  expect(pascalWords("—")).toBe("");
+  const seen: Record<string, number> = {};
+  expect(memberName("on", "Edit", seen, "Action")).toBe("onEdit");
+  expect(memberName("on", "Edit", seen, "Action")).toBe("onEdit2");
+  expect(memberName("on", "", seen, "Action")).toBe("onAction");
+  expect(memberName("is", "Save", seen, "Control", "Pressed")).toBe("isSavePressed");
 });

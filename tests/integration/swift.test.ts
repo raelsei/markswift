@@ -29,12 +29,8 @@ nativeTest(
         expect(result.code).toContain("minHeight: 30.0");
         expect(result.code).toContain("height: 10.0, alignment: .topLeading");
         expect(result.code).toContain("maxWidth: 200.0");
-        expect(
-          result.diagnostics
-            .flatMap((item) => item.diagnostics)
-            .map((d) => d.message)
-            .join("\n"),
-        ).toContain("destination dropped");
+        expect(result.code).toContain('Text.markswiftLink("our site", "https://example.com"');
+        expect(result.code).toContain("Button(action: onSave)");
         const output = join(directory, mode);
         for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
         const check = await typecheck(output);
@@ -59,6 +55,57 @@ nativeTest(
         await renderMac(result, join(directory, mode, "mac"), png);
         const meta = await sharp(png).metadata();
         expect([meta.width, meta.height]).toEqual([result.layout.size.w * 2, result.layout.size.h * 2]);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  240000,
+);
+
+nativeTest(
+  "027: action members and inline links compile and keep the link colour",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-027-"));
+    const html =
+      '<main data-markswift-root><form onsubmit="send(event)"><input value="Ada"><button>Go</button></form><div role="button" onclick="openMenu()">Menu</div><p class="t">XX <a href="#faq">LLLL</a> <a href="https://example.com">ext</a></p><div class="sw"></div></main>';
+    const css =
+      "body{margin:0} main{width:300px;padding:16px;background:#fff;font:16px system-ui} .t{font:900 40px system-ui;color:#000} .t a{color:#c81e1e;text-decoration:none} .sw{width:40px;height:40px;background:#c81e1e}";
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml(html, { name: "Actions027", mode, css, theme: "light" });
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+        if (mode !== "fidelity") continue;
+        const png = join(directory, "fidelity.png");
+        await renderMac(result, join(directory, "mac"), png);
+        const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+        const find = (n: LayoutNode, hit: (n: LayoutNode) => boolean): LayoutNode | undefined =>
+          hit(n) ? n : n.children.map((c) => find(c, hit)).find(Boolean);
+        const dpr = result.layout.dpr;
+        // The most frequent saturated red-ish colour inside a box: the link glyphs / the swatch.
+        const dominant = (n: LayoutNode | undefined): number[] => {
+          if (!n) throw new Error("box not found");
+          const counts = new Map<string, number>();
+          const { x, y, w, h } = n.bounds;
+          for (let py = Math.round(y * dpr); py < Math.round((y + h) * dpr); py++)
+            for (let px = Math.round(x * dpr); px < Math.round((x + w) * dpr); px++) {
+              const i = (py * info.width + px) * info.channels;
+              const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
+              const max = Math.max(r, g, b);
+              if (max - Math.min(r, g, b) <= 0.5 * max || r <= b) continue;
+              const key = `${r},${g},${b}`;
+              counts.set(key, (counts.get(key) ?? 0) + 1);
+            }
+          const best = [...counts].sort((a, b) => b[1] - a[1])[0];
+          if (!best) throw new Error("no saturated red pixels in the box (the link drew in the accent colour?)");
+          return best[0].split(",").map(Number);
+        };
+        const link = dominant(find(result.layout.root, (n) => n.tag === "p"));
+        const swatch = dominant(find(result.layout.root, (n) => /\bsw\b/.test(n.attrs["class"] ?? "")));
+        for (let c = 0; c < 3; c++) expect(Math.abs(link[c]! - swatch[c]!)).toBeLessThanOrEqual(3);
       }
     } finally {
       await rm(directory, { recursive: true, force: true });
