@@ -38,6 +38,10 @@ export interface ControlDeps extends ColorCtx {
   id?: string;
   /** The node's box modifiers, emitted inside a pressable control's label. */
   box?: string[];
+  /** Pressable owner → its `@MarkswiftPressed` member; built by `controlMembers`. */
+  pressOf?: Map<SemNode, string>;
+  /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
+  focusOf?: Map<SemNode, string>;
 }
 
 /**
@@ -86,6 +90,11 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   const tag = deps.radioTag.get(n);
   const binding = !state ? "" : tag !== undefined ? `$${state}.markswiftSelects(${str(tag)})` : `$${state}`;
   const still = deps.mode === "fidelity";
+  const press = deps.pressOf?.get(n);
+  const buttonStyle = press ? `.buttonStyle(MarkswiftPressStyle(isPressed: $${press}))` : ".buttonStyle(.plain)";
+  // Fidelity draws the field's text, so nothing takes focus; the member still drives the box.
+  const focus = deps.focusOf?.get(n);
+  const focused = focus ? [`.focused($${focus})`] : [];
   switch (n.control) {
     case "button": {
       const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
@@ -100,12 +109,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "} label: {",
           ...indent(pressable(n, deps), 1),
           "}",
-          ".buttonStyle(.plain)",
+          buttonStyle,
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
+      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -117,7 +126,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
         return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), [
           "}",
-          ".buttonStyle(.plain)",
+          buttonStyle,
           // An in-app `<a>` emitted as a Button is still a link.
           ".accessibilityRemoveTraits(.isButton)",
           ".accessibilityAddTraits(.isLink)",
@@ -131,6 +140,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
+        ...focused,
         ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
@@ -141,6 +151,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
+        ...focused,
         ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
@@ -153,6 +164,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
         ".markswiftTextEditorInsets()",
+        ...focused,
         ...(n.placeholder && state
           ? [
               ".overlay(alignment: .topLeading) {",

@@ -43,6 +43,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     tokens: opts.tokens,
     adaptive: opts.adaptive,
     scaledFonts,
+    statePaint: control.statePaint,
     renderNode: (node) => refOf(node, ctx),
   };
 

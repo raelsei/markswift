@@ -1,6 +1,7 @@
 import type { SemNode, Overlay } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import {
+  colorArgs,
   colorExpr,
   edgeInsets,
   horizontalAlignment,
@@ -31,20 +32,27 @@ export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[]
   if (!name) return [...core, ...modifiers(n, ctx)];
   if (n.action!.gesture)
     return [...core, ...modifiers(n, ctx), ".contentShape(Rectangle())", `.onTapGesture { ${name}() }`];
+  const press = ctx.control.pressOf.get(n);
   return [
     `Button(action: ${name}) {`,
     ...indent([...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`], 1),
     "}",
-    ".buttonStyle(.plain)",
+    `.buttonStyle(${press ? `MarkswiftPressStyle(isPressed: $${press})` : ".plain"})`,
     ...(ctx.mode === "app" && n.a11y?.disabled ? [".disabled(true)"] : []),
     ...placementModifiers(n, ctx),
   ];
 }
 
-/** The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area. */
+/**
+ * The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area.
+ * A node with a pressed/focused look paints the union style of `pairStyle`, its colours as ternaries.
+ */
 export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
-  const st = n.style;
+  const paint = ctx.statePaint?.get(n.id);
+  // A copy for the paint helpers; `frameModifier` and the overlays keep `n` (identity lookups).
+  const p = paint ? ({ ...n, style: paint.style } as SemNode) : n;
+  const st = p.style;
   const [pt, pr, pb, pl] = n.padding;
   if (pt || pr || pb || pl) {
     if (pt === pr && pr === pb && pb === pl) m.push(`.padding(${num(pt)})`);
@@ -62,14 +70,14 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   for (const o of [...n.overlays.filter((o) => o.layer === "background" && !hoisted(o))].reverse())
     m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
-  m.push(...insetShadowModifiers(n, ctx));
+  m.push(...insetShadowModifiers(p, ctx));
   // Fills are bottom-most first in the IR; the same chain rule means the top-most goes first.
   // Unless a layer carries a `background-blend-mode`: blending is against the layers *below it
   // inside this node*, so the whole stack has to live in one compositing group instead of a
   // chain of independent `.background` modifiers.
   if (st.fills.some((f) => f.kind !== "unsupported" && f.blend))
-    m.push(...blendedFillModifier(st.fills, n, shape, ctx));
-  else for (const f of [...st.fills].reverse()) m.push(...fillModifier(f, n, shape, ctx));
+    m.push(...blendedFillModifier(st.fills, p, shape, ctx));
+  else for (const f of [...st.fills].reverse()) m.push(...fillModifier(f, p, shape, ctx));
   // backdrop-filter: over the flat canvases these designs use, blurring the backdrop changes
   // nothing visible, while SwiftUI materials add their own tint (badly in dark mode). The
   // translucent fill above already carries the "glass" look; keep the node flagged approximated.
@@ -82,8 +90,13 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
         ? `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, style: ${strokeStyle(b.width, "dashed")}))`
         : `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, lineWidth: ${num(b.width)}))`,
     );
-  } else if (st.borderSides) m.push(...borderSideModifiers(n, ctx));
-  if (st.outline && st.outline.width > 0 && st.outline.color.a > 0) {
+  } else if (st.borderSides) m.push(...borderSideModifiers(p, ctx));
+  // A ring the rest leaves transparent still draws when the state paints it.
+  if (
+    st.outline &&
+    st.outline.width > 0 &&
+    (st.outline.color.a > 0 || paint?.colors.has(colorArgs(st.outline.color)))
+  ) {
     // A ring `offset` outside the border edge: the box shape grown by offset + half the stroke.
     const o = st.outline;
     if (o.style === "double") note(n, "approximated", "outline-style", "outline-style double drawn solid");
@@ -91,13 +104,13 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
       `.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`,
     );
   }
-  m.push(...outerShadowModifiers(n, ctx));
+  m.push(...outerShadowModifiers(p, ctx));
   for (const o of n.overlays.filter((o) => o.layer === "overlay" && !hoisted(o)))
     m.push(...overlayModifier(o, "overlay", ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
-  if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, n, ctx));
-  if (st.clipPath) m.push(clipPathModifier(st.clipPath, n, ctx));
-  if (st.mask) m.push(...maskModifier(st.mask, n, ctx));
+  if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, p, ctx));
+  if (st.clipPath) m.push(clipPathModifier(st.clipPath, p, ctx));
+  if (st.mask) m.push(...maskModifier(st.mask, p, ctx));
   // A disabled control's dimming is expressed twice over: the design's own `:disabled` opacity
   // and SwiftUI's automatic dimming from `.disabled(true)`. App mode keeps the native one (a
   // live control must dim the way the platform dims); fidelity keeps the design's number and
@@ -106,12 +119,16 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const nativeDim =
     ctx.mode === "app" &&
     ((n.kind === "control" && n.disabled === true) || (!!n.action && !n.action.gesture && n.a11y?.disabled === true));
-  if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
+  if (paint?.opacity && !nativeDim)
+    m.push(`.opacity(${paint.cond} ? ${num(paint.opacity.state)} : ${num(paint.opacity.rest)})`);
+  else if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
   if (st.blur !== undefined) m.push(`.blur(radius: ${num(st.blur)})`);
   if (st.blend) {
     const mode = swiftBlend(st.blend);
     if (mode) m.push(`.blendMode(${mode})`);
   }
+  // Emit-time notes on the copy land in the shared diagnostics; carry the regrade back.
+  if (p !== n) n.confidence = p.confidence;
   return m;
 }
 
@@ -122,7 +139,9 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
  */
 export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   const m: string[] = [];
-  const st = n.style;
+  const paint = ctx.statePaint?.get(n.id);
+  const st = paint?.style ?? n.style;
+  const scale = paint?.scale;
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
@@ -130,7 +149,10 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       const anchor = t.origin
         ? `UnitPoint(x: ${num(n.frame.w ? t.origin[0] / n.frame.w : 0.5)}, y: ${num(n.frame.h ? t.origin[1] / n.frame.h : 0.5)})`
         : ".center";
-      if (t.scaleX !== 1 || t.scaleY !== 1)
+      if (scale) {
+        const [[rx, ry], [sx, sy], c] = [scale.rest, scale.state, paint.cond];
+        m.push(`.scaleEffect(x: ${c} ? ${num(sx)} : ${num(rx)}, y: ${c} ? ${num(sy)} : ${num(ry)}, anchor: ${anchor})`);
+      } else if (t.scaleX !== 1 || t.scaleY !== 1)
         m.push(`.scaleEffect(x: ${num(t.scaleX)}, y: ${num(t.scaleY)}, anchor: ${anchor})`);
       if (t.rotate !== 0) m.push(`.rotationEffect(.degrees(${num(t.rotate)}), anchor: ${anchor})`);
       if (t.tx !== 0 || t.ty !== 0) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
