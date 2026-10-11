@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
-import type { LayoutDoc } from "../../../src/model/layout.ts";
+import { LAYOUT_DOC_VERSION, type LayoutDoc } from "../../../src/model/layout.ts";
 import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
 
 function paragraph(styles: Record<string, string>, h: number, text = "Measured text shifts nearby layout."): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "paragraph.html",
     combo: { screen: "paragraph", theme: "light" },
     size: { w: 320, h: 180 },
