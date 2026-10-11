@@ -1,7 +1,9 @@
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
-import type { ControlMembers } from "./context.ts";
+import type { ControlMembers, StatePaint } from "./context.ts";
+import { note } from "./diagnostics.ts";
 import { colorArgs, identifier, memberName, num, str, uniqueName } from "./format.ts";
+import { pairStyle } from "./states.ts";
 /**
  * Controls whose value the user changes, and the Swift type and seed of that value. `suffix`
  * names storage that is not the control's value (a file button's presentation flag).
@@ -110,7 +112,61 @@ export function controlMembers(root: SemNode): ControlMembers {
       else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
   });
-  return { decls: members.flatMap((m) => m.decl), members, stateOf, actionOf, activate, radioTag };
+  // Pressed/focused looks: a delta belongs to the nearest enclosing Button (its press drives the
+  // whole label) or to the text field itself; everything else is reported.
+  const statePaint = new Map<string, StatePaint>();
+  const pressOf = new Map<SemNode, string>();
+  const focusOf = new Map<SemNode, string>();
+  const visit = (n: SemNode, owner: SemNode | undefined): void => {
+    const pressable =
+      n.kind === "control"
+        ? !n.disabled && (n.control === "button" || (n.control === "link" && !!n.action))
+        : !!n.action && !n.action.gesture && !n.a11y?.disabled;
+    const own = pressable ? n : owner;
+    const pressed = n.states?.pressed;
+    if (pressed && n.id) {
+      if (own) {
+        let name = pressOf.get(own);
+        if (name === undefined) {
+          name = memberName("is", own.action?.words ?? own.id, seen, "Control", "Pressed");
+          members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftPressed private var ${name}`] });
+          pressOf.set(own, name);
+        }
+        statePaint.set(n.id, pairStyle(n, pressed, name));
+      } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
+    }
+    const focused = n.states?.focused;
+    if (focused && n.id) {
+      const field =
+        n.kind === "control" &&
+        !n.disabled &&
+        (n.control === "textField" || n.control === "secureField" || n.control === "textEditor");
+      if (field) {
+        const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
+        members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+        focusOf.set(n, name);
+        statePaint.set(n.id, pairStyle(n, focused, name));
+      } else note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
+    }
+    for (const o of n.overlays) visit(o.node, own);
+    if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own);
+    if (n.kind === "control") {
+      if (n.label) visit(n.label, own);
+      for (const c of n.content) visit(c, own);
+    }
+  };
+  visit(root, undefined);
+  return {
+    decls: members.flatMap((m) => m.decl),
+    members,
+    stateOf,
+    actionOf,
+    activate,
+    radioTag,
+    statePaint,
+    pressOf,
+    focusOf,
+  };
 }
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */

@@ -10,6 +10,12 @@ import { typecheck } from "../../tools/verify/typecheck.ts";
 import { buildRenderApp, renderMac } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
 import sharp from "sharp";
+import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
+import { chromium } from "playwright-core";
+import { compare } from "../../tools/verify/compare.ts";
+import { forceStates } from "../../src/browser/states.ts";
+import { PRESSABLE_SELECTOR, TEXT_ENTRY_SELECTOR } from "../../src/model/interactive.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
@@ -762,4 +768,77 @@ nativeTest(
     }
   },
   240000,
+);
+
+nativeTest(
+  "029: forced pressed and focused looks match the browser",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-029-"));
+    const file = join(import.meta.dir, "../conformance/fixtures/_states/interactive-states.html");
+    const browser = await chromium.launch({ channel: "chromium" });
+    try {
+      const result = await convert(
+        { file },
+        {
+          name: "StatesProbe",
+          mode: "fidelity",
+          theme: "light",
+          viewport: { width: 393, height: 800 },
+          dpr: 2,
+          browserChannel: "chromium",
+        },
+      );
+      expect(result.code).toContain("@MarkswiftPressed");
+      expect(result.code).toContain("@MarkswiftFocused");
+      const states = [undefined, "pressed", "focused"] as const;
+      const hash = async (path: string) =>
+        createHash("sha256")
+          .update(await Bun.file(path).bytes())
+          .digest("hex");
+      const scores: Record<string, number> = {};
+      const hashes: Record<string, { browser: string; native: string }> = {};
+      for (const forced of states) {
+        const name = forced ?? "rest";
+        const context = await browser.newContext({
+          viewport: { width: 393, height: 800 },
+          deviceScaleFactor: 2,
+          reducedMotion: "reduce",
+        });
+        const page = await context.newPage();
+        await page.goto(pathToFileURL(file).href);
+        await page.addStyleTag({ content: "* { transition: none !important; }" });
+        if (forced) {
+          const cdp = await context.newCDPSession(page);
+          await cdp.send("DOM.enable");
+          await cdp.send("CSS.enable");
+          const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+          const { nodeIds } = await cdp.send("DOM.querySelectorAll", {
+            nodeId: root.nodeId,
+            selector: forced === "pressed" ? PRESSABLE_SELECTOR : TEXT_ENTRY_SELECTOR,
+          });
+          await forceStates(cdp, nodeIds, forced === "pressed" ? ["hover", "active"] : ["focus", "focus-visible"]);
+        }
+        const browserPng = join(directory, `browser-${name}.png`);
+        await page
+          .locator("[data-markswift-root]")
+          .screenshot({ path: browserPng, scale: "device", animations: "disabled", caret: "hide" });
+        await context.close();
+        const nativePng = join(directory, `native-${name}.png`);
+        await renderMac(result, join(directory, `mac-${name}`), nativePng, forced);
+        scores[name] = (await compare(browserPng, nativePng, join(directory, `diff-${name}.png`), 2)).ssim;
+        hashes[name] = { browser: await hash(browserPng), native: await hash(nativePng) };
+      }
+      console.log(`029 SSIM ${JSON.stringify(scores)}`);
+      for (const forced of ["pressed", "focused"] as const) {
+        // The state really changed on both sides.
+        expect(hashes[forced]!.browser).not.toBe(hashes.rest!.browser);
+        expect(hashes[forced]!.native).not.toBe(hashes.rest!.native);
+        expect(scores[forced]!).toBeGreaterThanOrEqual(scores.rest! - 0.01);
+      }
+    } finally {
+      await browser.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  300000,
 );

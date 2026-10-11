@@ -215,7 +215,7 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- More than one viewport or state per capture: media queries are not reconstructed.
+- More than one viewport per capture (media queries are not reconstructed); interaction states other than pressed and focused (hover-only, disabled, validation, open/checked).
 - Animations and transitions (captured at their end state, reported).
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
 - `ui-monospace` maps to a different native face (an explicit support boundary).

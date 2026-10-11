@@ -31,6 +31,8 @@ export interface DomSnapshot {
       pseudoType?: RareStringData;
       /** `img.currentSrc` (absolute URL) for every `<img>`. */
       currentSourceURL?: RareStringData;
+      /** Stable per-node backend id (CDP always sends it); joins the rest and state snapshots. */
+      backendNodeId?: number[];
     };
     layout: {
       nodeIndex: number[];
@@ -68,6 +70,8 @@ interface Raw {
   lines?: Array<{ bounds: Rect; start: number; length: number }>;
   text?: string;
   paint?: number;
+  /** See `LayoutNode.states`. */
+  states?: LayoutNode["states"];
   parent?: Raw;
   children: Raw[];
 }
@@ -116,8 +120,13 @@ export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
  * @param snap     snapshot as painted (styles incl. transform matrices, paint order)
  * @param boxes    optional snapshot taken with `transform: none` on every element;
  *                 its bounds/offsets are the untransformed layout boxes and win over `snap`'s.
+ * @param states   paint deltas per `snap` node index under forced interaction states (`browser/states.ts`).
  */
-export function snapshotToTree(snap: DomSnapshot, boxes?: DomSnapshot): Raw {
+export function snapshotToTree(
+  snap: DomSnapshot,
+  boxes?: DomSnapshot,
+  states?: { pressed: Map<number, Record<string, string>>; focused: Map<number, Record<string, string>> },
+): Raw {
   const doc = snap.documents[0];
   if (!doc) throw new Error("empty snapshot");
   const S = snap.strings;
@@ -145,6 +154,12 @@ export function snapshotToTree(snap: DomSnapshot, boxes?: DomSnapshot): Raw {
       raws[i]!.parent = raws[p];
     }
   }
+  if (states)
+    for (const key of ["pressed", "focused"] as const)
+      for (const [idx, delta] of states[key]) {
+        const r = raws[idx];
+        if (r) r.states = { ...r.states, [key]: delta };
+      }
   const pseudo = doc.nodes.pseudoType;
   if (pseudo) for (let k = 0; k < pseudo.index.length; k++) raws[pseudo.index[k]!]!.pseudo = str(pseudo.value[k]!);
   const L = doc.layout;
@@ -338,6 +353,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
+  if (raw.states) node.states = raw.states;
   appendChildren(raw, origin, identity, path, node.children);
   return node;
 }
@@ -429,6 +445,7 @@ function pseudoElement(
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
+  if (raw.states) node.states = raw.states;
   return node;
 }
 

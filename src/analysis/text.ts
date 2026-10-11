@@ -315,6 +315,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     lines,
   };
   if (growth) node.lineBoxGrowth = growth;
+  addStateRunColors(node, built);
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
@@ -336,6 +337,26 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (wm && wm !== "horizontal-tb")
     note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+
+/**
+ * Runs drawn in another colour while their element is pressed/focused → `node.states[key].runColors`,
+ * index-aligned with `node.runs` (gap runs paint nothing and stay empty).
+ */
+function addStateRunColors(node: TextNode, built: MeasuredTextRun[]): void {
+  node.runs.forEach((run, i) => {
+    const el = built.find((b) => b.run === run)?.styleOf;
+    const vis = el?.styles["visibility"];
+    if (!el || vis === "hidden" || vis === "collapse") return;
+    for (const key of ["pressed", "focused"] as const) {
+      const d = el.states?.[key];
+      if (!d || !("color" in d || "-webkit-text-fill-color" in d)) continue;
+      const c = textColorOf({ ...el.styles, ...d });
+      if (JSON.stringify(c) === JSON.stringify(run.color)) continue;
+      const st = ((node.states ??= {})[key] ??= {});
+      (st.runColors ??= [])[i] = c;
+    }
+  });
 }
 
 // ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.

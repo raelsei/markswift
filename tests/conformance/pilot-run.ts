@@ -41,6 +41,8 @@ type RunEntry = {
   typecheck?: boolean;
   ssim?: number;
   mismatch?: number;
+  /** Wall time of `BrowserCapture.capture` for this capture, ms; both modes of one capture share it. */
+  captureMs?: number;
 };
 /** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid` stays in `run.json` only. */
 interface RunEnvironment {
@@ -308,7 +310,9 @@ async function run() {
             (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme,
           );
           let captured: Awaited<ReturnType<BrowserCapture["capture"]>>;
+          let captureMs = 0;
           try {
+            const t0 = performance.now();
             captured = await browsers.get(width)!.capture(
               {
                 screen: item.id,
@@ -326,6 +330,7 @@ async function run() {
               htmlIdentity,
               `pilot:${item.fixture}`,
             );
+            captureMs = performance.now() - t0;
           } catch (error) {
             for (const entry of pair) report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
             continue;
@@ -340,6 +345,7 @@ async function run() {
               size: captured.layout.size,
               loadedFonts: captured.layout.fonts.filter((face) => face.loaded).length,
               warnings: captured.warnings.length,
+              captureMs,
             };
             report.entries.push(result);
             try {

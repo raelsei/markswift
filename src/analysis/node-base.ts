@@ -3,7 +3,7 @@ import { type SemNode, type SemBase, type Diagnostic, addDiagnostic, confidenceO
 import { type LayoutNode, VALIDATION_MARK } from "../model/layout.ts";
 import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
-import { styleOf } from "./style.ts";
+import { stateStylesOf, styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
@@ -42,6 +42,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
       "validation styling (:invalid/:valid rule) captured as the resting look; it does not follow the field's value",
     );
   const style = styleOf(n, diagnostics);
+  const states = stateStylesOf(n, style);
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
@@ -67,6 +68,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(a11y && Object.keys(a11y).length ? { a11y } : {}),
     ...(action ? { action } : {}),
     ...(labelFor ? { labelFor } : {}),
+    ...(states ? { states } : {}),
   };
 }
 
