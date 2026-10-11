@@ -166,3 +166,14 @@ browserTest(
   },
   30000,
 );
+
+browserTest("textarea text, appearance and accent-color reach the generated controls", async () => {
+  const result = await convertHtml(
+    '<main data-markswift-root><textarea id="bio">Designer and developer.</textarea><select id="plain" style="appearance:none"><option>One</option></select><input id="c" type="checkbox" checked style="accent-color:#e11d48"><input id="go" type="submit"></main>',
+    { name: "Controls", mode: "app", theme: "light", css: "body{margin:0} main{width:320px;font:15px system-ui}" },
+  );
+  expect(result.code).toContain('@State private var s_bio: String = "Designer and developer."');
+  expect(result.code).not.toContain('Image(systemName: "chevron.down")');
+  expect(result.code).not.toContain("tint: Color.markswift(0.0, 0.459, 1.0)");
+  expect(result.code).toContain('Text(verbatim: "Submit")');
+});

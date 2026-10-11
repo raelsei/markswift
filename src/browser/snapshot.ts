@@ -358,7 +358,8 @@ function appendChildren(
       // space for it (inter-run gap: w > 0); collapsed whitespace has no box. A
       // `KEEP_WITHOUT_LAYOUT` host (`<option>`) has no box and neither has its label — the
       // laid-out text of the snapshot never covers it, so its DOM value is the text, kept with
-      // a zero rect because nothing measures it.
+      // a zero rect because nothing measures it. A `<textarea>` has a box but paints its text in
+      // shadow DOM: its DOM text is the default value, kept the same way.
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
         const text: LayoutNode = {
           tag: "#text",
@@ -372,7 +373,7 @@ function appendChildren(
         if (c.lines && c.lines.length > 1)
           text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
         out.push(text);
-      } else if (!raw.bounds && c.value.trim()) {
+      } else if ((!raw.bounds || raw.name === "textarea") && c.value.trim()) {
         out.push({
           tag: "#text",
           attrs: {},
