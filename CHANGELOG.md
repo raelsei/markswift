@@ -9,6 +9,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - `convert --update` regenerates an existing output in place from its `.markswift.json` manifest; refuses hand-edited files (exit 2) unless `--force`; never touches files Markswift did not write.
 - Diagnostics for hyphens, word/overflow-wrap breaking, text-wrap balance/pretty, word-spacing, text-indent, font-feature-settings, font-variant-caps and underline thickness/offset; `line division forced` is reported only in fidelity; percentage and shrunk widths, auto-fill/auto-fit grids, width-dependent `@media`/`@container` rules and baked `:invalid`/`:valid` styling are reported.
 - npm package runnable with Node.js ≥ 20 (`npx markswift`, `import "markswift"`); a `v*` tag publishes it with npm provenance after a smoke test that installs the packed tarball without Bun.
+- Every activatable element exposes a camelCase `on<Name>: () -> Void` action (buttons, `role=button`/`onclick` elements as real `Button`s, input buttons, in-app links, `form onsubmit` → `.onSubmit`); inline links are tappable `Text` runs in the design's colour.
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
@@ -21,6 +22,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 ### Changed (breaking)
 - `ConversionResult.warnings` and `CompileResult.warnings` are `ConversionWarning` objects (`source`, `level?`, `feature?`, `component?`, `message`); the CLI prints `Warning: <level> <feature>: <message>`.
 - LayoutDoc 3: saved alpha (version 2) layouts are rejected by `compileLayout`; recapture them. Version 3 adds eight captured text properties and `PreferredSize.gridTemplateColumns`; later 1.0 plans may extend it until the 1.0 tag.
+- Action members are renamed `on_x` → `onX`; `<div role=button>` is a `Button` instead of a view with an `.isButton` trait.
 
 ### Fixed
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
