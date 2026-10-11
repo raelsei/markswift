@@ -60,6 +60,8 @@ export interface LayoutNode {
   lines?: Array<{ bounds: Rect; start: number; length: number }>;
   /** Global paint order index (stacking), when available. */
   paint?: number;
+  /** Paint the element shows in an interaction state: computed values of whitelisted paint properties that differ from rest (`:hover`+`:active` = pressed, `:focus`+`:focus-visible` = focused), captured by forcing the state over CDP. */
+  states?: { pressed?: Record<string, string>; focused?: Record<string, string> };
   children: LayoutNode[];
 }
 
@@ -75,6 +77,12 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     text: z.string().optional(),
     lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number() })).optional(),
     paint: z.number().optional(),
+    states: z
+      .object({
+        pressed: z.record(z.string(), z.string()).optional(),
+        focused: z.record(z.string(), z.string()).optional(),
+      })
+      .optional(),
     children: z.array(LayoutNode),
   }),
 );

@@ -22,7 +22,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 
 ### Changed (breaking)
 - `ConversionResult.warnings` and `CompileResult.warnings` are `ConversionWarning` objects (`source`, `level?`, `feature?`, `component?`, `message`); the CLI prints `Warning: <level> <feature>: <message>`.
-- LayoutDoc 3: saved alpha (version 2) layouts are rejected by `compileLayout`; recapture them. Version 3 adds eight captured text properties and `PreferredSize.gridTemplateColumns`; later 1.0 plans may extend it until the 1.0 tag.
+- LayoutDoc 3: saved alpha (version 2) layouts are rejected by `compileLayout`; recapture them. Version 3 adds eight captured text properties and `PreferredSize.gridTemplateColumns`, and also adds `LayoutNode.states` (plan 029); later 1.0 plans may extend it until the 1.0 tag.
 - Action members are renamed `on_x` → `onX`; `<div role=button>` is a `Button` instead of a view with an `.isButton` trait.
 
 ### Fixed
