@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="display: grid; grid-template-columns">
+<meta name="markswift-reflow" content="pinned">
+<title>alert-grid</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; --danger: #dc2626; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.alert { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 20px; margin: 0 0 12px; }
+.alert:last-child { margin-bottom: 0; }
+.alert svg { width: 16px; height: 16px; margin-top: 2px; }
+.title { font-weight: 500; margin: 0; }
+.desc { color: var(--muted); margin: 0; }
+.danger { color: var(--danger); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<div class="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div><p class="title">Heads up!</p><p class="desc">You can add components and dependencies to your app using the command line.</p></div></div>
+<div class="alert danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div><p class="title">Payment failed</p><p class="desc">Your card was declined. Update your billing details to keep your subscription active.</p></div></div>
+</main>
+</body>
+</html>
