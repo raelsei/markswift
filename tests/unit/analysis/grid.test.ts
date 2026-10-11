@@ -249,3 +249,20 @@ test("a grid keeps its absolutely positioned decoration", () => {
   expect(grid(input).overlays).toHaveLength(1);
   expect(grid(input).overlays[0]!.offset).toEqual([32, 12]);
 });
+
+test("an equal-fill auto-fit grid reports its pinned column count", () => {
+  const plain = capture("109.333px 109.333px 109.333px", "20px", [
+    [0, 0, 109.333, 20],
+    [119.333, 0, 109.333, 20],
+    [238.667, 0, 109.333, 20],
+  ]);
+  const input = structuredClone(plain);
+  input.root.preferredSize = {
+    width: "360px",
+    height: "200px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+  };
+  const pins = grid(input).diagnostics.filter((d) => d.feature === "grid-template-columns");
+  expect(pins.map((d) => d.message).join("\n")).toContain("repeat(auto-fit, minmax(100px, 1fr)) pinned at 3 columns");
+  expect(grid(plain).diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
+});

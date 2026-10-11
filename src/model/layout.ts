@@ -15,6 +15,8 @@ export const PreferredSize = z.object({
   insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
   /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
   autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
+  /** Typed-OM computed `grid-template-columns` as authored (`repeat(auto-fit, minmax(100px, 1fr))`, `1fr 2fr`); absent when `none`. */
+  gridTemplateColumns: z.string().optional(),
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
