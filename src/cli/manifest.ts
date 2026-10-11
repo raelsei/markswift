@@ -14,11 +14,11 @@ export interface Manifest {
 }
 
 export class EditedFilesError extends Error {
-  constructor(
-    readonly files: string[],
-    message: string,
-  ) {
+  readonly files: string[];
+
+  constructor(files: string[], message: string) {
     super(message);
+    this.files = files;
   }
 }
 
