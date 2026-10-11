@@ -210,7 +210,7 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
 - More than one viewport or state per capture: media queries are not reconstructed.
 - Animations and transitions (captured at their end state, reported).
-- Interactive links inside prose: they stay styled text runs and report the dropped destination.
+- Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
 - `ui-monospace` maps to a different native face (an explicit support boundary).
 
 ## Diagnostics
@@ -278,7 +278,6 @@ and `rebaseline` to produce a candidate baseline.
 
 - Component extraction: parameters, `ForEach` over repeated siblings, meaningful names.
 - Multi-component linker: one runtime and token set shared across conversions.
-- Interactive inline links via `AttributedString`.
 - Responsive flex/grid reflow, including unequal growth and grid tracks.
 - Box-shadow rendering cost (one offscreen pass per shadow).
 - No paint for content invisible at rest (for example `opacity: 0` overlays).

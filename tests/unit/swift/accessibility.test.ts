@@ -205,7 +205,8 @@ test("aria-label, aria-hidden, headings and roles reach VoiceOver", () => {
     [el("div", { role: "button", tabindex: "0" }, { x: 0, y: 0, w: 320, h: 22 }, [text("Confirm", 0, 0, 60, 22)])],
     "app",
   );
-  expect(role).toContain(".accessibilityAddTraits(.isButton)");
+  expect(role).toContain("Button(action: onConfirm)");
+  expect(role).not.toContain(".accessibilityAddTraits(.isButton)");
 
   const img = swift(
     [

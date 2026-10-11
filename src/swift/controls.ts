@@ -26,7 +26,7 @@ export interface ControlDeps extends ColorCtx {
   child: (n: SemNode) => string[];
   /** Control → `@State` property name; built by `controlMembers`. */
   stateOf: Map<SemNode, string>;
-  /** `onclick` source → callback property name; built by `controlMembers`. */
+  /** `Action.key` → callback member; built by `controlMembers`. */
   actionOf: Map<string, string>;
   /** Grouped radio → its tag in the group's selection; built by `controlMembers`. */
   radioTag: Map<SemNode, string>;
@@ -88,7 +88,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   const still = deps.mode === "fidelity";
   switch (n.control) {
     case "button": {
-      const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
+      const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
       // `<input type=file>`: the button's own job is to present the system picker, so its action
       // is the presentation flag and the design's box gains `.fileImporter`. The `accept` list
       // goes across as the attribute wrote it — one string literal however many tokens it has —
@@ -105,7 +105,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
+      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -114,8 +114,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // `onclick` handler gets, and named after whatever the design called the target.
       const href = n.href ?? "";
       if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
-        const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
-        return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
+        const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
+        return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
       return wrap(`Link(destination: markswiftURL(${str(href)})) {`, pressable(n, deps), ["}"]);
     }
@@ -126,6 +126,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+        ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
     case "secureField":
       // The browser paints one bullet per character of the value.
@@ -135,6 +136,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+        ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");

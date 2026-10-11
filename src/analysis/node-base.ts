@@ -7,6 +7,7 @@ import { styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
+import { activatableAction } from "./controls.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -35,6 +36,10 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
   const a11y = a11yOf(n, ctx);
+  // Native controls get their action in `controlOf`; everything else the design makes activatable here.
+  const action = policy.route !== "control" && !style.hidden ? activatableAction(n) : undefined;
+  // A Button already announces itself as one; the explicit trait only stays where no Button is emitted.
+  if (action && !action.gesture && a11y?.trait === "isButton") delete a11y.trait;
   const labelFor = ctx.labels?.activates.get(n)?.id;
   return {
     id: n.id ?? "",
@@ -49,7 +54,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     confidence: "mapped",
     diagnostics,
     overlays: [],
-    ...(a11y ? { a11y } : {}),
+    ...(a11y && Object.keys(a11y).length ? { a11y } : {}),
+    ...(action ? { action } : {}),
     ...(labelFor ? { labelFor } : {}),
   };
 }

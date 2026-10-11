@@ -180,6 +180,8 @@ export interface TextRun {
    * carry as a box.
    */
   gap?: number;
+  /** Inline `<a href>`: the run is a link. `action` is set for an href the app must resolve (fragment, relative path). */
+  link?: { href: string; action?: Action };
 }
 
 /**
@@ -273,6 +275,18 @@ export interface SizeConstraints {
   maxHeight?: number;
 }
 
+/** A callback the generated view exposes for something the design lets the user activate. */
+export interface Action {
+  /** One member per key: the handler source (`save()`), `#<target>` for an in-app link, else `node:<id>`. */
+  key: string;
+  /** Words the member is named from: handler name, `id`, `aria-label`, caption or link target — the first non-empty. */
+  words: string;
+  /** One line quoting the design, the member's doc comment. */
+  origin: string;
+  /** The element contains another control: a tap gesture on its box, not a Button (SwiftUI must not nest Buttons). */
+  gesture?: true;
+}
+
 export interface SemBase extends SizeConstraints {
   /** Template path id; stable across regenerations. */
   id: string;
@@ -311,6 +325,11 @@ export interface SemBase extends SizeConstraints {
   };
   /** `<label>`: id of the toggle/radio its tap changes. */
   labelFor?: string;
+  /**
+   * What activating this element does; set on Buttons, in-app links, text fields inside a
+   * `<form onsubmit>` (Return), and activatable non-controls.
+   */
+  action?: Action;
 }
 
 export interface StackNode extends SemBase {
@@ -467,12 +486,6 @@ export interface ControlNode extends SemBase {
   options?: string[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
-  /**
-   * The callback the generated view should run: an `@onclick` handler's source, or — for an
-   * `<a href>` the app cannot resolve (an in-page fragment, a relative path) — the target the
-   * design named, so the placeholder the developer fills in says which link it was.
-   */
-  action?: string;
   /** `<details open>`: initial disclosure state. */
   expanded?: boolean;
   /**

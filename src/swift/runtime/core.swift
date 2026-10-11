@@ -100,6 +100,16 @@ extension Text {
     nonisolated static func markswiftRuns(_ runs: [Text]) -> Text {
         runs.dropFirst().reduce(runs.first ?? Text(verbatim: "")) { $0 + $1 }
     }
+
+    /// An inline `<a href>` run: a tappable `Text` in the design's colour. A link run ignores
+    /// `.foregroundStyle` and draws in the accent colour unless the attributed string carries its own
+    /// colour, so the colour rides on the attribute. The paragraph's `openURL` handler routes in-app hrefs.
+    nonisolated static func markswiftLink(_ text: String, _ href: String, _ color: Color) -> Text {
+        var run = AttributedString(text)
+        run.link = markswiftURL(href)
+        run.swiftUI.foregroundColor = color
+        return Text(run)
+    }
 }
 
 extension View {

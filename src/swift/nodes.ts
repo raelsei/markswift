@@ -4,7 +4,7 @@ import { textExpr } from "./text.ts";
 import { svgExpr } from "./svg.ts";
 import { imageNodeExpr } from "./images.ts";
 import { controlExpr } from "./controls.ts";
-import { boxModifiers, modifiers, placementModifiers } from "./modifiers.ts";
+import { boxModifiers, decorate, placementModifiers } from "./modifiers.ts";
 /** Lines for a node: container → property reference; leaf → inline expression (with modifiers). */
 export function refOf(n: SemNode, ctx: EmitContext): string[] {
   if (n.kind === "stack" || n.kind === "grid") return [ctx.nameOf.get(n)!];
@@ -47,5 +47,5 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
     default:
       core = ["EmptyView()"];
   }
-  return [...core, ...modifiers(n, ctx)];
+  return decorate(n, core, ctx);
 }

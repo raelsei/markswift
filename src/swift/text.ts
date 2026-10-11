@@ -1,6 +1,6 @@
 import type { TextNode, TextRun } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ColorCtx, EmitMode } from "./context.ts";
+import type { ColorCtx, ControlMembers, EmitMode } from "./context.ts";
 import { colorExpr, fontExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
@@ -22,7 +22,10 @@ function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number;
   };
 }
 
-export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
+export function textExpr(
+  n: TextNode,
+  ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics; control?: Pick<ControlMembers, "actionOf"> },
+): string[] {
   const runs = n.runs;
   // Whole-text decisions (case, line height, shadow) come from the runs that carry glyphs.
   const glyphs = runs.filter((r) => r.gap === undefined);
@@ -127,6 +130,20 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
       if (Math.abs(g) >= 0.5) out.push(`.padding(.${edge}, ${num(g)})`);
     }
   }
+  // In-app hrefs go to the view's action members; anything else (an absolute URL) opens as usual.
+  const routes = new Map<string, string>();
+  for (const r of runs) if (r.link?.action) routes.set(r.link.href, ctx.control?.actionOf.get(r.link.action.key) ?? "");
+  if ([...routes.values()].some(Boolean))
+    out.push(
+      ".environment(\\.openURL, OpenURLAction { url in",
+      "    switch url.absoluteString {",
+      ...[...routes]
+        .filter(([, name]) => name)
+        .map(([href, name]) => `    case ${str(href)}: ${name}(); return .handled`),
+      "    default: return .systemAction",
+      "    }",
+      "})",
+    );
   return out;
 }
 
@@ -174,24 +191,47 @@ function runExpr(
         "text-transform capitalize applied to the literal (no .textCase equivalent)",
       );
   }
-  let e = `Text(verbatim: ${str(text)})`;
-  e += `.font(${fontExpr(r.font, ctx)})`;
-  if (r.italic) e += ".italic()";
-  // `background-clip: text`: the paint is the glyph fill (`Text.foregroundStyle` takes any ShapeStyle).
-  const paint =
-    r.paint && r.paint.kind !== "image" && r.paint.kind !== "unsupported"
-      ? paintExpr(r.paint, n.frame.w, n.frame.h, ctx, n.id)
-      : undefined;
-  if (r.paint && !paint)
-    note(
-      n,
-      "approximated",
-      "background-clip: text",
-      `background-clip text with a ${r.paint.kind} paint falls back to the text color`,
-    );
   // A run's own slot key (`run2`) resolves it even when the node paints its colour twice; a
   // paint fallback colour is no enumerated slot, so it keeps the node-wide lookup.
-  e += `.foregroundStyle(${paint ?? colorExpr(r.color, ctx, n.id, r.paint ? undefined : `run${i}`)})`;
+  const fill = r.paint ? undefined : `run${i}`;
+  let e = `Text(verbatim: ${str(text)})`;
+  if (r.link) {
+    // A link run takes one colour (it rides on the attributed string, `Text.markswiftLink`); a
+    // gradient fill falls back to the run colour, else its first stop.
+    const solid =
+      r.color.a > 0 || !r.paint
+        ? r.color
+        : "stops" in r.paint
+          ? (r.paint.stops[0]?.color ?? r.color)
+          : r.paint.kind === "solid"
+            ? r.paint.color
+            : r.color;
+    if (r.paint)
+      note(
+        n,
+        "approximated",
+        "background-clip: text",
+        "inline link with background-clip: text → drawn in one solid colour (a link run takes one colour)",
+      );
+    e = `Text.markswiftLink(${str(text)}, ${str(r.link.href)}, ${colorExpr(solid, ctx, n.id, fill)})`;
+  }
+  e += `.font(${fontExpr(r.font, ctx)})`;
+  if (r.italic) e += ".italic()";
+  if (!r.link) {
+    // `background-clip: text`: the paint is the glyph fill (`Text.foregroundStyle` takes any ShapeStyle).
+    const paint =
+      r.paint && r.paint.kind !== "image" && r.paint.kind !== "unsupported"
+        ? paintExpr(r.paint, n.frame.w, n.frame.h, ctx, n.id)
+        : undefined;
+    if (r.paint && !paint)
+      note(
+        n,
+        "approximated",
+        "background-clip: text",
+        `background-clip text with a ${r.paint.kind} paint falls back to the text color`,
+      );
+    e += `.foregroundStyle(${paint ?? colorExpr(r.color, ctx, n.id, fill)})`;
+  }
   if (r.decoration) {
     const d = r.decoration;
     const pattern = d.style === "dotted" ? ".dot" : d.style === "dashed" ? ".dash" : undefined;

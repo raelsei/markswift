@@ -1,7 +1,7 @@
 import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
-import { modifiers, overlayModifier } from "./modifiers.ts";
+import { decorate, overlayModifier } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
@@ -83,14 +83,14 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     )
       out.push(".fixedSize(horizontal: false, vertical: true)");
   }
-  out.push(...modifiers(n, ctx));
+  const body = decorate(n, out, ctx);
   if (n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis,
     // with `position: fixed` overlays attached outside it so they stay put while content scrolls.
     if (ctx.mode === "fidelity")
       return [
-        ...out,
+        ...body,
         `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`,
         ".clipped()",
       ];
@@ -101,11 +101,11 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     ].flatMap((o) => overlayModifier(o, o.layer, ctx));
     return [
       `ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`,
-      ...indent(out, 1),
+      ...indent(body, 1),
       `}`,
       ".markswiftScrollEdgeEffectHidden()",
       ...fixed,
     ];
   }
-  return out;
+  return body;
 }
