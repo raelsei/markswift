@@ -10,9 +10,10 @@ import { LAYOUT_DOC_VERSION, LayoutDoc, STYLE_WHITELIST } from "../../src/model/
  */
 const FINGERPRINTS: Record<number, string> = {
   2: "cad15d763304e55bd3849ea25b46a4af44d2ba4d189bf6bb6ff4fd4fa78f6934",
+  3: "44a521eb98aef43822880b3d0f9de48cf53e49ccc94bb00410b58cf2cd4e6b3e",
 };
 /** The LayoutDoc version not yet shipped in a `v*` tag, or null. The release commit sets it back to null. */
-const UNRELEASED_LAYOUT_DOC_VERSION: number | null = null;
+const UNRELEASED_LAYOUT_DOC_VERSION: number | null = 3;
 
 test("STYLE_WHITELIST and the LayoutDoc schema change only with a LayoutDoc.version bump", () => {
   const fingerprint = createHash("sha256")

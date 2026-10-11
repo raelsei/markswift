@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
@@ -34,7 +35,7 @@ function card(shadows: string, border = "0px") {
     children: [],
   };
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "shadow-test",
     combo: { screen: "card", theme: "light" },
     size: { w: 180, h: 230 },

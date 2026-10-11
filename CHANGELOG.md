@@ -16,6 +16,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 
 ### Changed (breaking)
 - `ConversionResult.warnings` and `CompileResult.warnings` are `ConversionWarning` objects (`source`, `level?`, `feature?`, `component?`, `message`); the CLI prints `Warning: <level> <feature>: <message>`.
+- LayoutDoc 3: saved alpha (version 2) layouts are rejected by `compileLayout`; recapture them. Version 3 adds eight captured text properties and `PreferredSize.gridTemplateColumns`; later 1.0 plans may extend it until the 1.0 tag.
 
 ### Fixed
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).

@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";
@@ -19,7 +20,7 @@ function capture(
     children: [],
   }));
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "grid.html",
     combo: { screen: "grid", theme: "light" },
     size: { w: 360, h: 200 },

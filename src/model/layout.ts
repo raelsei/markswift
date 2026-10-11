@@ -121,7 +121,7 @@ export type Theme = Combo["theme"];
 /** Version of the saved-capture format. Bump it with any STYLE_WHITELIST or schema change, or a change in what a
  * captured value means — once per release cycle: while the version is unreleased (see
  * tests/architecture/layout-doc.test.ts, which pins the schema to it) later changes re-pin its fingerprint. */
-export const LAYOUT_DOC_VERSION = 2;
+export const LAYOUT_DOC_VERSION = 3;
 
 export const LayoutDoc = z.object({
   version: z.literal(LAYOUT_DOC_VERSION),

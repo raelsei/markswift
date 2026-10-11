@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /** Adaptive compile: one light view whose colours follow the colour scheme, paired from a dark capture. */
 import { expect, test } from "bun:test";
 import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
@@ -14,7 +15,7 @@ const box = (id: string, y: number, styles: Record<string, string>): Node => ({
 
 function page(theme: "light" | "dark", card: string, edge?: string): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "card.html",
     combo: { screen: "card", theme },
     size: { w: 200, h: 100 },

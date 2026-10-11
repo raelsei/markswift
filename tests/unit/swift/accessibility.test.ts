@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
@@ -18,7 +19,7 @@ function text(value: string, x: number, y: number, w: number, h: number): Layout
 
 function swift(children: LayoutNode[], mode: EmitMode): string {
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "a11y.html",
     combo: { screen: "a11y", theme: "light" },
     size: { w: 320, h: 400 },

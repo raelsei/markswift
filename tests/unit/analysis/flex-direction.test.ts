@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
  * Flex alignment and direction in visual terms (plan 011): reverse/RTL packing, text alignment,
  * unbreakable words, align-self and auto margins. Hand-built layout docs, as in infer.test.ts.
@@ -34,7 +35,7 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 
 function doc(root: LayoutNode): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
