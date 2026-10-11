@@ -7,7 +7,7 @@ import { serveDir } from "../../../src/input/server.ts";
 
 test("static server refuses foreign hosts, dotfiles and malformed paths", async () => {
   const dir = await mkdtemp(join(tmpdir(), "markswift-server-"));
-  const server = serveDir(dir);
+  const server = await serveDir(dir);
   try {
     await Bun.write(join(dir, "a.txt"), "a");
     await Bun.write(join(dir, ".env"), "SECRET=1");
@@ -26,6 +26,23 @@ test("static server refuses foreign hosts, dotfiles and malformed paths", async 
         .end();
     });
     expect(foreign).toBe(403);
+  } finally {
+    server.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("static server sends Chrome's content types and no directories or escapes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "markswift-server-"));
+  const server = await serveDir(dir);
+  try {
+    await Bun.write(join(dir, "a.js"), "export {}");
+    await Bun.write(join(dir, "a.css"), "p{}");
+    const res = (path: string) => fetch(server.origin + path);
+    expect((await res("/a.js")).headers.get("content-type")).toContain("text/javascript");
+    expect((await res("/a.css")).headers.get("content-type")).toContain("text/css");
+    expect((await res("/%2e%2e/etc/passwd")).status).toBe(404);
+    expect((await res("/")).status).toBe(404);
   } finally {
     server.stop();
     await rm(dir, { recursive: true, force: true });

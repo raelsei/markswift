@@ -210,7 +210,7 @@ async function run() {
       throw new Error(`output already exists: ${out}; choose a fresh --out directory`);
     throw error;
   }
-  const server = serveDir(join(import.meta.dir, "fixtures"));
+  const server = await serveDir(join(import.meta.dir, "fixtures"));
   const browsers = new Map<number, BrowserCapture>();
   let report: RunReport | undefined;
   try {

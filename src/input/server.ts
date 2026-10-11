@@ -1,5 +1,10 @@
 /** Static file server over http://127.0.0.1 for capture pages (ES modules and fetch fail under file://). */
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
+import { mimeType } from "./mime.ts";
 
 export interface StaticServer {
   /** `http://127.0.0.1:<port>` */
@@ -12,37 +17,34 @@ export interface StaticServer {
  * `127.0.0.1:<port>` (403, DNS rebinding), malformed percent-encoding (400), any dot-segment
  * such as `.env` or `.git/` (404), and paths resolving outside the root (403).
  */
-export function serveDir(rootDir: string): StaticServer {
+export async function serveDir(rootDir: string): Promise<StaticServer> {
   const root = resolve(rootDir);
-
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(req, server) {
-      if (req.headers.get("host") !== `127.0.0.1:${server.port}`) return new Response("forbidden", { status: 403 });
-      let path: string;
-      try {
-        path = decodeURIComponent(new URL(req.url).pathname);
-      } catch {
-        return new Response("bad request", { status: 400 });
-      }
-      if (path.split("/").some((s) => s.startsWith("."))) return new Response("not found", { status: 404 });
-      const local = resolve(root, "." + path);
-      if (local !== root && !local.startsWith(root + "/")) return new Response("forbidden", { status: 403 });
-      return fileResponse(local);
-    },
+  const server = createServer(async (req, res) => {
+    const reply = (status: number, body: string) => res.writeHead(status, { "content-type": "text/plain" }).end(body);
+    const { port } = server.address() as AddressInfo;
+    if (req.headers.host !== `127.0.0.1:${port}`) return reply(403, "forbidden");
+    let path: string;
+    try {
+      // Parsing against a base normalises `..` before the containment check below.
+      path = decodeURIComponent(new URL(req.url ?? "/", "http://127.0.0.1").pathname);
+    } catch {
+      return reply(400, "bad request");
+    }
+    if (path.split("/").some((s) => s.startsWith("."))) return reply(404, "not found");
+    const local = resolve(root, "." + path);
+    if (local !== root && !local.startsWith(root + "/")) return reply(403, "forbidden");
+    const info = await stat(local).catch(() => undefined);
+    if (!info?.isFile()) return reply(404, "not found");
+    res.writeHead(200, { "content-type": mimeType(local), "content-length": info.size, "cache-control": "no-store" });
+    createReadStream(local).pipe(res);
   });
-
+  await new Promise<void>((done, fail) => server.once("error", fail).listen(0, "127.0.0.1", done));
+  const { port } = server.address() as AddressInfo;
   return {
-    origin: `http://127.0.0.1:${server.port}`,
+    origin: `http://127.0.0.1:${port}`,
     stop() {
-      server.stop(true);
+      server.closeAllConnections();
+      server.close();
     },
   };
-}
-
-async function fileResponse(path: string): Promise<Response> {
-  const f = Bun.file(path);
-  if (!(await f.exists())) return new Response("not found", { status: 404 });
-  return new Response(f, { headers: { "cache-control": "no-store" } });
 }
