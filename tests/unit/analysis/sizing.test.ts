@@ -163,3 +163,19 @@ test("ordinary inline text does not acquire CSS constraints that the browser ign
   ).toMatchObject({ width: { kind: "fixed", px: 30 } });
   expect(sizing(element(30, 20, { display: "inline", "min-width": "120px" })).minWidth).toBeUndefined();
 });
+
+test.each([
+  [["right", "left"], "center"],
+  [["left"], "end"],
+  [["right"], undefined],
+  [undefined, undefined],
+] as const)("a fixed-width block with auto margins %p is placed %p", (autoMargins, expected) => {
+  // Parent content box is 350 px wide; 95 px used margins on each side make the margin box fill it.
+  const box: LayoutNode = {
+    ...element(160, 40, { display: "block", "margin-left": "95px", "margin-right": "95px" }),
+    preferredSize: { width: "160px", height: "auto", ...(autoMargins ? { autoMargins: [...autoMargins] } : {}) },
+  };
+  const s = sizing(box);
+  expect(s.width).toEqual({ kind: "fixed", px: 160 });
+  expect(s.selfAlign).toBe(expected);
+});
