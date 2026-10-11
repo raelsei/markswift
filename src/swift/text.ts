@@ -64,6 +64,9 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   // into the literal.
   const clamped = n.lineLimit !== undefined && n.noWrap !== true;
   const divided = n.noWrap === true || (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length));
+  // Only fidelity bakes the browser's line division into the literal.
+  if (ctx.mode === "fidelity" && runs.some((r) => r.breaks?.length))
+    note(n, "approximated", "text-wrap-mode", "line division forced from the browser (native wraps differently)");
   const noSoftWrap =
     !n.truncate && !clamped && (divided || n.unbreakable === true || (ctx.mode === "fidelity" && n.lines === 1));
   out.push(`.fixedSize(horizontal: ${noSoftWrap}, vertical: true)`);

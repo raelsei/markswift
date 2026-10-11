@@ -1,6 +1,6 @@
 /** Semantic node base construction and confidence classification. */
 import { type SemNode, type SemBase, type Diagnostic, addDiagnostic, confidenceOf } from "../model/semantic.ts";
-import { type LayoutNode } from "../model/layout.ts";
+import { type LayoutNode, VALIDATION_MARK } from "../model/layout.ts";
 import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
 import { styleOf } from "./style.ts";
@@ -23,6 +23,13 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.diagnostic)
     addDiagnostic(diagnostics, policy.diagnostic.level, policy.diagnostic.feature, policy.diagnostic.message);
+  if (n.attrs[VALIDATION_MARK] !== undefined)
+    addDiagnostic(
+      diagnostics,
+      "approximated",
+      ":invalid",
+      "validation styling (:invalid/:valid rule) captured as the resting look; it does not follow the field's value",
+    );
   const style = styleOf(n, diagnostics);
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);

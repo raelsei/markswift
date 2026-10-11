@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
@@ -39,7 +40,7 @@ test("SVG chart labels and nested tspans use the conversion's bundled fonts", ()
     ],
   };
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "chart",
     combo: { screen: "chart", theme: "light" },
     size: { w: 100, h: 50 },
@@ -168,7 +169,7 @@ test("path data is normalised once, during analysis, into absolute segments", ()
     children: [path],
   };
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "icon",
     combo: { screen: "icon", theme: "light" },
     size: { w: 24, h: 24 },
@@ -190,7 +191,7 @@ test("path data is normalised once, during analysis, into absolute segments", ()
 
 describe("data: svg sources are parsed once, during analysis", () => {
   const doc = (root: LayoutNode): LayoutDoc => ({
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "t",
     combo: { screen: "t", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },

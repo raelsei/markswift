@@ -1,6 +1,7 @@
 import type { Page } from "playwright-core";
 import type { CompileOptions, CompileResult } from "../compiler/index.ts";
 import type { LayoutDoc, Theme } from "../model/layout.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
 export type { HtmlSource } from "../input/types.ts";
 
 export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
@@ -29,8 +30,8 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
 }
 
 export interface ConversionResult extends CompileResult {
-  /** Font packaging limitations, browser resource/page errors and light/dark pairing limitations. */
-  warnings: string[];
+  /** Font packaging limitations, browser resource/page errors, viewport-dependent CSS and light/dark pairing limitations. */
+  warnings: ConversionWarning[];
   /** The emitted capture: the light one for `adaptive`. */
   layout: LayoutDoc;
   /** The dark capture of an `adaptive` conversion. */

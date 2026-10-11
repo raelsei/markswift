@@ -9,6 +9,7 @@ export type {
   Diagnostic,
   DiagnosticLevel,
   Confidence,
+  ConversionWarning,
 } from "./compiler/index.ts";
 export { HTML_ELEMENTS, INPUT_CONTROLS, classifyElement } from "./html/index.ts";
 export type { ElementPolicy, ElementRoute, ElementSupport } from "./html/index.ts";

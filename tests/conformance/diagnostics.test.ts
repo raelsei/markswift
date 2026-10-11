@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ const ROWS = new Set(
   [attribute, cssLayout, cssMisc, cssPaint, cssTypography, html, svg].flatMap((inv) => inv.entries.map((e) => e.id)),
 );
 const doc = (child: LayoutNode): LayoutDoc => ({
-  version: 2,
+  version: LAYOUT_DOC_VERSION,
   source: "diagnostics",
   combo: { screen: "d", theme: "light" },
   size: { w: 200, h: 200 },

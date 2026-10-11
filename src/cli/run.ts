@@ -3,7 +3,7 @@ import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
 import type { ConversionCommand } from "./args.ts";
 import { inlineRelativeUrls } from "./css.ts";
-import { ensureVacant, formatDiagnostics, updatable, updateBundle, writeBundle } from "./output.ts";
+import { ensureVacant, formatDiagnostics, formatWarning, updatable, updateBundle, writeBundle } from "./output.ts";
 
 export async function runConversion(command: ConversionCommand): Promise<void> {
   if (command.update) await updatable(command.outDir, command.force);
@@ -30,6 +30,6 @@ export async function runConversion(command: ConversionCommand): Promise<void> {
       ? `Updated ${files.length} files for ${result.name} in ${command.outDir}\n`
       : `Wrote ${files.length} files for ${result.name} to ${command.outDir}\n`,
   );
-  for (const warning of result.warnings) process.stderr.write(`Warning: ${warning}\n`);
+  for (const warning of result.warnings) process.stderr.write(`Warning: ${formatWarning(warning)}\n`);
   for (const line of formatDiagnostics(result.diagnostics)) process.stderr.write(`Note ${line}\n`);
 }

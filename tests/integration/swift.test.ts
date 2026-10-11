@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -226,7 +227,7 @@ nativeTest(
       },
     ]);
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "silent-loss",
       combo: { screen: "s", theme: "light" },
       size: { w: 300, h: 380 },
@@ -333,7 +334,7 @@ nativeTest(
       },
     );
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "app-sizing",
       combo: { screen: "s", theme: "light" },
       size: { w: 390, h: 2000 },
@@ -496,7 +497,7 @@ nativeTest(
       },
     );
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "flex-direction",
       combo: { screen: "s", theme: "light" },
       size: { w: 390, h: 634 },

@@ -34,6 +34,22 @@ export function confidenceOf(list: readonly Diagnostic[]): Confidence {
   return list.some((d) => d.level === "unmapped") ? "unmapped" : list.length ? "approximated" : "mapped";
 }
 
+/**
+ * One per-conversion message, not tied to a node. `capture`: page errors, unreadable resources
+ * and viewport-dependent CSS the view does not follow; `fonts`: font packaging; `adaptive`:
+ * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034).
+ * `level` and `feature` are set together when the message is a design loss, with the same
+ * meaning as on `Diagnostic` (`feature` is an inventory row id). `component` names the
+ * component a package build was converting when the message arose.
+ */
+export interface ConversionWarning {
+  source: "capture" | "fonts" | "adaptive" | "build" | "palette";
+  level?: DiagnosticLevel;
+  feature?: string;
+  component?: string;
+  message: string;
+}
+
 export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */

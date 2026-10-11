@@ -28,6 +28,8 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
           (k) => map?.get(`margin-${k}`)?.toString() === "auto",
         );
         if (autoMargins.length) entry.autoMargins = autoMargins;
+        const tracks = map?.get("grid-template-columns")?.toString();
+        if (tracks && tracks !== "none") entry.gridTemplateColumns = tracks;
         out[path] = entry;
       }
       Array.from(el.children).forEach((child, i) => {

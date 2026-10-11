@@ -786,7 +786,7 @@ export default {
       ir: "GridNode.columns, GridNode.tracks (new)",
       via: "style",
       impl: "partial",
-      note: "Chrome reports the resolved px track list for a laid-out grid, so the column count is right for every track syntax; track widths are not carried and Grid sizes columns by content.",
+      note: "Chrome reports the resolved px track list for a laid-out grid, so the column count is right for every track syntax; track widths are not carried and Grid sizes columns by content. Equal-fill `repeat(auto-fill|auto-fit, …)` templates (read through Typed OM) are reported: the column count is pinned.",
       spec: mdn("grid-template-columns"),
     },
     {
@@ -1073,7 +1073,7 @@ export default {
       ir: "SemBase.width (Size)",
       via: "style",
       impl: "partial",
-      note: "Declared px → fixed (measured), `100%` → fill, equal flex-grow or block/stretch child → fill, otherwise hug. Only the inline `style` attribute is parsed (`parseDeclared`); stylesheet widths (classes, Tailwind) rely on the stretch/grow rules and the whitelisted computed value goes unused.",
+      note: "Declared px → fixed (measured), `100%` → fill, equal flex-grow or block/stretch child → fill, otherwise hug. Only the inline `style` attribute is parsed (`parseDeclared`); stylesheet widths (classes, Tailwind) rely on the stretch/grow rules and the whitelisted computed value goes unused. Percentage widths kept as measured px, and px widths laid out at another size (flex shrink, min/max), are reported.",
       spec: mdn("width"),
     },
     {

@@ -15,6 +15,8 @@ export const PreferredSize = z.object({
   insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
   /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
   autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
+  /** Typed-OM computed `grid-template-columns` as authored (`repeat(auto-fit, minmax(100px, 1fr))`, `1fr 2fr`); absent when `none`. */
+  gridTemplateColumns: z.string().optional(),
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
@@ -119,7 +121,10 @@ export type Theme = Combo["theme"];
 /** Version of the saved-capture format. Bump it with any STYLE_WHITELIST or schema change, or a change in what a
  * captured value means — once per release cycle: while the version is unreleased (see
  * tests/architecture/layout-doc.test.ts, which pins the schema to it) later changes re-pin its fingerprint. */
-export const LAYOUT_DOC_VERSION = 2;
+export const LAYOUT_DOC_VERSION = 3;
+
+/** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
+export const VALIDATION_MARK = "data-markswift-validation";
 
 export const LayoutDoc = z.object({
   version: z.literal(LAYOUT_DOC_VERSION),
@@ -188,14 +193,17 @@ export const STYLE_WHITELIST = [
   "flex-wrap",
   "float",
   "font-family",
+  "font-feature-settings",
   "font-size",
   "font-style",
+  "font-variant-caps",
   "font-variant-numeric",
   "font-weight",
   "grid-auto-flow",
   "grid-template-columns",
   "grid-template-rows",
   "height",
+  "hyphens",
   "justify-content",
   "left",
   "letter-spacing",
@@ -245,10 +253,14 @@ export const STYLE_WHITELIST = [
   "text-decoration-color",
   "text-decoration-line",
   "text-decoration-style",
+  "text-decoration-thickness",
+  "text-indent",
   "text-overflow",
   "text-shadow",
   "text-transform",
+  "text-underline-offset",
   "text-wrap-mode",
+  "text-wrap-style",
   "top",
   "transform",
   "transform-origin",
@@ -262,5 +274,6 @@ export const STYLE_WHITELIST = [
   "white-space-collapse",
   "width",
   "word-break",
+  "word-spacing",
   "writing-mode",
 ] as const;
