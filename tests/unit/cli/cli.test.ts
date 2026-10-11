@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inlineRelativeUrls } from "../../../src/cli/css.ts";
+import { VERSION } from "../../../src/model/version.ts";
 
 const entry = join(import.meta.dir, "../../../src/cli.ts");
 
@@ -27,9 +28,9 @@ test("CLI help explains input, output and browser requirements without starting 
   }
 });
 
-test("CLI reports the alpha package version", async () => {
+test("CLI reports the package version", async () => {
   const result = await invoke("--version");
-  expect(result).toEqual({ stdout: "0.1.0-alpha.1\n", stderr: "", code: 0 });
+  expect(result).toEqual({ stdout: `${VERSION}\n`, stderr: "", code: 0 });
 });
 
 test("CLI rejects missing and ambiguous input with usage status", async () => {

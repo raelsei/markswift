@@ -61,7 +61,7 @@ conversion or file error. Warnings and diagnostics go to stderr.
 | --- | --- |
 | `<Name>.swift` | Always: the view, with a light and a dark `#Preview` |
 | `<Name>+Tokens.swift` | Always: colours in `<Name>.Palette` |
-| `MarkswiftRuntime.swift` | Always: shared helpers, identical for every conversion by the same version |
+| `MarkswiftRuntime.swift` | Always: shared helpers; its header names the Markswift version, and every conversion by that version produces the identical file |
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |
 | `<Name>+Fonts.swift`, `<Name>+UIAppFonts.plist.fragment`, `Fonts/*.ttf` | When webfonts were bundled |
 | `Images/<hash>.<ext>` | When the component shows raster images (one file per distinct image) |
@@ -90,7 +90,10 @@ for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`gene
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
   `convertHtml(html, options)` is the string shorthand. `compileLayout(layout, { name, mode, dark })`
-  recompiles a saved `LayoutDoc` (version 2) without Chrome; it does not package fonts.
+  recompiles a saved `LayoutDoc` (version 2) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
+  cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
+  and rejects any other with an error naming both versions — recapture the source. A change to the captured style
+  list or the schema bumps the LayoutDoc version and is a breaking release.
 - Options: `name`, `mode` (`app` | `fidelity`), `theme` (`adaptive` | `light` | `dark`),
   `darkClass`, `css` (compiled CSS), `root` (default `[data-markswift-root]`, otherwise `body`),
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
