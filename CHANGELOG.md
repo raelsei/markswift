@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 
 ## [Unreleased]
 
+### Changed
+- The quality gate names the old and new value of a changed capture configuration and prints a rebaseline hint on toolchain drift; the Visual Toolchain step lists simulator runtimes; a missing tracked baseline fails with instructions.
+
 ## [0.1.0-alpha.1] — 2026-10-10
 
 First alpha: visually faithful SwiftUI starting code for one captured component (iOS 18+, Swift 6, `app` mode by default).
