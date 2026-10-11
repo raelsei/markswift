@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { compare, regionMismatch } from "../../../tools/verify/compare.ts";
+import { compare, placeholderPixels, regionMismatch } from "../../../tools/verify/compare.ts";
 
 // 400×240 device px at DPR 2: white canvas, a #2563eb rect at (40,40,240,120), a #111827 bar at (40,180,320,20).
 const W = 400,
@@ -64,4 +64,29 @@ test("a shifted element fails its region while untouched areas stay clean", asyn
 test("different dimensions are rejected, never stretched", async () => {
   const narrow = await png(join(dir, "narrow.png"), [], false, 398);
   await expect(compare(ref, narrow, join(dir, "d3.png"), 2)).rejects.toThrow("image dimensions differ");
+});
+
+test("a 16-bit Display P3 render of the same colour scores as identical", async () => {
+  const buf = Buffer.alloc(40 * 40 * 3);
+  for (let i = 0; i < buf.length; i += 3) buf.set([14, 165, 234], i);
+  const raw = { raw: { width: 40, height: 40, channels: 3 as const } };
+  const plain = join(dir, "srgb.png");
+  const p3 = join(dir, "p3.png");
+  await sharp(buf, raw).png().toFile(plain);
+  await sharp(buf, raw).toColourspace("rgb16").withIccProfile("p3").png().toFile(p3);
+  const score = await compare(plain, p3, join(dir, "d4.png"), 2);
+  expect(score.mismatch).toBe(0);
+  expect(score.ssim).toBeGreaterThanOrEqual(0.999);
+});
+
+test("placeholderPixels counts only the exact ImageRenderer yellow", async () => {
+  const buf = Buffer.alloc(20 * 20 * 3, 255);
+  for (let y = 2; y < 8; y++) for (let x = 3; x < 8; x++) buf.set([255, 204, 0], (y * 20 + x) * 3);
+  buf.set([255, 205, 0], (15 * 20 + 15) * 3);
+  const yellow = join(dir, "yellow.png");
+  await sharp(buf, { raw: { width: 20, height: 20, channels: 3 } })
+    .png()
+    .toFile(yellow);
+  expect(await placeholderPixels(yellow)).toBe(30);
+  expect(await placeholderPixels(ref)).toBe(0);
 });

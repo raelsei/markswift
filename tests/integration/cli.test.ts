@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -126,4 +126,75 @@ browserTest(
     }
   },
   45_000,
+);
+
+browserTest(
+  "CLI --update regenerates in place behind an edit guard",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-cli-update-"));
+    try {
+      const source = join(directory, "card.html");
+      const css = join(directory, "card.css");
+      const output = join(directory, "generated");
+      const view = join(output, "AlphaCard.swift");
+      const wrapper = join(output, "Wrapper.swift");
+      await Bun.write(source, '<main data-markswift-root class="card">Hello CLI</main>');
+      await Bun.write(css, "body{margin:0}.card{width:220px;height:80px;background:#ffcc00;font:18px system-ui}");
+      const run = async (...flags: string[]) => {
+        const child = Bun.spawn(
+          [
+            process.execPath,
+            join(import.meta.dir, "../../src/cli.ts"),
+            "convert",
+            source,
+            "--css",
+            css,
+            "--name",
+            "AlphaCard",
+            "--out",
+            output,
+            ...flags,
+          ],
+          { stdout: "pipe", stderr: "pipe" },
+        );
+        const [stdout, stderr, code] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ]);
+        return { stdout, stderr, code };
+      };
+      const snapshot = async () => {
+        const names = (await readdir(output, { recursive: true, withFileTypes: true }))
+          .filter((entry) => entry.isFile())
+          .map((entry) => join(entry.parentPath, entry.name));
+        return Object.fromEntries(
+          await Promise.all(names.sort().map(async (name) => [name, (await readFile(name)).toString("hex")])),
+        );
+      };
+
+      expect((await run()).code).toBe(0);
+      const first = await snapshot();
+      expect(Object.keys(first)).toContain(join(output, ".markswift.json"));
+      await writeFile(wrapper, "struct Wrapper {}");
+
+      const updated = await run("--update");
+      expect(updated.code).toBe(0);
+      expect(updated.stdout).toContain("Updated");
+      expect(await snapshot()).toEqual({ ...first, [wrapper]: Buffer.from("struct Wrapper {}").toString("hex") });
+
+      await appendFile(view, "\n// mine");
+      const refused = await run("--update");
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toContain("AlphaCard.swift");
+      expect(await readFile(view, "utf8")).toEndWith("// mine");
+
+      expect((await run("--update", "--force")).code).toBe(0);
+      expect((await readFile(view)).toString("hex")).toBe(first[view]);
+      expect(await readFile(wrapper, "utf8")).toBe("struct Wrapper {}");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  90_000,
 );

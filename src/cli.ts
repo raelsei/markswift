@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
+import { EditedFilesError } from "./cli/manifest.ts";
 import { runConversion } from "./cli/run.ts";
 import { VERSION } from "./model/version.ts";
 
@@ -19,6 +20,10 @@ async function main(): Promise<number> {
   } catch (error) {
     if (error instanceof UsageError) {
       process.stderr.write(`${error.message}\nRun markswift convert --help for usage.\n`);
+      return 2;
+    }
+    if (error instanceof EditedFilesError) {
+      process.stderr.write(`${error.message}\n`);
       return 2;
     }
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

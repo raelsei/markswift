@@ -6,7 +6,8 @@ import { convert, convertHtml } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { renderMac } from "../../tools/verify/native.ts";
+import { buildRenderApp, renderMac } from "../../tools/verify/native.ts";
+import { command } from "../../tools/verify/process.ts";
 import sharp from "sharp";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
@@ -58,6 +59,38 @@ nativeTest(
         const meta = await sharp(png).metadata();
         expect([meta.width, meta.height]).toEqual([result.layout.size.w * 2, result.layout.size.h * 2]);
       }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  240000,
+);
+
+nativeTest(
+  "iOS render app builds two captures into one simulator app",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-ios-"));
+    try {
+      const a = await convertHtml(PUBLIC_HTML, { name: "ExampleCardApp", mode: "app", css: PUBLIC_CSS });
+      const b = await convertHtml(PUBLIC_HTML, { name: "ExampleCardFidelity", mode: "fidelity", css: PUBLIC_CSS });
+      const app = await buildRenderApp(
+        [
+          { result: a, output: "/tmp/a.png" },
+          { result: b, output: "/tmp/b.png" },
+        ],
+        join(directory, "ios"),
+      );
+      expect((await command(["vtool", "-show-build", join(app, "Render")])).includes("IOSSIMULATOR")).toBe(true);
+      expect(await Bun.file(join(app, "Info.plist")).exists()).toBe(true);
+      await expect(
+        buildRenderApp(
+          [
+            { result: a, output: "/tmp/a.png" },
+            { result: a, output: "/tmp/b.png" },
+          ],
+          join(directory, "dup"),
+        ),
+      ).rejects.toThrow("duplicate generated file");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

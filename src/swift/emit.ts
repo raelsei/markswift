@@ -78,7 +78,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     "}",
   ];
   const lines = [
-    `// ${GENERATED_BY} — do not edit. Source: ` +
+    `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift convert --update\`; customise through the initializer or your own files. Source: ` +
       comment(screen.source) +
       " (" +
       comment(screen.name) +
