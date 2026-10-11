@@ -15,6 +15,7 @@ import { readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
+import { captureStates } from "./states.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
@@ -249,6 +250,9 @@ export class BrowserCapture {
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
+      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs).
+      const states = await captureStates(cdp, `[${ROOT_MARK}="1"]`, snapA);
+      errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
       await page.evaluate((mark) => {
         for (const el of document.querySelectorAll("*")) {
@@ -271,7 +275,7 @@ export class BrowserCapture {
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       await cdp.detach();
-      const tree = snapshotToTree(snapA, snapB);
+      const tree = snapshotToTree(snapA, snapB, states);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, preferredSizes);
