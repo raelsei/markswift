@@ -49,11 +49,14 @@ test("every generated Swift file names the Markswift version on its first line",
 });
 
 test("a LayoutDoc of another version fails with both versions named", () => {
-  const named = (v: number) =>
-    new RegExp(`LayoutDoc version ${v} .*Markswift .*reads LayoutDoc version ${LAYOUT_DOC_VERSION}\\b`);
-  expect(() => compileLayout({ ...layout, version: 1 } as unknown as LayoutDoc)).toThrow(named(1));
   const dark = { ...layout, combo: { screen: "card", theme: "dark" }, version: LAYOUT_DOC_VERSION + 1 };
-  expect(() => compileLayout(layout, { dark: dark as unknown as LayoutDoc })).toThrow(named(LAYOUT_DOC_VERSION + 1));
+  for (const [version, compile] of [
+    [1, () => compileLayout({ ...layout, version: 1 } as unknown as LayoutDoc)],
+    [LAYOUT_DOC_VERSION + 1, () => compileLayout(layout, { dark: dark as unknown as LayoutDoc })],
+  ] as const)
+    expect(compile).toThrow(
+      new RegExp(`LayoutDoc version ${version} .*Markswift .*reads LayoutDoc version ${LAYOUT_DOC_VERSION}\\b`),
+    );
 });
 
 test("serialized CSS sizing intent survives public compilation", () => {
