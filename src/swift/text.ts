@@ -1,16 +1,25 @@
 import type { TextNode, TextRun } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 import type { ColorCtx, EmitMode } from "./context.ts";
-import { colorExpr, fontExpr, num, str } from "./format.ts";
+import { colorExpr, fontExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine, SYSTEM_LINE_HEIGHT } from "./text-box.ts";
 
-function naturalLineHeight(f: TextRun["font"], metrics: FontMetrics): number {
-  if (f.family.kind !== "custom") return f.size * SYSTEM_LINE_HEIGHT;
-  const m = metrics[f.family.name.toLowerCase()];
-  const ratio = m ? (m.ascent + m.descent + m.lineGap) / m.upem : SYSTEM_LINE_HEIGHT;
-  return f.size * ratio;
+/**
+ * Ascent, descent and natural line height of a run's face, as multiples of its size. System faces
+ * and unpackaged families: SF Pro as the browser measures it on macOS (`hhea` 1980/432 per 2048)
+ * and the native line height (`SYSTEM_LINE_HEIGHT`).
+ */
+function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number; descent: number; natural: number } {
+  const m = f.family.kind === "custom" ? metrics[f.family.name.toLowerCase()] : undefined;
+  // ponytail: SF metrics of the converting Mac's Chrome (macOS 27); other macOS versions ship other SF builds.
+  if (!m) return { ascent: 1980 / 2048, descent: 432 / 2048, natural: SYSTEM_LINE_HEIGHT };
+  return {
+    ascent: m.ascent / m.upem,
+    descent: m.descent / m.upem,
+    natural: (m.ascent + m.descent + m.lineGap) / m.upem,
+  };
 }
 
 export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
@@ -34,18 +43,20 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
   const first = glyphs[0];
-  // CSS `line-height` is leading, never a pinned height (that would freeze Dynamic Type):
-  // `.lineSpacing` is its between-lines part, in app mode even when the browser did not wrap.
-  const natural = first ? naturalLineHeight(first.font, ctx.fontMetrics) : 0;
+  // CSS `line-height` is leading, never a pinned height (that would freeze Dynamic Type). Fidelity
+  // gives `.lineSpacing` the between-lines part; app mode uses `markswiftLineHeight` below.
+  const natural = first ? first.font.size * faceRatios(first.font, ctx.fontMetrics).natural : 0;
   const leading = first?.font.lineHeight === undefined ? 0 : first.font.lineHeight - natural;
-  if (leading >= 0.01 && (ctx.mode === "app" || n.lines > 1)) out.push(`.lineSpacing(${num(leading)})`);
+  if (leading >= 0.01 && ctx.mode === "fidelity" && n.lines > 1) out.push(`.lineSpacing(${num(leading)})`);
   // SwiftUI clamps a negative `.lineSpacing` to zero.
   if (leading <= -0.01 && n.lines > 1)
     note(
       n,
       "approximated",
       "line-height",
-      `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`,
+      ctx.mode === "app"
+        ? `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines compress on iOS 26+ only (iOS 18–25 clamps the spacing at 0)`
+        : `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`,
     );
   if (viewCase) out.push(`.textCase(.${viewCase})`);
   // `.shadow` is a View modifier too: one shadow for the whole text.
@@ -86,13 +97,49 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     ].filter(Boolean);
     out.push(`.frame(${size.join(", ")}, alignment: ${align})`);
   }
-  // App mode: the half-leading above the first and below the last line, as padding so it grows
-  // with Dynamic Type. Only when the measured box is the line box (not a clipped box or a
-  // glyph-box union between flow children).
-  else if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * (natural + leading) - 0.5) {
-    out.push(`.padding(.vertical, ${num(leading / 2)})`);
+  // App mode: CSS line boxes, scaling with Dynamic Type.
+  else if (first?.font.lineHeight !== undefined) {
+    const lh = first.font.lineHeight;
+    const r = faceRatios(first.font, ctx.fontMetrics);
+    const s = first.font.size;
+    const args = [`${num(lh)}, size: ${num(s)}, relativeTo: .${nearestTextStyle(s)}`];
+    // The browser's baseline: Blink rounds the face's ascent and descent to whole px and floors the
+    // half-leading above the baseline, so the odd part of the leading lies below.
+    const ascent = Math.round(r.ascent * s);
+    const descent = Math.round(r.descent * s);
+    const leadingPx = lh - ascent - descent;
+    const below = descent + leadingPx - 2 * Math.floor(leadingPx / 2);
+    args.push(`ascent: ${num(ascent / s)}, descent: ${num(below / s)}`);
+    if (first.font.family.kind === "custom" && ctx.fontMetrics[first.font.family.name.toLowerCase()])
+      args.push(`natural: ${num(r.natural)}`);
+    // Half-leading only when the measured box is the line box (not a clipped box or a glyph-box
+    // union between flow children) — the same test the padding used.
+    if (n.frame.h - n.padding[0] - n.padding[2] < n.lines * lh - 0.5) args.push("halfLeading: false");
+    out.push(`.markswiftLineHeight(${args.join(", ")})`);
+    // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
+    // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up
+    // that much shorter than the browser's. Pass both growths into the helper if that path matters.
+    // Growth already in the box padding loses what native text adds itself; unpadded growth is
+    // added for the part native text does not grow.
+    if (n.lineBoxGrowth) {
+      const { edge, px, padded } = n.lineBoxGrowth;
+      const g = (padded ? 0 : px) - Math.min(px, nativeInlineGrowth(glyphs, lh / first.font.size));
+      if (Math.abs(g) >= 0.5) out.push(`.padding(.${edge}, ${num(g)})`);
+    }
   }
   return out;
+}
+
+/**
+ * Growth `.lineHeight(.multiple(factor:))` gives a line whose runs are larger or shifted: measured
+ * on macOS 26, every run spans `size + baselineOffset` above the baseline and `-baselineOffset`
+ * below it, and the line is `factor ×` that span.
+ */
+function nativeInlineGrowth(glyphs: TextRun[], factor: number): number {
+  const host = glyphs[0]!.font.size;
+  const above = Math.max(host, ...glyphs.map((r) => r.font.size + (r.baselineOffset ?? 0)));
+  const below = Math.max(0, ...glyphs.map((r) => -(r.baselineOffset ?? 0)));
+  return factor * (above + below - host);
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */

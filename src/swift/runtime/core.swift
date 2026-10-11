@@ -102,6 +102,58 @@ extension Text {
     }
 }
 
+extension View {
+    /// CSS `line-height` on a `Text` whose first run is `size` points, scaling like a font
+    /// `relativeTo: style`. `ascent` and `descent` place the browser's baseline (the face's
+    /// ascent and descent as the browser rounded them, multiples of the size); `natural` is the
+    /// face's native line height (default: SF Pro, 2444 per 2048).
+    ///
+    /// iOS/macOS 26+: `.lineHeight(.multiple(factor:))` makes every line exactly `lineHeight`
+    /// (tight values compress) and puts the first baseline at y = size; the padding pair moves it
+    /// to the CSS half-leading baseline without changing the height. iOS 18–25: `.lineSpacing`
+    /// plus half-leading padding, which cannot compress tight leading.
+    /// `halfLeading: false` (a measured box that is not the line box) leaves out the half-leading
+    /// above the first and below the last line.
+    func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
+                             ascent: CGFloat, descent: CGFloat,
+                             natural: CGFloat = 2444.0 / 2048, halfLeading: Bool = true) -> some View {
+        modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
+                                     halfLeading: halfLeading, size: size, relativeTo: style))
+    }
+}
+
+struct MarkswiftLineHeight: ViewModifier {
+    let factor: CGFloat
+    let ascent: CGFloat
+    let descent: CGFloat
+    let natural: CGFloat
+    let halfLeading: Bool
+    @ScaledMetric private var size: CGFloat
+
+    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, size: CGFloat, relativeTo style: Font.TextStyle) {
+        self.factor = factor
+        self.ascent = ascent
+        self.descent = descent
+        self.natural = natural
+        self.halfLeading = halfLeading
+        _size = ScaledMetric(wrappedValue: size, relativeTo: style)
+    }
+
+    func body(content: Content) -> some View {
+        let leading = (factor - natural) * size
+        let trim = halfLeading ? 0 : leading / 2
+        if #available(iOS 26.0, macOS 26.0, *) {
+            // CSS puts the baseline half the leading plus the ascent below the line top; SwiftUI at y = size.
+            let shift = (factor / 2 + (ascent - descent) / 2 - 1) * size
+            content.lineHeight(.multiple(factor: factor))
+                .padding(.top, shift - trim)
+                .padding(.bottom, -shift - trim)
+        } else {
+            content.lineSpacing(max(0, leading)).padding(.vertical, leading / 2 - trim)
+        }
+    }
+}
+
 /// Bundle holding the generated `Images/` resources. `.main` for an app target; set it to `Bundle.module`
 /// (or a framework bundle) when the generated views live in a package.
 enum MarkswiftAssets {

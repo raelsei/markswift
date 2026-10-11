@@ -15,6 +15,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - The quality gate names the old and new value of a changed capture configuration and prints a rebaseline hint on toolchain drift; the Visual Toolchain step lists simulator runtimes; a missing tracked baseline fails with instructions.
 - Generated views are tool-owned: the header says how to regenerate and customise instead of "do not edit"; every output directory contains `.markswift.json`.
 - `--renderer ios` renders through UIHostingController + drawHierarchy in a batched simulator app, so text fields, editors and scroll views are drawn instead of ImageRenderer's yellow placeholder; the pinned simulator (`MARKSWIFT_SIMULATOR`, default `iPhone 17`) is created on the newest iOS runtime when missing.
+- App-mode `line-height` emits `markswiftLineHeight` (runtime): exact CSS line boxes and the browser's baselines on iOS 26+, today's `.lineSpacing` path on iOS 18–25; sub/sup line-box growth is no longer counted twice, and line-box growth under 2 px (a `kbd` border) is kept in app mode.
 - The static asset server and font conversion use `node:` APIs; the webfont converter script is embedded in the bundle.
 
 ### Changed (breaking)

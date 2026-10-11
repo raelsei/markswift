@@ -363,6 +363,13 @@ export interface TextNode extends SemBase {
   unbreakable?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
+  /**
+   * Line-box growth the browser measured beyond `lines × line-height` (sub/sup, larger inline
+   * runs, `kbd` borders) on `edge`. `padded`: over 2 px, already included in `padding` (both
+   * modes); smaller growth is app-only. App mode subtracts the growth native text adds on its own,
+   * so it is not counted twice.
+   */
+  lineBoxGrowth?: { edge: "top" | "bottom"; px: number; padded: boolean };
 }
 
 export interface SvgNode extends SemBase {
