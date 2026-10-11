@@ -1,16 +1,20 @@
 import type { TextNode, TextRun } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 import type { ColorCtx, EmitMode } from "./context.ts";
-import { colorExpr, fontExpr, num, str } from "./format.ts";
+import { colorExpr, fontExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine, SYSTEM_LINE_HEIGHT } from "./text-box.ts";
 
-function naturalLineHeight(f: TextRun["font"], metrics: FontMetrics): number {
-  if (f.family.kind !== "custom") return f.size * SYSTEM_LINE_HEIGHT;
-  const m = metrics[f.family.name.toLowerCase()];
-  const ratio = m ? (m.ascent + m.descent + m.lineGap) / m.upem : SYSTEM_LINE_HEIGHT;
-  return f.size * ratio;
+/** Ascent, descent and natural line height of a run's face, as multiples of its size (SF Pro `hhea` for system faces and unpackaged families). */
+function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number; descent: number; natural: number } {
+  const m = f.family.kind === "custom" ? metrics[f.family.name.toLowerCase()] : undefined;
+  if (!m) return { ascent: 1950 / 2048, descent: 494 / 2048, natural: SYSTEM_LINE_HEIGHT };
+  return {
+    ascent: m.ascent / m.upem,
+    descent: m.descent / m.upem,
+    natural: (m.ascent + m.descent + m.lineGap) / m.upem,
+  };
 }
 
 export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics }): string[] {
@@ -34,18 +38,20 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
   const first = glyphs[0];
-  // CSS `line-height` is leading, never a pinned height (that would freeze Dynamic Type):
-  // `.lineSpacing` is its between-lines part, in app mode even when the browser did not wrap.
-  const natural = first ? naturalLineHeight(first.font, ctx.fontMetrics) : 0;
+  // CSS `line-height` is leading, never a pinned height (that would freeze Dynamic Type). Fidelity
+  // gives `.lineSpacing` the between-lines part; app mode uses `markswiftLineHeight` below.
+  const natural = first ? first.font.size * faceRatios(first.font, ctx.fontMetrics).natural : 0;
   const leading = first?.font.lineHeight === undefined ? 0 : first.font.lineHeight - natural;
-  if (leading >= 0.01 && (ctx.mode === "app" || n.lines > 1)) out.push(`.lineSpacing(${num(leading)})`);
+  if (leading >= 0.01 && ctx.mode === "fidelity" && n.lines > 1) out.push(`.lineSpacing(${num(leading)})`);
   // SwiftUI clamps a negative `.lineSpacing` to zero.
   if (leading <= -0.01 && n.lines > 1)
     note(
       n,
       "approximated",
       "line-height",
-      `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`,
+      ctx.mode === "app"
+        ? `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines compress on iOS 26+ only (iOS 18–25 clamps the spacing at 0)`
+        : `line-height ${num(natural + leading)} is tighter than the face's natural ${num(natural)} → lines cannot be compressed`,
     );
   if (viewCase) out.push(`.textCase(.${viewCase})`);
   // `.shadow` is a View modifier too: one shadow for the whole text.
@@ -83,11 +89,17 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     ].filter(Boolean);
     out.push(`.frame(${size.join(", ")}, alignment: ${align})`);
   }
-  // App mode: the half-leading above the first and below the last line, as padding so it grows
-  // with Dynamic Type. Only when the measured box is the line box (not a clipped box or a
-  // glyph-box union between flow children).
-  else if (Math.abs(leading) >= 0.5 && n.frame.h - n.padding[0] - n.padding[2] >= n.lines * (natural + leading) - 0.5) {
-    out.push(`.padding(.vertical, ${num(leading / 2)})`);
+  // App mode: CSS line boxes, scaling with Dynamic Type.
+  else if (first?.font.lineHeight !== undefined) {
+    const lh = first.font.lineHeight;
+    const r = faceRatios(first.font, ctx.fontMetrics);
+    const args = [`${num(lh)}, size: ${num(first.font.size)}, relativeTo: .${nearestTextStyle(first.font.size)}`];
+    if (first.font.family.kind === "custom" && ctx.fontMetrics[first.font.family.name.toLowerCase()])
+      args.push(`ascent: ${num(r.ascent)}, descent: ${num(r.descent)}, natural: ${num(r.natural)}`);
+    // Half-leading only when the measured box is the line box (not a clipped box or a glyph-box
+    // union between flow children) — the same test the padding used.
+    if (n.frame.h - n.padding[0] - n.padding[2] < n.lines * lh - 0.5) args.push("halfLeading: false");
+    out.push(`.markswiftLineHeight(${args.join(", ")})`);
   }
   return out;
 }
