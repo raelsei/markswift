@@ -8,6 +8,8 @@ export interface ConversionCommand {
   source: { file: string } | { url: string } | { stdin: true };
   outDir: string;
   cssPath?: string;
+  update: boolean;
+  force: boolean;
   options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport">;
 }
 
@@ -27,7 +29,11 @@ Inputs:
   --css <file>      Optional compiled CSS file
 
 Options:
-  --out <directory> Required. Must not already exist; writes every Swift file and asset
+  --out <directory> Required. Must not exist yet, unless --update
+  --update          Regenerate into an existing --out written by Markswift: rewrites only the files
+                    listed in its .markswift.json, removes listed files no longer produced, never
+                    touches other files; refuses (exit 2) when a listed file was edited by hand
+  --force           With --update: overwrite hand-edited listed files
   --name <Name>     Swift view name (default: ConvertedView)
   --root <selector> Capture only this CSS selector
   --width <px>      Viewport width (default: 390)
@@ -63,6 +69,7 @@ export function parseArgs(args: string[]): Command {
   if (args.slice(1).some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
 
   const values = new Map<string, string>();
+  const flags = new Set<string>();
   const positional: string[] = [];
   let afterDoubleDash = false;
   for (let i = 1; i < args.length; i++) {
@@ -71,7 +78,10 @@ export function parseArgs(args: string[]): Command {
       afterDoubleDash = true;
       continue;
     }
-    if (!afterDoubleDash && valueFlags.has(arg)) {
+    if (!afterDoubleDash && (arg === "--update" || arg === "--force")) {
+      if (flags.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
+      flags.add(arg);
+    } else if (!afterDoubleDash && valueFlags.has(arg)) {
       if (values.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       const value = args[++i];
       if (!value || value.startsWith("--")) throw new UsageError(`Missing value for ${arg}`);
@@ -83,6 +93,7 @@ export function parseArgs(args: string[]): Command {
 
   const outDir = values.get("--out");
   if (!outDir) throw new UsageError("--out is required");
+  if (flags.has("--force") && !flags.has("--update")) throw new UsageError("--force only applies with --update");
   const url = values.get("--url");
   if (positional.length + (url ? 1 : 0) !== 1) throw new UsageError("Choose exactly one HTML file, -, or --url");
   if (url) {
@@ -117,6 +128,8 @@ export function parseArgs(args: string[]): Command {
     source,
     outDir,
     cssPath: values.get("--css"),
+    update: flags.has("--update"),
+    force: flags.has("--force"),
     options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },
   };
 }

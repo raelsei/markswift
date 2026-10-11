@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inlineRelativeUrls } from "../../../src/cli/css.ts";
+import { writeBundle } from "../../../src/cli/output.ts";
 import { VERSION } from "../../../src/model/version.ts";
 
 const entry = join(import.meta.dir, "../../../src/cli.ts");
@@ -68,6 +69,51 @@ test("CLI leaves an existing output directory untouched", async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("--force without --update is a usage error", async () => {
+  const result = await invoke("convert", "card.html", "--out", "generated", "--force");
+  expect(result.code).toBe(2);
+  expect(result.stderr).toContain("--force only applies with --update");
+});
+
+test("--update refuses a directory Markswift did not write before Chrome starts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-cli-foreign-"));
+  try {
+    const source = join(directory, "card.html");
+    const output = join(directory, "generated");
+    await Bun.write(source, "<main>Card</main>");
+    await Bun.write(join(output, "keep.txt"), "keep me");
+    const result = await invoke("convert", source, "--out", output, "--update");
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("has no .markswift.json");
+    expect(await Bun.file(join(output, "keep.txt")).text()).toBe("keep me");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("--update refuses hand-edited files with exit 2 before Chrome starts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-cli-edited-"));
+  try {
+    const source = join(directory, "card.html");
+    const output = join(directory, "generated");
+    await Bun.write(source, "<main>Card</main>");
+    await writeBundle({ files: { "Card.swift": "x" }, assets: {} }, output, { version: "0" });
+    await Bun.write(join(output, "Card.swift"), "x // mine");
+    const result = await invoke("convert", source, "--out", output, "--update");
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("Card.swift");
+    expect(await Bun.file(join(output, "Card.swift")).text()).toBe("x // mine");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("CLI help documents --update and --force", async () => {
+  const result = await invoke("convert", "--help");
+  expect(result.stdout).toContain("--update");
+  expect(result.stdout).toContain("--force");
 });
 
 test("CLI explains missing input files before starting Chrome", async () => {

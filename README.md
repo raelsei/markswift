@@ -44,16 +44,16 @@ printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18p
   | bun src/cli.ts convert - --name HelloCard --out ./generated-hello
 ```
 
-prints `Wrote 3 files for HelloCard to ./generated-hello`. `--out` must not exist yet; one
+prints `Wrote 3 files for HelloCard to ./generated-hello`. `--out` must not exist yet; regenerate later with `--update`; one
 conversion writes several files. Other inputs: `bun src/cli.ts convert ./page.html --out ./out`
 (relative assets resolve beside the file), `--css ./compiled.css` for a separate **compiled**
 stylesheet, and `--url http://localhost:5173/card --root '#preview'` for a running page.
 
-Options (`bun src/cli.ts convert --help`): `--out <dir>` (required), `--name <Name>` (default
+Options (`bun src/cli.ts convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
 `ConvertedView`), `--root <selector>`, `--width`/`--height` (default 390 × 844),
 `--theme adaptive|light|dark` (default `adaptive`), `--dark-class <name>`, `--mode app|fidelity`
-(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options, 1
-conversion or file error. Warnings and diagnostics go to stderr.
+(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options or hand-edited files
+refused by `--update`, 1 conversion or file error. Warnings and diagnostics go to stderr.
 
 ## What you get
 
@@ -65,6 +65,16 @@ conversion or file error. Warnings and diagnostics go to stderr.
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |
 | `<Name>+Fonts.swift`, `<Name>+UIAppFonts.plist.fragment`, `Fonts/*.ttf` | When webfonts were bundled |
 | `Images/<hash>.<ext>` | When the component shows raster images (one file per distinct image) |
+| `.markswift.json` | Always: what this run wrote (for `--update`) |
+
+## Regenerating
+
+Generated files are tool-owned. Every output directory carries `.markswift.json` (`tool`, `version`, and `files`:
+each written path → its SHA-256). When the design changes, rerun the same command with `--update`: it rewrites the
+listed files, deletes listed files the new output no longer produces, and never touches a file it did not write. If a
+listed file was edited by hand it refuses with exit 2 and names the file (`--force` discards those edits); an unlisted
+file in the way of a new generated file is always refused. Customise through the component's initializer, `extension`s
+and wrappers in your own files, and commit the output directory including `.markswift.json`.
 
 ## Library API
 
