@@ -1,5 +1,5 @@
-import type { Color } from "../../css/index.ts";
-import type { Theme } from "../../input/types.ts";
+import type { Color } from "../../model/values.ts";
+import type { Theme } from "../../model/layout.ts";
 /** What a colour paints; drives the fallback name and the token-hint consistency check. */
 export type TokenRole = "canvas" | "fill" | "border" | "text" | "shadow" | "icon";
 
@@ -17,19 +17,18 @@ export interface ColorToken {
   uses: string[];
   /** Colour slots this token covers (a light/dark pair counts once). */
   slots: number;
-  /** Literals in the emitted views a rewrite would replace (a pair counts twice). */
-  literals: number;
 }
 
 /**
- * Where the view emitter resolves a literal: `base\0theme\0nodeId\0r,g,b,a` → token name.
+ * Where the view emitter resolves a literal: `base\0theme\0nodeId\0r,g,b,a` → token name, and
+ * the same key plus `\0slot` for call sites that know the slot.
  *
- * The call sites that paint a colour do not know which named slot of the node they are
+ * Most call sites that paint a colour do not know which named slot of the node they are
  * painting (a `.shadow(color:)` line only has the `Shadow`), so the key is the colour value
  * the node paints in the theme being emitted. Keyed per node, because one value can be two
  * tokens in one screen — the same light colour with two different dark counterparts. A key
  * two tokens claim is absent from the index: ambiguity keeps the literal instead of guessing
- * the other theme.
+ * the other theme; only the slot-qualified key resolves it.
  */
 export type TokenIndex = Map<string, string>;
 
@@ -39,8 +38,6 @@ export interface TokenSet {
   tokens: ColorToken[];
   /** Colour slots left inline: single-use colours that are identical in both themes. */
   inlineSlots: number;
-  /** Colour slots the tokens cover — the literals the views no longer carry (a pair counts twice). */
-  replaceableLiterals: number;
   /** Resolution table for the emitters; see {@link screenTokens}. */
   index: TokenIndex;
 }
@@ -51,6 +48,11 @@ export interface Slot {
   key: string;
   role: TokenRole;
   color: Color;
+  /**
+   * Which CSS gradient stop a gradient slot is — what a `from-`/`via-`/`to-` utility names:
+   * the first, the last, and the middle one only when it is the only middle one.
+   */
+  stop?: "from" | "via" | "to";
 }
 
 /** A colour slot after pairing the two themes. */
@@ -65,8 +67,10 @@ export interface Usage {
   light: Color;
   /** Unset when the node/slot exists in one theme only. */
   dark?: Color;
-  /** Custom-property names the node's declared style referenced. */
+  /** Token hints of the node: custom-property names and role-qualified class hints. */
   hints: string[];
+  /** {@link Slot.stop} */
+  stop?: "from" | "via" | "to";
   /** Document-order index of the first theme that carried this slot. */
   order: number;
 }

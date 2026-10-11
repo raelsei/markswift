@@ -1,26 +1,40 @@
 {
   "name": "markswift",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
+  "license": "MIT",
   "type": "module",
+  "bin": {
+    "markswift": "./src/cli.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
-    "test": "bun test tests/unit tests/architecture tests/integration",
+    "lint": "biome ci .",
+    "format": "biome format --write .",
+    "test": "bun test tests/unit tests/architecture tests/integration tests/conformance playground/tests",
     "quality": "bun run tools/quality.ts",
-    "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration",
-    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts",
+    "pilot": "bun run tests/conformance/pilot-run.ts",
+    "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration tests/conformance",
+    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/conformance/pilot-run.test.ts",
     "test:unit": "bun test tests/unit",
-    "test:architecture": "bun test tests/architecture"
+    "test:architecture": "bun test tests/architecture",
+    "test:conformance": "bun test tests/conformance"
   },
   "dependencies": {
     "domhandler": "^5.0.3",
     "htmlparser2": "^9.1.0",
-    "playwright-core": "^1.55.0",
+    "playwright-core": "^1.63.0",
     "svgpath": "^2.6.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@biomejs/biome": "2.5.15",
+    "@types/bun": "^1.4.1",
+    "@types/pngjs": "^6.0.5",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "sharp": "0.34.5",
+    "ssim.js": "^3.5.0",
     "typescript": "^5.9.0"
   },
   "exports": {
@@ -29,7 +43,8 @@
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "bun": ">=1.4.2"

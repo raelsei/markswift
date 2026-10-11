@@ -1,13 +1,15 @@
-import type { Color } from "../css/index.ts";
-import type { Screen, SemNode } from "../model/semantic.ts";
+import type { Color } from "../model/values.ts";
+import type { Confidence, Diagnostic, Screen, SemNode } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
   view: string;
   /** Shapes referenced by this screen: name → Swift struct source. */
   shapes: Record<string, string>;
-  /** Nodes whose confidence is not `mapped`. */
-  report: Array<{ id: string; kind: string; confidence: string; notes: string[] }>;
+  /** Raster files referenced by this screen: bundle path (`Images/<hash>.<ext>`) → bytes. */
+  images: Record<string, Uint8Array>;
+  /** Nodes whose confidence is not `mapped`, with what each lost. */
+  report: Array<{ id: string; kind: string; confidence: Confidence; diagnostics: Diagnostic[] }>;
 }
 
 /**
@@ -23,25 +25,35 @@ export interface EmitOptions {
   mode: EmitMode;
   /** Design tokens of the run, bound to this screen; absent = every colour stays a literal. */
   tokens?: ScreenTokens;
+  /** The light screen of a light/dark pair: the view must look right in both colour schemes. */
+  adaptive?: boolean;
 }
 
 /** Everything the recursive emitters need; built once per screen. */
-export interface EmitContext {
-  /** Recursive child expression; supplied by the screen emitter. */
-  renderNode: (node: SemNode) => string;
+export interface EmitContext extends ColorCtx {
+  /** Recursive child lines; supplied by the screen emitter. */
+  renderNode: (node: SemNode) => string[];
   fontMetrics: FontMetrics;
-  /** Container node → Swift property name (keyed by identity: sc-for repeats share an id). */
+  /** Container node → Swift property name. */
   nameOf: Map<SemNode, string>;
+  /**
+   * Items of native rows, grids and content-sized containers: CSS sizes them no narrower than
+   * their content (`min-width: auto` of flex/grid items, shrink-to-fit), so their fill frames
+   * may grow to it. Every other fill-width box takes its container's width; see `frameModifier`.
+   */
+  contentMinWidth: Set<SemNode>;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
+  /** Raster files referenced so far, path → bytes. */
+  images: Record<string, Uint8Array>;
   screen: Screen;
   mode: EmitMode;
   /** `@State` names and action callbacks of this screen's controls. */
   control: ControlMembers;
   /** This screen's colour → token lookup; see `colorExpr`. */
   tokens?: ScreenTokens;
+  adaptive?: boolean;
 }
-
 
 /**
  * Resolves a colour one node paints to a design-token name. Implemented by `tokens/extract.ts`
@@ -49,8 +61,8 @@ export interface EmitContext {
  * emitters depend on the lookup and not on the extractor.
  */
 export interface ScreenTokens {
-  /** Token for the colour `id` paints, or undefined when the colour must stay a literal. */
-  name(c: Color, id: string | undefined): string | undefined;
+  /** Token for the colour `id` paints (at `slot`, when the call site knows it), or undefined when the colour must stay a literal. */
+  name(c: Color, id: string | undefined, slot?: string): string | undefined;
 }
 
 /**
@@ -62,8 +74,9 @@ export interface ColorCtx {
   tokens?: ScreenTokens;
   /** Which output is being written; `fontExpr` emits a different font expression per mode. */
   mode: EmitMode;
+  /** App mode: `@ScaledMetric` font sizes used so far, property name → declaration; emitted once per view. */
+  scaledFonts?: Map<string, string>;
 }
-
 
 /** The view-level members a screen's controls need, in emission order. */
 export interface ControlMembers {
@@ -71,4 +84,8 @@ export interface ControlMembers {
   decls: string[];
   stateOf: Map<SemNode, string>;
   actionOf: Map<string, string>;
+  /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
+  activate: Map<string, string>;
+  /** Grouped radio → its tag in the group's `String` selection (its `stateOf` name). */
+  radioTag: Map<SemNode, string>;
 }

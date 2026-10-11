@@ -1,5 +1,4 @@
-import type { Color } from "../../css/index.ts";
-import type { Theme } from "../../input/types.ts";
+import type { Color } from "../../model/values.ts";
 import type { Screen } from "../../model/semantic.ts";
 import type { ScreenTokens } from "../context.ts";
 import type { Usage, TokenSet, TokenRole, ColorToken, TokenIndex } from "./types.ts";
@@ -14,9 +13,10 @@ function colorKey(c: Color): string {
 /**
  * Reduce every screen of a run — both themes — to a token set.
  *
- * A slot whose light and dark colours differ becomes a semantic token; a colour identical in
- * both themes and used at two or more slots becomes a static token; a single-use identical
- * colour stays inline. Names come from the CSS custom property the IR recorded when one can be
+ * A slot whose light and dark colours differ becomes a semantic token — even when it is the
+ * only slot painting that pair, so an adaptive view never keeps a light literal for it; a colour
+ * identical in both themes and used at two or more slots becomes a static token; a single-use
+ * identical colour stays inline. Names come from the CSS custom property the IR recorded when one can be
  * attributed unambiguously, otherwise from role and colour (`fillBlue`, `textPrimary`), with a
  * numeric suffix on collision. Deterministic: the same screens produce the same names.
  */
@@ -38,8 +38,7 @@ export function extractTokens(screens: Screen[]): TokenSet {
   const tokens: ColorToken[] = [];
   const index: TokenIndex = new Map();
   const ambiguous = new Set<string>();
-  const put = (base: string, theme: Theme, id: string, c: Color, name: string): void => {
-    const k = `${base}\u0000${theme}\u0000${id}\u0000${colorKey(c)}`;
+  const put = (k: string, name: string): void => {
     const cur = index.get(k);
     if (cur === undefined) index.set(k, name);
     else if (cur !== name) ambiguous.add(k);
@@ -58,10 +57,17 @@ export function extractTokens(screens: Screen[]): TokenSet {
     const uses: string[] = [];
     for (const u of us) if (!uses.includes(u.nodeId)) uses.push(u.nodeId);
     // The two values of one slot are two index entries: the light view paints the light value,
-    // the dark view the dark one, and both resolve to this single name.
+    // the dark view the dark one, and both resolve to this single name. Each is also keyed by
+    // slot, for call sites that know it: they resolve even where the node-wide key is ambiguous.
     for (const u of us) {
-      put(u.base, u.theme, u.nodeId, u.light, name);
-      if (u.dark) put(u.base, u.theme === "light" ? "dark" : "light", u.nodeId, u.dark, name);
+      for (const slot of ["", `\u0000${u.slot}`]) {
+        put(`${u.base}\u0000${u.theme}\u0000${u.nodeId}\u0000${colorKey(u.light)}${slot}`, name);
+        if (u.dark)
+          put(
+            `${u.base}\u0000${u.theme === "light" ? "dark" : "light"}\u0000${u.nodeId}\u0000${colorKey(u.dark)}${slot}`,
+            name,
+          );
+      }
     }
     tokens.push({
       name,
@@ -72,24 +78,27 @@ export function extractTokens(screens: Screen[]): TokenSet {
       ...(hint ? { hint } : {}),
       uses,
       slots: us.length,
-      literals: us.reduce((n, u) => n + (u.dark ? 2 : 1), 0),
     });
   }
   for (const k of ambiguous) index.delete(k);
   const keptKeys = new Set(kept.map(([k]) => k));
   let inlineSlots = 0;
   for (const [k, us] of groups) if (!keptKeys.has(k)) inlineSlots += us.length;
-  return { tokens, inlineSlots, replaceableLiterals: tokens.reduce((n, t) => n + t.literals, 0), index };
+  return { tokens, inlineSlots, index };
 }
 
 /**
  * The token lookup for one screen: binds the screen group and theme, so the emitters ask only
  * "which token does this node's colour name here?". A miss — an unenumerated colour, or one
- * two tokens claim on the same node — leaves the literal in place.
+ * two tokens claim on the same node — leaves the literal in place. A call site that names the
+ * slot gets that slot's token only.
  */
 export function screenTokens(set: TokenSet, screen: Screen): ScreenTokens {
   const prefix = `${screenBase(screen)}\u0000${screen.theme}\u0000`;
   return {
-    name: (c, id) => (id === undefined ? undefined : set.index.get(`${prefix}${id}\u0000${colorKey(c)}`)),
+    name: (c, id, slot) =>
+      id === undefined
+        ? undefined
+        : set.index.get(`${prefix}${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`),
   };
 }

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="visibility; visibility: hidden; visibility: collapse">
+<title>visibility</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.row { display: flex; gap: 8px; }
+.hide { visibility: hidden; }
+.coll { visibility: collapse; }
+table { border-collapse: collapse; width: 100%; }
+td { border: 1px solid var(--line); padding: 6px 10px; }
+tr.coll { visibility: collapse; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="vis-hidden">
+  <p class="cap">middle item visibility: hidden keeps its space</p>
+  <div class="frame row"><div class="b">One</div><div class="b hide">Hidden</div><div class="b">Three</div></div>
+</section>
+<section class="v" id="vis-collapse-flex">
+  <p class="cap">visibility: collapse on a flex item (acts like hidden)</p>
+  <div class="frame row"><div class="b">One</div><div class="b coll">Collapsed</div><div class="b">Three</div></div>
+</section>
+<section class="v" id="vis-collapse-row">
+  <p class="cap">visibility: collapse on a table row removes it</p>
+  <table><tr><td>Row 1</td><td>visible</td></tr><tr class="coll"><td>Row 2</td><td>collapsed</td></tr><tr><td>Row 3</td><td>visible</td></tr></table>
+</section>
+</main>
+</body>
+</html>

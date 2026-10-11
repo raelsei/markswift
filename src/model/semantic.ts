@@ -4,12 +4,44 @@
  * plus a `confidence` telling emitters how faithful the mapping is.
  * No SwiftUI / Compose vocabulary here.
  */
-import type { Color, Paint, Shadow, Transform2D } from "../css/index.ts";
-import type { Rect } from "./layout.ts";
+import type { BlendMode, Color, Paint, Shadow, Transform2D } from "./values.ts";
+import type { Rect, Theme } from "./layout.ts";
 
 export type Confidence = "mapped" | "approximated" | "unmapped";
 
+export type DiagnosticLevel = "approximated" | "unmapped";
+
+/**
+ * One captured feature the generated view does not reproduce faithfully. `feature` is the id of a
+ * row in tests/conformance/inventory (`font-family`, `display: grid`, `svg:textPath`, `img`), so
+ * reports group by the product decision for that feature; `message` says what was lost, without a
+ * level prefix.
+ */
+export interface Diagnostic {
+  level: DiagnosticLevel;
+  feature: string;
+  message: string;
+}
+
+/** Appends the diagnostic unless an identical one is already listed. */
+export function addDiagnostic(list: Diagnostic[], level: DiagnosticLevel, feature: string, message: string): void {
+  if (!list.some((d) => d.level === level && d.feature === feature && d.message === message))
+    list.push({ level, feature, message });
+}
+
+/** The only confidence rule: the worst level present, `mapped` when there is none. */
+export function confidenceOf(list: readonly Diagnostic[]): Confidence {
+  return list.some((d) => d.level === "unmapped") ? "unmapped" : list.length ? "approximated" : "mapped";
+}
+
 export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
+
+/** Captured content extent and child border boxes for layouts whose native rules differ. */
+export interface MeasuredLayout {
+  width: number;
+  height: number;
+  frames: Rect[];
+}
 
 export type Axis = "v" | "h";
 
@@ -46,6 +78,8 @@ export interface Style {
   fills: Paint[];
   /** Corner radii: top-left, top-right, bottom-right, bottom-left (px). */
   radius?: [number, number, number, number];
+  /** All four corners meet at half-width/half-height: CSS 50% radii form an ellipse. */
+  ellipse?: true;
   /** Uniform border (all four edges equal). */
   border?: { width: number; color: Color; dashed?: boolean };
   /** Per-edge borders when the edges differ; `border` is unset then. Missing edge = none. */
@@ -63,17 +97,16 @@ export interface Style {
   blur?: number;
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
-  /** Backdrop blur — a material approximation on native targets. */
-  backdropBlur?: number;
   transform?: Transform2D & { origin?: [number, number] };
-  blend?: string;
+  /** `mix-blend-mode`, never `normal`. */
+  blend?: BlendMode;
   /** `clip-path` basic shape. */
   clipPath?: ClipShape;
   /** `mask-image` gradient (luminance/alpha mask). */
   mask?: Paint;
   /** `visibility: hidden` — occupies space, paints nothing. */
   hidden?: boolean;
-  /** Names of CSS custom properties the declared style referenced (token hints). */
+  /** Token hints: CSS custom properties the declared style referenced, plus role-qualified class hints (`bg:white`). */
   tokens?: string[];
 }
 
@@ -102,7 +135,7 @@ export interface TextRun {
   font: FontSpec;
   color: Color;
   kerning?: number;
-  /** CSS `text-transform`; emitters apply it (`.textCase`) so bound text keeps it at runtime. */
+  /** CSS `text-transform`; emitters apply it (`.textCase` when every run shares it, else the literal). */
   transform?: TextTransform;
   italic?: boolean;
   decoration?: TextDecoration;
@@ -125,8 +158,6 @@ export interface TextRun {
    * identically cannot be known offline.
    */
   breaks?: number[];
-  /** True when the run came from a template interpolation (`{{ … }}`). */
-  bound?: boolean;
   /**
    * A run that paints no glyphs and only advances the line by this many points: the horizontal
    * padding/border of an inline element (`kbd`, `mark`, `code`), which a native text run cannot
@@ -146,9 +177,17 @@ export type SvgGradient = { stops: Array<{ color: Color; pos: number }> } & (
   | { kind: "radial"; center: [number, number]; radius: [number, number] }
 );
 
+/** One absolute path command after `unshort`/`unarc`/`abs`: viewBox user units. */
+export type PathSegment =
+  | ["M" | "L", number, number]
+  | ["H" | "V", number]
+  | ["C", number, number, number, number, number, number]
+  | ["Q", number, number, number, number]
+  | ["Z"];
+
 export interface SvgPath {
-  /** Path data in viewBox user units; ancestor and own `transform`s are baked in. */
-  d: string;
+  /** Absolute segments in viewBox user units; ancestor and own `transform`s are baked in. */
+  path: PathSegment[];
   fill?: Color;
   /** Gradient fill (`fill="url(#id)"`); set instead of `fill`. */
   gradient?: SvgGradient;
@@ -177,8 +216,8 @@ export interface SvgPath {
    * 3 o'clock (the baked rotation).
    */
   ring?: { r: number; to: number; startAngle: number };
-  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `d`. */
-  clip?: { d: string; eoFill?: true };
+  /** `clip-path="url(#id)"`: the clipPath's shapes as one path in the same space as `path`. */
+  clip?: { path: PathSegment[]; eoFill?: true };
   /** `mask="url(#id)"`: the mask's painted shapes; their luminance becomes this layer's alpha. */
   mask?: SvgPath[];
 }
@@ -204,33 +243,58 @@ export interface Overlay {
   offset: [number, number];
   /** True when the node covers exactly the host box (inset: 0). */
   covers: boolean;
+  /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
+  fixed?: true;
+  /** App-mode attachment when CSS anchored the right and/or bottom edge: the host corner kept, and the node's offset from it. `offset` (top-left) stays the exact capture placement used by fidelity. */
+  anchor?: { corner: "topTrailing" | "bottomLeading" | "bottomTrailing"; offset: [number, number] };
 }
 
-export interface SemBase {
+/** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
+export interface SizeConstraints {
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+}
+
+export interface SemBase extends SizeConstraints {
   /** Template path id; stable across regenerations. */
   id: string;
   frame: Rect;
   width: Size;
   height: Size;
-  /** Cap on the box width in px: declared `max-width`, or the width its horizontal margins leave. */
-  maxWidth?: number;
   /**
-   * Cross-axis placement inside the parent's content box when the box does not span it
-   * (CSS auto or asymmetric margins). Default: leading.
+   * Horizontal placement inside a column/block parent's content box: asymmetric/auto margins or
+   * `align-self`. Default: the parent's alignment.
    */
-  selfAlign?: "center" | "end";
+  selfAlign?: "start" | "center" | "end";
+  /** Vertical placement inside a flex row from `align-self` when it differs from the row's `align-items`. */
+  selfAlignV?: "start" | "center" | "end";
   /**
-   * Set on a node whose computed `direction` differs from its parent's; emitters override the
-   * layout direction there. Inherited descendants leave it unset, so it is emitted once per
-   * change — an LTR island inside an RTL block needs its own `"ltr"`.
+   * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
+   * neutral characters against it. Only text carries it — container order is already measured,
+   * so overriding the direction on a stack would mirror it a second time.
    */
-  layoutDirection?: "rtl" | "ltr";
+  layoutDirection?: "rtl";
   /** top, right, bottom, left — includes border width so content lands where the browser put it. */
   padding: [number, number, number, number];
   style: Style;
   confidence: Confidence;
-  notes: string[];
+  diagnostics: Diagnostic[];
   overlays: Overlay[];
+  /** What assistive technology is told about this node, beyond what the element itself implies. */
+  a11y?: {
+    /** `aria-label`, else the text of the `<label>` that names this control. */
+    label?: string;
+    /** `aria-hidden="true"`. */
+    hidden?: true;
+    /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
+    heading?: 1 | 2 | 3 | 4 | 5 | 6;
+    /** `role` = button | link | img on an element that is not already that control. */
+    trait?: "isButton" | "isLink" | "isImage";
+  };
+  /** `<label>`: id of the toggle/radio its tap changes. */
+  labelFor?: string;
 }
 
 export interface StackNode extends SemBase {
@@ -242,7 +306,15 @@ export interface StackNode extends SemBase {
   distribution: Distribution;
   /** Leading offset before the first child that padding does not explain. */
   leadInset: number;
+  /** Gaps taken by a CSS auto margin in a flex container — index i is before child i (children.length = after the last). Emitted as flexible Spacers; the gap's fixed part (`spacing`, or `leadInset` for 0) is their minimum. */
+  autoGaps?: number[];
+  /** `space-between`: the CSS gap, the Spacers' minimum length. */
+  minGap?: number;
   scroll?: Axis;
+  /** Fixed-size row items that reflow natively when available width changes. */
+  wrap?: { columnGap: number; rowGap: number };
+  /** Captured positions for wrapping combinations without a native layout mapping. */
+  measured?: MeasuredLayout;
   children: SemNode[];
 }
 
@@ -251,11 +323,16 @@ export interface GridNode extends SemBase {
   columns: number;
   hSpacing: number;
   vSpacing: number;
+  measured?: MeasuredLayout;
+  /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
+  scroll?: Axis;
   children: SemNode[];
 }
 
 export interface TextNode extends SemBase {
   kind: "text";
+  /** Source element, retained so emitters can scope text-layout strategies safely. */
+  sourceTag?: string;
   runs: TextRun[];
   align: "leading" | "center" | "trailing";
   lineLimit?: number;
@@ -266,6 +343,8 @@ export interface TextNode extends SemBase {
    * re-flowing. Unset means normal wrapping.
    */
   noWrap?: true;
+  /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
+  unbreakable?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
 }
@@ -285,7 +364,12 @@ export interface SvgNode extends SemBase {
 export interface ImageNode extends SemBase {
   kind: "image";
   src: string;
-  contentMode: "fill" | "fit";
+  /** A `data:image/svg+xml` source, parsed during analysis. */
+  vector?: SvgNode;
+  /** CSS `object-fit` (`scale-down` arrives as `contain`, noted): fill stretches, contain letterboxes, cover crops, none keeps the natural size. */
+  contentMode: "fill" | "contain" | "cover" | "none";
+  /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
+  position?: [number, number];
   /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
   alt?: string;
   /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
@@ -337,10 +421,16 @@ export interface ControlNode extends SemBase {
   content: SemNode[];
   /** Initial text/number the design shows (`@value`, `<textarea>` text, the selected `<option>`). */
   value?: string;
+  /** `colorPicker` only: the initial colour (`@value`; HTML's default for a missing/invalid value is black). */
+  swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
+  inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
+  /** Radio `@name`; radios with the same group share one selection. */
+  group?: string;
   /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
   disabled?: boolean;
   /** Numeric domain of a slider/progress/gauge, resolved from `@min`/`@max`/`@step`. */
@@ -381,7 +471,7 @@ export interface Screen {
   version: 1;
   name: string;
   source: string;
-  theme: "light" | "dark";
+  theme: Theme;
   size: { w: number; h: number };
   /** Backdrop behind the root, from the design. */
   canvas: Color;

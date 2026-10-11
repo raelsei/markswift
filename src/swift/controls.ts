@@ -1,4 +1,3 @@
-import { numericValue } from "./control-state.ts";
 /**
  * `ControlNode` → SwiftUI. The node's box (fill, border, radius, padding, frame) is painted by
  * the shared modifier chain in `modifiers.ts`; this file emits only the interactive core that goes
@@ -12,35 +11,55 @@ import { numericValue } from "./control-state.ts";
  * `Toggle` with a drawn style, `ProgressView`/`Gauge` with a drawn style, `DisclosureGroup`) is
  * identical in both modes.
  */
-import { parseColor } from "../css/index.ts";
+import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
-import type { EmitMode } from "./context.ts";
-import { colorArgs, colorExpr, fontExpr, indent, num, str, type ScreenTokens } from "./format.ts";
+import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
+import { numericValue } from "./control-state.ts";
+import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
+import { shapeExpr } from "./paint.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
-export interface ControlDeps {
+export interface ControlDeps extends ColorCtx {
   /** Emits a child node the way the surrounding view would (containers → their property). */
   child: (n: SemNode) => string[];
   /** Control → `@State` property name; built by `controlMembers`. */
   stateOf: Map<SemNode, string>;
   /** `onclick` source → callback property name; built by `controlMembers`. */
   actionOf: Map<string, string>;
+  /** Grouped radio → its tag in the group's selection; built by `controlMembers`. */
+  radioTag: Map<SemNode, string>;
   mode: EmitMode;
-  /** The screen's colour scheme: `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
-  theme: "light" | "dark";
+  /** The screen's colour scheme (`adaptive`: both): `<progress>`/`<meter>`/`<input type=range>` are painted by the browser, whose palette follows it. */
+  theme: Theme | "adaptive";
   /** This screen's colour → token lookup, and the control node its colours belong to. */
   tokens?: ScreenTokens;
   id?: string;
+  /** The node's box modifiers, emitted inside a pressable control's label. */
+  box?: string[];
 }
 
 /**
  * Chrome's palette for the widgets it paints itself. The page's CSS never mentions these colours
  * yet they are part of the design's pixels, so the generated view carries them the same way it
- * carries every other measured colour: resolved for the screen's theme. Measured from Chrome 152.
+ * carries every other measured colour: resolved for the screen's theme, or as a light/dark pair
+ * (`Color.markswift(light:dark:)` from MarkswiftRuntime.swift) for an adaptive view. Measured from Chrome 152.
  */
-const UA: Record<"light" | "dark", { accent: string; track: string; edge: string }> = {
-  light: { accent: "Color.markswift(0.0, 0.459, 1.0)", track: "Color.markswift(0.937, 0.937, 0.937)", edge: "Color.markswift(0.698, 0.698, 0.698)" },
-  dark: { accent: "Color.markswift(0.6, 0.784, 1.0)", track: "Color.markswift(0.231, 0.231, 0.231)", edge: "Color.markswift(0.522, 0.522, 0.522)" },
+const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
+  light: {
+    accent: "Color.markswift(0.0, 0.459, 1.0)",
+    track: "Color.markswift(0.937, 0.937, 0.937)",
+    edge: "Color.markswift(0.698, 0.698, 0.698)",
+  },
+  dark: {
+    accent: "Color.markswift(0.6, 0.784, 1.0)",
+    track: "Color.markswift(0.231, 0.231, 0.231)",
+    edge: "Color.markswift(0.522, 0.522, 0.522)",
+  },
+  adaptive: {
+    accent: "Color.markswift(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
+    track: "Color.markswift(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
+    edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
+  },
 };
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
@@ -50,7 +69,7 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     // A field showing its placeholder paints it in the prompt colour, as the browser does; in app
     // mode the live control styles its own prompt and this would colour the typed text instead.
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
-    if (prompt) out.push(".foregroundStyle(Color(uiColor: .placeholderText))");
+    if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
@@ -62,7 +81,8 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
 
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
-  const binding = state ? `$${state}` : "";
+  const tag = deps.radioTag.get(n);
+  const binding = !state ? "" : tag !== undefined ? `$${state}.markswiftSelects(${str(tag)})` : `$${state}`;
   const still = deps.mode === "fidelity";
   switch (n.control) {
     case "button": {
@@ -76,14 +96,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "Button {",
           `    ${state} = true`,
           "} label: {",
-          ...indent(body(n, deps), 1),
+          ...indent(pressable(n, deps), 1),
           "}",
           ".buttonStyle(.plain)",
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+      return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -93,17 +113,23 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       const href = n.href ?? "";
       if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
         const action = n.action !== undefined ? (deps.actionOf.get(n.action) ?? "{}") : "{}";
-        return wrap(`Button(action: ${action}) {`, body(n, deps), ["}", ".buttonStyle(.plain)"]);
+        return wrap(`Button(action: ${action}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
       }
-      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, body(n, deps), ["}"]);
+      return wrap(`Link(destination: markswiftURL(${str(href)})) {`, pressable(n, deps), ["}"]);
     }
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
-      return [`TextField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [
+        `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+      ];
     case "secureField":
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
-      return [`SecureField(${str(n.placeholder ?? "")}, text: ${binding})`];
+      return [
+        `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+      ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it.
@@ -113,18 +139,42 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // A switch is the right control only when the design drew one: HTML checkboxes and radios
       // are small squares/circles, and an iOS switch would not fit their measured box.
       const ua = UA[deps.theme];
-      const style = n.control === "radio" ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})` : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28 ? ".switch" : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
-      return wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      const style =
+        n.control === "radio"
+          ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})`
+          : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28
+            ? ".switch"
+            : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+      const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
+      // (or `aria-label`); the representation does not inherit the visible style.
+      if (n.a11y?.label)
+        out.push(
+          ".accessibilityRepresentation {",
+          `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`,
+          "}",
+        );
+      return out;
     }
     case "slider": {
       const r = n.range ?? { min: 0, max: 100 };
-      if (still) return [`MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${UA[deps.theme].accent}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`];
-      return [`Slider(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""})`];
+      if (still)
+        return [
+          `MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${UA[deps.theme].accent}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`,
+        ];
+      return [
+        `Slider(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""})`,
+      ];
     }
     case "stepper": {
       const r = n.range ?? { min: 0, max: 100 };
       if (still) return painted(n.value ?? "", ".leading");
-      return [`Stepper(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""}) {`, "    EmptyView()", "}", ".labelsHidden()"];
+      return [
+        `Stepper(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""}) {`,
+        "    EmptyView()",
+        "}",
+        ".labelsHidden()",
+      ];
     }
     case "picker": {
       // Closed, a picker shows its selection and a menu indicator — exactly what `<select>` paints.
@@ -149,10 +199,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "datePicker":
       if (still) return painted(n.value ?? "", ".leading");
-      return [`DatePicker(selection: ${binding}, displayedComponents: .date) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
+      return [
+        `DatePicker(selection: ${binding}, displayedComponents: .date) {`,
+        ...indent(body(n, deps), 1),
+        "}",
+        ".labelsHidden()",
+      ];
     case "colorPicker": {
-      const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
-      if (still) return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];
+      const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
+      if (still)
+        return [`RoundedRectangle(cornerRadius: 4.0, style: .circular).fill(Color.markswift(${colorArgs(c)}))`];
       return [`ColorPicker(selection: ${binding}) {`, ...indent(body(n, deps), 1), "}", ".labelsHidden()"];
     }
     case "progress": {
@@ -182,6 +238,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
   }
 }
+
+/** What iOS Safari gives the same input; `markswiftInputTraits` applies it on iOS only (runtime/controls.swift). */
+const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
+  email: [".markswiftInputTraits(.email)"],
+  tel: [".markswiftInputTraits(.tel)"],
+  url: [".markswiftInputTraits(.url)"],
+  number: [".markswiftInputTraits(.number)"],
+  search: [".markswiftInputTraits(.search)"],
+  password: [".markswiftInputTraits(.password)"],
+};
 
 /**
  * `<meter>` state colours, as every browser paints them: the value sits in its optimum band, one
@@ -221,6 +287,18 @@ function body(n: ControlNode, deps: ControlDeps): string[] {
   return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
 }
 
+/**
+ * A button's or link's label with the node's box inside it, closed by the box shape: the whole box
+ * is the hit and press area, not only the glyphs. `EmptyView` takes no padding or frame, so an
+ * empty label with a box becomes `Color.clear`.
+ */
+function pressable(n: ControlNode, deps: ControlDeps): string[] {
+  const label = body(n, deps);
+  if (!deps.box) return label;
+  const lines = deps.box.length && label.length === 1 && label[0] === "EmptyView()" ? ["Color.clear"] : label;
+  return [...lines, ...deps.box, `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`];
+}
+
 function wrap(open: string, inner: string[], close: string[]): string[] {
   return [open, ...indent(inner, 1), ...close];
 }
@@ -234,14 +312,21 @@ function stackOfNodes(nodes: SemNode[], deps: ControlDeps): string[] {
   if (nodes.length === 1) return deps.child(nodes[0]!);
   let horizontal = true;
   for (let i = 1; i < nodes.length; i++) {
-    const a = nodes[i - 1]!.frame, b = nodes[i]!.frame;
+    const a = nodes[i - 1]!.frame,
+      b = nodes[i]!.frame;
     if (b.x < a.x + a.w - 0.5) horizontal = false;
   }
   const [a, b] = [nodes[0]!.frame, nodes[1]!.frame];
   const gap = Math.max(0, Math.round((horizontal ? b.x - (a.x + a.w) : b.y - (a.y + a.h)) * 100) / 100);
-  const open = horizontal ? `HStack(alignment: .center, spacing: ${num(gap)}) {` : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
-  return [open, ...indent(nodes.flatMap((c) => deps.child(c)), 1), "}"];
+  const open = horizontal
+    ? `HStack(alignment: .center, spacing: ${num(gap)}) {`
+    : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
+  return [
+    open,
+    ...indent(
+      nodes.flatMap((c) => deps.child(c)),
+      1,
+    ),
+    "}",
+  ];
 }
-
-export { controlMembers, type ControlMembers } from "./control-state.ts";
-export { CONTROL_RUNTIME } from "./control-runtime.ts";

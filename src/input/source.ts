@@ -1,5 +1,5 @@
 import { basename, dirname, resolve } from "node:path";
-import { serveDir } from "../browser/server.ts";
+import { serveDir } from "./server.ts";
 import type { HtmlSource } from "./types.ts";
 
 export interface ResolvedSource {
@@ -19,7 +19,12 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
     const file = resolve(source.file);
     const html = await Bun.file(file).text();
     const server = serveDir(dirname(file));
-    return { html, url: `${server.origin}/${encodeURIComponent(basename(file))}`, label: basename(file), close: () => server.stop() };
+    return {
+      html,
+      url: `${server.origin}/${encodeURIComponent(basename(file))}`,
+      label: basename(file),
+      close: () => server.stop(),
+    };
   }
   if (source.baseURL && source.assetsDir) throw new Error("choose baseURL or assetsDir, not both");
   const server = source.assetsDir ? serveDir(resolve(source.assetsDir)) : undefined;
@@ -33,6 +38,7 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
 
 function httpURL(value: string): string {
   const url = new URL(value);
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("only http and https page URLs are supported");
+  if (url.protocol !== "http:" && url.protocol !== "https:")
+    throw new Error("only http and https page URLs are supported");
   return url.href;
 }

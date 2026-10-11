@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="margin-top; margin-bottom; margin-left; margin-right">
+<title>margin-top</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.row { display: flex; }
+.push { margin-left: auto; }
+.center { width: 160px; margin-left: auto; margin-right: auto; text-align: center; }
+.hero { height: 72px; background: var(--accent); border-radius: 12px; }
+.lift { margin-top: -24px; margin-left: 16px; margin-right: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stack .b { margin-bottom: 12px; }
+.stack .b.last { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="m-auto"><p class="cap">margin-left: auto pushes the last item right</p><div class="frame row"><div class="b">Left</div><div class="b push">Right</div></div></section>
+<section class="v" id="m-center"><p class="cap">margin: 0 auto centers a 160px box</p><div class="frame"><div class="b center">Centered</div></div></section>
+<section class="v" id="m-negative"><p class="cap">negative margin-top lifts a card over the hero</p><div class="hero"></div><div class="lift">Lifted card</div></section>
+<section class="v stack" id="m-bottom"><p class="cap">margin-bottom: 12px between blocks</p><div class="b">One</div><div class="b">Two</div><div class="b last">Three</div></section>
+</main>
+</body>
+</html>

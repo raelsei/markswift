@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="flex-wrap; flex-wrap: wrap; align-content">
+<title>flex-wrap--wrap</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 6px 12px; border-radius: 999px; }
+.nowrap { display: flex; flex-wrap: nowrap; gap: 8px; overflow: hidden; }
+.tiles { display: flex; flex-wrap: wrap; gap: 8px; height: 120px; align-content: flex-start; }
+.tile { width: 80px; height: 40px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="wrap-chips">
+  <p class="cap">flex-wrap: wrap, pill chips</p>
+  <div class="frame chips"><span class="b chip">Design</span><span class="b chip">Engineering</span><span class="b chip">Marketing</span><span class="b chip">Sales</span><span class="b chip">Support</span><span class="b chip">Operations</span><span class="b chip">Finance</span></div>
+</section>
+<section class="v" id="wrap-none">
+  <p class="cap">flex-wrap: nowrap (items shrink)</p>
+  <div class="frame nowrap"><span class="b chip">Design</span><span class="b chip">Engineering</span><span class="b chip">Marketing</span><span class="b chip">Sales</span><span class="b chip">Support</span></div>
+</section>
+<section class="v" id="wrap-tiles">
+  <p class="cap">wrap with align-content: flex-start in a 120px box</p>
+  <div class="frame tiles"><div class="b tile">1</div><div class="b tile">2</div><div class="b tile">3</div><div class="b tile">4</div><div class="b tile">5</div><div class="b tile">6</div></div>
+</section>
+</main>
+</body>
+</html>

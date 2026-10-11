@@ -1,20 +1,19 @@
 /** Inline run collection, whitespace normalization and text decoration. */
 import { type LayoutNode } from "../model/layout.ts";
-import { type Color, parseColor } from "../css/index.ts";
+import { parseColor } from "../css/index.ts";
+import type { Color } from "../model/values.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
-
-/** Elements whose box is a replaced/atomic thing rather than inline text, whatever `display` says. */
-const ATOMIC_TAGS: Record<string, true> = { img: true, svg: true, video: true, audio: true, canvas: true, iframe: true, input: true, select: true, textarea: true, button: true, progress: true, meter: true };
+import { classifyElement } from "../html/policy.ts";
+import { outOfFlow } from "./geometry.ts";
 
 // ---------- text ----------
 
 /** Inline (non-atomic) element whose subtree is nothing but text: merged into the parent's runs. */
 export function isInlineText(c: LayoutNode): boolean {
-  if (ATOMIC_TAGS[c.tag]) return false;
+  if (classifyElement(c.tag, c.attrs).atomic) return false;
   if ((c.styles["display"] ?? "inline") !== "inline") return false;
-  const pos = c.styles["position"];
-  if (pos === "absolute" || pos === "fixed") return false;
+  if (outOfFlow(c)) return false;
   return c.children.every((k) => k.tag === "#text" || k.tag === "br" || isInlineText(k));
 }
 
@@ -34,7 +33,9 @@ export function groupRuns(host: LayoutNode, runs: SourceTextRun[]): SourceTextRu
   for (const r of runs) {
     const top = r.styleOf === host ? r.node : ancestorChildOf(host, r.styleOf);
     const idx = order.indexOf(top);
-    if (cur.length && idx !== lastIdx + 1) {
+    // Runs from one inline element share its top-level child (`idx === lastIdx`); only a flow
+    // child between them (a gap in the index) ends the group.
+    if (cur.length && idx !== lastIdx && idx !== lastIdx + 1) {
       groups.push(cur);
       cur = [];
     }
@@ -56,21 +57,10 @@ export function contains(a: LayoutNode, b: LayoutNode): boolean {
 
 export type Collapse = "collapse" | "preserve" | "preserve-breaks";
 
-/** `white-space-collapse` (Chrome longhand), or the `white-space` shorthand for older snapshots. */
+/** Computed `white-space-collapse`; a hand-built tree without it gets the initial `collapse`. */
 export function collapseOf(s: Record<string, string>): Collapse {
   const v = s["white-space-collapse"];
-  if (v) return v === "collapse" ? "collapse" : v === "preserve-breaks" ? "preserve-breaks" : "preserve";
-  const ws = s["white-space"] ?? "normal";
-  if (ws === "pre" || ws === "pre-wrap" || ws === "break-spaces") return "preserve";
-  return ws === "pre-line" ? "preserve-breaks" : "collapse";
-}
-
-/** `text-wrap-mode: nowrap` (Chrome longhand), or the `white-space` shorthand for older snapshots. */
-export function noWrap(s: Record<string, string>): boolean {
-  const v = s["text-wrap-mode"];
-  if (v) return v === "nowrap";
-  const ws = s["white-space"];
-  return ws === "nowrap" || ws === "pre";
+  return !v || v === "collapse" ? "collapse" : v === "preserve-breaks" ? "preserve-breaks" : "preserve";
 }
 
 /**
@@ -81,7 +71,7 @@ export function noWrap(s: Record<string, string>): boolean {
  * into the laid-out run text.
  */
 export function normalizeWhitespace(text: string, mode: Collapse): { text: string; src: number[] } {
-  if (mode === "preserve") return { text, src: Array.from(text, (_, i) => i) };
+  if (mode === "preserve") return { text, src: Array.from({ length: text.length }, (_, i) => i) };
   let out = "";
   const src: number[] = [];
   for (let i = 0; i < text.length; ) {
@@ -104,11 +94,25 @@ export function normalizeWhitespace(text: string, mode: Collapse): { text: strin
   return { text: out, src };
 }
 
-const WS = /\s/;
+/** CSS collapsible white space (space, tab, segment breaks, form feed). NBSP, U+202F, U+3000 and U+2000–200A are content: they never collapse or break. */
+const WS = /[ \t\n\r\f]/;
+
+/** The colour glyphs paint in: `-webkit-text-fill-color` overrides `color`; black when neither parses. */
+export function textColorOf(s: Record<string, string>): Color {
+  return parseColor(s["-webkit-text-fill-color"]) ?? parseColor(s["color"]) ?? { r: 0, g: 0, b: 0, a: 1 };
+}
+
+/** Concatenated text of an element's subtree, as the snapshot laid it out. */
+export function textContent(el: LayoutNode | undefined): string {
+  if (!el) return "";
+  return el.tag === "#text" ? (el.text ?? "") : el.children.map(textContent).join("");
+}
 
 export function decorationOf(s: Record<string, string>, color: Color): TextDecoration | undefined {
   const raw = s["-webkit-text-decorations-in-effect"] ?? s["text-decoration-line"] ?? "none";
-  const lines = raw.split(/\s+/).filter((l): l is DecorationLine => l === "underline" || l === "line-through" || l === "overline");
+  const lines = raw
+    .split(/\s+/)
+    .filter((l): l is DecorationLine => l === "underline" || l === "line-through" || l === "overline");
   if (!lines.length) return undefined;
   const d: TextDecoration = { lines };
   const dc = parseColor(s["text-decoration-color"]);

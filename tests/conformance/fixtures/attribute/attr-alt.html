@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="@alt; img">
+<title>attr-alt</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 12px; align-items: flex-start; }
+img { display: block; border-radius: 8px; }
+.broken { width: 120px; height: 80px; border: 1px solid var(--line); background: var(--card); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="alt">
+  <p class="cap">broken src with alt text / broken with empty alt / valid image with alt</p>
+  <div class="row"><img class="broken" src="data:image/png;base64,AAAA" alt="Team photo"><img class="broken" src="data:image/png;base64,AAAA" alt=""><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCIgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIj48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iODAiIHJ4PSIxMiIgZmlsbD0iIzI1NjNlYiIvPjx0ZXh0IHg9IjQwIiB5PSI1MCIgZm9udC1zaXplPSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2ZmZiIgZm9udC1mYW1pbHk9InN5c3RlbS11aSI+MXg8L3RleHQ+PC9zdmc+" width="80" height="80" alt="Blue tile"></div>
+</section>
+</main>
+</body>
+</html>

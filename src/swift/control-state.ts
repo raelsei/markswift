@@ -1,10 +1,7 @@
-import { parseColor } from "../css/index.ts";
-import { colorArgs } from "./format.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
-import { num, str } from "./format.ts";
-export type { ControlMembers } from "./context.ts";
 import type { ControlMembers } from "./context.ts";
+import { colorArgs, identifier, num, str, uniqueName } from "./format.ts";
 /**
  * Controls whose value the user changes, and the Swift type and seed of that value. `suffix`
  * names storage that is not the control's value (a file button's presentation flag).
@@ -29,7 +26,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "datePicker":
       return { type: "Date", value: ".now" };
     case "colorPicker": {
-      const c = (n.value ? parseColor(n.value) : undefined) ?? { r: 0, g: 0, b: 0, a: 1 };
+      const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
       return { type: "Color", value: `.markswift(${colorArgs(c)})` };
     }
     default:
@@ -45,24 +42,54 @@ export function controlMembers(root: SemNode): ControlMembers {
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const decls: string[] = [];
+  const activate = new Map<string, string>();
+  const radioTag = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
+  // Radios sharing a `name` hold one `String` selection: each radio's tag is its `value` when the
+  // group's values are unique, else its position. HTML: the last `checked` radio wins.
+  // ponytail: groups are keyed by `name` across the whole screen, not by form owner; split by `<form>` if a design has two forms reusing a name.
+  const groups = new Map<string, ControlNode[]>();
+  walk(root, (n) => {
+    if (n.kind !== "control" || n.control !== "radio" || n.group === undefined) return;
+    const list = groups.get(n.group);
+    if (list) list.push(n);
+    else groups.set(n.group, [n]);
+  });
+  const groupState = new Map<string, string>();
   walk(root, (n) => {
     if (n.kind !== "control") return;
+    const key = n.control === "radio" ? n.group : undefined;
+    const group = key !== undefined ? groups.get(key) : undefined;
+    if (key !== undefined && group) {
+      const values = group.map((r) => r.value ?? "on");
+      const tags = new Set(values).size === values.length ? values : group.map((_, i) => String(i));
+      let name = groupState.get(key);
+      if (name === undefined) {
+        name = uniqueName(`s_${identifier(key) || "group"}`, seen);
+        groupState.set(key, name);
+        const checked = group.findLastIndex((r) => r.checked);
+        decls.push(`@State private var ${name}: String = ${str(checked >= 0 ? tags[checked]! : "")}`);
+      }
+      const tag = tags[group.indexOf(n)]!;
+      stateOf.set(n, name);
+      radioTag.set(n, tag);
+      if (!n.disabled) activate.set(n.id, `${name} = ${str(tag)}`);
+      return;
+    }
     const decl = stateDecl(n);
     if (decl) {
-      const base = `s_${n.id.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "control"}${decl.suffix ?? ""}`;
-      const k = (seen[base] = (seen[base] ?? 0) + 1);
-      const name = k === 1 ? base : `${base}_r${k}`;
+      const name = uniqueName(`s_${identifier(n.id) || "control"}${decl.suffix ?? ""}`, seen);
       stateOf.set(n, name);
       decls.push(`@State private var ${name}: ${decl.type} = ${decl.value}`);
+      // What a tap on the control's `<label>` does: a checkbox flips, a lone radio turns on.
+      if (!n.disabled && n.control === "toggle") activate.set(n.id, `${name}.toggle()`);
+      else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
     // A handler used by several controls is one callback: the design calls the same function.
     // Two callbacks can still mangle to one name (`#docs` and a link captioned `Docs`), so the
     // property names are deduplicated the same way the state names are.
     if (n.action !== undefined && !actionOf.has(n.action)) {
-      const base = `on_${n.action.replace(/\(.*$/s, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "action"}`;
-      const k = (seen[base] = (seen[base] ?? 0) + 1);
-      const name = k === 1 ? base : `${base}_r${k}`;
+      const name = uniqueName(`on_${identifier(n.action.replace(/\(.*$/s, "")) || "action"}`, seen);
       actionOf.set(n.action, name);
       // A destination-less `<a>` carries `#<target>` rather than a handler's source: the design
       // named a place, and the developer supplies the navigation that goes there.
@@ -75,10 +102,8 @@ export function controlMembers(root: SemNode): ControlMembers {
       decls.push(`var ${name}: () -> Void = {}`);
     }
   });
-  return { decls, stateOf, actionOf };
+  return { decls, stateOf, actionOf, activate, radioTag };
 }
-
-/** The SwiftUI control itself; the caller appends the node's box modifiers. */
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */
 export function numericValue(n: ControlNode): number {

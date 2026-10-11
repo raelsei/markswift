@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="svg:use; svg:symbol; svg:defs">
+<meta name="markswift-themes" content="light,dark">
+<title>svg-use</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 16px; align-items: center; }
+svg { display: block; }
+.lbl { font-size: 11px; color: var(--muted); text-align: center; margin: 4px 0 0; }
+.ic { width: 36px; height: 36px; }
+.hidden { width: 0; height: 0; position: absolute; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<svg class="hidden" aria-hidden="true"><defs><symbol id="sym-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7 12.5l3 3 7-7" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol></defs></svg>
+<section class="v" id="uses">
+  <p class="cap">one symbol reused four times via use with different currentColor</p>
+  <div class="row">
+    <svg class="ic" style="color: #2563eb;"><use href="#sym-check"/></svg>
+    <svg class="ic" style="color: #16a34a;"><use href="#sym-check"/></svg>
+    <svg class="ic" style="color: #db2777;"><use href="#sym-check"/></svg>
+    <svg class="ic" style="color: #f59e0b;"><use href="#sym-check"/></svg>
+  </div>
+</section>
+<section class="v" id="use-inline">
+  <p class="cap">use referencing a shape defined in the same svg with x/y offsets</p>
+  <svg width="160" height="40" viewBox="0 0 160 40"><defs><rect id="pill" width="40" height="24" rx="12" fill="#2563eb"/></defs><use href="#pill" x="0" y="8"/><use href="#pill" x="56" y="8"/><use href="#pill" x="112" y="8"/></svg>
+</section>
+</main>
+</body>
+</html>

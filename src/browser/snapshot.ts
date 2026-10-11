@@ -8,6 +8,8 @@
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { STYLE_WHITELIST } from "../model/layout.ts";
 import type { NodeIdentity } from "../input/types.ts";
+import type { PreferredSizes } from "./sizing.ts";
+import { round2 } from "../css/index.ts";
 
 /** CDP `RareStringData`: sparse per-node strings (`value[k]` belongs to node `index[k]`). */
 interface RareStringData {
@@ -50,7 +52,10 @@ interface Raw {
   name: string;
   value: string;
   attrs: Record<string, string>;
+  /** `<img>` only: see `LayoutNode.currentSrc`. */
+  currentSrc?: string;
   styles: Record<string, string>;
+  preferredSize?: LayoutNode["preferredSize"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
   bounds?: Rect;
   /** CSSOM offset rect (relative to the offsetParent's padding edge). */
@@ -67,17 +72,45 @@ interface Raw {
   children: Raw[];
 }
 
-const SKIP_TAGS: Record<string, true> = { script: true, style: true, link: true, meta: true, template: true, noscript: true };
+const SKIP_TAGS: Record<string, true> = {
+  script: true,
+  style: true,
+  link: true,
+  meta: true,
+  template: true,
+  noscript: true,
+};
 /**
  * Nodes that never get a layout box but must survive: SVG paint servers, so fills/strokes can
  * resolve `url(#id)`, and `<option>`/`<optgroup>`, which Chrome lays out in the select popup
  * rather than in the page — their labels are read as text, never measured.
  */
-const KEEP_WITHOUT_LAYOUT: Record<string, true> = { defs: true, lineargradient: true, radialgradient: true, stop: true, clippath: true, mask: true, option: true, optgroup: true };
+const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
+  defs: true,
+  lineargradient: true,
+  radialgradient: true,
+  stop: true,
+  clippath: true,
+  mask: true,
+  option: true,
+  optgroup: true,
+};
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
-/** Written on `<img>` when the browser chose a `srcset`/`<picture>` candidate other than `src`. */
-export const CURRENT_SRC_ATTR = "data-h2s-src";
+
+/** Join CSS size intent while wrappers still exist, before display:contents is flattened. */
+export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
+  const walk = (raw: Raw, path: string) => {
+    if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
+    let i = 0;
+    for (const child of raw.children) {
+      if (child.type !== 1 || child.pseudo !== undefined) continue;
+      const childPath = path ? `${path}/${i++}` : String(i++);
+      walk(child, childPath);
+    }
+  };
+  walk(root, "");
+}
 
 /**
  * @param snap     snapshot as painted (styles incl. transform matrices, paint order)
@@ -170,7 +203,11 @@ function assignLineBoxes(document: DomSnapshot["documents"][number], raws: Raw[]
     const r = raws[nodeIndex[tb.layoutIndex[k]!]!];
     const b = tb.bounds[k];
     if (!r || !b) continue;
-    (r.lines ??= []).push({ bounds: { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! }, start: tb.start[k]!, length: tb.length[k]! });
+    (r.lines ??= []).push({
+      bounds: { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! },
+      start: tb.start[k]!,
+      length: tb.length[k]!,
+    });
   }
 }
 
@@ -205,7 +242,7 @@ function pseudoBox(raw: Raw): Rect | undefined {
 
 /**
  * Records the `srcset`/`<picture>` candidate the browser actually loaded as
- * `data-h2s-src`, spelled as authored (so it stays a bundlable path), when it
+ * `currentSrc`, spelled as authored (so it stays a bundlable path), when it
  * is not the plain `src`. Falls back to the absolute URL if no candidate matches.
  */
 function markCurrentSrc(img: Raw, currentSrc: string, base: string): void {
@@ -221,9 +258,10 @@ function markCurrentSrc(img: Raw, currentSrc: string, base: string): void {
   if (src !== undefined && resolve(src) === currentSrc) return;
   const candidates = srcsetUrls(img.attrs["srcset"] ?? "");
   if (img.parent?.name === "picture") {
-    for (const s of img.parent.children) if (s.type === 1 && s.name === "source") candidates.push(...srcsetUrls(s.attrs["srcset"] ?? ""));
+    for (const s of img.parent.children)
+      if (s.type === 1 && s.name === "source") candidates.push(...srcsetUrls(s.attrs["srcset"] ?? ""));
   }
-  img.attrs[CURRENT_SRC_ATTR] = candidates.find((c) => resolve(c) === currentSrc) ?? currentSrc;
+  img.currentSrc = candidates.find((c) => resolve(c) === currentSrc) ?? currentSrc;
 }
 
 /** Candidate URLs of a `srcset` (HTML spec tokenisation: URLs are whitespace-free, descriptors run to the next comma). */
@@ -255,12 +293,6 @@ export function findByAttr(root: Raw, attr: string, value: string): Raw | undefi
   return undefined;
 }
 
-export function findAll(root: Raw, pred: (r: Raw) => boolean, out: Raw[] = []): Raw[] {
-  if (pred(root)) out.push(root);
-  for (const c of root.children) findAll(c, pred, out);
-  return out;
-}
-
 /**
  * Convert the capture root to a LayoutNode tree, dropping nodes without
  * layout (display:none, <script>, comments, collapsed whitespace — a
@@ -282,7 +314,12 @@ export function findAll(root: Raw, pred: (r: Raw) => boolean, out: Raw[] = []): 
  * - `visibility: hidden` elements keep their box and are emitted like any
  *   other node; hiding is the inference pass's decision.
  */
-export function toLayout(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, path = ""): LayoutNode | undefined {
+export function toLayout(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  path = "",
+): LayoutNode | undefined {
   if (raw.type !== 1 || SKIP_TAGS[raw.name]) return undefined;
   if (!raw.bounds && !KEEP_WITHOUT_LAYOUT[raw.name]) return undefined; // display:none or not laid out
   return element(raw, origin, identity, path);
@@ -295,16 +332,24 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
     styles: raw.styles,
     bounds: raw.bounds ? rebase(raw.bounds, origin) : { x: 0, y: 0, w: 0, h: 0 },
     children: [],
+    ...(raw.preferredSize ? { preferredSize: raw.preferredSize } : {}),
   };
   const id = identity(raw.name, raw.attrs, path);
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
+  if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
   appendChildren(raw, origin, identity, path, node.children);
   return node;
 }
 
 /** Converts `raw`'s children into `out`; `path` is `raw`'s element path. */
-function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, path: string, out: LayoutNode[]): void {
+function appendChildren(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  path: string,
+  out: LayoutNode[],
+): void {
   let after: LayoutNode | undefined;
   let i = 0;
   for (const c of raw.children) {
@@ -315,12 +360,27 @@ function appendChildren(raw: Raw, origin: { x: number; y: number }, identity: No
       // laid-out text of the snapshot never covers it, so its DOM value is the text, kept with
       // a zero rect because nothing measures it.
       if (c.bounds && c.text && (c.text.trim() || c.bounds.w > 0)) {
-        const text: LayoutNode = { tag: "#text", attrs: {}, styles: {}, bounds: rebase(c.bounds, origin), text: c.text, children: [] };
+        const text: LayoutNode = {
+          tag: "#text",
+          attrs: {},
+          styles: {},
+          bounds: rebase(c.bounds, origin),
+          text: c.text,
+          children: [],
+        };
         // Only a broken text node needs its division recorded; one box is the bounds already.
-        if (c.lines && c.lines.length > 1) text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
+        if (c.lines && c.lines.length > 1)
+          text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
         out.push(text);
       } else if (!raw.bounds && c.value.trim()) {
-        out.push({ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 0, h: 0 }, text: c.value, children: [] });
+        out.push({
+          tag: "#text",
+          attrs: {},
+          styles: {},
+          bounds: { x: 0, y: 0, w: 0, h: 0 },
+          text: c.value,
+          children: [],
+        });
       }
       continue;
     }
@@ -345,7 +405,12 @@ function hasLayout(raw: Raw): boolean {
   return raw.bounds !== undefined || raw.children.some(hasLayout);
 }
 
-function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: NodeIdentity, parentPath: string): LayoutNode | undefined {
+function pseudoElement(
+  raw: Raw,
+  origin: { x: number; y: number },
+  identity: NodeIdentity,
+  parentPath: string,
+): LayoutNode | undefined {
   const tag = PSEUDO_TAGS[raw.pseudo!];
   if (!tag || !raw.bounds) return undefined;
   const text = raw.text?.trim() ? raw.text : undefined;
@@ -356,7 +421,9 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
     attrs: {},
     styles: raw.styles,
     bounds: rebase(box ?? raw.bounds, origin),
-    children: text ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }] : [],
+    children: text
+      ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }]
+      : [],
   };
   const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
   if (id !== undefined) node.id = id;
@@ -365,7 +432,5 @@ function pseudoElement(raw: Raw, origin: { x: number; y: number }, identity: Nod
 }
 
 function rebase(b: Rect, o: { x: number; y: number }): Rect {
-  return { x: round(b.x - o.x), y: round(b.y - o.y), w: round(b.w), h: round(b.h) };
+  return { x: round2(b.x - o.x), y: round2(b.y - o.y), w: round2(b.w), h: round2(b.h) };
 }
-
-const round = (v: number) => Math.round(v * 100) / 100;

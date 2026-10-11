@@ -6,15 +6,29 @@
  * Nothing here reads geometry: `input[type=range]` is a slider however the design paints it.
  */
 import type { LayoutNode } from "../model/layout.ts";
-import type { Color } from "../css/index.ts";
-import type { ControlKind, ControlNode, FontSpec, SemBase, SemNode } from "../model/semantic.ts";
+import { INPUT_CONTROLS, INPUT_PLACEHOLDERS } from "../html/inputs.ts";
+import type { Color } from "../model/values.ts";
+import { parseColor } from "../css/index.ts";
+import {
+  type ControlKind,
+  type ControlNode,
+  type Diagnostic,
+  type FontSpec,
+  type SemBase,
+  type SemNode,
+  addDiagnostic,
+} from "../model/semantic.ts";
+import { textContent } from "./text-runs.ts";
 
 /** `controlOf`'s answer: which control an element is, with the attribute state the design shows. */
 export interface ControlSpec {
   control: ControlKind;
   value?: string;
+  swatch?: Color;
   placeholder?: string;
+  inputType?: ControlNode["inputType"];
   checked?: boolean;
+  group?: string;
   disabled?: boolean;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
@@ -24,49 +38,8 @@ export interface ControlSpec {
   expanded?: boolean;
   files?: ControlNode["files"];
   /** Losses to record on the node (a link with no runtime destination, an unsupported input type). */
-  notes: string[];
+  diagnostics: Diagnostic[];
 }
-
-/** `<input type>` → control kind. Types absent here render nothing native (see `unrenderableNote`). */
-const INPUT_KINDS: Record<string, ControlKind> = {
-  button: "button",
-  checkbox: "toggle",
-  color: "colorPicker",
-  date: "datePicker",
-  "datetime-local": "datePicker",
-  email: "textField",
-  // A file picker is a button that presents `.fileImporter`; `spec.files` carries the rest.
-  file: "button",
-  month: "datePicker",
-  number: "textField",
-  password: "secureField",
-  radio: "radio",
-  range: "slider",
-  reset: "button",
-  search: "textField",
-  submit: "button",
-  tel: "textField",
-  text: "textField",
-  time: "datePicker",
-  url: "textField",
-  week: "datePicker",
-};
-
-/**
- * `<input type>`s with no control of their own. `image` is a submit button painted from `@src`,
- * which needs an image node the control path cannot build; `hidden` never reaches the IR
- * (`display: none`), and is here so an unexpected one reports rather than becoming a field.
- */
-const UNMAPPED_INPUTS: Record<string, string> = {
-  hidden: "no box of its own",
-  image: "an image submit button; the button is here but the `@src` image is not",
-};
-
-/** Elements whose content the browser draws but the capture cannot reach or a phone cannot host. */
-const UNRENDERABLE: Record<string, string> = {
-  canvas: "script-drawn bitmap; the DOM holds no content to translate",
-  iframe: "nested document, outside the capture root",
-};
 
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
@@ -74,11 +47,11 @@ const UNRENDERABLE: Record<string, string> = {
  */
 export function controlOf(n: LayoutNode): ControlSpec | undefined {
   const a = n.attrs;
-  const notes: string[] = [];
+  const diagnostics: Diagnostic[] = [];
   const disabled = "disabled" in a ? true : undefined;
   switch (n.tag) {
     case "button": {
-      const spec: ControlSpec = { control: "button", notes };
+      const spec: ControlSpec = { control: "button", diagnostics };
       if (a["onclick"]) spec.action = a["onclick"];
       if (disabled) spec.disabled = true;
       return spec;
@@ -86,20 +59,25 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "a": {
       const href = a["href"];
       if (href === undefined) return undefined;
-      const spec: ControlSpec = { control: "link", href, notes };
+      const spec: ControlSpec = { control: "link", href, diagnostics };
       // An absolute URL has a destination outside the app and becomes a `Link`. Everything else
       // — `#`, `#section`, `/path` — is navigation only the app can perform, so the element
       // becomes a button over the same callback an `onclick` would get, named after whatever the
       // design called the target so the placeholder says which link it was.
       if (!ABSOLUTE_URL.test(href)) {
         spec.action = a["onclick"] || `#${targetName(href, n)}`;
-        notes.push(`approximated: <a href="${href}"> has no runtime destination → Button over a placeholder action`);
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "a",
+          `<a href="${href}"> has no runtime destination → Button over a placeholder action`,
+        );
       }
       return spec;
     }
     case "textarea": {
-      const spec: ControlSpec = { control: "textEditor", notes };
-      const text = textOf(n).trim();
+      const spec: ControlSpec = { control: "textEditor", diagnostics };
+      const text = textContent(n).trim();
       if (text) spec.value = text;
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (disabled) spec.disabled = true;
@@ -110,22 +88,29 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       let selected: string | undefined;
       for (const o of optionsOf(n)) {
         // `@label` overrides the element's text; the text itself may be missing from the snapshot.
-        const label = (o.attrs["label"] ?? textOf(o)).trim();
+        const label = (o.attrs["label"] ?? textContent(o)).trim();
         if (label) options.push(label);
         if ("selected" in o.attrs) selected = label;
       }
-      const spec: ControlSpec = { control: "picker", options, notes };
+      const spec: ControlSpec = { control: "picker", options, diagnostics };
       // A closed `<select>` shows the selected option, or the first one when the page names none.
       const shown = selected || options[0];
       if (shown) spec.value = shown;
       // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
-      if (!options.length) notes.push("approximated: <select> option labels are not in the snapshot → picker with no choices");
-      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1)) notes.push("approximated: <select multiple/size> list box → menu picker");
+      if (!options.length)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "select",
+          "<select> option labels are not in the snapshot → picker with no choices",
+        );
+      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1))
+        addDiagnostic(diagnostics, "approximated", "select", "<select multiple/size> list box → menu picker");
       if (disabled) spec.disabled = true;
       return spec;
     }
     case "details": {
-      const spec: ControlSpec = { control: "disclosure", notes };
+      const spec: ControlSpec = { control: "disclosure", diagnostics };
       if ("open" in a) spec.expanded = true;
       return spec;
     }
@@ -133,24 +118,51 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
     case "meter": {
       const min = num(a["min"]) ?? 0;
       const max = num(a["max"]) ?? 1;
-      const spec: ControlSpec = { control: n.tag === "progress" ? "progress" : "gauge", range: { min, max: Math.max(max, min) }, notes };
+      const spec: ControlSpec = {
+        control: n.tag === "progress" ? "progress" : "gauge",
+        range: { min, max: Math.max(max, min) },
+        diagnostics,
+      };
       const v = a["value"];
       if (v !== undefined && num(v) !== undefined) spec.value = v;
-      else if (n.tag === "progress") notes.push("approximated: indeterminate <progress> → animated bar");
-      if (n.tag === "meter") spec.level = meterLevel(num(a["value"]) ?? 0, min, Math.max(max, min), num(a["low"]), num(a["high"]), num(a["optimum"]));
+      else if (n.tag === "progress")
+        addDiagnostic(diagnostics, "approximated", "progress", "indeterminate <progress> → animated bar");
+      if (n.tag === "meter")
+        spec.level = meterLevel(
+          num(a["value"]) ?? 0,
+          min,
+          Math.max(max, min),
+          num(a["low"]),
+          num(a["high"]),
+          num(a["optimum"]),
+        );
       return spec;
     }
     case "input": {
       const type = (a["type"] ?? "text").toLowerCase();
-      if (UNMAPPED_INPUTS[type]) return undefined;
+      if (Object.hasOwn(INPUT_PLACEHOLDERS, type)) return undefined;
       // HTML's missing/invalid value default for `@type` is Text, so a type nobody recognises is
       // a text field — and the box the capture measured is the one Chrome gave a text field.
-      const control = INPUT_KINDS[type] ?? "textField";
-      if (!INPUT_KINDS[type]) notes.push(`approximated: <input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`);
-      const spec: ControlSpec = { control, notes };
+      const control = Object.hasOwn(INPUT_CONTROLS, type) ? INPUT_CONTROLS[type]! : "textField";
+      if (!Object.hasOwn(INPUT_CONTROLS, type))
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "input",
+          `<input type="${type}"> is not a type HTML defines → text field, which is what the browser rendered`,
+        );
+      const spec: ControlSpec = { control, diagnostics };
+      if (/^(email|tel|url|number|search|password)$/.test(type))
+        spec.inputType = type as NonNullable<ControlNode["inputType"]>;
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
+        // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
+        if (control === "radio") {
+          if (a["name"]) spec.group = a["name"];
+          spec.value = a["value"] ?? "on";
+        }
       } else if (a["value"] !== undefined) spec.value = a["value"];
+      if (control === "colorPicker") spec.swatch = parseColor(a["value"]) ?? { r: 0, g: 0, b: 0, a: 1 };
       if (control === "slider") {
         const min = num(a["min"]) ?? 0;
         const max = num(a["max"]) ?? 100;
@@ -160,12 +172,20 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
       }
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (type === "file") {
-        const accept = (a["accept"] ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+        const accept = (a["accept"] ?? "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
         spec.files = { accept };
         if ("multiple" in a) spec.files.multiple = true;
         // Chrome draws the button caption and the chosen-file text in the input's shadow DOM,
         // which the snapshot cannot reach, so the generated button keeps the box and loses them.
-        notes.push('approximated: <input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach');
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "input: file",
+          '<input type="file"> → Button presenting .fileImporter; Chrome\'s "Choose file" caption and filename text are shadow DOM the capture cannot reach',
+        );
       }
       if (control === "button" && a["onclick"]) spec.action = a["onclick"];
       if (disabled) spec.disabled = true;
@@ -176,23 +196,9 @@ export function controlOf(n: LayoutNode): ControlSpec | undefined {
   }
 }
 
-/**
- * Why this element cannot be rendered natively, for the `unmapped:` note the report shows. The
- * caller attaches it to the placeholder box it emits in the element's measured frame.
- */
-export function unrenderableNote(n: LayoutNode): string | undefined {
-  const why = UNRENDERABLE[n.tag];
-  if (why) return `unmapped: <${n.tag}> content cannot be rendered natively — ${why}`;
-  if (n.tag !== "input") return undefined;
-  const type = (n.attrs["type"] ?? "text").toLowerCase();
-  const unmapped = UNMAPPED_INPUTS[type];
-  if (!unmapped) return undefined;
-  return `unmapped: <input type="${type}"> has no native equivalent — ${unmapped}; placeholder box only`;
-}
-
 /** A control's laid-out surroundings, as the generic container path produced them. */
 export interface ControlParts {
-  /** The box the generic path would have painted: frame, padding, style, notes. */
+  /** The box the generic path would have painted: frame, padding, style, diagnostics. */
   base: SemBase;
   /** Element children, in document order, already built. */
   children: Array<{ node: LayoutNode; sem: SemNode }>;
@@ -208,9 +214,9 @@ export interface ControlParts {
  * `content` in measured order (a `<summary>` becomes the disclosure's `label` instead).
  */
 export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNode {
-  const { control, notes, ...state } = spec;
+  const { control, diagnostics, ...state } = spec;
   const base = parts.base;
-  base.notes.push(...notes);
+  base.diagnostics.push(...diagnostics);
   let label: SemNode | undefined;
   const kids = parts.children.filter((c) => {
     if (control === "disclosure" && c.node.tag === "summary" && !label) {
@@ -220,7 +226,9 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
     return true;
   });
   // Document order is the DOM's; measured order is what the reader sees (CSS `order`, floats).
-  const content = [...kids.map((c) => c.sem), ...parts.texts].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const content = [...kids.map((c) => c.sem), ...parts.texts].sort(
+    (a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x,
+  );
   // A control whose whole content is its own text (a button's caption, a link's label): that text
   // is the element's line box, so it inherits the measured content box. Without it the control
   // would shrink to the glyphs and lose the browser's centring inside the box.
@@ -239,6 +247,45 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
   return node;
 }
 
+/** `<label>` ↔ control (HTML: `for` names an element id; otherwise the first control inside). */
+export interface LabelIndex {
+  /** Control element → its label's text (the label's text content without the control's own). */
+  text: Map<LayoutNode, string>;
+  /** Label element → the enabled toggle/radio element a tap on the label changes. */
+  activates: Map<LayoutNode, LayoutNode>;
+}
+
+export function labelIndex(root: LayoutNode): LabelIndex {
+  const byId = new Map<string, LayoutNode>();
+  const labels: LayoutNode[] = [];
+  const index = (n: LayoutNode) => {
+    const id = n.attrs["id"];
+    if (id && !byId.has(id)) byId.set(id, n);
+    if (n.tag === "label") labels.push(n);
+    n.children.forEach(index);
+  };
+  index(root);
+  const out: LabelIndex = { text: new Map(), activates: new Map() };
+  const firstControl = (n: LayoutNode): LayoutNode | undefined => {
+    for (const c of n.children) {
+      const hit = controlOf(c) ? c : firstControl(c);
+      if (hit) return hit;
+    }
+  };
+  const textOf = (n: LayoutNode, skip: LayoutNode): string =>
+    n === skip ? "" : n.tag === "#text" ? (n.text ?? "") : n.children.map((c) => textOf(c, skip)).join("");
+  for (const label of labels) {
+    const target = label.attrs["for"] !== undefined ? byId.get(label.attrs["for"]) : firstControl(label);
+    if (!target) continue;
+    // ponytail: first label wins when several name one control; HTML concatenates them. Join them if a design needs it.
+    const text = textOf(label, target).replace(/\s+/g, " ").trim();
+    if (text && !out.text.has(target)) out.text.set(target, text);
+    const spec = controlOf(target);
+    if ((spec?.control === "toggle" || spec?.control === "radio") && !spec.disabled) out.activates.set(label, target);
+  }
+  return out;
+}
+
 /** A URL with a scheme: the only `href` the generated view can hand to the system. */
 const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
@@ -252,7 +299,7 @@ function targetName(href: string, n: LayoutNode): string {
   const hash = href.indexOf("#");
   const fragment = hash < 0 ? "" : href.slice(hash + 1);
   const path = (hash < 0 ? href : href.slice(0, hash)).split("?")[0]!.split("/").filter(Boolean).pop() ?? "";
-  const name = fragment || path || textOf(n).trim() || n.id || "link";
+  const name = fragment || path || textContent(n).trim() || n.id || "link";
   return name.slice(0, 40);
 }
 
@@ -260,7 +307,14 @@ function targetName(href: string, n: LayoutNode): string {
  * HTML's `<meter>` gauge algorithm: the value is in its optimum band, one band away, or in the
  * worst one. `low`/`high` default to the ends of the range, `optimum` to its middle.
  */
-function meterLevel(value: number, min: number, max: number, low?: number, high?: number, optimum?: number): NonNullable<ControlNode["level"]> {
+function meterLevel(
+  value: number,
+  min: number,
+  max: number,
+  low?: number,
+  high?: number,
+  optimum?: number,
+): NonNullable<ControlNode["level"]> {
   const lo = Math.min(Math.max(low ?? min, min), max);
   const hi = Math.min(Math.max(high ?? max, lo), max);
   const opt = Math.min(Math.max(optimum ?? (min + max) / 2, min), max);
@@ -271,13 +325,14 @@ function meterLevel(value: number, min: number, max: number, low?: number, high?
 }
 
 /** Controls that paint text of their own (from `value`/`placeholder`) rather than child nodes. */
-const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = { textField: true, secureField: true, textEditor: true, picker: true, datePicker: true, stepper: true };
-
-/** Concatenated text of an element's subtree, as the snapshot laid it out. */
-function textOf(n: LayoutNode): string {
-  if (n.tag === "#text") return n.text ?? "";
-  return n.children.map(textOf).join("");
-}
+const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = {
+  textField: true,
+  secureField: true,
+  textEditor: true,
+  picker: true,
+  datePicker: true,
+  stepper: true,
+};
 
 /** `<option>` children, including those inside `<optgroup>`. */
 function optionsOf(n: LayoutNode): LayoutNode[] {

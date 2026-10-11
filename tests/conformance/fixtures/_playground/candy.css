@@ -1,0 +1,16 @@
+* { box-sizing: border-box; }
+body {margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#18152b;font-family:Arial,sans-serif;overflow:hidden;}
+.game {text-align:center;}
+.card {position:relative;width:180px;height:230px;cursor:pointer;perspective:800px;}
+.card-face {position:relative;width:100%;height:100%;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 25%,#fff 0%,#ffd86b 8%,transparent 30%),linear-gradient(145deg,#ffcf32,#ff8c00);border:5px solid #fff3a3;box-shadow:0 8px 0 #c45b00,0 15px 30px rgba(0,0,0,.45),inset 0 3px 5px rgba(255,255,255,.8);transform:translateY(0) scale(1);transition:transform .15s ease;overflow:hidden;}
+.card-face::before {content:"";position:absolute;top:-50%;left:-30%;width:160%;height:80%;background:rgba(255,255,255,.35);transform:rotate(-12deg);border-radius:50%;}
+.card-face::after {content:"";position:absolute;inset:0;background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,255,255,.8) 15%,rgba(255,255,255,0) 60%);opacity:0;pointer-events:none;}
+.icon {position:relative;z-index:2;font-size:70px;filter:drop-shadow(0 5px 3px rgba(0,0,0,.3));transform:scale(1);}
+.text {position:relative;z-index:2;margin-top:10px;font-size:26px;font-weight:900;color:white;text-shadow:0 3px 0 #c45b00,0 5px 8px rgba(0,0,0,.35);}
+.card.flash .card-face {animation:cardFlash .65s cubic-bezier(.2,1.5,.4,1);}
+.card.flash .card-face::after {animation:whiteFlash .5s ease-out;}
+.card.flash .icon {animation:iconPop .65s cubic-bezier(.2,1.7,.4,1);}
+@keyframes cardFlash {0%{transform:scale(1);filter:brightness(1);}15%{transform:scale(1.12) rotate(-2deg);filter:brightness(1.8);}30%{transform:scale(.94) rotate(2deg);filter:brightness(1.4);}50%{transform:scale(1.06);filter:brightness(1.15);}75%{transform:scale(.98);}100%{transform:scale(1);filter:brightness(1);}}
+@keyframes iconPop {0%{transform:scale(1);}20%{transform:scale(1.45) rotate(-8deg);}40%{transform:scale(.85) rotate(6deg);}65%{transform:scale(1.15);}100%{transform:scale(1);}}
+@keyframes whiteFlash {0%{opacity:0;}15%{opacity:1;}100%{opacity:0;}}
+p {margin-top:30px;color:#aaa;}

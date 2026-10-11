@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import type { Color } from "../../src/css/color.ts";
+import type { Color } from "../../src/model/values.ts";
 
 export function expectClose(c: Color | undefined, [r, g, b, a]: [number, number, number, number]): void {
   expect(c).toBeDefined();

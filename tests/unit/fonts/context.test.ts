@@ -6,22 +6,48 @@ import { bundledFamilies, metricsForFonts } from "../../../src/fonts/metadata.ts
 import type { FontPackage } from "../../../src/fonts/types.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 
-const styles = { display: "block", "font-family": "Test Face, sans-serif", "font-size": "20px", "line-height": "30px", color: "rgb(0, 0, 0)" };
+const styles = {
+  display: "block",
+  "font-family": "Test Face, sans-serif",
+  "font-size": "20px",
+  "line-height": "30px",
+  color: "rgb(0, 0, 0)",
+};
 const bounds = { x: 0, y: 0, w: 200, h: 60 };
 const doc: LayoutDoc = {
-  version: 1, source: "font-context", combo: { screen: "test", theme: "light", demoState: "normal" },
-  size: { w: 200, h: 60 }, dpr: 1, canvas: "white",
-  root: { tag: "p", attrs: {}, styles, bounds, children: [
-    { tag: "#text", attrs: {}, styles, bounds, text: "Two lines of text", children: [] },
-  ] },
+  version: 2,
+  source: "font-context",
+  combo: { screen: "test", theme: "light" },
+  size: { w: 200, h: 60 },
+  dpr: 1,
+  canvas: "white",
+  fonts: [],
+  root: {
+    tag: "p",
+    attrs: {},
+    styles,
+    bounds,
+    children: [{ tag: "#text", attrs: {}, styles, bounds, text: "Two lines of text", children: [] }],
+  },
 };
 
 function fontPackage(ascent: number): FontPackage {
   return {
-    faces: [{ family: "Test Face", file: "test.ttf", style: "normal", weight: [100, 900], axes: {},
-      metrics: { upem: 1000, ascent, descent: 200, lineGap: 0, useTypoMetrics: false },
-      converted: false, renamed: false }],
-    plist: "", swift: "", notes: [],
+    faces: [
+      {
+        family: "Test Face",
+        file: "test.ttf",
+        style: "normal",
+        weight: [100, 900],
+        axes: {},
+        metrics: { upem: 1000, ascent, descent: 200, lineGap: 0, useTypoMetrics: false },
+        converted: false,
+        renamed: false,
+      },
+    ],
+    assets: {},
+    plist: "",
+    notes: [],
   };
 }
 

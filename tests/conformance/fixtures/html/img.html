@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="img; picture; source; @src; @alt; @width; @height">
+<meta name="markswift-themes" content="light,dark">
+<title>img</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 12px; }
+.slot { width: 110px; height: 110px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+.slot img { width: 100%; height: 100%; display: block; }
+.cover { object-fit: cover; }
+.contain { object-fit: contain; }
+.fill { object-fit: fill; }
+.lbl { font-size: 11px; color: var(--muted); text-align: center; margin: 4px 0 0; }
+.hero { width: 100%; height: 120px; object-fit: cover; border-radius: 12px; display: block; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="fit">
+  <p class="cap">object-fit cover / contain / fill on a portrait image</p>
+  <div class="row">
+    <div><div class="slot"><img class="cover" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160' width='100' height='160' preserveAspectRatio='none'%3E %3Crect width='100' height='160' fill='%239333ea'/%3E%3Ccircle cx='50' cy='60' r='30' fill='%23fbbf24'/%3E%3C/svg%3E" alt="Purple poster, cover" width="100" height="160"></div><p class="lbl">cover</p></div>
+    <div><div class="slot"><img class="contain" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160' width='100' height='160' preserveAspectRatio='none'%3E %3Crect width='100' height='160' fill='%239333ea'/%3E%3Ccircle cx='50' cy='60' r='30' fill='%23fbbf24'/%3E%3C/svg%3E" alt="Purple poster, contain" width="100" height="160"></div><p class="lbl">contain</p></div>
+    <div><div class="slot"><img class="fill" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160' width='100' height='160' preserveAspectRatio='none'%3E %3Crect width='100' height='160' fill='%239333ea'/%3E%3Ccircle cx='50' cy='60' r='30' fill='%23fbbf24'/%3E%3C/svg%3E" alt="Purple poster, fill" width="100" height="160"></div><p class="lbl">fill</p></div>
+  </div>
+</section>
+<section class="v" id="picture">
+  <p class="cap">picture with a (min-width: 200px) source and img fallback</p>
+  <picture><source media="(min-width: 200px)" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTAwIiB3aWR0aD0iMTYwIiBoZWlnaHQ9IjEwMCI+IDxyZWN0IHdpZHRoPSIxNjAiIGhlaWdodD0iMTAwIiBmaWxsPSIjMGVhNWU5Ii8+PGNpcmNsZSBjeD0iMTIwIiBjeT0iMzAiIHI9IjE4IiBmaWxsPSIjZmRlMDQ3Ii8+IDxwYXRoIGQ9Ik0wIDEwMCBMNDAgNTUgTDcwIDgwIEwxMTAgNDAgTDE2MCAxMDAgWiIgZmlsbD0iIzE2YTM0YSIvPjwvc3ZnPg=="><img class="hero" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160' width='100' height='160' preserveAspectRatio='none'%3E %3Crect width='100' height='160' fill='%239333ea'/%3E%3Ccircle cx='50' cy='60' r='30' fill='%23fbbf24'/%3E%3C/svg%3E" alt="Landscape hero"></picture>
+</section>
+</main>
+</body>
+</html>

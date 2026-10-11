@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="background-size; background-size: cover; background-size: contain; background-size: 120px 80px; background-position; background-repeat; background-repeat: no-repeat; background-repeat: repeat">
+<meta name="markswift-themes" content="light,dark">
+<title>background-size</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tiles.two { grid-template-columns: repeat(2, 1fr); }
+.t { height: 84px; border-radius: 12px; display: flex; align-items: flex-end; padding: 6px 8px; box-sizing: border-box; color: #fff; font-size: 11px; line-height: 14px; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.t { background-color: var(--soft); color: var(--fg); text-shadow: none; }
+.img { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E %3Crect width='160' height='100' fill='%230ea5e9'/%3E%3Ccircle cx='120' cy='30' r='18' fill='%23fde047'/%3E %3Cpath d='M0 100 L40 55 L70 80 L110 40 L160 100 Z' fill='%2316a34a'/%3E%3Cpath d='M0 100 L30 75 L60 100 Z' fill='%2315803d'/%3E%3C/svg%3E"); }
+.cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
+.contain { background-size: contain; background-position: center; background-repeat: no-repeat; }
+.fixed { background-size: 120px 80px; background-position: right bottom; background-repeat: no-repeat; }
+.tileit { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='4' fill='%232563eb'/%3E%3C/svg%3E"); background-size: 20px 20px; background-repeat: repeat; }
+.pos { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='4' fill='%232563eb'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 90% 20%; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="bgs-sizes">
+  <p class="cap">cover / contain / 120px 80px at right bottom</p>
+  <div class="tiles"><div class="t img cover">cover</div><div class="t img contain">contain</div><div class="t img fixed">120x80</div></div>
+</section>
+<section class="v" id="bgs-repeat">
+  <p class="cap">repeat dots 20px / no-repeat at 90% 20%</p>
+  <div class="tiles two"><div class="t tileit">repeat</div><div class="t pos">position</div></div>
+</section>
+</main>
+</body>
+</html>

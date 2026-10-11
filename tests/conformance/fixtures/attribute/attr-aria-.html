@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="@aria-*; button; svg">
+<title>attr-aria-</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 12px; align-items: center; }
+.icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 0; background: var(--soft); display: inline-flex; align-items: center; justify-content: center; }
+.icon svg { width: 20px; height: 20px; fill: none; stroke: var(--accent); stroke-width: 2; }
+.deco { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #f97316, #db2777); }
+.bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar div { width: 65%; height: 100%; background: var(--accent); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="aria">
+  <p class="cap">aria-label icon button / aria-hidden decoration / role=progressbar with aria-valuenow</p>
+  <div class="row">
+    <button type="button" class="icon" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+    <div class="deco" aria-hidden="true"></div>
+    <div class="bar" role="progressbar" aria-label="Upload" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"><div></div></div>
+  </div>
+</section>
+</main>
+</body>
+</html>

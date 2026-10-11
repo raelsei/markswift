@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="float; float: left; float: right; clear">
+<title>float--left</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.thumb { width: 72px; height: 72px; border-radius: 12px; background: var(--accent); }
+.left { float: left; margin: 0 12px 4px 0; }
+.right { float: right; margin: 0 0 4px 12px; }
+.cf { clear: both; }
+p.t { margin: 0; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="float-left">
+  <p class="cap">float: left thumbnail with wrapping text</p>
+  <div class="thumb left"></div>
+  <p class="t">Floated boxes are taken out of normal flow and shifted to the left edge; the paragraph text wraps around the remaining width until it clears the float and returns to the full width.</p>
+  <div class="cf"></div>
+</section>
+<section class="v" id="float-right">
+  <p class="cap">float: right</p>
+  <div class="thumb right"></div>
+  <p class="t">The same thumbnail floated to the right; text flows along its left side and continues underneath once the float ends.</p>
+  <div class="cf"></div>
+</section>
+</main>
+</body>
+</html>

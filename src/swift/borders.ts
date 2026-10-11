@@ -1,5 +1,6 @@
 import type { SemNode, Edge, BorderStyle } from "../model/semantic.ts";
-import { colorExpr, num, type ColorCtx } from "./format.ts";
+import type { ColorCtx } from "./context.ts";
+import { colorExpr, dashPattern, num, strokeStyle } from "./format.ts";
 
 /**
  * Per-edge borders. An edge whose two corners are both square is a bar aligned to that edge —
@@ -49,10 +50,10 @@ export function borderSideModifiers(n: SemNode, ctx: ColorCtx): string[] {
         paint(`, band: ${num(2 / 3)}...1`);
         break;
       case "dashed":
-        paint(`, dash: [${num(g.width * 3)}, ${num(g.width * 2)}]`);
+        paint(`, dash: ${dashPattern("dashed", g.width)}`);
         break;
       case "dotted":
-        paint(`, dash: [0.01, ${num(g.width * 2)}], roundCaps: true`);
+        paint(`, dash: ${dashPattern("dotted", g.width)}, roundCaps: true`);
         break;
       default:
         paint("");
@@ -62,13 +63,18 @@ export function borderSideModifiers(n: SemNode, ctx: ColorCtx): string[] {
 }
 
 /** Square-cornered edges: a bar per edge, `double` two bars a third of the width each. */
-function straightBorderSides(edges: Array<[Edge | undefined, string, "height" | "width"]>, n: SemNode, ctx: ColorCtx): string[] {
+function straightBorderSides(
+  edges: Array<[Edge | undefined, string, "height" | "width"]>,
+  n: SemNode,
+  ctx: ColorCtx,
+): string[] {
   const m: string[] = [];
   for (const [e, edge, dim] of edges) {
     if (!e || e.width <= 0 || e.color.a <= 0) continue;
     const color = colorExpr(e.color, ctx, n.id);
     const overlay = (view: string) => `.overlay(alignment: ${edge}) { ${view} }`;
-    const bar = (thickness: number, inset = 0) => `Rectangle().fill(${color}).frame(${dim}: ${num(thickness)})${inset ? `.padding(${edge}, ${num(inset)})` : ""}`;
+    const bar = (thickness: number, inset = 0) =>
+      `Rectangle().fill(${color}).frame(${dim}: ${num(thickness)})${inset ? `.padding(${edge}, ${num(inset)})` : ""}`;
     switch (e.style) {
       case "double": {
         const t = e.width / 3;
@@ -76,10 +82,12 @@ function straightBorderSides(edges: Array<[Edge | undefined, string, "height" | 
         break;
       }
       case "dashed":
-        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: StrokeStyle(lineWidth: ${num(e.width)}, dash: [${num(e.width * 3)}, ${num(e.width * 2)}])).frame(${dim}: ${num(e.width)})`));
-        break;
       case "dotted":
-        m.push(overlay(`MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: StrokeStyle(lineWidth: ${num(e.width)}, lineCap: .round, dash: [0.01, ${num(e.width * 2)}])).frame(${dim}: ${num(e.width)})`));
+        m.push(
+          overlay(
+            `MarkswiftEdgeLine(edge: ${edge}).stroke(${color}, style: ${strokeStyle(e.width, e.style)}).frame(${dim}: ${num(e.width)})`,
+          ),
+        );
         break;
       default:
         m.push(overlay(bar(e.width)));

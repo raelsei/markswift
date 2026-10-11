@@ -1,0 +1,12 @@
+{
+  "name": "markswift-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run server/index.ts",
+    "build": "bun run build.ts",
+    "build:service": "bun run build-service.ts",
+    "api": "bun run server/public.ts",
+    "test": "bun test tests"
+  }
+}

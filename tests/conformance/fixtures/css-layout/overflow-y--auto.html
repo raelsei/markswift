@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="overflow-y; overflow-y: auto; overflow-y: hidden; overflow-y: scroll">
+<title>overflow-y--auto</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.list { height: 160px; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.list.hidden { overflow-y: hidden; }
+.list.scroll { overflow-y: scroll; }
+.item { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="oy-auto">
+  <p class="cap">overflow-y: auto, 160px tall, 8 rows</p>
+  <div class="list"><div class="item">Row 1</div><div class="item">Row 2</div><div class="item">Row 3</div><div class="item">Row 4</div><div class="item">Row 5</div><div class="item">Row 6</div><div class="item">Row 7</div><div class="item">Row 8</div></div>
+</section>
+<section class="v" id="oy-hidden">
+  <p class="cap">overflow-y: hidden</p>
+  <div class="list hidden"><div class="item">Row 1</div><div class="item">Row 2</div><div class="item">Row 3</div><div class="item">Row 4</div><div class="item">Row 5</div><div class="item">Row 6</div></div>
+</section>
+<section class="v" id="oy-scroll">
+  <p class="cap">overflow-y: scroll</p>
+  <div class="list scroll"><div class="item">Row 1</div><div class="item">Row 2</div><div class="item">Row 3</div><div class="item">Row 4</div><div class="item">Row 5</div><div class="item">Row 6</div></div>
+</section>
+</main>
+</body>
+</html>

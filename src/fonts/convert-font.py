@@ -2,7 +2,7 @@ import json, sys
 from fontTools.ttLib import TTFont
 
 src, dst, family, subfamily, want_rename = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == "1"
-# A render/generate replay must not rewrite head.modified to the wall clock.
+# Converting the same font twice must not rewrite head.modified to the wall clock.
 font = TTFont(src, recalcTimestamp=False)
 flavor = font.flavor
 name = font["name"]

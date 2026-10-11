@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>markswift smoke</title>
+    <style>
+      body { margin: 0; font-family: system-ui; color: #101418; }
+      main { width: 393px; padding: 16px; box-sizing: border-box; background: #f4f6fa; }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      p { margin: 0 0 16px; font-size: 15px; line-height: 20px; }
+      .row { display: flex; gap: 12px; }
+      .box { flex: 1; height: 64px; border-radius: 8px; }
+      #primary { background: #3b6cf6; }
+      .accent { background: #f6a23b; }
+      @media (prefers-color-scheme: dark) {
+        body { color: #e8ecf2; }
+        main { background: #0b0e13; }
+      }
+    </style>
+  </head>
+  <body>
+    <main data-markswift-root>
+      <h1>Hello</h1>
+      <p>Smoke page for the plain HTML adapter.</p>
+      <div class="row">
+        <div class="box" id="primary"></div>
+        <div class="box accent" data-testid="accent"></div>
+      </div>
+    </main>
+  </body>
+</html>

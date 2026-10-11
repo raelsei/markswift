@@ -1,7 +1,4 @@
-import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import type { FontFace } from "../model/layout.ts";
-
 
 /** Codepoints a face must cover to be the one worth bundling: Basic Latin. */
 export function coversLatin(range: string | undefined): boolean {
@@ -16,17 +13,17 @@ export function coversLatin(range: string | undefined): boolean {
   return false;
 }
 
-
-/** Bytes behind one `src` entry: the `data:` URL itself, or the file the capture saved. */
-export async function srcBytes(src: FontFace["src"][number], outDir: string): Promise<Uint8Array | undefined> {
+/** Bytes behind one `src` entry: the `data:` URL itself, or the captured bytes keyed by `src.file`. */
+export function srcBytes(
+  src: FontFace["src"][number],
+  sources: ReadonlyMap<string, Uint8Array>,
+): Uint8Array | undefined {
   const data = /^data:[^,]*;base64,(.*)$/s.exec(src.url);
   if (data) return Uint8Array.from(Buffer.from(data[1]!, "base64"));
-  if (src.url.startsWith("data:")) return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
-  if (!src.file) return undefined;
-  const f = Bun.file(resolve(outDir, src.file));
-  return (await f.exists()) ? new Uint8Array(await f.arrayBuffer()) : undefined;
+  if (src.url.startsWith("data:"))
+    return new TextEncoder().encode(decodeURIComponent(src.url.slice(src.url.indexOf(",") + 1)));
+  return src.file ? sources.get(src.file) : undefined;
 }
-
 
 /** OpenType weight class → the subfamily name a font file conventionally carries for it. */
 export const WEIGHT_SUBFAMILY: Record<number, string> = {
@@ -41,19 +38,25 @@ export const WEIGHT_SUBFAMILY: Record<number, string> = {
   900: "Black",
 };
 
-
 /** `Geist Variable` → `GeistVariable`; a file name and a PostScript name stem. */
-export function sanitize(family: string): string {
+function sanitize(family: string): string {
   return family.replace(/[^A-Za-z0-9]/g, "") || "Font";
 }
 
-
-/** Font files of a generated Swift dir, for the harness to bundle. */
-export async function packagedFontFiles(swiftDir: string): Promise<string[]> {
-  const dir = join(swiftDir, "Fonts");
-  try {
-    return (await readdir(dir)).filter((f) => /\.(ttf|otf)$/.test(f)).sort().map((f) => join(dir, f));
-  } catch {
-    return [];
-  }
+/**
+ * File stem for a packaged face, unique within one package case-insensitively (as `writeBundle` checks).
+ * `claimed` maps lower-cased stems already written to their CSS family. Returns `undefined` when this exact
+ * family already owns the stem: the same family+subfamily twice (italic and oblique, or a static 400 and a
+ * variable Regular) would register one PostScript name twice on iOS, so only the first can be bundled.
+ */
+export function fontFileStem(
+  family: string,
+  subfamily: string,
+  claimed: ReadonlyMap<string, string>,
+): string | undefined {
+  const base = sanitize(family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
+  const owner = claimed.get(base.toLowerCase());
+  if (owner === undefined) return base;
+  if (owner === family) return undefined;
+  for (let n = 2; ; n++) if (!claimed.has(`${base}-${n}`.toLowerCase())) return `${base}-${n}`;
 }

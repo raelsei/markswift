@@ -1,10 +1,24 @@
 /** Flow, float, stack and grid layout inference. */
-import { type SemBase, type CrossAlign, type Distribution, type StackNode, type TextRun, type TextNode, type Axis, type GridNode } from "../model/semantic.ts";
+import {
+  type SemBase,
+  type CrossAlign,
+  type Distribution,
+  type StackNode,
+  type TextRun,
+  type TextNode,
+  type Axis,
+  addDiagnostic,
+} from "../model/semantic.ts";
+import { type Rect } from "../model/layout.ts";
 import { px, round2 } from "../css/index.ts";
-import { type LayoutNode } from "../model/layout.ts";
 import { type AnalyzedChild } from "./context.ts";
-import { floating, lineTops, renders, hangsLeading, fillsWidthInside, unionRect } from "./geometry.ts";
+import { floating, lineTops, renders, hangsLeading, fillsWidthInside } from "./geometry.ts";
 import { finish } from "./node-base.ts";
+
+/** Horizontal overlap of more than 1px: a float over a box it shortens the line boxes of. */
+function overlapsX(a: Rect, b: Rect): boolean {
+  return Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1;
+}
 
 /**
  * A float's neighbour, split where its lines clear the float.
@@ -20,13 +34,18 @@ import { finish } from "./node-base.ts";
  * lifted lines — or undefined when nothing clears the float or the measured division cannot be
  * split (mixed inline styles, a clamped or truncating box, a division that is not the measured one).
  */
-function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlign, distribution: Distribution): StackNode | undefined {
+function liftClearedText(
+  base: SemBase,
+  items: AnalyzedChild[],
+  align: CrossAlign,
+  distribution: Distribution,
+): StackNode | undefined {
   for (const it of items) {
     const sem = it.sem;
     if (floating(it.node) || sem.kind !== "text" || sem.lineLimit !== undefined || sem.truncate) continue;
     // Only a box the float overlaps had its lines shortened instead of its width: a flex item's
     // computed `float` survives even though flex layout ignores it, and it sits clear of its row.
-    const over = items.filter((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, sem.frame.x + sem.frame.w) - Math.max(f.sem.frame.x, sem.frame.x) > 1);
+    const over = items.filter((f) => floating(f.node) && overlapsX(f.sem.frame, sem.frame));
     // Where each line after the first begins, as a (run, offset into its text) pair: a run's
     // `breaks` are the boundaries inside it, and the runs are in document order.
     const bounds: Array<[number, number]> = [];
@@ -58,7 +77,13 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
     const headRuns = [...sem.runs.slice(0, ri), head];
     const tailRuns = [tail, ...sem.runs.slice(ri + 1)];
     const shapedH = round2(pt + cut * pitch);
-    const shaped: TextNode = { ...sem, runs: headRuns, frame: { ...sem.frame, h: shapedH }, padding: [pt, pr, 0, pl], lines: cut };
+    const shaped: TextNode = {
+      ...sem,
+      runs: headRuns,
+      frame: { ...sem.frame, h: shapedH },
+      padding: [pt, pr, 0, pl],
+      lines: cut,
+    };
     const cleared: TextNode = {
       ...sem,
       id: sem.id ? `${sem.id}#cleared` : "",
@@ -66,15 +91,35 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
       frame: { ...sem.frame, y: round2(sem.frame.y + shapedH), h: round2(sem.frame.h - shapedH) },
       padding: [0, pr, pb, pl],
       lines: tops.length - cut,
-      notes: [...sem.notes],
+      diagnostics: [...sem.diagnostics],
       overlays: [],
     };
     const rowItems: AnalyzedChild[] = items.map((i) => (i === it ? { node: i.node, sem: shaped } : i));
     const bottom = Math.max(...rowItems.map((i) => i.sem.frame.y + i.sem.frame.h));
-    const rowBase: SemBase = { ...base, id: base.id ? `${base.id}/beside` : "", frame: { ...base.frame, h: round2(bottom - base.frame.y) }, notes: [], overlays: [] };
+    const rowBase: SemBase = {
+      ...base,
+      id: base.id ? `${base.id}/beside` : "",
+      frame: { ...base.frame, h: round2(bottom - base.frame.y) },
+      diagnostics: [],
+      overlays: [],
+    };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
-    const outer = stackOf(base, "v", [{ node: it.node, sem: row }, { node: it.node, sem: cleared }], "stretch", "start");
-    outer.notes.push("approximated: float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere");
+    const outer = stackOf(
+      base,
+      "v",
+      [
+        { node: it.node, sem: row },
+        { node: it.node, sem: cleared },
+      ],
+      "stretch",
+      "start",
+    );
+    addDiagnostic(
+      outer.diagnostics,
+      "approximated",
+      "float",
+      "float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere",
+    );
     return outer;
   }
   return undefined;
@@ -86,7 +131,14 @@ function liftClearedText(base: SemBase, items: AnalyzedChild[], align: CrossAlig
  * box (the browser shortens line boxes instead of the block), so the gap is the float's margin;
  * a negative `margin-top` really does overlap, and negative spacing reproduces it.
  */
-export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: CrossAlign, distribution: Distribution): StackNode {
+export function stackOf(
+  base: SemBase,
+  axis: Axis,
+  all: AnalyzedChild[],
+  align: CrossAlign,
+  distribution: Distribution,
+  flex = false,
+): StackNode {
   const [pt, , , pl] = base.padding;
   const items = all.filter((i) => renders(i.node) && !hangsLeading(i.sem.frame, base.frame.x + pl));
   // A row whose text clears the float part-way down is two blocks, not one (see `liftClearedText`).
@@ -98,18 +150,41 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   for (let i = 1; i < items.length; i++) {
     const a = items[i - 1]!;
     const b = items[i]!;
-    let g = axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
+    let g =
+      axis === "h" ? b.sem.frame.x - (a.sem.frame.x + a.sem.frame.w) : b.sem.frame.y - (a.sem.frame.y + a.sem.frame.h);
     if (g < -0.5) {
       if (axis === "h" && a.node.styles["float"] === "left") g = Math.max(0, px(a.node.styles["margin-right"]));
       else if (axis === "h" && b.node.styles["float"] === "right") g = Math.max(0, px(b.node.styles["margin-left"]));
       else if (axis === "v" && px(b.node.styles["margin-top"]) < -0.5) {
         // A card lifted onto a hero: the overlap is the design, not an approximation.
       } else {
-        base.notes.push(`approximated: children overlap by ${round2(-g)}px`);
+        addDiagnostic(
+          base.diagnostics,
+          "approximated",
+          axis === "h" ? "margin-left" : "margin-top",
+          `children overlap by ${round2(-g)}px`,
+        );
         g = 0;
       }
     } else g = Math.max(0, g);
     gaps.push(round2(g));
+  }
+  // `margin: auto` on a flex item takes the free space (`ml-auto`, `mt-auto`). Computed margins
+  // are used px, so the capture keeps the authored `auto` (PreferredSize.autoMargins). Such a gap
+  // becomes a Spacer whose minimum is what the margin did not add. Only with free space to take:
+  // in block flow an auto vertical margin is 0, and a hugging box has none.
+  const [before, after] = axis === "h" ? (["left", "right"] as const) : (["top", "bottom"] as const);
+  const autoMargin = (it: AnalyzedChild | undefined, side: "top" | "right" | "bottom" | "left") =>
+    it?.node.preferredSize?.autoMargins?.includes(side) ? px(it.node.styles[`margin-${side}`]) : undefined;
+  const autoGaps: number[] = [];
+  if (flex && (axis === "h" ? base.width : base.height).kind !== "hug") {
+    for (let i = 0; i <= items.length; i++) {
+      const a = autoMargin(items[i - 1], after),
+        b = autoMargin(items[i], before);
+      if (a === undefined && b === undefined) continue;
+      autoGaps.push(i);
+      if (i > 0 && i < items.length) gaps[i - 1] = round2(Math.max(0, gaps[i - 1]! - (a ?? 0) - (b ?? 0)));
+    }
   }
   const uniform = gaps.every((g) => Math.abs(g - (gaps[0] ?? 0)) <= 0.5);
   const spacing = uniform ? round2(gaps[0] ?? 0) : gaps;
@@ -127,7 +202,7 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
     const band = round2(base.frame.w - base.padding[1] - pl - taken);
     for (const it of items) {
       if (floating(it.node) || it.sem.width.kind !== "fill" || band <= 0 || band >= it.sem.frame.w) continue;
-      const shaped = items.some((f) => floating(f.node) && Math.min(f.sem.frame.x + f.sem.frame.w, it.sem.frame.x + it.sem.frame.w) - Math.max(f.sem.frame.x, it.sem.frame.x) > 1);
+      const shaped = items.some((f) => floating(f.node) && overlapsX(f.sem.frame, it.sem.frame));
       if (shaped) it.sem.frame = { ...it.sem.frame, w: band };
     }
   }
@@ -135,7 +210,10 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   // A hugging child that still holds a filling descendant stays greedy in SwiftUI (an
   // unconstrained container passes `maxWidth: .infinity` up), so a row would share its width
   // out instead of packing the measured ones. The browser already shrank it to fit: pin that.
-  if (axis === "h") for (const it of items) if (it.sem.width.kind === "hug" && fillsWidthInside(it.sem)) it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w) };
+  if (axis === "h")
+    for (const it of items)
+      if (it.sem.width.kind === "hug" && fillsWidthInside(it.sem))
+        it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w) };
 
   let leadInset = 0;
   if (items[0]) {
@@ -147,8 +225,19 @@ export function stackOf(base: SemBase, axis: Axis, all: AnalyzedChild[], align: 
   // A leading gap is only meaningful when children are packed at the start or the distribution
   // leaves outer gaps (around/evenly); for center/end/between it is the distribution's doing.
   if (distribution === "center" || distribution === "end" || distribution === "between") leadInset = 0;
+  if (autoGaps.includes(0)) leadInset = round2(Math.max(0, leadInset - (autoMargin(items[0], before) ?? 0)));
 
-  return { ...base, kind: "stack", axis, spacing, align, distribution, leadInset, children: items.map((i) => i.sem) };
+  return {
+    ...base,
+    kind: "stack",
+    axis,
+    spacing,
+    align,
+    distribution,
+    leadInset,
+    ...(autoGaps.length ? { autoGaps } : {}),
+    children: items.map((i) => i.sem),
+  };
 }
 
 /**
@@ -166,7 +255,10 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
     const f = it.sem.frame;
     const line = lines[lines.length - 1];
     const overlap = Math.min(bottom, f.y + f.h) - Math.max(top, f.y);
-    const clear = !line || floating(it.node) || line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
+    const clear =
+      !line ||
+      floating(it.node) ||
+      line.every((o) => floating(o.node) || f.x >= o.sem.frame.x + o.sem.frame.w - 1 || f.x + f.w <= o.sem.frame.x + 1);
     if (line && clear && overlap > 1 && overlap >= Math.min(f.h, bottom - top) / 2) {
       line.push(it);
       bottom = Math.max(bottom, f.y + f.h);
@@ -178,38 +270,4 @@ export function linesOf(all: AnalyzedChild[]): AnalyzedChild[][] {
   }
   for (const l of lines) l.sort((a, b) => a.sem.frame.x - b.sem.frame.x);
   return lines;
-}
-
-/**
- * Grid from the snapshot: columns are the distinct cell x positions, spacing the measured
- * gaps (falling back to the computed `gap`). Cells get their measured width so the Grid lays
- * tracks out as the browser did; equal tracks that fill the row are `fr`-like and fill instead.
- */
-export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[], declared: Record<string, string>): GridNode {
-  const items = all.filter((i) => renders(i.node));
-  const lines = linesOf(items);
-  const xs: number[] = [];
-  for (const it of items) if (!xs.some((x) => Math.abs(x - it.sem.frame.x) <= 0.5)) xs.push(it.sem.frame.x);
-  const columns = Math.max(1, xs.length);
-  const hGaps: number[] = [];
-  const vGaps: number[] = [];
-  for (const line of lines) for (let i = 1; i < line.length; i++) hGaps.push(line[i]!.sem.frame.x - (line[i - 1]!.sem.frame.x + line[i - 1]!.sem.frame.w));
-  for (let i = 1; i < lines.length; i++) {
-    const a = lines[i - 1]!.map((it) => it.sem.frame).reduce(unionRect);
-    vGaps.push(lines[i]![0]!.sem.frame.y - (a.y + a.h));
-  }
-  const hSpacing = round2(hGaps.length ? Math.max(0, Math.min(...hGaps)) : px(n.styles["column-gap"]));
-  const vSpacing = round2(vGaps.length ? Math.max(0, Math.min(...vGaps)) : px(n.styles["row-gap"]));
-  const contentW = n.bounds.w - base.padding[1] - base.padding[3];
-  const widths = items.map((it) => it.sem.frame.w);
-  const equal = widths.every((w) => Math.abs(w - widths[0]!) <= 0.5);
-  const fills = equal && Math.abs(columns * widths[0]! + (columns - 1) * hSpacing - contentW) <= 1;
-  const children = lines.flat().map((it) => {
-    if (it.sem.width.kind !== "fill") it.sem.width = fills ? { kind: "fill" } : { kind: "fixed", px: round2(it.sem.frame.w) };
-    return it.sem;
-  });
-  const tpl = declared["grid-template-columns"] ?? "";
-  if (/auto-fit|auto-fill/.test(tpl)) base.notes.push("approximated: grid auto-fit → fixed column count from the snapshot");
-  else base.notes.push("approximated: grid mapped to fixed-column Grid");
-  return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
 }

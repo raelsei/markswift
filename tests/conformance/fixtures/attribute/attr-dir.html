@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="@dir; bdo; bdi">
+<title>attr-dir</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+p.s { margin: 0 0 6px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.row { display: flex; gap: 8px; }
+.b { background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="dir-text"><p class="cap">dir="rtl" paragraph, dir="ltr" default, bdo reversed, bdi isolated</p><p class="s" dir="rtl">Right-to-left paragraph text.</p><p class="s" dir="ltr">Left-to-right paragraph text.</p><p class="s">Normal with <bdo dir="rtl">reversed run</bdo> and <bdi>isolated</bdi>.</p></section>
+<section class="v" id="dir-flex"><p class="cap">dir="rtl" on a flex row</p><div class="row" dir="rtl"><span class="b">1</span><span class="b">2</span><span class="b">3</span></div></section>
+</main>
+</body>
+</html>

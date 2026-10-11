@@ -1,23 +1,14 @@
-/**
- * Runtime helpers the emitted controls call; appended to MarkswiftRuntime.swift — always as the
- * tail of that file, never inside another declaration, so the import below stays at file scope.
- * It is first in the block because that is the nearest thing to the file's import list this
- * module owns; Swift accepts an import declaration anywhere at file scope, and `bun run
- * generate` typechecks the file every run, so a future append cannot break it silently.
- */
-
-export const CONTROL_RUNTIME = `
-// \`UTType\` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
+// `UTType` (the file importer's content types) is not re-exported by SwiftUI or Foundation.
 import UniformTypeIdentifiers
 
-/// A URL from a design's \`href\`. Anything the design left unresolvable (an in-page anchor, a
-/// relative path, a malformed URL) becomes \`about:blank\` rather than trapping at runtime.
+/// A URL from a design's `href`. Anything the design left unresolvable (an in-page anchor, a
+/// relative path, a malformed URL) becomes `about:blank` rather than trapping at runtime.
 nonisolated func markswiftURL(_ s: String) -> URL {
     URL(string: s) ?? URL(string: "about:blank")!
 }
 
-/// The types an \`<input type="file" accept>\` list names. The tokens are the attribute's own
-/// forms — \`.png\`, \`image/png\`, \`image/*\` — and only the running system knows what they mean,
+/// The types an `<input type="file" accept>` list names. The tokens are the attribute's own
+/// forms — `.png`, `image/png`, `image/*` — and only the running system knows what they mean,
 /// so they are resolved here rather than at generation time. A token the system does not
 /// recognise is dropped, and a list that resolves to nothing means "any file".
 nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
@@ -44,6 +35,34 @@ nonisolated func markswiftContentTypes(_ accept: String) -> [UTType] {
     return out.isEmpty ? [.item] : out
 }
 
+/// One radio of a group: on when the group's selection is this radio's tag; turning it on selects it.
+extension Binding where Value == String {
+    func markswiftSelects(_ tag: String) -> Binding<Bool> {
+        Binding<Bool>(get: { wrappedValue == tag }, set: { if $0 { wrappedValue = tag } })
+    }
+}
+
+/// The keyboard, autofill type and capitalisation iOS Safari gives the same `<input type>`.
+/// These modifiers exist only on iOS; on other platforms (the macOS render gate) the field is unchanged.
+nonisolated enum MarkswiftInputTraits: Sendable { case email, tel, url, number, search, password }
+
+extension View {
+    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits) -> some View {
+        #if os(iOS)
+        switch traits {
+        case .email: keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+        case .tel: keyboardType(.phonePad).textContentType(.telephoneNumber)
+        case .url: keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+        case .number: keyboardType(.decimalPad)
+        case .search: keyboardType(.webSearch).submitLabel(.search)
+        case .password: textContentType(.password)
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
 nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
@@ -64,8 +83,8 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
-        let face = on ? tint : Color(uiColor: .systemBackground)
-        let line = on ? tint : Color(uiColor: .systemGray2)
+        let face = on ? tint : Color.markswiftSystemBackground
+        let line = on ? tint : Color.markswiftSystemGray2
         switch mark {
         case .check:
             RoundedRectangle(cornerRadius: 2, style: .circular)
@@ -85,7 +104,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
                 .resizable()
                 .scaledToFit()
                 .fontWeight(.bold)
-                .foregroundStyle(Color(uiColor: .systemBackground))
+                .foregroundStyle(Color.markswiftSystemBackground)
                 .padding(2)
         case .dot:
             Circle().fill(tint).padding(3)
@@ -93,7 +112,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
     }
 }
 
-/// The bar a browser paints for \`<progress>\`/\`<meter>\`: a rounded track with the completed part
+/// The bar a browser paints for `<progress>`/`<meter>`: a rounded track with the completed part
 /// filled, centred in the element's box.
 nonisolated struct MarkswiftBar: View {
     let fraction: Double
@@ -139,7 +158,7 @@ nonisolated struct MarkswiftBarGaugeStyle: GaugeStyle {
 }
 
 /// A range input as the browser paints it: a half-height track filled up to the value, with a
-/// round thumb on it. \`ImageRenderer\` cannot rasterise a live \`Slider\`, so the fidelity views
+/// round thumb on it. `ImageRenderer` cannot rasterise a live `Slider`, so the fidelity views
 /// use this to verify the design's geometry.
 nonisolated struct MarkswiftSliderTrack: View {
     let fraction: Double
@@ -163,4 +182,3 @@ nonisolated struct MarkswiftSliderTrack: View {
         }
     }
 }
-`;

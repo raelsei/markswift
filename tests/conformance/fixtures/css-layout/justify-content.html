@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="justify-content; justify-content: space-between; justify-content: space-around; justify-content: space-evenly">
+<title>justify-content</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.row { display: flex; }
+.between { justify-content: space-between; }
+.around { justify-content: space-around; }
+.evenly { justify-content: space-evenly; }
+.center { justify-content: center; gap: 8px; }
+.end { justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="jc-between"><p class="cap">space-between</p><div class="frame row between"><div class="b">A</div><div class="b">B</div><div class="b">C</div></div></section>
+<section class="v" id="jc-around"><p class="cap">space-around</p><div class="frame row around"><div class="b">A</div><div class="b">B</div><div class="b">C</div></div></section>
+<section class="v" id="jc-evenly"><p class="cap">space-evenly</p><div class="frame row evenly"><div class="b">A</div><div class="b">B</div><div class="b">C</div></div></section>
+<section class="v" id="jc-center"><p class="cap">center, gap 8</p><div class="frame row center"><div class="b">A</div><div class="b">B</div><div class="b">C</div></div></section>
+<section class="v" id="jc-end"><p class="cap">flex-end, gap 8</p><div class="frame row end"><div class="b">A</div><div class="b">B</div><div class="b">C</div></div></section>
+</main>
+</body>
+</html>

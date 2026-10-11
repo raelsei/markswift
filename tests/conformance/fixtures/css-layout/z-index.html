@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="z-index; isolation">
+<title>z-index</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.stage { position: relative; height: 140px; }
+.card { position: absolute; width: 140px; height: 90px; border-radius: 12px; color: #fff; padding: 8px; box-sizing: border-box; font-weight: 600; }
+.c1 { left: 0; top: 0; background: #2563eb; z-index: 3; }
+.c2 { left: 60px; top: 24px; background: #16a34a; z-index: 1; }
+.c3 { left: 120px; top: 48px; background: #dc2626; z-index: 2; }
+.iso { isolation: isolate; position: relative; }
+.iso .c1 { z-index: 1; }
+.iso .c2 { z-index: 2; }
+.iso .c3 { z-index: 3; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="z-order">
+  <p class="cap">z-index 3 / 1 / 2: blue on top, red middle, green bottom</p>
+  <div class="stage"><div class="card c1">z 3</div><div class="card c2">z 1</div><div class="card c3">z 2</div></div>
+</section>
+<section class="v" id="z-isolated">
+  <p class="cap">isolation: isolate with z-index 1 / 2 / 3 (document order wins inside)</p>
+  <div class="stage iso"><div class="card c1">z 1</div><div class="card c2">z 2</div><div class="card c3">z 3</div></div>
+</section>
+</main>
+</body>
+</html>

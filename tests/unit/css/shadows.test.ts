@@ -1,7 +1,6 @@
 import { expectClose } from "../../helpers/color.ts";
 import { describe, expect, test } from "bun:test";
-import { parseShadows } from "../../../src/css/shadows.ts";
-
+import { parseShadows } from "../../../src/css/index.ts";
 
 describe("parseShadows", () => {
   test("accepts modern colors", () => {

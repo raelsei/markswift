@@ -1,5 +1,6 @@
 /** SVG presentation attributes, inherited values and references. */
 import { type LayoutNode } from "../../model/layout.ts";
+import { addDiagnostic } from "../../model/semantic.ts";
 import { parseDeclared } from "../../css/index.ts";
 import { type SvgScope, type SvgContext } from "./context.ts";
 
@@ -31,23 +32,40 @@ export function inherit(parent: Record<string, string>, own: Record<string, stri
 }
 
 /** Presentation value: computed style first, attribute fallback; inside a `<use>` instance `currentColor` follows the use element. */
-export function styleProp(c: LayoutNode, attrs: Record<string, string>, k: string, scope: SvgScope): string | undefined {
+export function styleProp(
+  c: LayoutNode,
+  attrs: Record<string, string>,
+  k: string,
+  scope: SvgScope,
+): string | undefined {
   const declared = attrs[k];
   if (scope.useColor && declared === "currentColor") return scope.useColor;
-  return c.styles[k] ?? declared;
+  const v = c.styles[k] ?? declared;
+  // Markup-only SVG has no computed style: `currentColor` is the inherited `color` attribute, and
+  // an SVG document's initial colour is black. Captured inline SVG never reaches this (computed values are resolved).
+  return v?.toLowerCase() === "currentcolor" ? (attrs["color"] ?? "black") : v;
 }
 
 /** `url(#id)` target from an attribute or the inline `style` (non-whitelisted properties such as `clip-path`/`mask`). */
-export function reference(c: LayoutNode, attrs: Record<string, string>, k: string, ctx: SvgContext): LayoutNode | undefined {
+export function reference(
+  c: LayoutNode,
+  attrs: Record<string, string>,
+  k: string,
+  ctx: SvgContext,
+): LayoutNode | undefined {
   const raw = attrs[k] ?? parseDeclared(c.attrs["style"])[k];
   const m = raw && /^url\(["']?#([^"')]+)["']?\)/.exec(raw);
-  if (m && !ctx.ids[m[1]!]) ctx.notes.push(`unmapped: svg ${k} url(#${m[1]}) (target not in document)`);
+  if (m && !ctx.ids[m[1]!])
+    addDiagnostic(ctx.diagnostics, "unmapped", "svg", `svg ${k} url(#${m[1]}) (target not in document)`);
   return m ? ctx.ids[m[1]!] : undefined;
 }
 
 export function parseDash(s: string | undefined): number[] {
   if (!s || s === "none") return [];
-  const v = s.split(/[\s,]+/).map(parseFloat).filter((x) => Number.isFinite(x) && x >= 0);
+  const v = s
+    .split(/[\s,]+/)
+    .map(parseFloat)
+    .filter((x) => Number.isFinite(x) && x >= 0);
   return v.some((x) => x > 0) ? v : [];
 }
 

@@ -1,12 +1,22 @@
 /**
  * Layout IR — what the browser measured. Target-agnostic, one tree per
- * (screen, theme, state) combination. Produced from CDP DOMSnapshot; consumed
+ * (screen, theme) combination. Produced from CDP DOMSnapshot; consumed
  * by the semantic inference pass. Nothing here knows about SwiftUI.
  */
 import { z } from "zod";
 
 export const Rect = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export type Rect = z.infer<typeof Rect>;
+/** CSS Typed OM preserves auto/percent/px intent before used values become measured pixels. */
+export const PreferredSize = z.object({
+  width: z.string(),
+  height: z.string(),
+  /** Typed-OM computed insets of an absolute/fixed box: `auto` survives here (DOMSnapshot reports used px), and says which edge the author anchored. */
+  insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
+  /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
+  autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
+});
+export type PreferredSize = z.infer<typeof PreferredSize>;
 
 /**
  * One laid-out DOM node. `display: contents` elements are not here — their
@@ -14,7 +24,7 @@ export type Rect = z.infer<typeof Rect>;
  * are lost). `visibility: hidden` nodes are present with their box.
  */
 export interface LayoutNode {
-  /** Stable node identity (`#id`, `data-markswift`, legacy `data-h2s`, other identity attributes, or element-index path); absent for text nodes. */
+  /** Stable node identity (`#id`, `data-markswift`, other identity attributes, or element-index path); absent for text nodes. */
   id?: string;
   /**
    * Lower-case tag name, `#text`, or a pseudo-element: `::before` / `::after` /
@@ -23,14 +33,18 @@ export interface LayoutNode {
    * quotes, list markers). `::after` follows the element's real children.
    */
   tag: string;
-  /**
-   * Raw attributes. `<img>` additionally carries `data-h2s-src` when the browser
-   * loaded a `srcset`/`<picture>` candidate other than `src`, spelled as
-   * authored; consumers read `attrs["data-h2s-src"] ?? attrs["src"]`.
-   */
+  /** Raw attributes. */
   attrs: Record<string, string>;
+  /**
+   * `<img>` only: the source the browser loaded when it chose a `srcset`/`<picture>` candidate
+   * other than `src` (spelled as authored), or the inlined data URL. Consumers read
+   * `currentSrc ?? attrs["src"]`.
+   */
+  currentSrc?: string;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
+  /** Authored/cascaded size intent, independent of measured bounds; absent for text and pseudo-element nodes. */
+  preferredSize?: PreferredSize;
   /** Box relative to the capture root, CSS px. */
   bounds: Rect;
   /** Laid-out text for `#text` nodes. */
@@ -52,7 +66,9 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     id: z.string().optional(),
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
+    currentSrc: z.string().optional(),
     styles: z.record(z.string(), z.string()),
+    preferredSize: PreferredSize.optional(),
     bounds: Rect,
     text: z.string().optional(),
     lines: z.array(z.object({ bounds: Rect, start: z.number(), length: z.number() })).optional(),
@@ -63,9 +79,9 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
 
 /**
  * One `@font-face` rule the captured page declared, as the browser resolved it. Collected at
- * capture time (`render/browser.ts`): the CSS rules give family, axis ranges and `src`, and
+ * capture time (`browser/fonts.ts`): the CSS rules give family, axis ranges and `src`, and
  * `document.fonts` says which of them actually loaded. Target-agnostic — a webfont is an input
- * fact, not a SwiftUI decision; `emit/fonts.ts` turns these into bundled font files.
+ * fact, not a SwiftUI decision; `fonts/package.ts` turns these into bundled font files.
  */
 export const FontFace = z.object({
   /** Family name as authored, unquoted — the name `font-family` declarations refer to. */
@@ -81,8 +97,8 @@ export const FontFace = z.object({
    * byte-identical across renders. `local()` entries are dropped: a face that only names an
    * installed font has nothing to bundle.
    *
-   * `file` is an out-dir-relative path to the bytes, written once per out dir under `_fonts/`
-   * and named by content hash. It exists because `url` alone is not a durable reference: a
+   * `file` keys the face's bytes in the capture's `fontFiles` (content-hash name under the
+   * `_fonts/` prefix). It exists because `url` alone is not a durable reference: a
    * design whose fonts are local files is served from an ephemeral port, so the URL is dead the
    * moment the capture outlives the run. Absent for a `data:` URL (the URL *is* the bytes) and
    * for a remote face that could not be read at capture time.
@@ -96,42 +112,33 @@ export type FontFace = z.infer<typeof FontFace>;
 export const Combo = z.object({
   screen: z.string(),
   theme: z.enum(["light", "dark"]),
-  demoState: z.string().default("normal"),
 });
 export type Combo = z.infer<typeof Combo>;
+export type Theme = Combo["theme"];
 
 export const LayoutDoc = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   source: z.string(),
   combo: Combo,
   /** CSS px size of the capture root (the phone's content area). */
   size: z.object({ w: z.number(), h: z.number() }),
+  /** The browser viewport in capture-root coordinates (the root's top-left is 0,0): what `100vh` and `position: fixed` resolved against. Absent in hand-built docs. */
+  viewport: Rect.optional(),
   dpr: z.number(),
   /** Effective background behind the root (computed color string). */
   canvas: z.string().default("rgb(255, 255, 255)"),
-  /**
-   * `@font-face` rules of the page, deduplicated — the faces the browser resolved, in
-   * declaration order. Three states, and they are **not** interchangeable; `undefined` must
-   * never be allowed to collapse into `[]`:
-   *
-   * - **absent** — a capture taken before this field existed. Nobody looked, so nothing may be
-   *   concluded: consumers must reproduce their pre-field behaviour. The committed Vacu corpus
-   *   is the regression gate and `research/output/vacu-v1` the re-sync corpus, so a stored capture has to
-   *   keep producing the output it was measured with. Treating absent as "no webfonts" silently
-   *   swapped every custom face in Vacu for a system design once already.
-   * - **`[]`** — the capture looked and the document declared no `@font-face`. A named family is
-   *   then genuinely unbundled and the substitution is reported.
-   * - **non-empty** — decide per face, from the bytes behind its `src`.
-   */
-  fonts: z.array(FontFace).optional(),
+  /** `@font-face` rules of the page, deduplicated — the faces the browser resolved, in declaration order. */
+  fonts: z.array(FontFace),
   root: LayoutNode,
 });
 export type LayoutDoc = z.infer<typeof LayoutDoc>;
 
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
 export const STYLE_WHITELIST = [
+  "align-content",
   "align-items",
   "align-self",
+  "animation-name",
   "aspect-ratio",
   "backdrop-filter",
   "background-blend-mode",
@@ -202,6 +209,7 @@ export const STYLE_WHITELIST = [
   "min-width",
   "mix-blend-mode",
   "object-fit",
+  "object-position",
   "opacity",
   "order",
   "outline-color",
@@ -217,7 +225,9 @@ export const STYLE_WHITELIST = [
   "padding-top",
   "position",
   "right",
+  "rotate",
   "row-gap",
+  "scale",
   "stroke",
   "stroke-dasharray",
   "stroke-dashoffset",
@@ -237,6 +247,7 @@ export const STYLE_WHITELIST = [
   "top",
   "transform",
   "transform-origin",
+  "translate",
   "vertical-align",
   "visibility",
   "-webkit-line-clamp",

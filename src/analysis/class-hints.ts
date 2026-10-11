@@ -2,9 +2,6 @@
  * Colour names a design put in a class list — the utility-framework counterpart of
  * `var(--token)` in an inline style. Pure and input-agnostic: a page with no colour
  * utilities yields nothing, so the inference pass can always ask.
- *
- * Lives in `ir/` rather than in the Tailwind preparation because the inference pass must not
- * depend on an adapter; the adapter re-exports it for its own reporting.
  */
 
 /** Utility prefixes whose value is a colour. */
@@ -40,29 +37,98 @@ const COLOR_UTILS = [
  * to the `border`/`divide` prefix and reports the side as if it were a colour name.
  */
 const NOT_A_COLOR: Record<string, true> = {
-  xs: true, sm: true, base: true, md: true, lg: true, xl: true, "2xl": true, "3xl": true, "4xl": true,
-  "5xl": true, "6xl": true, "7xl": true, "8xl": true, "9xl": true, none: true, inherit: true, auto: true,
-  solid: true, dashed: true, dotted: true, double: true, hidden: true, current: true, transparent: true,
-  left: true, center: true, right: true, justify: true, start: true, end: true, wrap: true, nowrap: true,
-  balance: true, pretty: true, ellipsis: true, clip: true, truncate: true, collapse: true, separate: true,
-  inner: true, reverse: true,
-  x: true, y: true, t: true, r: true, b: true, l: true,
-  fixed: true, local: true, scroll: true, cover: true, contain: true, repeat: true, "no-repeat": true,
-  visible: true, top: true, bottom: true, slice: true, clone: true, inset: true,
+  xs: true,
+  sm: true,
+  base: true,
+  md: true,
+  lg: true,
+  xl: true,
+  "2xl": true,
+  "3xl": true,
+  "4xl": true,
+  "5xl": true,
+  "6xl": true,
+  "7xl": true,
+  "8xl": true,
+  "9xl": true,
+  none: true,
+  inherit: true,
+  auto: true,
+  solid: true,
+  dashed: true,
+  dotted: true,
+  double: true,
+  hidden: true,
+  current: true,
+  transparent: true,
+  left: true,
+  center: true,
+  right: true,
+  justify: true,
+  start: true,
+  end: true,
+  wrap: true,
+  nowrap: true,
+  balance: true,
+  pretty: true,
+  ellipsis: true,
+  clip: true,
+  truncate: true,
+  collapse: true,
+  separate: true,
+  inner: true,
+  reverse: true,
+  x: true,
+  y: true,
+  t: true,
+  r: true,
+  b: true,
+  l: true,
+  fixed: true,
+  local: true,
+  scroll: true,
+  cover: true,
+  contain: true,
+  repeat: true,
+  "no-repeat": true,
+  visible: true,
+  top: true,
+  bottom: true,
+  slice: true,
+  clone: true,
+  inset: true,
 };
 
 /** Families that begin with a `COLOR_UTILS` prefix but carry no colour. */
-const NOT_A_COLOR_FAMILY = ["bg-clip-", "bg-blend-", "bg-origin-", "bg-gradient-", "bg-linear-", "bg-radial-", "bg-conic-", "bg-position-", "bg-size-", "text-shadow-", "border-spacing-", "outline-offset-"];
+const NOT_A_COLOR_FAMILY = [
+  "bg-clip-",
+  "bg-blend-",
+  "bg-origin-",
+  "bg-gradient-",
+  "bg-linear-",
+  "bg-radial-",
+  "bg-conic-",
+  "bg-position-",
+  "bg-size-",
+  "text-shadow-",
+  "border-spacing-",
+  "outline-offset-",
+];
 
 /**
  * Token-hint channel for the emit pass: the *semantic* part of a node's colour utilities, in
- * the same shape `Style.tokens` already carries CSS custom-property names (`bg-card` → `card`,
- * `text-muted-foreground` → `muted-foreground`, `bg-blue-500` → `blue-500`, which `tokens.ts`
- * camelizes into `Color.blue500`).
+ * the same `Style.tokens` list that carries CSS custom-property names, qualified by the utility
+ * that painted it (`bg-card` → `bg:card`, `text-muted-foreground` → `text:muted-foreground`,
+ * `from-sky-500` → `from:sky-500`). The qualifier is what lets the token pass match a name to
+ * the slot its utility paints — one node's `bg-white text-black` are two names for two slots,
+ * not two candidates for either — and `tokens.ts` camelizes the name (`Palette.sky500`).
+ * A custom-property name never contains `:`, so the two kinds cannot collide.
  *
- * `dark:` is kept because it paints the dark counterpart of the same slot; other variants
- * (`hover:`, `md:`, `focus:`) name states the static capture never sees. Arbitrary values
- * (`bg-[#0f172a]`) carry no name and are dropped.
+ * Every variant (`dark:`, `hover:`, `md:`, `focus:`) is dropped. `hover:`/`md:` name states the
+ * static capture never sees; a `dark:` utility names the *dark* value of the slot, and one hint
+ * list per node cannot say which theme a hint belongs to, so using it would name the light colour
+ * after its dark counterpart (`text-slate-500 dark:text-slate-400` → `slate400`). Arbitrary
+ * values (`bg-[#0f172a]`) carry no name and are dropped.
  */
 export function classColorHints(attrs: Record<string, string>): string[] {
   const out: string[] = [];
@@ -71,7 +137,7 @@ export function classColorHints(attrs: Record<string, string>): string[] {
     const parts = raw.split(":");
     // Tailwind v3 writes the important marker as a leading `!`, v4 as a trailing one.
     const util = parts[parts.length - 1]!.replace(/^!/, "").replace(/!$/, "");
-    if (parts.length > 1 && !parts.slice(0, -1).every((v) => v === "dark")) continue;
+    if (parts.length > 1) continue;
     if (util.includes("[")) continue;
     const hint = colorHint(util);
     if (hint && !out.includes(hint)) out.push(hint);
@@ -79,7 +145,7 @@ export function classColorHints(attrs: Record<string, string>): string[] {
   return out;
 }
 
-/** `bg-blue-500` → `blue-500`; `text-sm` → undefined. */
+/** `bg-blue-500` → `bg:blue-500`; `text-sm` → undefined. */
 function colorHint(util: string): string | undefined {
   if (NOT_A_COLOR_FAMILY.some((p) => util.startsWith(p))) return undefined;
   // Longest prefix first so `border-t-red-500` is not read as `border` → `t-red-500`.
@@ -87,5 +153,5 @@ function colorHint(util: string): string | undefined {
   if (!prefix) return undefined;
   const value = util.slice(prefix.length + 1).split("/")[0]!;
   if (!value || NOT_A_COLOR[value] || /^\d+(?:\.\d+)?(?:px|rem|em|%)?$/.test(value)) return undefined;
-  return value;
+  return `${prefix}:${value}`;
 }

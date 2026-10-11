@@ -4,11 +4,11 @@ import { textExpr } from "./text.ts";
 import { svgExpr } from "./svg.ts";
 import { imageNodeExpr } from "./images.ts";
 import { controlExpr } from "./controls.ts";
-import { modifiers } from "./modifiers.ts";
-/** Expression for a node: container → property reference; leaf → inline expression (with modifiers). */
-export function refOf(n: SemNode, ctx: EmitContext): string {
-  if (n.kind === "stack" || n.kind === "grid") return ctx.nameOf.get(n)!;
-  return leafExpr(n, ctx).join("\n");
+import { boxModifiers, modifiers, placementModifiers } from "./modifiers.ts";
+/** Lines for a node: container → property reference; leaf → inline expression (with modifiers). */
+export function refOf(n: SemNode, ctx: EmitContext): string[] {
+  if (n.kind === "stack" || n.kind === "grid") return [ctx.nameOf.get(n)!];
+  return leafExpr(n, ctx);
 }
 
 function leafExpr(n: SemNode, ctx: EmitContext): string[] {
@@ -23,9 +23,24 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
     case "image":
       core = imageNodeExpr(n, ctx);
       break;
-    case "control":
-      core = controlExpr(n, { child: (c) => ctx.renderNode(c).split("\n"), stateOf: ctx.control.stateOf, actionOf: ctx.control.actionOf, mode: ctx.mode, theme: ctx.screen.theme, tokens: ctx.tokens, id: n.id });
+    case "control": {
+      // A button's or link's box goes inside its label: the box is the hit and press area.
+      const pressable = n.control === "button" || n.control === "link";
+      core = controlExpr(n, {
+        child: ctx.renderNode,
+        stateOf: ctx.control.stateOf,
+        actionOf: ctx.control.actionOf,
+        radioTag: ctx.control.radioTag,
+        mode: ctx.mode,
+        theme: ctx.adaptive ? "adaptive" : ctx.screen.theme,
+        tokens: ctx.tokens,
+        scaledFonts: ctx.scaledFonts,
+        id: n.id,
+        ...(pressable ? { box: boxModifiers(n, ctx) } : {}),
+      });
+      if (pressable) return [...core, ...placementModifiers(n, ctx)];
       break;
+    }
     case "box":
       core = ["Color.clear"];
       break;

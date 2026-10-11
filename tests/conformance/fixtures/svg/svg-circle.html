@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="svg:circle; svg:ellipse; cx; cy; r; stroke-dasharray; stroke-dashoffset">
+<meta name="markswift-themes" content="light,dark">
+<title>svg-circle</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 16px; align-items: center; }
+svg { display: block; }
+.lbl { font-size: 11px; color: var(--muted); text-align: center; margin: 4px 0 0; }
+.ring { width: 80px; height: 80px; }
+.track { fill: none; stroke: var(--line); stroke-width: 8; }
+.bar { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 226.2; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.p75 { stroke-dashoffset: 56.5; }
+.p30 { stroke-dashoffset: 158.3; }
+.dots { fill: none; stroke: #db2777; stroke-width: 4; stroke-dasharray: 4 8; stroke-linecap: round; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="rings">
+  <p class="cap">progress rings 75% and 30% (r=36, dasharray 226.2), dotted ring, plain circle + ellipse</p>
+  <div class="row">
+    <svg class="ring" viewBox="0 0 80 80"><circle class="track" cx="40" cy="40" r="36"/><circle class="bar p75" cx="40" cy="40" r="36"/></svg>
+    <svg class="ring" viewBox="0 0 80 80"><circle class="track" cx="40" cy="40" r="36"/><circle class="bar p30" cx="40" cy="40" r="36"/></svg>
+    <svg class="ring" viewBox="0 0 80 80"><circle class="dots" cx="40" cy="40" r="30"/></svg>
+    <svg class="ring" viewBox="0 0 80 80"><circle cx="24" cy="40" r="14" fill="#16a34a"/><ellipse cx="56" cy="40" rx="18" ry="10" fill="#f59e0b"/></svg>
+  </div>
+</section>
+</main>
+</body>
+</html>

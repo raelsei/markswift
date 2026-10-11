@@ -1,28 +1,28 @@
-import { mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
 import type { FontFace } from "../model/layout.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
-import { coversLatin, srcBytes, sanitize, WEIGHT_SUBFAMILY } from "./source.ts";
-import { runFontTool } from "./converter.ts";
-import { plistFragment, registrationSwift } from "./registration.ts";
-
+import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
+import { type FontConverter, pythonFontConverter } from "./converter.ts";
+import { plistFragment } from "./registration.ts";
 
 /**
- * Packages every bundleable face into `<swiftDir>/Fonts/` and returns what was written.
+ * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
  *
- * `outDir` resolves `src[].file` (the capture's `_fonts/`). Faces are grouped by (family,
- * style): within a group the Basic-Latin subset wins, the rest are reported. A face whose bytes
- * cannot be read, or whose format iOS cannot load and `fontTools` cannot convert, is noted and
- * skipped — except that a failed *conversion* still writes the original bytes, so the
- * missing-converter case is visible in the bundle instead of looking like a design with no font.
+ * `sources` holds the capture's font bytes keyed by `src[].file`; `data:` sources carry their
+ * own. Faces are grouped by (family, style): within a group the Basic-Latin subset wins, the
+ * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
+ * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
  */
-export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: string): Promise<FontPackage> {
-  const fontsDir = join(swiftDir, "Fonts");
-  await rm(fontsDir, { recursive: true, force: true });
+export async function packageFonts(
+  faces: FontFace[],
+  sources: ReadonlyMap<string, Uint8Array>,
+  convert: FontConverter = pythonFontConverter,
+  signal?: AbortSignal,
+): Promise<FontPackage> {
   const notes: string[] = [];
   const packaged: PackagedFace[] = [];
-  if (!faces.length) return { faces: [], plist: "", swift: "", notes };
+  const assets: Record<string, Uint8Array> = {};
+  if (!faces.length) return { faces: [], assets, plist: "", notes };
 
   // (family, style, weight range) is one bundled face; several `unicode-range` subsets of the
   // same key are the same font cut up, and iOS can only hold one of them.
@@ -31,7 +31,7 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     const k = `${f.family}|${f.style}|${f.weight.join("-")}`;
     (groups[k] ??= []).push(f);
   }
-  await mkdir(fontsDir, { recursive: true });
+  const claimed = new Map<string, string>();
   for (const k of Object.keys(groups).sort()) {
     const group = groups[k]!;
     const latin = group.filter((f) => coversLatin(f.unicodeRange));
@@ -41,19 +41,24 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
         `approximated: font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
       );
     }
-    if (!latin.length) notes.push(`unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`);
+    if (!latin.length)
+      notes.push(
+        `unmapped: font-family ${chosen.family} declares no face covering Basic Latin; bundled its first subset`,
+      );
 
     let bytes: Uint8Array | undefined;
     let usedSrc: FontFace["src"][number] | undefined;
     for (const src of chosen.src) {
-      bytes = await srcBytes(src, outDir);
+      bytes = srcBytes(src, sources);
       if (bytes?.length) {
         usedSrc = src;
         break;
       }
     }
     if (!bytes?.length || !usedSrc) {
-      notes.push(`unmapped: font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`);
+      notes.push(
+        `unmapped: font-family ${chosen.family} has no readable src (${chosen.src.map((s) => s.url.slice(0, 60)).join(", ") || "none"}) → not bundled, text falls back to the system font`,
+      );
       continue;
     }
 
@@ -62,31 +67,52 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
     // each needs its own subfamily or the lookup cannot tell them apart. A variable face covers
     // the whole range, so it is the family's Regular.
     const staticWeight = chosen.weight[0] === chosen.weight[1] ? chosen.weight[0] : undefined;
-    const weightName = staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
+    const weightName =
+      staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
-    const stem = sanitize(chosen.family) + (subfamily === "Regular" ? "" : `-${subfamily.replace(/\s+/g, "")}`);
-    const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
-    const dst = join(fontsDir, file);
-    const tmp = join(fontsDir, `.${stem}.src`);
-    await Bun.write(tmp, bytes);
-    const tool = await runFontTool(tmp, dst, chosen.family, subfamily, true);
-    if (typeof tool === "string") {
-      // No converter: ship what we have and say exactly what is wrong with it. WOFF2 will not
-      // register, so the note has to name the format, not just the failure.
-      await Bun.write(dst, bytes);
-      await rm(tmp, { force: true });
-      const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
+    const stem = fontFileStem(chosen.family, subfamily, claimed);
+    if (stem === undefined) {
       notes.push(
-        `unmapped: font-family ${chosen.family} could not be packaged (${tool}); wrote ${fmt} unconverted` +
-          (sig === "wOF2" || sig === "wOFF" ? ` — iOS cannot register ${fmt}, so this face will not load (needs python3 with fontTools + brotli)` : ""),
+        `approximated: font-family ${chosen.family} declares another ${subfamily} face (${chosen.style}, weight ${chosen.weight.join("–")}); iOS registers one face per name, bundled the first`,
       );
       continue;
     }
-    if (!tool.wrote) await Bun.write(dst, bytes); // Already an sfnt with a matching name: copy verbatim.
-    await rm(tmp, { force: true });
-    const metrics: FaceMetrics = { upem: tool.upem, ascent: tool.ascent, descent: tool.descent, lineGap: tool.lineGap, useTypoMetrics: tool.useTypoMetrics };
-    packaged.push({ family: chosen.family, file, style: chosen.style, weight: chosen.weight, axes: tool.axes, metrics, converted: tool.converted, renamed: tool.renamed });
-    if (!chosen.loaded) notes.push(`approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`);
+    const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
+    const tool = await convert(bytes, chosen.family, subfamily, signal);
+    if (typeof tool === "string") {
+      // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
+      const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
+      notes.push(
+        `unmapped: font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
+          (sig === "wOF2" || sig === "wOFF"
+            ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli`
+            : ""),
+      );
+      continue;
+    }
+    assets[`Fonts/${file}`] = tool.bytes ?? bytes; // No rewritten bytes: already an sfnt with a matching name, shipped verbatim.
+    const metrics: FaceMetrics = {
+      upem: tool.upem,
+      ascent: tool.ascent,
+      descent: tool.descent,
+      lineGap: tool.lineGap,
+      useTypoMetrics: tool.useTypoMetrics,
+    };
+    packaged.push({
+      family: chosen.family,
+      file,
+      style: chosen.style,
+      weight: chosen.weight,
+      axes: tool.axes,
+      metrics,
+      converted: tool.converted,
+      renamed: tool.renamed,
+    });
+    claimed.set(stem.toLowerCase(), chosen.family);
+    if (!chosen.loaded)
+      notes.push(
+        `approximated: font-family ${chosen.family} never loaded in the reference browser, so the reference pixels are a fallback face; bundled it anyway`,
+      );
   }
 
   // A family whose bundled face is variable covers every weight of its axis; one whose face is
@@ -94,9 +120,11 @@ export async function packageFonts(faces: FontFace[], swiftDir: string, outDir: 
   // has no instance for is a synthetic (smeared) weight and has to be reported once.
   for (const f of packaged) {
     if (!f.axes["wght"] && f.weight[0] !== f.weight[1]) {
-      notes.push(`approximated: font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`);
+      notes.push(
+        `approximated: font-family ${f.family} declares weight ${f.weight.join("–")} but the bundled file has no wght axis; weights other than ${f.weight[0]} are synthesised`,
+      );
     }
   }
   const files = packaged.map((f) => f.file).sort();
-  return { faces: packaged, plist: plistFragment(files), swift: files.length ? registrationSwift(packaged) : "", notes };
+  return { faces: packaged, assets, plist: plistFragment(files), notes };
 }
