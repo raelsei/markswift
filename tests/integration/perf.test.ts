@@ -48,6 +48,8 @@ nativeTest(
       expect(images).toBe(1);
       // Card (#fff / #27272a) and button (#2563eb) fills are opaque in both themes, every spread is 0.
       expect(compositingGroups).toBe(0);
+      // The hover-only `.glow` overlay is invisible at rest and no pressed/focused state reveals it.
+      expect(hiddenOpacity).toBe(0);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

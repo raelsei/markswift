@@ -146,3 +146,40 @@ describe("tables", () => {
     expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
   });
 });
+
+describe("paint invisible at rest", () => {
+  const box = { x: 0, y: 0, w: 100, h: 100 };
+  const clear = { opacity: "0", "background-color": "rgb(0, 0, 255)" };
+  const positioned = (child: LayoutNode) =>
+    inferScreen(doc(el("main", box, { display: "block", position: "relative" }, [child])), "s").root;
+
+  test("a transparent absolute overlay with nothing to read is dropped", () => {
+    expect(positioned(el("div", box, { position: "absolute", ...clear })).overlays).toHaveLength(0);
+  });
+
+  test("a transparent overlay with text stays: assistive technology still reads it", () => {
+    const root = positioned(el("div", box, { position: "absolute", ...clear }, [textNode("Hi", box)]));
+    expect(root.overlays).toHaveLength(1);
+    expect(root.overlays[0]!.node.style.opacity).toBe(0);
+  });
+
+  test("a transparent in-flow node keeps its space but draws nothing", () => {
+    const a = el("div", { x: 0, y: 0, w: 100, h: 50 }, { display: "block", ...clear });
+    const b = el("div", { x: 0, y: 50, w: 100, h: 50 }, { display: "block", "background-color": "rgb(255, 0, 0)" });
+    const root = inferScreen(doc(el("main", box, { display: "block" }, [a, b])), "s").root;
+    const hidden = flatten(root).find((n) => n.style.hidden);
+    expect(hidden?.style.opacity).toBeUndefined();
+    expect(hidden?.frame).toEqual({ x: 0, y: 0, w: 100, h: 50 });
+    expect(root.kind === "stack" && root.children.includes(hidden!)).toBe(true);
+  });
+
+  test("an animated transparent overlay stays: the animation may reveal it", () => {
+    const root = positioned(el("div", box, { position: "absolute", ...clear, "animation-name": "fade" }));
+    expect(root.overlays).toHaveLength(1);
+  });
+
+  test("a transparent overlay a pressed state reveals stays", () => {
+    const glow = { ...el("div", box, { position: "absolute", ...clear }), states: { pressed: { opacity: "1" } } };
+    expect(positioned(glow).overlays).toHaveLength(1);
+  });
+});
