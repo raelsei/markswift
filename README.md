@@ -119,6 +119,8 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   controls treat their measured height as a floor; pages taller than the viewport scroll.
   CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
   compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
+  ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
+  `enterkeyhint` choose a text field's iOS keyboard, autofill type and Return key.
 - `fidelity` keeps the captured geometry and line division at fixed sizes. It exists for visual
   verification.
 
