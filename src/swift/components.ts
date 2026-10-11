@@ -191,8 +191,9 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
     for (const [c, col] of columns.entries()) {
       const varying = col.values.some((v) => strip(v) !== strip(col.values[0]!));
       const kind = strip(col.marker);
+      // Decided per type, over every member of the runs sharing it (`extractComponents`).
       if (LITERAL[kind]) {
-        roles.push(varying ? "field" : "literal");
+        roles.push("literal");
         continue;
       }
       for (const [i, v] of col.values.entries()) {
@@ -217,8 +218,8 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       n.distribution !== "around" &&
       n.distribution !== "evenly" &&
       !(start === 0 && n.leadInset !== 0);
-    // ponytail: runs whose columns play different roles (a field in one, a constant in another) get separate types; merge per column if designs need it.
-    const sig = `${tpl(members[0]!).key}|${roles.join(",")}|${cls.join(",")}`;
+    // ponytail: runs whose state/action columns play different roles (a field in one, a constant in another) get separate types; merge per column if designs need it.
+    const sig = `${tpl(members[0]!).key}|${columns.map((col, c) => (LITERAL[col.marker] ? "" : `${roles[c]}:${cls[c]}`)).join(",")}`;
     return { parent, members, columns, cls, roles, forEach, sig };
   };
   const runs: Run[] = [];
@@ -272,20 +273,33 @@ export function extractComponents(screen: Screen, ctx: EmitContext): Extraction 
     fields: Map<number, string>;
     binding: boolean;
   }
+  // Runs with equal signatures share a type. One subview renders all of them, so a design literal
+  // is a field when it differs anywhere across their members, and literal only when all agree.
+  const groups = new Map<string, Run[]>();
+  for (const run of runs) groups.set(run.sig, [...(groups.get(run.sig) ?? []), run]);
   const types = new Map<string, Type>();
-  const runType = runs.map((run) => {
-    let t = types.get(run.sig);
-    if (!t) {
-      const seen: Record<string, number> = {};
-      const fields = new Map<number, string>();
-      for (const [c, r] of run.roles.entries())
-        if (r === "field" && run.cls[c] === c) fields.set(c, names.field(run.columns[c]!.marker, seen));
-      const binding = run.roles.some((r, c) => r === "field" && !LITERAL[strip(run.columns[c]!.marker)]);
-      t = { index: types.size, run, fields, binding };
-      types.set(run.sig, t);
+  for (const [sig, group] of groups) {
+    const head = group[0]!;
+    const vectors = head.columns.map((col, c) =>
+      LITERAL[col.marker] ? group.flatMap((run) => run.columns[c]!.values).join("\u0000") : undefined,
+    );
+    for (const [c, v] of vectors.entries()) {
+      if (v === undefined) continue;
+      const first = head.columns[c]!.values[0]!;
+      const role = group.some((run) => run.columns[c]!.values.some((x) => x !== first)) ? "field" : "literal";
+      for (const run of group) {
+        run.roles[c] = role;
+        run.cls[c] = vectors.indexOf(v);
+      }
     }
-    return t;
-  });
+    const seen: Record<string, number> = {};
+    const fields = new Map<number, string>();
+    for (const [c, r] of head.roles.entries())
+      if (r === "field" && head.cls[c] === c) fields.set(c, names.field(head.columns[c]!.marker, seen));
+    const binding = head.roles.some((r, c) => r === "field" && !LITERAL[strip(head.columns[c]!.marker)]);
+    types.set(sig, { index: types.size, run: head, fields, binding });
+  }
+  const runType = runs.map((run) => types.get(run.sig)!);
   /** One column per class with `role`. */
   const classes = (run: Run, role: Role) => run.roles.flatMap((r, c) => (r === role && run.cls[c] === c ? [c] : []));
   /** Member name of column `c` (all members, for non-varying roles; the first member's otherwise). */

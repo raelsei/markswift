@@ -181,6 +181,30 @@ test("rows whose overlays differ are not a run", () => {
   expect(swift).not.toContain("struct Row");
 });
 
+test("lists sharing a row type keep each list's own constants", () => {
+  const ul = (rows: RowSpec[], y: number) =>
+    element(
+      "ul",
+      16,
+      y,
+      360,
+      rows.length * 28 - 8,
+      { display: "flex", "flex-direction": "column", gap: "8px" },
+      rows.map((r, i) => row(r, 16, y + i * 28, 360)),
+    );
+  // Within each list the role is constant; across the two lists it differs. Different lengths keep
+  // the lists themselves from forming the (outermost) run.
+  const same = (role: string) => ROWS.map((r) => ({ ...r, role, color: "rgb(30, 30, 200)" }));
+  const lists = [ul(same("Owner"), 16), ul(same("Editor").slice(0, 2), 100)];
+  const swift = emit(
+    doc(element("main", 0, 0, 393, 200, { display: "block", "padding-top": "16px", "padding-left": "16px" }, lists)),
+  );
+  expect(count(swift, /struct Row\w*: Identifiable/g)).toBe(1);
+  expect(count(swift, /ForEach\(Self\.rows2?\) \{ row in/g)).toBe(2);
+  expect(swift).toContain('text2: "Editor"');
+  expect(swift).toContain("Text(verbatim: row.text2)");
+});
+
 test("fidelity mode never extracts", () => {
   expect(emit(listDoc(ROWS), { mode: "fidelity" })).not.toContain("ForEach(");
 });
