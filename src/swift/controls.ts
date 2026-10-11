@@ -115,7 +115,13 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       const href = n.href ?? "";
       if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
         const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
-        return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ".buttonStyle(.plain)"]);
+        return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), [
+          "}",
+          ".buttonStyle(.plain)",
+          // An in-app `<a>` emitted as a Button is still a link.
+          ".accessibilityRemoveTraits(.isButton)",
+          ".accessibilityAddTraits(.isLink)",
+        ]);
       }
       return wrap(`Link(destination: markswiftURL(${str(href)})) {`, pressable(n, deps), ["}"]);
     }
@@ -125,7 +131,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
-        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+        ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
     case "secureField":
@@ -135,7 +141,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
-        ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
+        ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
       ];
     case "textEditor":
@@ -306,15 +312,16 @@ const DATE_COMPONENTS: Record<NonNullable<ControlNode["dateKind"]>, string> = {
 /** Chrome's `::marker` text for `<summary>`: ▸ closed (◂ right-to-left), ▾ open. */
 const MARKER = /Text\(verbatim: "([\u25b8\u25be\u25c2]) "\)/;
 
-/** What iOS Safari gives the same input; `markswiftInputTraits` applies it on iOS only (runtime/controls.swift). */
-const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
-  email: [".markswiftInputTraits(.email)"],
-  tel: [".markswiftInputTraits(.tel)"],
-  url: [".markswiftInputTraits(.url)"],
-  number: [".markswiftInputTraits(.number)"],
-  search: [".markswiftInputTraits(.search)"],
-  password: [".markswiftInputTraits(.password)"],
-};
+/** What iOS Safari gives the same field: keyboard, autofill type and Return key, via the iOS-only `markswiftInputTraits` (runtime/controls.swift). */
+function inputTraits(n: ControlNode): string[] {
+  const args = [
+    n.inputType ? `.${n.inputType}` : "",
+    n.autofill ? `autofill: ${str(n.autofill)}` : "",
+    n.inputMode ? `inputMode: ${str(n.inputMode)}` : "",
+    n.enterKey ? `enterKey: ${str(n.enterKey)}` : "",
+  ].filter(Boolean);
+  return args.length ? [`.markswiftInputTraits(${args.join(", ")})`] : [];
+}
 
 /**
  * `<meter>` state colours, as every browser paints them: the value sits in its optimum band, one

@@ -42,26 +42,80 @@ extension Binding where Value == String {
     }
 }
 
-/// The keyboard, autofill type and capitalisation iOS Safari gives the same `<input type>`.
+/// The keyboard, autofill type, capitalisation and Return key iOS Safari gives the same `<input>`.
 /// These modifiers exist only on iOS; on other platforms (the macOS render gate) the field is unchanged.
 nonisolated enum MarkswiftInputTraits: Sendable { case email, tel, url, number, search, password }
 
 extension View {
-    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits) -> some View {
+    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits? = nil, autofill: String? = nil, inputMode: String? = nil, enterKey: String? = nil) -> some View {
         #if os(iOS)
-        switch traits {
-        case .email: keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-        case .tel: keyboardType(.phonePad).textContentType(.telephoneNumber)
-        case .url: keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-        case .number: keyboardType(.decimalPad)
-        case .search: keyboardType(.webSearch).submitLabel(.search)
-        case .password: textContentType(.password)
-        }
+        let t = MarkswiftKeyboard(traits, autofill: autofill, inputMode: inputMode, enterKey: enterKey)
+        keyboardType(t.keyboard).textContentType(t.content).textInputAutocapitalization(t.capitalization).autocorrectionDisabled(t.noAutocorrect).submitLabel(t.submit)
         #else
         self
         #endif
     }
 }
+
+#if os(iOS)
+/// The resolved keyboard of one field: the input type's defaults, then the design's explicit hints.
+nonisolated struct MarkswiftKeyboard {
+    var keyboard: UIKeyboardType = .default
+    var content: UITextContentType?
+    var capitalization: TextInputAutocapitalization?
+    var noAutocorrect = false
+    var submit: SubmitLabel = .return
+
+    init(_ traits: MarkswiftInputTraits?, autofill: String?, inputMode: String?, enterKey: String?) {
+        switch traits {
+        case .email: keyboard = .emailAddress; content = .emailAddress; capitalization = .never; noAutocorrect = true
+        case .tel: keyboard = .phonePad; content = .telephoneNumber
+        case .url: keyboard = .URL; content = .URL; capitalization = .never; noAutocorrect = true
+        case .number: keyboard = .decimalPad
+        case .search: keyboard = .webSearch; submit = .search
+        case .password: content = .password
+        case nil: break
+        }
+        switch inputMode {
+        case "text": keyboard = .default
+        case "decimal": keyboard = .decimalPad
+        case "numeric": keyboard = .numberPad
+        case "tel": keyboard = .phonePad
+        case "search": keyboard = .webSearch
+        case "email": keyboard = .emailAddress
+        case "url": keyboard = .URL
+        default: break
+        }
+        switch enterKey {
+        case "done": submit = .done
+        case "go": submit = .go
+        case "next": submit = .next
+        case "search": submit = .search
+        case "send": submit = .send
+        case "enter", "previous": submit = .return
+        default: break
+        }
+        if let autofill, let type = Self.autofill[autofill] { content = type }
+    }
+
+    /// WHATWG autofill field names → the system's content types; a name with no counterpart is left to the input type.
+    static let autofill: [String: UITextContentType] = [
+        "name": .name, "honorific-prefix": .namePrefix, "given-name": .givenName, "additional-name": .middleName,
+        "family-name": .familyName, "honorific-suffix": .nameSuffix, "nickname": .nickname,
+        "organization-title": .jobTitle, "organization": .organizationName,
+        "username": .username, "new-password": .newPassword, "current-password": .password, "one-time-code": .oneTimeCode,
+        "street-address": .fullStreetAddress, "address-line1": .streetAddressLine1, "address-line2": .streetAddressLine2,
+        "address-level1": .addressState, "address-level2": .addressCity, "address-level3": .sublocality,
+        "country-name": .countryName, "postal-code": .postalCode,
+        "cc-name": .creditCardName, "cc-given-name": .creditCardGivenName, "cc-additional-name": .creditCardMiddleName,
+        "cc-family-name": .creditCardFamilyName, "cc-number": .creditCardNumber, "cc-exp": .creditCardExpiration,
+        "cc-exp-month": .creditCardExpirationMonth, "cc-exp-year": .creditCardExpirationYear,
+        "cc-csc": .creditCardSecurityCode, "cc-type": .creditCardType,
+        "bday": .birthdate, "bday-day": .birthdateDay, "bday-month": .birthdateMonth, "bday-year": .birthdateYear,
+        "tel": .telephoneNumber, "tel-national": .telephoneNumber, "email": .emailAddress, "url": .URL,
+    ]
+}
+#endif
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
