@@ -10,6 +10,10 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
 - The quality gate names the old and new value of a changed capture configuration and prints a rebaseline hint on toolchain drift; the Visual Toolchain step lists simulator runtimes; a missing tracked baseline fails with instructions.
+- `--renderer ios` renders through UIHostingController + drawHierarchy in a batched simulator app, so text fields, editors and scroll views are drawn instead of ImageRenderer's yellow placeholder; the pinned simulator (`MARKSWIFT_SIMULATOR`, default `iPhone 17`) is created on the newest iOS runtime when missing.
+
+### Fixed
+- The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
 
 ## [0.1.0-alpha.1] — 2026-10-10
 
