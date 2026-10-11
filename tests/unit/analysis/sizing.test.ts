@@ -201,3 +201,19 @@ test("the root's width is not reported: the screen sizes it", () => {
   const n = { ...element(390, 40, { display: "block" }), preferredSize: { width: "100%", height: "auto" } };
   expect(widthNotes(n, { root: n, bundledFamilies: {}, fixed: [] })).toEqual([]);
 });
+
+test.each([
+  [["right", "left"], "center"],
+  [["left"], "end"],
+  [["right"], undefined],
+  [undefined, undefined],
+] as const)("a fixed-width block with auto margins %p is placed %p", (autoMargins, expected) => {
+  // Parent content box is 350 px wide; 95 px used margins on each side make the margin box fill it.
+  const box: LayoutNode = {
+    ...element(160, 40, { display: "block", "margin-left": "95px", "margin-right": "95px" }),
+    preferredSize: { width: "160px", height: "auto", ...(autoMargins ? { autoMargins: [...autoMargins] } : {}) },
+  };
+  const s = sizing(box);
+  expect(s.width).toEqual({ kind: "fixed", px: 160 });
+  expect(s.selfAlign).toBe(expected);
+});

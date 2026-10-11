@@ -123,3 +123,26 @@ test("a colour picker's swatch is resolved during analysis; a missing or invalid
   expect(orange.a).toBeCloseTo(1, 4);
   expect(swatch("nope")).toEqual({ r: 0, g: 0, b: 0, a: 1 });
 });
+
+describe("tables", () => {
+  test("the table's paint covers its rows, not its caption", () => {
+    const paint = { "background-color": "rgb(255, 255, 255)", "border-top-left-radius": "10px" };
+    const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", ...paint }, [
+      el("caption", { x: 0, y: 0, w: 200, h: 26 }, { display: "table-caption" }, [
+        textNode("Quarterly sales", { x: 0, y: 0, w: 100, h: 20 }),
+      ]),
+      el("tbody", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-row-group" }, [
+        el("tr", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-row" }, [
+          el("td", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-cell" }, [
+            textNode("Q1", { x: 0, y: 36, w: 20, h: 20 }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 66 }, { display: "block" }, [table])), "s");
+    const filled = flatten(screen.root).filter((n) => n.style.fills.length > 0);
+    expect(filled).toHaveLength(1);
+    expect(filled[0]!.frame).toEqual({ x: 0, y: 26, w: 200, h: 40 });
+    expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
+  });
+});

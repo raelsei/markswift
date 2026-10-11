@@ -4,7 +4,7 @@
     "height": 900,
     "mismatch": 0.09792881944444444,
     "ssim": 0.6626185999070908,
-    "ms": 85.02670800000487,
+    "ms": 85.9967500000057,
     "key": "background-image-320-dark-app",
     "caseId": "background-image",
     "viewportWidth": 320,
@@ -25,7 +25,7 @@
         "mismatch": 0.03750426912568306
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -35,9 +35,9 @@
       "layout.json": "18877dd25592e8a14ddce19b30790d8b00e402cd878a1177682f02beedd2bceb",
       "diagnostics.json": "4c062cf7c4e2b1b37df300427920297e2e3f9ad1a63f62ce4e4c94e2d71ae8c0",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "5c987d732a94dc9ec7fc836d2e281c1df91787b06ee03cf69ec2bc25febd1e2d"
+      "typecheck.json": "db256a5cc905a3a08b8c80adaf32b02bda531ea02ae12a372f2078ed2ffc40ed"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -50,7 +50,7 @@
     "height": 900,
     "mismatch": 0.0055538194444444446,
     "ssim": 0.9685443088262463,
-    "ms": 86.6772079999937,
+    "ms": 77.8446249999979,
     "key": "background-image-320-dark-fidelity",
     "caseId": "background-image",
     "viewportWidth": 320,
@@ -71,7 +71,7 @@
         "mismatch": 0.004503927595628415
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -81,9 +81,9 @@
       "layout.json": "18877dd25592e8a14ddce19b30790d8b00e402cd878a1177682f02beedd2bceb",
       "diagnostics.json": "4c062cf7c4e2b1b37df300427920297e2e3f9ad1a63f62ce4e4c94e2d71ae8c0",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "66446210452df24bd1def39b1a2ac60702b6bb8cd942db32cf89a80239e0c299"
+      "typecheck.json": "2f2359c122cab2770db6e23f66871b3ef012b7d6fee6c1db83c495f539c6ff69"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -96,7 +96,7 @@
     "height": 900,
     "mismatch": 0.09991493055555556,
     "ssim": 0.6609018494691092,
-    "ms": 85.30158300000767,
+    "ms": 112.58783299999777,
     "key": "background-image-320-light-app",
     "caseId": "background-image",
     "viewportWidth": 320,
@@ -117,7 +117,7 @@
         "mismatch": 0.039496527777777776
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -127,9 +127,9 @@
       "layout.json": "8e4cbf9b39d0c54c2fd98ec193e69c33f409f2879eeedfcd4da6a39f77d42f77",
       "diagnostics.json": "4c062cf7c4e2b1b37df300427920297e2e3f9ad1a63f62ce4e4c94e2d71ae8c0",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "35620942a78e8d389ca58b83006f800513ceaac828ae779fb26c8f75ae25ad37"
+      "typecheck.json": "68b3369d9117df8efe9037ecf8f641b0f6d654ca50a1b9590bbaf614f389b361"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -142,7 +142,7 @@
     "height": 900,
     "mismatch": 0.005881944444444445,
     "ssim": 0.9708560657659338,
-    "ms": 76.42483399999037,
+    "ms": 97.93224999999802,
     "key": "background-image-320-light-fidelity",
     "caseId": "background-image",
     "viewportWidth": 320,
@@ -163,7 +163,7 @@
         "mismatch": 0.005749089253187614
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -173,9 +173,9 @@
       "layout.json": "8e4cbf9b39d0c54c2fd98ec193e69c33f409f2879eeedfcd4da6a39f77d42f77",
       "diagnostics.json": "4c062cf7c4e2b1b37df300427920297e2e3f9ad1a63f62ce4e4c94e2d71ae8c0",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "4430a9b10554bc125e03cb7199c1f889702a416e4232266c95c424fea9d634b0"
+      "typecheck.json": "3ba672f97fcdc5d5cbfb5a2d0b570cbfe7f358074f1d4658eb001b57bdd66eec"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -188,7 +188,7 @@
     "height": 868,
     "mismatch": 0.0783085194375517,
     "ssim": 0.7239570228301129,
-    "ms": 112.53658300000825,
+    "ms": 93.99954099999741,
     "key": "background-image-390-dark-app",
     "caseId": "background-image",
     "viewportWidth": 390,
@@ -209,7 +209,7 @@
         "mismatch": 0.020989248445240857
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -219,9 +219,9 @@
       "layout.json": "cc8fddfa1b4735f1b6b7b5e84dfba11a35aeccc36a261156a5d39af5007fc2d8",
       "diagnostics.json": "400cd11183c48d84ad932a2546fa6a1377c30cff493433387224837eb3f22bdd",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "7c100cd94c5ef4dee449a14595ae1c3596b1719c46a3c05359686db982075b99"
+      "typecheck.json": "a89e5da8546f359b76cbc3817725e0438fa77cccd55c56cf5bbb4c6c8aaeae4e"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -234,7 +234,7 @@
     "height": 868,
     "mismatch": 0.005072078459175233,
     "ssim": 0.9791991597805374,
-    "ms": 91.25174999999581,
+    "ms": 90.44391700001142,
     "key": "background-image-390-dark-fidelity",
     "caseId": "background-image",
     "viewportWidth": 390,
@@ -255,7 +255,7 @@
         "mismatch": 0.006107041214293243
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -265,9 +265,9 @@
       "layout.json": "cc8fddfa1b4735f1b6b7b5e84dfba11a35aeccc36a261156a5d39af5007fc2d8",
       "diagnostics.json": "400cd11183c48d84ad932a2546fa6a1377c30cff493433387224837eb3f22bdd",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "306bb3de3e2c6bcf43915ba86c2d36a6b3aac2245001405910b1bc4b6ca0e193"
+      "typecheck.json": "4373f7c818b5f2d17dbbb6436b1988c012f882c41dba9c76943dcc709e1b9067"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -280,7 +280,7 @@
     "height": 868,
     "mismatch": 0.07961420300129977,
     "ssim": 0.7268716288624163,
-    "ms": 93.69362499999988,
+    "ms": 92.90362500000629,
     "key": "background-image-390-light-app",
     "caseId": "background-image",
     "viewportWidth": 390,
@@ -301,7 +301,7 @@
         "mismatch": 0.023005164962580375
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -311,9 +311,9 @@
       "layout.json": "522f919e61218f6671c781dd224194b2f42d9b231532f51078ff15e68360f478",
       "diagnostics.json": "400cd11183c48d84ad932a2546fa6a1377c30cff493433387224837eb3f22bdd",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2375d624061b1f379da98df01688afb1b8cd58d60e8bdfc49c36b631ff9893c1"
+      "typecheck.json": "29b07d11e5cfe87f819b25277bca427236989c1aa1949133ae1d21fc5f27b9e0"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -326,7 +326,7 @@
     "height": 868,
     "mismatch": 0.005237504431052818,
     "ssim": 0.9821563395160392,
-    "ms": 92.25750000000698,
+    "ms": 87.98633400000108,
     "key": "background-image-390-light-fidelity",
     "caseId": "background-image",
     "viewportWidth": 390,
@@ -347,7 +347,7 @@
         "mismatch": 0.006871244861389269
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "eaef0aa7162d5aa61672a6041deae35745270596c746da758ec715aed80638d6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -357,9 +357,9 @@
       "layout.json": "522f919e61218f6671c781dd224194b2f42d9b231532f51078ff15e68360f478",
       "diagnostics.json": "400cd11183c48d84ad932a2546fa6a1377c30cff493433387224837eb3f22bdd",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "5f5c8b04a22743e174e0647ad6fd8da8a6813c9ceec0a1565664de1ef5791579"
+      "typecheck.json": "f37968f70fbfa74bf6e0d48abd376847b7c8d6202e43108efb0d51f9f6c9c8fe"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -372,7 +372,7 @@
     "height": 536,
     "mismatch": 0.02358908582089552,
     "ssim": 0.8546530840540872,
-    "ms": 44.94070799999463,
+    "ms": 66.07204199999978,
     "key": "box-shadow-320-dark-app",
     "caseId": "box-shadow",
     "viewportWidth": 320,
@@ -397,7 +397,7 @@
         "mismatch": 0.050512941919191916
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -407,9 +407,9 @@
       "layout.json": "bdaaaaecf90756b01ba28245778392ecbcc68c09ab2ce3426ceb0019c094f2a5",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "ed00f613de9c328aa3ef585d2a6b97c67a142713bc1871a4bfcb6351231f747b"
+      "typecheck.json": "d1824646983fc62028a5f61b678db9f2d4c4c5ebc7cf65b3e95990afed230427"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -422,7 +422,7 @@
     "height": 536,
     "mismatch": 0.005369636194029851,
     "ssim": 0.9661589198828276,
-    "ms": 44.47729100000288,
+    "ms": 51.397750000003725,
     "key": "box-shadow-320-dark-fidelity",
     "caseId": "box-shadow",
     "viewportWidth": 320,
@@ -447,7 +447,7 @@
         "mismatch": 0.008925189393939393
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -457,9 +457,9 @@
       "layout.json": "bdaaaaecf90756b01ba28245778392ecbcc68c09ab2ce3426ceb0019c094f2a5",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "69ee665f4a51f7e1401b17fe2a9ae0da33156735c6fed1a28cd310ce927980b3"
+      "typecheck.json": "aad177494b1b0ac71c49e6634e1511427f8609e3a01c908bbcf23d69ae9751c0"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -472,7 +472,7 @@
     "height": 536,
     "mismatch": 0.0251953125,
     "ssim": 0.8495386694919438,
-    "ms": 47.99775000000227,
+    "ms": 54.323624999997264,
     "key": "box-shadow-320-light-app",
     "caseId": "box-shadow",
     "viewportWidth": 320,
@@ -497,7 +497,7 @@
         "mismatch": 0.05163352272727273
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -507,9 +507,9 @@
       "layout.json": "48fb1b2ca7669cf22c6d9cfb58ec2ff8479f2372782791dac90f9b400e48bdc7",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "60c150e4c00a3cdc04f085893c912f11f36aee99a1d497fde6592006075c322e"
+      "typecheck.json": "eb61d1d3b9cbb742ae3b0092b5d153ba6aa6c68686ca794be456d1df09e34f78"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -522,7 +522,7 @@
     "height": 536,
     "mismatch": 0.00673682369402985,
     "ssim": 0.9623627115935923,
-    "ms": 47.55516700001317,
+    "ms": 47.26062500000262,
     "key": "box-shadow-320-light-fidelity",
     "caseId": "box-shadow",
     "viewportWidth": 320,
@@ -547,7 +547,7 @@
         "mismatch": 0.010282512626262626
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -557,9 +557,9 @@
       "layout.json": "48fb1b2ca7669cf22c6d9cfb58ec2ff8479f2372782791dac90f9b400e48bdc7",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "ae8463aca0fdb656e4323baba5c4d27996051904ef2bb8f52d92ae9ad894853d"
+      "typecheck.json": "3f0063c68fa81678568cca3439fc7f1594344b070b2453911cf34aaf651494dd"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -572,7 +572,7 @@
     "height": 536,
     "mismatch": 0.020586969001148106,
     "ssim": 0.8756312929683635,
-    "ms": 58.12895800000115,
+    "ms": 56.369209000011324,
     "key": "box-shadow-390-dark-app",
     "caseId": "box-shadow",
     "viewportWidth": 390,
@@ -597,7 +597,7 @@
         "mismatch": 0.04506094464195023
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -607,9 +607,9 @@
       "layout.json": "be8147516fb5e00953fab522ff983ac675985f8ac6928c7a2ed2aa142ede3cff",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "5f8c845592578d97751e14c8f5df12fd3bc693d092d2c291e8991c7a8162b29e"
+      "typecheck.json": "46077615fba03c454afa7e168a7f7137332bc6a89e754fedf8efe0235002f28f"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -622,7 +622,7 @@
     "height": 536,
     "mismatch": 0.0026262916188289323,
     "ssim": 0.979892132035273,
-    "ms": 53.329166999988956,
+    "ms": 57.56395899999188,
     "key": "box-shadow-390-dark-fidelity",
     "caseId": "box-shadow",
     "viewportWidth": 390,
@@ -647,7 +647,7 @@
         "mismatch": 0.0043105637379380396
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -657,9 +657,9 @@
       "layout.json": "be8147516fb5e00953fab522ff983ac675985f8ac6928c7a2ed2aa142ede3cff",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "5b3f9e3b242fc7f64aa66acd6d57e9dff7cb46c4b846f91403317b96805db51a"
+      "typecheck.json": "1f444f7d40ed23d3890ce97958c8396359aa211d8e1287a89b2571c03c36f65b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -672,7 +672,7 @@
     "height": 536,
     "mismatch": 0.021644182931496364,
     "ssim": 0.8732761173707614,
-    "ms": 53.493625000002794,
+    "ms": 59.36516699999629,
     "key": "box-shadow-390-light-app",
     "caseId": "box-shadow",
     "viewportWidth": 390,
@@ -697,7 +697,7 @@
         "mismatch": 0.045473590655154904
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -707,9 +707,9 @@
       "layout.json": "6c93e7022c143c372600b34d08e7e8cff4d645e83b545aba0483650b5a1113f5",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "fd923e94bd6092191cd23fdaf426381c04b6e727e919ab7d532ed9325fa88222"
+      "typecheck.json": "cb828561f8d677049c8e3b120c18ee37608a38fbc5ce721db5f0507acb7e563b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -722,7 +722,7 @@
     "height": 536,
     "mismatch": 0.00320752009184845,
     "ssim": 0.9786321340735585,
-    "ms": 63.20216700001038,
+    "ms": 56.13904199999524,
     "key": "box-shadow-390-light-fidelity",
     "caseId": "box-shadow",
     "viewportWidth": 390,
@@ -747,7 +747,7 @@
         "mismatch": 0.004989842559674962
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "bda101a053bd687fe8f40e7a35769a70899ff6b28352236422a7372306a885b6",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -757,9 +757,9 @@
       "layout.json": "6c93e7022c143c372600b34d08e7e8cff4d645e83b545aba0483650b5a1113f5",
       "diagnostics.json": "6f98f543e7eb70ef3168546a603c6affc4b7b4f73b1acda3181387003a4e2c1e",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "901c7db16770d80b6befd1d6219b454e7e56f7b62edecb5b4618f80b4c9050f1"
+      "typecheck.json": "12a93c77d0dd41493abc9bd6a6e5d4208dd62260f100d0f2d10fdcd90ea90bde"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -772,7 +772,7 @@
     "height": 1008,
     "mismatch": 0.05368613591269841,
     "ssim": 0.7043771020215445,
-    "ms": 75.80945799999972,
+    "ms": 77.94070800000009,
     "key": "display-flex-320-dark-app",
     "caseId": "display-flex",
     "viewportWidth": 320,
@@ -797,7 +797,7 @@
         "mismatch": 0.06938525883838384
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -807,9 +807,9 @@
       "layout.json": "b079dded75d591ece4571f050ec0055f652b93b89583e2f414c886bed7e45715",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "66710bc3045cb53525b5d633aa14f487cdef8d4b35cd75ef901203cc48a77ed5"
+      "typecheck.json": "ea9fc887fcc21534fe3848008bd64118626d6b8773b6d4dfb32206d5ec325011"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -822,7 +822,7 @@
     "height": 1008,
     "mismatch": 0.0025793650793650793,
     "ssim": 0.9838291565373649,
-    "ms": 76.45808299999953,
+    "ms": 77.4228750000002,
     "key": "display-flex-320-dark-fidelity",
     "caseId": "display-flex",
     "viewportWidth": 320,
@@ -847,7 +847,7 @@
         "mismatch": 0.006214488636363636
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -857,9 +857,9 @@
       "layout.json": "b079dded75d591ece4571f050ec0055f652b93b89583e2f414c886bed7e45715",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "3451b1f32f5ed114d53331a4e9ae67920ed5b491a27d9fcac6836f375cbd3064"
+      "typecheck.json": "450d3b1d9a2cb234c89c869d8b2ac169bc0cde75ada4f3615e8f0e5d2eed06a3"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -872,7 +872,7 @@
     "height": 1008,
     "mismatch": 0.05368613591269841,
     "ssim": 0.7043771020215445,
-    "ms": 122.27750000000015,
+    "ms": 123.54933399999982,
     "key": "display-flex-320-light-app",
     "caseId": "display-flex",
     "viewportWidth": 320,
@@ -897,7 +897,7 @@
         "mismatch": 0.06938525883838384
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -907,9 +907,9 @@
       "layout.json": "7572f6a57b0711edb9fa3fe2d28dbc35b10ba1385de25fc02856aa6667ec9e1b",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "420cf1509e032c3f6efaf4743caf989e4a2d43addf8ea2af5f6b25544f2ab650"
+      "typecheck.json": "2ff9187f5fd0cc67a201fc7d12791928c308a11cd619563cd506ba83f9a0cf8c"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -922,7 +922,7 @@
     "height": 1008,
     "mismatch": 0.0025793650793650793,
     "ssim": 0.9838291565373649,
-    "ms": 81.29629100000056,
+    "ms": 95.44220900000073,
     "key": "display-flex-320-light-fidelity",
     "caseId": "display-flex",
     "viewportWidth": 320,
@@ -947,7 +947,7 @@
         "mismatch": 0.006214488636363636
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -957,9 +957,9 @@
       "layout.json": "7572f6a57b0711edb9fa3fe2d28dbc35b10ba1385de25fc02856aa6667ec9e1b",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "957b588c3eeb6542618b92a2acef602885b74cfe0df3d5f6ef3750688c0d0587"
+      "typecheck.json": "b29f750191acef97f476c0327fe660468d6d08932cb8e3356f396c377e7bf0f4"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -972,7 +972,7 @@
     "height": 1008,
     "mismatch": 0.0529532967032967,
     "ssim": 0.7793438734017694,
-    "ms": 88.91125000000102,
+    "ms": 90.83758300000045,
     "key": "display-flex-390-dark-app",
     "caseId": "display-flex",
     "viewportWidth": 390,
@@ -997,7 +997,7 @@
         "mismatch": 0.06026218892839005
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1007,9 +1007,9 @@
       "layout.json": "ab93205bf2d6d3a24407c3bdec3295a648de9234664f94853d40ecab6b06e3e9",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f0396c85dd7cbbe319892bc304de41e5d8f273b59aaf353da1e12081ff113a84"
+      "typecheck.json": "9fb75e3b8912aa1c66e4f959904df116f513c20c9dd7e460bd6bc1631ec06911"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1022,7 +1022,7 @@
     "height": 1008,
     "mismatch": 0.0021164021164021165,
     "ssim": 0.9932901236056325,
-    "ms": 88.64720899999884,
+    "ms": 87.15662499999962,
     "key": "display-flex-390-dark-fidelity",
     "caseId": "display-flex",
     "viewportWidth": 390,
@@ -1047,7 +1047,7 @@
         "mismatch": 0.004999365159979685
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1057,9 +1057,9 @@
       "layout.json": "ab93205bf2d6d3a24407c3bdec3295a648de9234664f94853d40ecab6b06e3e9",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "8eafef0541d7070195decea89b8c58e51638c691d9c41af62d7a3b0fb37e18ef"
+      "typecheck.json": "3982f67799e7ae6997b9ec0367d50db23bc027f6fb39d3efe79c21b01b2dd2fa"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1072,7 +1072,7 @@
     "height": 1008,
     "mismatch": 0.0529532967032967,
     "ssim": 0.7793438734017694,
-    "ms": 100.22875000000022,
+    "ms": 100.99945800000023,
     "key": "display-flex-390-light-app",
     "caseId": "display-flex",
     "viewportWidth": 390,
@@ -1097,7 +1097,7 @@
         "mismatch": 0.06026218892839005
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1107,9 +1107,9 @@
       "layout.json": "0152e6b5c3d74fe59c4382bc335244f6806fe7679e5fb14b0377708d984b9342",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "269e110b9e0ad8f1e9588e56acb030a72a2ab1dc51ec1514506410ba9fd1e36d"
+      "typecheck.json": "a9779f8dae4934f552a2830bfc2964d3ee5668899e84a37bda4fc16e0d17b72b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1122,7 +1122,7 @@
     "height": 1008,
     "mismatch": 0.0021164021164021165,
     "ssim": 0.9932901236056325,
-    "ms": 99.90962499999841,
+    "ms": 89.93874999999935,
     "key": "display-flex-390-light-fidelity",
     "caseId": "display-flex",
     "viewportWidth": 390,
@@ -1147,7 +1147,7 @@
         "mismatch": 0.004999365159979685
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "d077de6cd5e59e435b4d7eaf10527fcd5a27e019390479506c41ffd24bdddc44",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1157,9 +1157,9 @@
       "layout.json": "0152e6b5c3d74fe59c4382bc335244f6806fe7679e5fb14b0377708d984b9342",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f35168b9c97c929c73a04814cdbef42ba774dfda2531189c7d83ecf41df62a69"
+      "typecheck.json": "c42e05f614ac85aab40c80ee0b5cfdd44a0c92b8000156ccebb46d8b32622aa4"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1172,7 +1172,7 @@
     "height": 1136,
     "mismatch": 0.09878686179577464,
     "ssim": 0.6040393021653858,
-    "ms": 138.24512499999764,
+    "ms": 91.23345899999913,
     "key": "display-grid-320-dark-app",
     "caseId": "display-grid",
     "viewportWidth": 320,
@@ -1193,7 +1193,7 @@
         "mismatch": 0.059076003086419755
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1203,9 +1203,9 @@
       "layout.json": "195a7afdeb6055187001f38f6dcec191df9b02008b4c794e08f6592bdb7f0852",
       "diagnostics.json": "74cf4c71b18d157a5e2bdcc8a369da3e1d02653330e924823dc7460b85c2024d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "69d043fa3b822cf3caa1ba823b9fd0811de27e7c692439bf2c68a328915f7594"
+      "typecheck.json": "418bdea4ed87762ee70a4083f8387d829bb1f7d021c2622788955b0959e61acd"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1218,7 +1218,7 @@
     "height": 1136,
     "mismatch": 0.0012929137323943662,
     "ssim": 0.9912271470061694,
-    "ms": 133.63520900000003,
+    "ms": 85.9808750000011,
     "key": "display-grid-320-dark-fidelity",
     "caseId": "display-grid",
     "viewportWidth": 320,
@@ -1239,7 +1239,7 @@
         "mismatch": 0.0013020833333333333
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1249,9 +1249,9 @@
       "layout.json": "195a7afdeb6055187001f38f6dcec191df9b02008b4c794e08f6592bdb7f0852",
       "diagnostics.json": "74cf4c71b18d157a5e2bdcc8a369da3e1d02653330e924823dc7460b85c2024d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c6ee282fa3742cacce5a968e1cb74a3cd58aae7420cab7872d0f6d797ffa704f"
+      "typecheck.json": "9364d86480914cd29646773b40c82ba2131bce40560d8ff87cc1d1982227e8e1"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1264,7 +1264,7 @@
     "height": 1136,
     "mismatch": 0.09878686179577464,
     "ssim": 0.6040393021653858,
-    "ms": 97.59379199999967,
+    "ms": 107.07112499999857,
     "key": "display-grid-320-light-app",
     "caseId": "display-grid",
     "viewportWidth": 320,
@@ -1285,7 +1285,7 @@
         "mismatch": 0.059076003086419755
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1295,9 +1295,9 @@
       "layout.json": "f015a6a728567f0161b59fbd4dc53732b05ae98e71b64284639f6f8a219e4343",
       "diagnostics.json": "74cf4c71b18d157a5e2bdcc8a369da3e1d02653330e924823dc7460b85c2024d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "7bdb88c41c52d4bfbc16f57c97331b6953fdd9617ea7abca0d8a05402bffc2b7"
+      "typecheck.json": "94d9ce5ef31d025bf35a641be1ec1a9aee046f8b1de730175c50befeff0ff4fc"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1310,7 +1310,7 @@
     "height": 1136,
     "mismatch": 0.0012929137323943662,
     "ssim": 0.9912271470061694,
-    "ms": 199.8182080000006,
+    "ms": 101.24675000000207,
     "key": "display-grid-320-light-fidelity",
     "caseId": "display-grid",
     "viewportWidth": 320,
@@ -1331,7 +1331,7 @@
         "mismatch": 0.0013020833333333333
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1341,9 +1341,9 @@
       "layout.json": "f015a6a728567f0161b59fbd4dc53732b05ae98e71b64284639f6f8a219e4343",
       "diagnostics.json": "74cf4c71b18d157a5e2bdcc8a369da3e1d02653330e924823dc7460b85c2024d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e2857ec4cbbeb5cf8231cda262cd23f4a7592c651132432514340b33875676d5"
+      "typecheck.json": "22b20e232dc7bb0dae15cda9ee1004b6351b2cc25f6a3643a719bb3c8b8a825d"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1356,7 +1356,7 @@
     "height": 912,
     "mismatch": 0.048930218173639226,
     "ssim": 0.8145578023887162,
-    "ms": 84.73487500000192,
+    "ms": 88.43283300000621,
     "key": "display-grid-390-dark-app",
     "caseId": "display-grid",
     "viewportWidth": 390,
@@ -1377,7 +1377,7 @@
         "mismatch": 0.025188765712290503
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1387,9 +1387,9 @@
       "layout.json": "a1926fdc4ce4904b6a85b6c285f0aadf6cbfca4bb30ae5fc73712e53b6968774",
       "diagnostics.json": "a3d4e1a8701f038a642c4593d5df4a81b29289e5794e90e05f6276b6c4c45117",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "0736eb7ede4b697ea0b10d83324c8b4ee95e49cf02cc6f8bf8211b5316e7649e"
+      "typecheck.json": "0f0b8a6a4f2ea8cdd92ab731359e5b0ca20f93531e34af08e3d3c3f4f3675b7b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1402,7 +1402,7 @@
     "height": 912,
     "mismatch": 0.001847165991902834,
     "ssim": 0.9927428467279656,
-    "ms": 93.24637500000244,
+    "ms": 82.0277500000011,
     "key": "display-grid-390-dark-fidelity",
     "caseId": "display-grid",
     "viewportWidth": 390,
@@ -1423,7 +1423,7 @@
         "mismatch": 0.0030879015363128493
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1433,9 +1433,9 @@
       "layout.json": "a1926fdc4ce4904b6a85b6c285f0aadf6cbfca4bb30ae5fc73712e53b6968774",
       "diagnostics.json": "a3d4e1a8701f038a642c4593d5df4a81b29289e5794e90e05f6276b6c4c45117",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f2769009ce28c216664ce387376dc6e4f66493a61aaf837d09482e4b1ea59ea3"
+      "typecheck.json": "71ba9370b4140d9b9463c8b8d85dbdd8ce9a099485acb0c20e66e223a70e0773"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1448,7 +1448,7 @@
     "height": 912,
     "mismatch": 0.048930218173639226,
     "ssim": 0.8145578023887162,
-    "ms": 120.24008299999696,
+    "ms": 80.89016700000138,
     "key": "display-grid-390-light-app",
     "caseId": "display-grid",
     "viewportWidth": 390,
@@ -1469,7 +1469,7 @@
         "mismatch": 0.025188765712290503
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1479,9 +1479,9 @@
       "layout.json": "9494b4be2f8e76c015cc44b7bd1e0cf69be47794460974b61d652d86edb83578",
       "diagnostics.json": "a3d4e1a8701f038a642c4593d5df4a81b29289e5794e90e05f6276b6c4c45117",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f305a3d5a143d656bccfa9a1b00ec399145722bfa5e27dfc6d385ce7935d7522"
+      "typecheck.json": "8fb809ce72e6fb10b5b4b8cb6567104bf4e5d46bc6ea7c002ffc5eb586317368"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1494,7 +1494,7 @@
     "height": 912,
     "mismatch": 0.001847165991902834,
     "ssim": 0.9927428467279656,
-    "ms": 80.94774999999936,
+    "ms": 81.70029100000102,
     "key": "display-grid-390-light-fidelity",
     "caseId": "display-grid",
     "viewportWidth": 390,
@@ -1515,7 +1515,7 @@
         "mismatch": 0.0030879015363128493
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "8963b46862b2bc4282197eb8d2d318187f9e53eb0b5ac00d47d6c381017c906d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1525,9 +1525,9 @@
       "layout.json": "9494b4be2f8e76c015cc44b7bd1e0cf69be47794460974b61d652d86edb83578",
       "diagnostics.json": "a3d4e1a8701f038a642c4593d5df4a81b29289e5794e90e05f6276b6c4c45117",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "65d60b43969ab300b26b88b49be0bb186ab0dfb96a96e0227065902970ed6637"
+      "typecheck.json": "f9056fb6984b746a9fbe7c45a7acc387c7ce688aabb0c410c2f98f337b27bc31"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1540,7 +1540,7 @@
     "height": 864,
     "mismatch": 0.041887297453703703,
     "ssim": 0.7554387895023207,
-    "ms": 67.22312500000407,
+    "ms": 69.98833399999421,
     "key": "flex-wrap-320-dark-app",
     "caseId": "flex-wrap",
     "viewportWidth": 320,
@@ -1561,7 +1561,7 @@
         "mismatch": 0.09530739379084967
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1571,9 +1571,9 @@
       "layout.json": "13abd7bb6919bedd0ac2bf1574732862061c8e1b9f7c4044c615f8342aacebe9",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "28ebe6ee401b53311f44a326a32eda077e87f13868f9d01e2354e8eb5c504dab"
+      "typecheck.json": "1e3bee03513c0ca9eb1e6378d0a53e15d6a835b4e7133cefc98c4a2047599c31"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1586,7 +1586,7 @@
     "height": 864,
     "mismatch": 0.002195457175925926,
     "ssim": 0.9823744737658631,
-    "ms": 65.06383300000016,
+    "ms": 81.97479199999361,
     "key": "flex-wrap-320-dark-fidelity",
     "caseId": "flex-wrap",
     "viewportWidth": 320,
@@ -1607,7 +1607,7 @@
         "mismatch": 0.005029616013071896
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1617,9 +1617,9 @@
       "layout.json": "13abd7bb6919bedd0ac2bf1574732862061c8e1b9f7c4044c615f8342aacebe9",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "b295906e38e4646ac2b1f543a1d7cbbc52cadea986ef83419df47ea234023c49"
+      "typecheck.json": "7a98c5d7561f39bf6f1bf16d14ad5f41574246dbbd7220dcf06df3312a62f6c9"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1632,7 +1632,7 @@
     "height": 864,
     "mismatch": 0.041887297453703703,
     "ssim": 0.7554387895023207,
-    "ms": 76.98158300000068,
+    "ms": 71.82137499999953,
     "key": "flex-wrap-320-light-app",
     "caseId": "flex-wrap",
     "viewportWidth": 320,
@@ -1653,7 +1653,7 @@
         "mismatch": 0.09530739379084967
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1663,9 +1663,9 @@
       "layout.json": "b101fb01d2b408eec4c72ce12981d19353bf96e7a0e634ed39db898cb3b4ab45",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "001fa39eec345413161453814da67480b7522e35600ac219648ef133fbc93370"
+      "typecheck.json": "23e00861c2bd06472197c33b7c663255269ea84d32d0d5ef21de67c01377ef95"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1678,7 +1678,7 @@
     "height": 864,
     "mismatch": 0.002195457175925926,
     "ssim": 0.9823744737658631,
-    "ms": 63.626374999999825,
+    "ms": 67.64774999999645,
     "key": "flex-wrap-320-light-fidelity",
     "caseId": "flex-wrap",
     "viewportWidth": 320,
@@ -1699,7 +1699,7 @@
         "mismatch": 0.005029616013071896
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1709,9 +1709,9 @@
       "layout.json": "b101fb01d2b408eec4c72ce12981d19353bf96e7a0e634ed39db898cb3b4ab45",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "d75f1eaf8bb9fc0caed702dc93c412290f90505991a608d168bb3d56152d9123"
+      "typecheck.json": "268e944889bf9e89fa925681aa7cd5a0c179567b973a2efeea1d8743be06dac7"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1724,7 +1724,7 @@
     "height": 792,
     "mismatch": 0.04100135975135975,
     "ssim": 0.8362533505875864,
-    "ms": 93.91416700000264,
+    "ms": 77.00645900000382,
     "key": "flex-wrap-390-dark-app",
     "caseId": "flex-wrap",
     "viewportWidth": 390,
@@ -1745,7 +1745,7 @@
         "mismatch": 0.09171664475846204
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1755,9 +1755,9 @@
       "layout.json": "c34627a8fac43edaec9df8f877dd82f823bd49c29c727ce8f6d150c3231e0d81",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "730b334a1de71239baa2e68f65421cd008dd815e27def2185a8eb4f9475002c3"
+      "typecheck.json": "329d90c87e2ad288d2b1f87e5ff3c3925a3dea9c3aedd2fa6062adc7dd0a55a5"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1770,7 +1770,7 @@
     "height": 792,
     "mismatch": 0.0020444832944832947,
     "ssim": 0.9924289765413833,
-    "ms": 73.9988749999975,
+    "ms": 75.16225000000122,
     "key": "flex-wrap-390-dark-fidelity",
     "caseId": "flex-wrap",
     "viewportWidth": 390,
@@ -1791,7 +1791,7 @@
         "mismatch": 0.004200213604995071
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1801,9 +1801,9 @@
       "layout.json": "c34627a8fac43edaec9df8f877dd82f823bd49c29c727ce8f6d150c3231e0d81",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e403e5e986847ba79628e197a9bb79ab6796ccf8afe9ad69b74b98b16c986d40"
+      "typecheck.json": "ced4bc87c08e5e4223faf0da1ef27d7e7d5aadfb249bb3231bb390488f59c286"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1816,7 +1816,7 @@
     "height": 792,
     "mismatch": 0.04100135975135975,
     "ssim": 0.8362533505875864,
-    "ms": 95.91025000000081,
+    "ms": 74.36212499999965,
     "key": "flex-wrap-390-light-app",
     "caseId": "flex-wrap",
     "viewportWidth": 390,
@@ -1837,7 +1837,7 @@
         "mismatch": 0.09171664475846204
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1847,9 +1847,9 @@
       "layout.json": "c0980f4a698f1338eb037ec69fd093cc2106c7faffe5b3cf32ab71573ab7551e",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "7c7301b9ceb3c9c2af520617014b395128f8f7c6c6b5caa34625b614699dfd6e"
+      "typecheck.json": "18ec0a22147085d258dc1c56370b2140900989c26a14576967183c716694be67"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1862,7 +1862,7 @@
     "height": 792,
     "mismatch": 0.0020444832944832947,
     "ssim": 0.9924289765413833,
-    "ms": 73.04779199999757,
+    "ms": 72.45799999999872,
     "key": "flex-wrap-390-light-fidelity",
     "caseId": "flex-wrap",
     "viewportWidth": 390,
@@ -1883,7 +1883,7 @@
         "mismatch": 0.004200213604995071
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "93da2d493c462339185d80da4206c3a3ca7efe19f095c629c4e8bed3702ca415",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1893,9 +1893,9 @@
       "layout.json": "c0980f4a698f1338eb037ec69fd093cc2106c7faffe5b3cf32ab71573ab7551e",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "b9e261f697ad9f5cf3f34b84e8f95ffc25f9aac82805c378e56a653af94ec3b7"
+      "typecheck.json": "0bc0b914ca30f77de2abdbf37201272af137be005db258592ce4bc8749e0c495"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1908,7 +1908,7 @@
     "height": 476,
     "mismatch": 0.06710871848739496,
     "ssim": 0.45329787234456065,
-    "ms": 48.16941699999734,
+    "ms": 48.6820000000007,
     "key": "font-family-320-dark-app",
     "caseId": "font-family",
     "viewportWidth": 320,
@@ -1924,7 +1924,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1934,9 +1934,9 @@
       "layout.json": "28b25dbbea8982071b9c39f8d98ff6ddd0f7a4ada3c66158eb40c8f94e268ece",
       "diagnostics.json": "0ab225d035228416f8c830a6262f5d97d2f4e95230fb842642e626fb034ff9b5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "835f5af5f1188b37ab24366db9e6d3a09cbc06073198a748c0cb7e3c1680be30"
+      "typecheck.json": "a2605da1f279ea7d96e1ed32583470987069f722fdf778cf79e3db1344ce9e46"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1949,7 +1949,7 @@
     "height": 476,
     "mismatch": 0.04605435924369748,
     "ssim": 0.6334029795341476,
-    "ms": 48.44891700000153,
+    "ms": 47.71424999998999,
     "key": "font-family-320-dark-fidelity",
     "caseId": "font-family",
     "viewportWidth": 320,
@@ -1965,7 +1965,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -1975,9 +1975,9 @@
       "layout.json": "28b25dbbea8982071b9c39f8d98ff6ddd0f7a4ada3c66158eb40c8f94e268ece",
       "diagnostics.json": "0ab225d035228416f8c830a6262f5d97d2f4e95230fb842642e626fb034ff9b5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "0021a205a0f555c88bc4ae5cc387f1011c845c275cd7c58f45fabb582eac1b19"
+      "typecheck.json": "c497e9f0066404c93f385a83112649be76a98164a3379eaa384c3086e39586d4"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -1990,7 +1990,7 @@
     "height": 476,
     "mismatch": 0.06337316176470588,
     "ssim": 0.455119786202194,
-    "ms": 53.29654200001096,
+    "ms": 74.08012500000768,
     "key": "font-family-320-light-app",
     "caseId": "font-family",
     "viewportWidth": 320,
@@ -2006,7 +2006,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2016,9 +2016,9 @@
       "layout.json": "3aa89f7e9316a418ff9bc5de90829f3f0105ad8048cf563ebf444d720ef570a7",
       "diagnostics.json": "0ab225d035228416f8c830a6262f5d97d2f4e95230fb842642e626fb034ff9b5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e8b2a573f5f3688a8380131261bd7670f49fcce25f1fca26a6c011e8fa063d5c"
+      "typecheck.json": "3b2f6890d4a76a3c7bc69d8a9e80c1ec8a68e7cd2e5d0c05a8c5f73cad0f00b9"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2031,7 +2031,7 @@
     "height": 476,
     "mismatch": 0.04531578256302521,
     "ssim": 0.6353405224040336,
-    "ms": 47.51958300000115,
+    "ms": 47.160415999998804,
     "key": "font-family-320-light-fidelity",
     "caseId": "font-family",
     "viewportWidth": 320,
@@ -2047,7 +2047,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2057,9 +2057,9 @@
       "layout.json": "3aa89f7e9316a418ff9bc5de90829f3f0105ad8048cf563ebf444d720ef570a7",
       "diagnostics.json": "0ab225d035228416f8c830a6262f5d97d2f4e95230fb842642e626fb034ff9b5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "8aace428419d87305fc3073cfedb169b01f36342d0309d5a86869cc447d3f93d"
+      "typecheck.json": "25a68063dee9b6662c0049e11e25859d7a3e46422d3c571bc8c30ea9dff86b8e"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2072,7 +2072,7 @@
     "height": 436,
     "mismatch": 0.058015760997412374,
     "ssim": 0.5153283326209677,
-    "ms": 51.69412499999453,
+    "ms": 49.889958999992814,
     "key": "font-family-390-dark-app",
     "caseId": "font-family",
     "viewportWidth": 390,
@@ -2088,7 +2088,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2098,9 +2098,9 @@
       "layout.json": "408fafc0721da85c5cdbd4d5780b6e4e6667b53cb9e51395e269f02f1bd3cded",
       "diagnostics.json": "422b5b0dc29fc3b2a17c47752a378f06a04508ffeba70c7b818e3511fe2a29f3",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "aee42a8a54811d27ac62c673b39553bdcc149017634ed3f78d47fdf81b76fda1"
+      "typecheck.json": "8d58655cfff6c3b86a94696fe91a4ca6d747f7260f11f0eb02d334f7d8800eed"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2113,7 +2113,7 @@
     "height": 436,
     "mismatch": 0.04151964243707363,
     "ssim": 0.667193243170402,
-    "ms": 50.52758300000278,
+    "ms": 50.459874999985914,
     "key": "font-family-390-dark-fidelity",
     "caseId": "font-family",
     "viewportWidth": 390,
@@ -2129,7 +2129,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2139,9 +2139,9 @@
       "layout.json": "408fafc0721da85c5cdbd4d5780b6e4e6667b53cb9e51395e269f02f1bd3cded",
       "diagnostics.json": "422b5b0dc29fc3b2a17c47752a378f06a04508ffeba70c7b818e3511fe2a29f3",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "872660d03611a14754f8164ed55431f63b4a3a77cf21f115009d3d6e0401488a"
+      "typecheck.json": "450155259cddd9231c961996f93394485fae6b0c13b46d616b72d1549f30f174"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2154,7 +2154,7 @@
     "height": 436,
     "mismatch": 0.054869442484121386,
     "ssim": 0.5178993459001632,
-    "ms": 49.854833999997936,
+    "ms": 51.899041999990004,
     "key": "font-family-390-light-app",
     "caseId": "font-family",
     "viewportWidth": 390,
@@ -2170,7 +2170,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2180,9 +2180,9 @@
       "layout.json": "b083cf9d2693c4ec3eef1e553a99f485459793a6d00ce85dd7e18aed2361efd0",
       "diagnostics.json": "422b5b0dc29fc3b2a17c47752a378f06a04508ffeba70c7b818e3511fe2a29f3",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "01ab3477d0ae28e426474a9bb2d3cdf346bb99c10d05ffc22e3dedf2aec22f19"
+      "typecheck.json": "dbb4348b69970e0e7d3a7c79807446a47c62f142c8fb75b48785115e09a7b04a"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2195,7 +2195,7 @@
     "height": 436,
     "mismatch": 0.04065808045165843,
     "ssim": 0.6701215903062763,
-    "ms": 49.68991699999606,
+    "ms": 51.24762499998906,
     "key": "font-family-390-light-fidelity",
     "caseId": "font-family",
     "viewportWidth": 390,
@@ -2211,7 +2211,7 @@
     "typecheck": true,
     "fixture": "css-typography/font-family.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "2562fe604fbcf2434d83953d3a9407c514ebcc650575b3340aff6819483c2ae8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2221,9 +2221,9 @@
       "layout.json": "b083cf9d2693c4ec3eef1e553a99f485459793a6d00ce85dd7e18aed2361efd0",
       "diagnostics.json": "422b5b0dc29fc3b2a17c47752a378f06a04508ffeba70c7b818e3511fe2a29f3",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "9065b07421452ee28811d6aa744c7838328626f327b71315b545ebbbdb6f4104"
+      "typecheck.json": "dfe93148eb481041009af4f0c204ce977d96430e5fc415cd3094c87b68f0110c"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2236,7 +2236,7 @@
     "height": 728,
     "mismatch": 0.034690504807692306,
     "ssim": 0.8246686689543875,
-    "ms": 61.083290999988094,
+    "ms": 58.18654200001038,
     "key": "image-320-dark-app",
     "caseId": "image",
     "viewportWidth": 320,
@@ -2257,7 +2257,7 @@
         "mismatch": 0.020476221870604782
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2267,9 +2267,9 @@
       "layout.json": "6d5e479568cd23a91ec2f48b3f3495d3f448f31063a757dbc955cf8199e7e329",
       "diagnostics.json": "7d9b4037dca6c2d82c82575c359a91cee6b1919bab3d85e1dc712e2d53334f8d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "6f0070aef06058236bd688b240e04fe8920a171dcf932d070cf08c3b0275e54f"
+      "typecheck.json": "dfdde6c22dd60d873a6b9493aa75bcfc2ae0c81a4ef252fca84769a27bfe3f91"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2282,7 +2282,7 @@
     "height": 728,
     "mismatch": 0.0028223729395604395,
     "ssim": 0.9834762545732834,
-    "ms": 55.72791699998197,
+    "ms": 59.529332999984035,
     "key": "image-320-dark-fidelity",
     "caseId": "image",
     "viewportWidth": 320,
@@ -2303,7 +2303,7 @@
         "mismatch": 0.005005054500703235
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2313,9 +2313,9 @@
       "layout.json": "6d5e479568cd23a91ec2f48b3f3495d3f448f31063a757dbc955cf8199e7e329",
       "diagnostics.json": "7d9b4037dca6c2d82c82575c359a91cee6b1919bab3d85e1dc712e2d53334f8d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "b47d71093ee9878238db2bb66a17035a3d82c2c0a41e2f537d112a2ad209a2c4"
+      "typecheck.json": "7ca8398c714808939f9fe3c98538bc482b6bb83e6f1445744b9c34bc02752c91"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2328,7 +2328,7 @@
     "height": 728,
     "mismatch": 0.0331301510989011,
     "ssim": 0.8470115241882429,
-    "ms": 55.46866700000828,
+    "ms": 57.89637499998207,
     "key": "image-320-light-app",
     "caseId": "image",
     "viewportWidth": 320,
@@ -2349,7 +2349,7 @@
         "mismatch": 0.016767756680731365
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2359,9 +2359,9 @@
       "layout.json": "2aa948e3dcc836f0ff22ca9268e0576430cb888441643877553ec0f225b07934",
       "diagnostics.json": "7d9b4037dca6c2d82c82575c359a91cee6b1919bab3d85e1dc712e2d53334f8d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f9f3a0934690d82a1ac79c598d46d1450905922f81681415d44349081974c0e5"
+      "typecheck.json": "83ed38d2ed7e96d8181c8dd79ab3c13c3819c6f534112b9c54498485f3ab4ba6"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2374,7 +2374,7 @@
     "height": 728,
     "mismatch": 0.0029125171703296704,
     "ssim": 0.9839988238572859,
-    "ms": 69.99162499999511,
+    "ms": 56.667124999978114,
     "key": "image-320-light-fidelity",
     "caseId": "image",
     "viewportWidth": 320,
@@ -2395,7 +2395,7 @@
         "mismatch": 0.005136911040787623
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2405,9 +2405,9 @@
       "layout.json": "2aa948e3dcc836f0ff22ca9268e0576430cb888441643877553ec0f225b07934",
       "diagnostics.json": "7d9b4037dca6c2d82c82575c359a91cee6b1919bab3d85e1dc712e2d53334f8d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "cdec9a233794ddaad318de9789b0858f486f502f5110ba1f42b884d5c4e431ed"
+      "typecheck.json": "61ac6ea8a6b3bbed68ea98bcb9c98c20a513973d48e1bc7354e55d6f9c2c23fb"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2420,7 +2420,7 @@
     "height": 696,
     "mismatch": 0.026075744179192454,
     "ssim": 0.8660660907356734,
-    "ms": 64.43966699999874,
+    "ms": 64.50412499997765,
     "key": "image-390-dark-app",
     "caseId": "image",
     "viewportWidth": 390,
@@ -2441,7 +2441,7 @@
         "mismatch": 0.018938724276925254
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2451,9 +2451,9 @@
       "layout.json": "402c55dab72fb9a42e075c5242d3bb9e56f544e02cb9d89e3411d2693efb6a05",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "89b584a30ced3d282ded6747aa5fc2cf086a7fd9714fb164d1dfab7b22a006e1"
+      "typecheck.json": "8dafbcfc89ffa2a1a419dd4ad8b7b7ff15f33107bda692200d58376797969810"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2466,7 +2466,7 @@
     "height": 696,
     "mismatch": 0.0027446212791040377,
     "ssim": 0.9825866713430701,
-    "ms": 62.465958000015235,
+    "ms": 63.67691700000432,
     "key": "image-390-dark-fidelity",
     "caseId": "image",
     "viewportWidth": 390,
@@ -2487,7 +2487,7 @@
         "mismatch": 0.004075030054451595
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2497,9 +2497,9 @@
       "layout.json": "402c55dab72fb9a42e075c5242d3bb9e56f544e02cb9d89e3411d2693efb6a05",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2254f4a879bb3957f27e9be5c9ef5de91f3d2adb43480bb06261bc89b5edba66"
+      "typecheck.json": "5f8bdc97e08085c2feaddbbc1ebd3106ca12b20a1d0e3392bdc88dc0b63e2c8b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2512,7 +2512,7 @@
     "height": 696,
     "mismatch": 0.024412393162393162,
     "ssim": 0.8833142215191532,
-    "ms": 65.91504199997871,
+    "ms": 65.16733399999794,
     "key": "image-390-light-app",
     "caseId": "image",
     "viewportWidth": 390,
@@ -2533,7 +2533,7 @@
         "mismatch": 0.014907891945406973
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2543,9 +2543,9 @@
       "layout.json": "5f813586a2a53081adb431436ed3339bf2e8a8b21cd9022c404d42c42344e118",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e627c56773de3622fa5c82120e98a1bd4ebac0c6f7625bc5098111b06cb09334"
+      "typecheck.json": "75db6f435f3d0f6e39ce6caf6dda54f1391f5e02a6cd9921458391545d934f81"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2558,7 +2558,7 @@
     "height": 696,
     "mismatch": 0.0028293545534924846,
     "ssim": 0.9831355148275206,
-    "ms": 63.5293749999837,
+    "ms": 64.76470800000243,
     "key": "image-390-light-fidelity",
     "caseId": "image",
     "viewportWidth": 390,
@@ -2579,7 +2579,7 @@
         "mismatch": 0.004181104589491549
       }
     ],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "311f8333a8f271280fa797fc362b65496fb9ab2373666e5b795b31f39347de7f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2589,9 +2589,9 @@
       "layout.json": "5f813586a2a53081adb431436ed3339bf2e8a8b21cd9022c404d42c42344e118",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "30fe1f3f9d891b7d078c8100faf84fe4efb9bc15086a713b652bc6ba3030676d"
+      "typecheck.json": "1f2cb9de5d43714c0d2e0014ca28d296e626b5a72de71d84b4bbb6b294e4ac02"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2604,7 +2604,7 @@
     "height": 288,
     "mismatch": 0.00009223090277777778,
     "ssim": 0.9950944413382511,
-    "ms": 26.67783299999428,
+    "ms": 28.822291999997105,
     "key": "text-heading-320-dark-app",
     "caseId": "text-heading",
     "viewportWidth": 320,
@@ -2620,7 +2620,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2630,10 +2630,10 @@
       "layout.json": "bea73b9bd223445d4dd6f7388847992e553c4392c75275459cea6f49ae4cc95d",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "4cb18dbff1a56df33bbe798e46ad38243d01ab4fddefce5444e0fbfdb35299ab",
+      "typecheck.json": "f0d8a832e2ea9d5516dda3e6a4d4c274cc7bcb1f32f2b6fff3e828155df754ef",
       "text.json": "80fc117dc4bd3608af59bf3d4d27522773531f3885a2832726b982063657c4a9"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2646,7 +2646,7 @@
     "height": 288,
     "mismatch": 0.0009168836805555556,
     "ssim": 0.97940488211948,
-    "ms": 26.26133400000981,
+    "ms": 26.797042000020156,
     "key": "text-heading-320-dark-fidelity",
     "caseId": "text-heading",
     "viewportWidth": 320,
@@ -2662,7 +2662,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2672,10 +2672,10 @@
       "layout.json": "bea73b9bd223445d4dd6f7388847992e553c4392c75275459cea6f49ae4cc95d",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "1323c9011d9bbd50d208a7bfc055980bd801dc042dab872ecc0b2118cce38308",
+      "typecheck.json": "3d7e00bb62bbc7e0bab1248b871098d15202962f6a21cd2c9fb42e1fdee98be5",
       "text.json": "b34e0e9aa75c1095cf4e3463564bbf5ebec9674d0cd400fc79e5260582e67127"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2688,7 +2688,7 @@
     "height": 288,
     "mismatch": 0.00010308159722222222,
     "ssim": 0.9958335871623776,
-    "ms": 29.309249999991152,
+    "ms": 33.22095799999079,
     "key": "text-heading-320-light-app",
     "caseId": "text-heading",
     "viewportWidth": 320,
@@ -2704,7 +2704,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2714,10 +2714,10 @@
       "layout.json": "b39603504d7d88a91d3480fbb19f28461928e997df847c1ac724ec875faced82",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "7c2cca0fa6cba09cf6284c105b33f46e75dbd463d7757b27bcadc28d7c3b7e2c",
+      "typecheck.json": "f279d440526ca183deeb1ec918496ed36b3781ce2253c98f93ff6441e75786a1",
       "text.json": "8b2f89795ce715af564cab778233083d3d94d09bd901f87ac1b07be2d2fa5b79"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2730,7 +2730,7 @@
     "height": 288,
     "mismatch": 0.0008897569444444444,
     "ssim": 0.982252722272925,
-    "ms": 26.075457999977516,
+    "ms": 27.869458000001032,
     "key": "text-heading-320-light-fidelity",
     "caseId": "text-heading",
     "viewportWidth": 320,
@@ -2746,7 +2746,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2756,10 +2756,10 @@
       "layout.json": "b39603504d7d88a91d3480fbb19f28461928e997df847c1ac724ec875faced82",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "14d084e20565474cf76fe0317e30441fbf645758418da5ac4b54ee3fd5e6e863",
+      "typecheck.json": "89561dfdc3bc68281c088a0eefac0c47155c19f97398e1addbe174cbdb359c42",
       "text.json": "6a4d14d567791f81be5fefd8833b14cf9a970baeb42fa0528ec82f8a9d8dac7c"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2772,7 +2772,7 @@
     "height": 288,
     "mismatch": 0.00007567663817663817,
     "ssim": 0.9959980968812042,
-    "ms": 30.095207999984268,
+    "ms": 28.786541999987094,
     "key": "text-heading-390-dark-app",
     "caseId": "text-heading",
     "viewportWidth": 390,
@@ -2788,7 +2788,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2798,10 +2798,10 @@
       "layout.json": "2f04e2f6d87b0e3f36824a4187b4038c5c79bc14eba765285e103d87bacd0525",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2c5e52cf1a45bdb4fac2d93de2f95c95ede39ead35e3574711df904dbc41bdd2",
+      "typecheck.json": "187d163c437470eb19f0dd60020a7a0a55ad51a76f5b6f519b0aadf4f8bf9477",
       "text.json": "80fc117dc4bd3608af59bf3d4d27522773531f3885a2832726b982063657c4a9"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2814,7 +2814,7 @@
     "height": 288,
     "mismatch": 0.0007523148148148148,
     "ssim": 0.9831987196237876,
-    "ms": 32.0891249999986,
+    "ms": 30.453041999979177,
     "key": "text-heading-390-dark-fidelity",
     "caseId": "text-heading",
     "viewportWidth": 390,
@@ -2830,7 +2830,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2840,10 +2840,10 @@
       "layout.json": "2f04e2f6d87b0e3f36824a4187b4038c5c79bc14eba765285e103d87bacd0525",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "db7768eb4c67f29dfb397011e867643a64e915e9224f18e326c99802db5f18a6",
+      "typecheck.json": "abdb8cdb88e7ec803da7ee976eb097675ae0bc56efacfb01ead1235dd550a4bb",
       "text.json": "b34e0e9aa75c1095cf4e3463564bbf5ebec9674d0cd400fc79e5260582e67127"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2856,7 +2856,7 @@
     "height": 288,
     "mismatch": 0.00008457977207977208,
     "ssim": 0.996601084264038,
-    "ms": 30.982583000004524,
+    "ms": 31.501458000013372,
     "key": "text-heading-390-light-app",
     "caseId": "text-heading",
     "viewportWidth": 390,
@@ -2872,7 +2872,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2882,10 +2882,10 @@
       "layout.json": "4a5d9115f5c238403bda839264a3acc9efcc5ba48feef8aed5eb56036923a0a7",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "91f3d97cf52e48aadc0f7ef56cc07eda2db43c50c25b0e134d4a30d02cbd3feb",
+      "typecheck.json": "d0cbe2c6aa2c57203b0cde7d30872f38f3722c3184a5e6bd14197ccee4187dd8",
       "text.json": "8b2f89795ce715af564cab778233083d3d94d09bd901f87ac1b07be2d2fa5b79"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2898,7 +2898,7 @@
     "height": 288,
     "mismatch": 0.0007300569800569801,
     "ssim": 0.9855219576436975,
-    "ms": 29.1929999999993,
+    "ms": 38.062917000002926,
     "key": "text-heading-390-light-fidelity",
     "caseId": "text-heading",
     "viewportWidth": 390,
@@ -2914,7 +2914,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--heading.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "facd59557a2da3bb6b9e1ba21e2f6496ddcc26bb23178ce499684247211cec8d",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2924,10 +2924,10 @@
       "layout.json": "4a5d9115f5c238403bda839264a3acc9efcc5ba48feef8aed5eb56036923a0a7",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "fd7df220db46a423e2ce57cfcb33b97ad47f9c1acf61e3674200bdcd2d26533d",
+      "typecheck.json": "3b4770967b5efbcececf49b15e5da5ad1ea010d498f3fc4e6be90fef86fca79f",
       "text.json": "6a4d14d567791f81be5fefd8833b14cf9a970baeb42fa0528ec82f8a9d8dac7c"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2940,7 +2940,7 @@
     "height": 360,
     "mismatch": 0.003498263888888889,
     "ssim": 0.9787134828743511,
-    "ms": 31.413292000012007,
+    "ms": 40.99337499999092,
     "key": "text-inline-320-dark-app",
     "caseId": "text-inline",
     "viewportWidth": 320,
@@ -2956,7 +2956,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -2966,10 +2966,10 @@
       "layout.json": "11f423cddd9e174a4ddc8e5668eac49567aa3d290dda20e6a94b334791b1efa6",
       "diagnostics.json": "9879cf66177b283d4e8adcca2fe17da0dafd00ea00068caeb1e181cac227346d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "bd6439c7623086efb11b810aa636593dba52f1f4fb1a0e8f032ab42442b47a79",
+      "typecheck.json": "4308a2765cf6d6503b24dfcbf928f1f8b20df2659e268d04e1e345d948a4a680",
       "text.json": "c4a48ccc777aeef7369a93162c9bce88f83691a1f27281e54df8c0f0bbaea564"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -2982,7 +2982,7 @@
     "height": 360,
     "mismatch": 0.003498263888888889,
     "ssim": 0.9787134828743511,
-    "ms": 32.76362500002142,
+    "ms": 32.77225000000908,
     "key": "text-inline-320-dark-fidelity",
     "caseId": "text-inline",
     "viewportWidth": 320,
@@ -2998,7 +2998,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3008,10 +3008,10 @@
       "layout.json": "11f423cddd9e174a4ddc8e5668eac49567aa3d290dda20e6a94b334791b1efa6",
       "diagnostics.json": "9879cf66177b283d4e8adcca2fe17da0dafd00ea00068caeb1e181cac227346d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e7bcc7a819e8223594894eb4585faa7199d196f2ce76d6a57968133b4e7e4b24",
+      "typecheck.json": "049ad4fc1d1d3f8879210e6e6ea1dadb00c6ea61e3421fd279ca794c605819f7",
       "text.json": "c4a48ccc777aeef7369a93162c9bce88f83691a1f27281e54df8c0f0bbaea564"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3024,7 +3024,7 @@
     "height": 360,
     "mismatch": 0.0035243055555555557,
     "ssim": 0.9796513809572037,
-    "ms": 31.512833000015235,
+    "ms": 32.64479200000642,
     "key": "text-inline-320-light-app",
     "caseId": "text-inline",
     "viewportWidth": 320,
@@ -3040,7 +3040,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3050,10 +3050,10 @@
       "layout.json": "cedc47d01deb2d5f9b5f1c2240bef65945404cc472e9fef3a1382e03dcdc1b9a",
       "diagnostics.json": "9879cf66177b283d4e8adcca2fe17da0dafd00ea00068caeb1e181cac227346d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c664e7658e6a736d01abc9ef17094dfb4e7491c99f23b686663648931f28f675",
+      "typecheck.json": "7e1747eabd2d8750cea13c2471ee3c5840c73310d7e08d0c507d49e838190f7f",
       "text.json": "a066aaba459adcc284f540be11fde31dd5e62ff1fe41dbeb4bc19a6ad6af6817"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3066,7 +3066,7 @@
     "height": 360,
     "mismatch": 0.0035243055555555557,
     "ssim": 0.9796513809572037,
-    "ms": 31.049499999993714,
+    "ms": 32.84258300001966,
     "key": "text-inline-320-light-fidelity",
     "caseId": "text-inline",
     "viewportWidth": 320,
@@ -3082,7 +3082,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3092,10 +3092,10 @@
       "layout.json": "cedc47d01deb2d5f9b5f1c2240bef65945404cc472e9fef3a1382e03dcdc1b9a",
       "diagnostics.json": "9879cf66177b283d4e8adcca2fe17da0dafd00ea00068caeb1e181cac227346d",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2d55628526e4b66e77c7e2eb9abf94e2cb697be4c1aae1ba7f379d3261ddc651",
+      "typecheck.json": "bf7efe80f8e0de7ff5b1caecc0ffcc18a77eb3dbc671822fdd543d7e127c96de",
       "text.json": "a066aaba459adcc284f540be11fde31dd5e62ff1fe41dbeb4bc19a6ad6af6817"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3108,7 +3108,7 @@
     "height": 360,
     "mismatch": 0.0028133903133903135,
     "ssim": 0.9835517427293413,
-    "ms": 35.30987499997718,
+    "ms": 65.61841599998297,
     "key": "text-inline-390-dark-app",
     "caseId": "text-inline",
     "viewportWidth": 390,
@@ -3124,7 +3124,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3134,10 +3134,10 @@
       "layout.json": "01d62c030115f6ce2bfadf6cb877b6c10abdec45938c7dfebe14775200f12bbf",
       "diagnostics.json": "bcfce0c7f909b322d4bf3ff6417715a198601095b60d8967e498a6161fb01a70",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "6a97f51e31fb1ee7a5fb053e88a22af9ba79c5bd5388dc3776f49fd4f380dc25",
+      "typecheck.json": "2ebd7ab9ae09afb62690c6eeb86a569a7be8394142169f638151a1b2b9f74cb6",
       "text.json": "f5e442d7a9e7cb8c3959e0846868dd419790aec19b5c5b4c28a3a501f9166d3b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3150,7 +3150,7 @@
     "height": 360,
     "mismatch": 0.0028133903133903135,
     "ssim": 0.9835517427293413,
-    "ms": 35.557374999974854,
+    "ms": 56.68924999999581,
     "key": "text-inline-390-dark-fidelity",
     "caseId": "text-inline",
     "viewportWidth": 390,
@@ -3166,7 +3166,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3176,10 +3176,10 @@
       "layout.json": "01d62c030115f6ce2bfadf6cb877b6c10abdec45938c7dfebe14775200f12bbf",
       "diagnostics.json": "bcfce0c7f909b322d4bf3ff6417715a198601095b60d8967e498a6161fb01a70",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "958e3661d13c41d09105e51507134f62e6515125bfee30bddf3fafdb2e1a526b",
+      "typecheck.json": "ca5f4616dd819e98aaf70c5a44a8e8e55e687422347098c856b1b4c25278893f",
       "text.json": "f5e442d7a9e7cb8c3959e0846868dd419790aec19b5c5b4c28a3a501f9166d3b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3192,7 +3192,7 @@
     "height": 360,
     "mismatch": 0.002841880341880342,
     "ssim": 0.9843250283581708,
-    "ms": 34.50420899997698,
+    "ms": 46.05420799998683,
     "key": "text-inline-390-light-app",
     "caseId": "text-inline",
     "viewportWidth": 390,
@@ -3208,7 +3208,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3218,10 +3218,10 @@
       "layout.json": "93e9124cade9ee64e22d977a02061f18f1d10c8efd1637186d9d070e9cb19a9c",
       "diagnostics.json": "bcfce0c7f909b322d4bf3ff6417715a198601095b60d8967e498a6161fb01a70",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "1194b006a99b2afbb7a467ce034c4c2a762e91af5017f829b6798f10395eed8e",
+      "typecheck.json": "46163109c1cbfcc26e8abca6c9068995e5a6f0b87693c14d79489d1f4e448838",
       "text.json": "4701d1578c6ddf6b7fdf0835f4e2219e2664a7b5b4c6ce5c5292296aee3cf2ea"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3234,7 +3234,7 @@
     "height": 360,
     "mismatch": 0.002841880341880342,
     "ssim": 0.9843250283581708,
-    "ms": 33.574167000013404,
+    "ms": 37.37341699999524,
     "key": "text-inline-390-light-fidelity",
     "caseId": "text-inline",
     "viewportWidth": 390,
@@ -3250,7 +3250,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--inline.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "021ab100d5d5e4a74836f27a604b4b51e8f9792b36fdeeb922e278d444cdfd0a",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3260,10 +3260,10 @@
       "layout.json": "93e9124cade9ee64e22d977a02061f18f1d10c8efd1637186d9d070e9cb19a9c",
       "diagnostics.json": "bcfce0c7f909b322d4bf3ff6417715a198601095b60d8967e498a6161fb01a70",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "39a0d29c9fd06ef68a60b92e22bda8862569d992828338515c6413366ecef9cf",
+      "typecheck.json": "a36b091aa86d91db83a4a4c7574b60e83c55129b04c0648ec4ab072358e2847f",
       "text.json": "4701d1578c6ddf6b7fdf0835f4e2219e2664a7b5b4c6ce5c5292296aee3cf2ea"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3276,7 +3276,7 @@
     "height": 500,
     "mismatch": 0.085459375,
     "ssim": 0.4343379646548435,
-    "ms": 48.644790999998804,
+    "ms": 50.62924999999814,
     "key": "text-level-320-dark-app",
     "caseId": "text-level",
     "viewportWidth": 320,
@@ -3292,7 +3292,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3302,9 +3302,9 @@
       "layout.json": "1461fd9871e7f29715da31a441ee27a0ae5907cb27d030feea39d59d276c750e",
       "diagnostics.json": "b9bdf404951a786c8a37aace8e5f03ad0bd7c05d91d25a5b48b8e370fbb09ef9",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2addc0085c499f150237ab53d23aa4efea17cee68906805ff0d315aa769b4f54"
+      "typecheck.json": "999a74605e3a37f4adfbb628a7f0f3fdc99d05b1f0a2797879ab129deead8569"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3317,7 +3317,7 @@
     "height": 500,
     "mismatch": 0.03125625,
     "ssim": 0.7548407258502865,
-    "ms": 47.51799999999639,
+    "ms": 47.52637499998673,
     "key": "text-level-320-dark-fidelity",
     "caseId": "text-level",
     "viewportWidth": 320,
@@ -3333,7 +3333,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3343,9 +3343,9 @@
       "layout.json": "1461fd9871e7f29715da31a441ee27a0ae5907cb27d030feea39d59d276c750e",
       "diagnostics.json": "b9bdf404951a786c8a37aace8e5f03ad0bd7c05d91d25a5b48b8e370fbb09ef9",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "3acf0379a0a48d01a8bf2337e0cf925c34ff9fbff3f951ea7b2d7a172a889a34"
+      "typecheck.json": "d5b6d7cc1dcf9fb53dd0d43bc7acc3e63db7650faba09fd4559e5baf21191d10"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3358,7 +3358,7 @@
     "height": 500,
     "mismatch": 0.08188125,
     "ssim": 0.42137682485554556,
-    "ms": 50.578999999997905,
+    "ms": 49.84504200000083,
     "key": "text-level-320-light-app",
     "caseId": "text-level",
     "viewportWidth": 320,
@@ -3374,7 +3374,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3384,9 +3384,9 @@
       "layout.json": "59a0a3d0e8992ad69759c2a8f34466d9f126456ad368b7fb3dfebe4626f3e285",
       "diagnostics.json": "b9bdf404951a786c8a37aace8e5f03ad0bd7c05d91d25a5b48b8e370fbb09ef9",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "3f8bc2e18bede8ded692157c9c502f04f3ec6c64a21f4db44cb479b367b09a4d"
+      "typecheck.json": "5105e428fd520de726dce9326b04f68ee4f41279954337bf62a4d22553076ef5"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3399,7 +3399,7 @@
     "height": 500,
     "mismatch": 0.033440625,
     "ssim": 0.7351426790937363,
-    "ms": 46.91058300000441,
+    "ms": 49.795083000004524,
     "key": "text-level-320-light-fidelity",
     "caseId": "text-level",
     "viewportWidth": 320,
@@ -3415,7 +3415,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3425,9 +3425,9 @@
       "layout.json": "59a0a3d0e8992ad69759c2a8f34466d9f126456ad368b7fb3dfebe4626f3e285",
       "diagnostics.json": "b9bdf404951a786c8a37aace8e5f03ad0bd7c05d91d25a5b48b8e370fbb09ef9",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "6b99c30d8a7c0f94027950eeda164941c07227a37d8d36cb86497b16d2a985ad"
+      "typecheck.json": "daa7ed67abf10271995e0f695a5968542658aac5f176ae81eafb4736a26a24b2"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3440,7 +3440,7 @@
     "height": 420,
     "mismatch": 0.07708180708180708,
     "ssim": 0.48324382508195396,
-    "ms": 49.08399999997346,
+    "ms": 50.94583399998373,
     "key": "text-level-390-dark-app",
     "caseId": "text-level",
     "viewportWidth": 390,
@@ -3456,7 +3456,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3466,9 +3466,9 @@
       "layout.json": "a45a73aa31b0a32f6e48e430076d8b81f299b67ed3a7c61df0afae06c5f64a0f",
       "diagnostics.json": "82ae556534bf70a48b766c0a66bd29f521d744c93e72e86fab2dca1f9cc463c5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "334bafa093801f837e28d6afb6d943faad65b5e63257f96f396dcd5165b71a7a"
+      "typecheck.json": "79bdda4be2dff18755630a15e024a6672b82407f87a8cfaeb9697a30ec5b6e5d"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3481,7 +3481,7 @@
     "height": 420,
     "mismatch": 0.0280006105006105,
     "ssim": 0.7925096896702494,
-    "ms": 49.117625000013504,
+    "ms": 48.87529100000393,
     "key": "text-level-390-dark-fidelity",
     "caseId": "text-level",
     "viewportWidth": 390,
@@ -3497,7 +3497,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3507,9 +3507,9 @@
       "layout.json": "a45a73aa31b0a32f6e48e430076d8b81f299b67ed3a7c61df0afae06c5f64a0f",
       "diagnostics.json": "82ae556534bf70a48b766c0a66bd29f521d744c93e72e86fab2dca1f9cc463c5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "ed01b10d7510fba301f6800d41ef54e7fa002c3e757068dcbed26143b02e5462"
+      "typecheck.json": "d455c11eb6268b00f6f2d47cdbbe4d6782e62a80423c1aff6dbeb93edd166a12"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3522,7 +3522,7 @@
     "height": 420,
     "mismatch": 0.07264041514041514,
     "ssim": 0.48697016477866345,
-    "ms": 51.146833000006154,
+    "ms": 58.072375000003376,
     "key": "text-level-390-light-app",
     "caseId": "text-level",
     "viewportWidth": 390,
@@ -3538,7 +3538,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3548,9 +3548,9 @@
       "layout.json": "f1f41006fb871d62a526d8275947f59421e2aa89579fd82867110c1729c90b3e",
       "diagnostics.json": "82ae556534bf70a48b766c0a66bd29f521d744c93e72e86fab2dca1f9cc463c5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c35d304e38d5717bdddb0bb337acb662dab33eb673e90f52acdb5c4c5db93a63"
+      "typecheck.json": "f22ce7756ae269fc273062891f3facec1e30a1c92372eea1e7543053d3b0441c"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3563,7 +3563,7 @@
     "height": 420,
     "mismatch": 0.0283028083028083,
     "ssim": 0.7833728069466603,
-    "ms": 46.58512500001234,
+    "ms": 53.15912500000559,
     "key": "text-level-390-light-fidelity",
     "caseId": "text-level",
     "viewportWidth": 390,
@@ -3579,7 +3579,7 @@
     "typecheck": true,
     "fixture": "html/text-level-semantics.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "31bbc4f5ebb90391bec789d7c61a1fda6d820026c81e268a051cf5f7afb43c3f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3589,9 +3589,9 @@
       "layout.json": "f1f41006fb871d62a526d8275947f59421e2aa89579fd82867110c1729c90b3e",
       "diagnostics.json": "82ae556534bf70a48b766c0a66bd29f521d744c93e72e86fab2dca1f9cc463c5",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "e5d0609d2a28d5104c6b3c539879fbb9d731ddc62dfbfc40d4d75fbeb903051a"
+      "typecheck.json": "cd336ec7baa44cee8b8c8e039e9fe48890c3ab3eb01486c86c9d91ab41ddeebd"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3604,7 +3604,7 @@
     "height": 360,
     "mismatch": 0.0013368055555555555,
     "ssim": 0.9662459992828687,
-    "ms": 31.990749999997206,
+    "ms": 36.5604170000297,
     "key": "text-missing-font-320-dark-app",
     "caseId": "text-missing-font",
     "viewportWidth": 320,
@@ -3620,20 +3620,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "c7828f2ade501925dc68c357478f64a85d683e570172d0948f70b10f6f93996a",
       "native.png": "48e5e1b68a58491a2ea9d336e1d104f65a2c0388c32c9d856cbf4a4ddd000765",
       "diff.png": "8e58502a001535f82000098706efd718b54681823c2c00fa46f4ae00b8925989",
-      "layout.json": "d0abf46b6f15e84e4a4be6ab576aaa1228864bb8628a5edd6cb1dd3c498f4ecc",
+      "layout.json": "b5caffa24e67f53bb44be70a79242a8928d2a7248b53c02574e6b0e8ca302fe4",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "8a30799f46f9b7de07eaabaa7bc380498bbfd27a5f40cc10fc16f25164d629e6",
-      "text.json": "99249f848f894adb1f985b4fb0668ca04c1a2de7010cef3a8c7c14d96abafc55"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "43c8f1e2199c10469322a8fd901ba3dd351d1efe3987e8a612a43046a405d91c",
+      "text.json": "59af7030236e9e2d765244d97ac401a747fb635af522545aa3e78174b9059e61"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3646,7 +3646,7 @@
     "height": 360,
     "mismatch": 0.0013368055555555555,
     "ssim": 0.9662459992828687,
-    "ms": 31.070249999989755,
+    "ms": 33.183999999950174,
     "key": "text-missing-font-320-dark-fidelity",
     "caseId": "text-missing-font",
     "viewportWidth": 320,
@@ -3662,20 +3662,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "c7828f2ade501925dc68c357478f64a85d683e570172d0948f70b10f6f93996a",
       "native.png": "48e5e1b68a58491a2ea9d336e1d104f65a2c0388c32c9d856cbf4a4ddd000765",
       "diff.png": "8e58502a001535f82000098706efd718b54681823c2c00fa46f4ae00b8925989",
-      "layout.json": "d0abf46b6f15e84e4a4be6ab576aaa1228864bb8628a5edd6cb1dd3c498f4ecc",
+      "layout.json": "b5caffa24e67f53bb44be70a79242a8928d2a7248b53c02574e6b0e8ca302fe4",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "1a2b317334972518574bf1a7a2a52c7faf6fafd4db4a2b1d1bd1552fbe7408e7",
-      "text.json": "99249f848f894adb1f985b4fb0668ca04c1a2de7010cef3a8c7c14d96abafc55"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "c587809204e3d52bc193aee3848ce848a655c96a069f6a2d4198ee16219851df",
+      "text.json": "59af7030236e9e2d765244d97ac401a747fb635af522545aa3e78174b9059e61"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3688,7 +3688,7 @@
     "height": 360,
     "mismatch": 0.0012543402777777778,
     "ssim": 0.9718407954144922,
-    "ms": 31.18149999997695,
+    "ms": 36.8581669999985,
     "key": "text-missing-font-320-light-app",
     "caseId": "text-missing-font",
     "viewportWidth": 320,
@@ -3704,20 +3704,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "7ab3becb2348128b451dc2bddf085aa4504044bbf578d1da3800f21035a62c36",
       "native.png": "7a8748ec9718480eefaf34fd9f92856eff4eead8aacf8728d804230da097f936",
       "diff.png": "874a8508fa7194eefcdcfeaaf8443e6b19937403f299f9853e6126a434545f39",
-      "layout.json": "c2635849c7b02e45f9728271897a0b366048ce8ae92ef0db8ff5e9889a0c4d85",
+      "layout.json": "9d824426aaadb208adf1be1819063682081a1d1d45a27cb0beb259bdef5da498",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "58c343d0b15301b7ae96737d041d8dd2b6a5d7d37ebcd6ffc66d33e60638d601",
-      "text.json": "a53582b9f868477e5c9088920c6944146a9d976be99c2ca95b73f1e7cb56d60a"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "fe1031041ea19e92db8aa6391a9ac932986d22e2072ece0544da97cf75d10f4c",
+      "text.json": "5bb8babd90fed260ec0c227d5cc93334684ba3821540a188498f15ba7e52e3f7"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3730,7 +3730,7 @@
     "height": 360,
     "mismatch": 0.0012543402777777778,
     "ssim": 0.9718407954144922,
-    "ms": 31.044499999989057,
+    "ms": 36.87670899997465,
     "key": "text-missing-font-320-light-fidelity",
     "caseId": "text-missing-font",
     "viewportWidth": 320,
@@ -3746,20 +3746,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "7ab3becb2348128b451dc2bddf085aa4504044bbf578d1da3800f21035a62c36",
       "native.png": "7a8748ec9718480eefaf34fd9f92856eff4eead8aacf8728d804230da097f936",
       "diff.png": "874a8508fa7194eefcdcfeaaf8443e6b19937403f299f9853e6126a434545f39",
-      "layout.json": "c2635849c7b02e45f9728271897a0b366048ce8ae92ef0db8ff5e9889a0c4d85",
+      "layout.json": "9d824426aaadb208adf1be1819063682081a1d1d45a27cb0beb259bdef5da498",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "f9ec19785cb643567f1e42c4b23ecbb8f39cd968a3bc2d3a70a7d795357848c7",
-      "text.json": "a53582b9f868477e5c9088920c6944146a9d976be99c2ca95b73f1e7cb56d60a"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "a2e3905b1f1ddf9c9c9a0063269fb84956d8991c7c60c522b53c2e7305847e7f",
+      "text.json": "5bb8babd90fed260ec0c227d5cc93334684ba3821540a188498f15ba7e52e3f7"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3772,7 +3772,7 @@
     "height": 360,
     "mismatch": 0.0010754985754985755,
     "ssim": 0.9724593515214629,
-    "ms": 38.012083999987226,
+    "ms": 38.115125000011176,
     "key": "text-missing-font-390-dark-app",
     "caseId": "text-missing-font",
     "viewportWidth": 390,
@@ -3788,20 +3788,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "a9eecb9c154d2451fb59c8dffc038497dddc183264420480b9329910f1049d35",
       "native.png": "2bc8a9bb88dbeb37f22966af0b919297f904ba8f3168a01e725f8517fdc905ba",
       "diff.png": "554d89abfebb6ac2ca0d3d6478206fa980235c4cbe08cfca432728b7c7cf00fb",
-      "layout.json": "b47d3895786c04d3061358ec4c0eac83de03dc60c0a2f36a7ee8bfd0d199239a",
+      "layout.json": "68009535d171e33ccbac7f4923251264db5af03c48a0d8f4ef792546dd7c0529",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "267297f2c177b2bc16a357cbd95556ec1b7486c71b560f40276f18db53cde83a",
-      "text.json": "356f2ff0155894d8c9c73153762fb91529c4db6bf73c09d0b67c0707e3f73fd4"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "de8efcea26a492ea6180f6c8bbad7e8e9d88d8a1f982f6d250108d669197e199",
+      "text.json": "71e093f98b6d47ce09c3e9f2e7c6a6be3edb460e4ee481121f34d4adc486db02"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3814,7 +3814,7 @@
     "height": 360,
     "mismatch": 0.0010754985754985755,
     "ssim": 0.9724593515214629,
-    "ms": 34.48995900002774,
+    "ms": 38.63662499998463,
     "key": "text-missing-font-390-dark-fidelity",
     "caseId": "text-missing-font",
     "viewportWidth": 390,
@@ -3830,20 +3830,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "a9eecb9c154d2451fb59c8dffc038497dddc183264420480b9329910f1049d35",
       "native.png": "2bc8a9bb88dbeb37f22966af0b919297f904ba8f3168a01e725f8517fdc905ba",
       "diff.png": "554d89abfebb6ac2ca0d3d6478206fa980235c4cbe08cfca432728b7c7cf00fb",
-      "layout.json": "b47d3895786c04d3061358ec4c0eac83de03dc60c0a2f36a7ee8bfd0d199239a",
+      "layout.json": "68009535d171e33ccbac7f4923251264db5af03c48a0d8f4ef792546dd7c0529",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "5124f92fe59e525010f1f288ea462c52ed6ce7b35258155ca500866d073462aa",
-      "text.json": "356f2ff0155894d8c9c73153762fb91529c4db6bf73c09d0b67c0707e3f73fd4"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "7cc07a7f9513a53c4af2daec7c5e756fe9eb7559b9dcd7ee7f794bbfa12dd1ab",
+      "text.json": "71e093f98b6d47ce09c3e9f2e7c6a6be3edb460e4ee481121f34d4adc486db02"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3856,7 +3856,7 @@
     "height": 360,
     "mismatch": 0.001096866096866097,
     "ssim": 0.9768921157138667,
-    "ms": 38.94441600001301,
+    "ms": 38.79829199996311,
     "key": "text-missing-font-390-light-app",
     "caseId": "text-missing-font",
     "viewportWidth": 390,
@@ -3872,20 +3872,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "43854967de2d1583c2ac06a5c132292148b81af05892cdf95d30cbe5935fb31c",
       "native.png": "5b500d608925c86f829c5b36e08a99ce7b1d0d3c6e39129a942197daa4b92188",
       "diff.png": "74668549b7dd24e439a8936448bebfa04b35c2e21d53c13f866bd416f5883e4a",
-      "layout.json": "bab13566d4c9013fdcedb2aee40883097bf329d7ae4b1ccb33ce5290f805ee85",
+      "layout.json": "f479d7b6b98b2997f3e7a7d4be3694a167393549a64cced63357bc5c9c885ef6",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "363ee05fbf6c11a38a08cde7ee14bf19088d4ad021c9f5dc6f74501ade61f25f",
-      "text.json": "93d443e7bab8f8e936261cd8f3a6362098822b18ccaa4d8a538cd36e61cafa19"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "f3c91082df4069d047c2029fadee2b621b61533ced9015ddf97009662a638948",
+      "text.json": "8d176c83a4c714729abc6cb7acfd542de6cb4eb6371999a448b6811dbf63cbe5"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3898,7 +3898,7 @@
     "height": 360,
     "mismatch": 0.001096866096866097,
     "ssim": 0.9768921157138667,
-    "ms": 37.517333000025246,
+    "ms": 38.77620799996657,
     "key": "text-missing-font-390-light-fidelity",
     "caseId": "text-missing-font",
     "viewportWidth": 390,
@@ -3914,20 +3914,20 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--missing-font.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "88559c6e06c5e1b09886095d50ce4bf5ae5a94bcccdcceb37e718419cbeeccd8",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
       "browser.png": "43854967de2d1583c2ac06a5c132292148b81af05892cdf95d30cbe5935fb31c",
       "native.png": "5b500d608925c86f829c5b36e08a99ce7b1d0d3c6e39129a942197daa4b92188",
       "diff.png": "74668549b7dd24e439a8936448bebfa04b35c2e21d53c13f866bd416f5883e4a",
-      "layout.json": "bab13566d4c9013fdcedb2aee40883097bf329d7ae4b1ccb33ce5290f805ee85",
+      "layout.json": "f479d7b6b98b2997f3e7a7d4be3694a167393549a64cced63357bc5c9c885ef6",
       "diagnostics.json": "0fb97c639c3e3a45705775d5ad0a9e6841fbe9f34591a7022a750b397368eb22",
-      "warnings.json": "2623ede142555d52886448caec1fa366bd6726fe88245667b2fb695c11b506e7",
-      "typecheck.json": "e2e4b0d238e09c20a5b13d3f04fe4adcba7f84996d216c80a86c22f51a8a45dc",
-      "text.json": "93d443e7bab8f8e936261cd8f3a6362098822b18ccaa4d8a538cd36e61cafa19"
+      "warnings.json": "64974f6df83e8e0083a7064e4d9ba1f586e13abcd2d1e3a002039c8462bc57d6",
+      "typecheck.json": "deff66d30aa81d2b1eda7b56ce90493dafa174f9ab4a81027d1a9b6aa4cc95de",
+      "text.json": "8d176c83a4c714729abc6cb7acfd542de6cb4eb6371999a448b6811dbf63cbe5"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3940,7 +3940,7 @@
     "height": 360,
     "mismatch": 0.009348958333333334,
     "ssim": 0.9274908506628795,
-    "ms": 29.486624999990454,
+    "ms": 30.669625000009546,
     "key": "text-paragraph-320-dark-app",
     "caseId": "text-paragraph",
     "viewportWidth": 320,
@@ -3956,7 +3956,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -3966,10 +3966,10 @@
       "layout.json": "69022600bd48b6bb6930fe14f6c52dc7df66fd1b9df3f437cf11a0788238055c",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "ad5b196af31895fe535ab4d51aa580e31b9407173db46d7e819f5d4b90699779",
+      "typecheck.json": "28b8ff1622bee3d5afee4dbff615bee0cca3dfbfd4b7aa91197218a82561e247",
       "text.json": "16a716e22e6dd63fa2e9318453172d58d02ce111a13f1c222754f972e7b537a6"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -3982,7 +3982,7 @@
     "height": 360,
     "mismatch": 0.0001171875,
     "ssim": 0.9953337326331261,
-    "ms": 29.177874999993946,
+    "ms": 30.49275000000489,
     "key": "text-paragraph-320-dark-fidelity",
     "caseId": "text-paragraph",
     "viewportWidth": 320,
@@ -3998,7 +3998,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4008,10 +4008,10 @@
       "layout.json": "69022600bd48b6bb6930fe14f6c52dc7df66fd1b9df3f437cf11a0788238055c",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c80ccdd3e86c5917989ebeabcc090af942ea957da27b00ad669fe87eb6ccad92",
+      "typecheck.json": "71832fdc0c0eb01d7a28658eb1e596084a2661789b152fd3b4f90a4083973857",
       "text.json": "9414b5c29704d8b287d3bdb567d90b45beb03a4cab136ca74c765036ea763768"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4024,7 +4024,7 @@
     "height": 360,
     "mismatch": 0.009105902777777777,
     "ssim": 0.9283313704508237,
-    "ms": 31.33941699998104,
+    "ms": 31.613790999981575,
     "key": "text-paragraph-320-light-app",
     "caseId": "text-paragraph",
     "viewportWidth": 320,
@@ -4040,7 +4040,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4050,10 +4050,10 @@
       "layout.json": "1c61e7e53c221e7598a3ce0f49fce8403d2d0d40c9b9a18160ead6d764bfc027",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "6ee2d96bdaf2d08aa99821e1a4211a494b9c4c2e5162298045e81efbab5a1b98",
+      "typecheck.json": "f890c895778a2edbb1a19994ffe29b77eb474c30a04d788ed4de5a5ee4b87cf0",
       "text.json": "ff8217884659b42f974b281258142fd4fec1a25d54fe88fe6cf89f0d2af6e9b1"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4066,7 +4066,7 @@
     "height": 360,
     "mismatch": 0.00012586805555555555,
     "ssim": 0.9950614617437801,
-    "ms": 31.267958000011276,
+    "ms": 30.70374999998603,
     "key": "text-paragraph-320-light-fidelity",
     "caseId": "text-paragraph",
     "viewportWidth": 320,
@@ -4082,7 +4082,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4092,10 +4092,10 @@
       "layout.json": "1c61e7e53c221e7598a3ce0f49fce8403d2d0d40c9b9a18160ead6d764bfc027",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "8709feb08780be3ab4714fb5341340af984fc3a68fdda343bc0cc41ca2940a05",
+      "typecheck.json": "9d1d058fd9e500b663c3b06ab8194faeaf0524b1039fd149341f4dc1f590c3dc",
       "text.json": "d242d11aef90ffef87b9ad695e4278281823ca922a52bf349fc2665429f799a3"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4108,7 +4108,7 @@
     "height": 360,
     "mismatch": 0.00009971509971509972,
     "ssim": 0.9958091181825794,
-    "ms": 34.45766599997296,
+    "ms": 36.26600000000326,
     "key": "text-paragraph-390-dark-app",
     "caseId": "text-paragraph",
     "viewportWidth": 390,
@@ -4124,7 +4124,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4134,10 +4134,10 @@
       "layout.json": "ae63fc684680d5ab40381ff9e9d7924556490cb55cd2536e58df8cd453484ee1",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "92a7beb3e9b1e9239c8340d07f0480b3bc3682ba5067d5db77d1ac27c3262b26",
+      "typecheck.json": "3ed70a413314a68bfe1f8aba4f1cdf8b8e869722ba3ec464e83bd394c735a205",
       "text.json": "3fa3f6ea939300fef4ad228abeb2ffa5a4b528f331b64ba8ec1c1fd269983f6b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4150,7 +4150,7 @@
     "height": 360,
     "mismatch": 0.00009971509971509972,
     "ssim": 0.9958091181825794,
-    "ms": 35.31633299999521,
+    "ms": 38.024749999982305,
     "key": "text-paragraph-390-dark-fidelity",
     "caseId": "text-paragraph",
     "viewportWidth": 390,
@@ -4166,7 +4166,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4176,10 +4176,10 @@
       "layout.json": "ae63fc684680d5ab40381ff9e9d7924556490cb55cd2536e58df8cd453484ee1",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "483c2514ad8305dd2479951607acee90e051b2d2df03b5698c2f1dc81e36df59",
+      "typecheck.json": "894099678a1f9e282df8920ab5b9904115849f6294807ba0a0c375ceee726858",
       "text.json": "3fa3f6ea939300fef4ad228abeb2ffa5a4b528f331b64ba8ec1c1fd269983f6b"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4192,7 +4192,7 @@
     "height": 360,
     "mismatch": 0.00010327635327635327,
     "ssim": 0.9954845459231527,
-    "ms": 35.05312500000582,
+    "ms": 34.52074999999604,
     "key": "text-paragraph-390-light-app",
     "caseId": "text-paragraph",
     "viewportWidth": 390,
@@ -4208,7 +4208,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4218,10 +4218,10 @@
       "layout.json": "ff7f5fc120a506dbcde5a97ed87db0c5281015d3603759a803bdab0a83304929",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "1fbf7525e25409fe8a967fb3916a3a72cd81e64f8337cd3b4250ff317b312268",
+      "typecheck.json": "76cdfc0a870c7bf70fb8e4475af90cf1bf08bb6375bdf6005ba4f16cf0ad2679",
       "text.json": "ab162441075a3ac50a332ee6a24964e7567b0ee594a2ab6206b5c80b52fe1be3"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4234,7 +4234,7 @@
     "height": 360,
     "mismatch": 0.00010327635327635327,
     "ssim": 0.9954845459231527,
-    "ms": 33.61908400000539,
+    "ms": 35.820624999993015,
     "key": "text-paragraph-390-light-fidelity",
     "caseId": "text-paragraph",
     "viewportWidth": 390,
@@ -4250,7 +4250,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--paragraph.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "0a6c0e312096b6fe3f4cb3bff83dbdf1a974b60848eb87dc9323fd7de138c273",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4260,10 +4260,10 @@
       "layout.json": "ff7f5fc120a506dbcde5a97ed87db0c5281015d3603759a803bdab0a83304929",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c667228df95579bb8713104d3900e697ba80fbd463c4a6b2c974c8e5085431b7",
+      "typecheck.json": "f756f71805dddb371ed2ae16c7225b50f707da7af999ee2dea95dcd5512daedc",
       "text.json": "ab162441075a3ac50a332ee6a24964e7567b0ee594a2ab6206b5c80b52fe1be3"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4276,7 +4276,7 @@
     "height": 360,
     "mismatch": 0.010546875,
     "ssim": 0.9119457870534284,
-    "ms": 29.283207999978913,
+    "ms": 50.81500000000233,
     "key": "text-pre-320-dark-app",
     "caseId": "text-pre",
     "viewportWidth": 320,
@@ -4292,7 +4292,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4302,10 +4302,10 @@
       "layout.json": "9ad74eb7d1913d99e73ead29e1f0ee1d12bde3c6d1c9ac6a444613040584fae0",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "d96eb427453f218ee0bffec243716d8836dd5fdf0aa9526899a44b027c252380",
+      "typecheck.json": "5465846cfab4cd90a8a8348220fe9a8575f8d2bb8803ae4a4e667596a49d7b50",
       "text.json": "c7d2838fd11e8bb96657768bd91eb307ffcd2a0bf92e06f72d24a43260edb5da"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4318,7 +4318,7 @@
     "height": 360,
     "mismatch": 0.010546875,
     "ssim": 0.9119457870534284,
-    "ms": 29.664041999989422,
+    "ms": 30.63366700001643,
     "key": "text-pre-320-dark-fidelity",
     "caseId": "text-pre",
     "viewportWidth": 320,
@@ -4334,7 +4334,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4344,10 +4344,10 @@
       "layout.json": "9ad74eb7d1913d99e73ead29e1f0ee1d12bde3c6d1c9ac6a444613040584fae0",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "fad21c94169793b14a03cfffd8ceef827cb0c22045658edb19169091cea6f0d7",
+      "typecheck.json": "eab43157591c6cac8ef978ca010449408e5e883e6be1836c062c8b5435e72338",
       "text.json": "c7d2838fd11e8bb96657768bd91eb307ffcd2a0bf92e06f72d24a43260edb5da"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4360,7 +4360,7 @@
     "height": 360,
     "mismatch": 0.0105859375,
     "ssim": 0.9158378774229433,
-    "ms": 30.423417000012705,
+    "ms": 46.264999999984866,
     "key": "text-pre-320-light-app",
     "caseId": "text-pre",
     "viewportWidth": 320,
@@ -4376,7 +4376,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4386,10 +4386,10 @@
       "layout.json": "b267cbb48e933197bb2ec1c2529957088bbc709c9c8ac4915c8075a4ed72bd08",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "0f10a87fb16c2799229f1dafa67e5555c742f421da15f916770dc2657e3a2fe6",
+      "typecheck.json": "e0015cd43b975b54596dd271a33fb0ed4a5e8a2f79e0720b41c7bdd2b41ea5c3",
       "text.json": "1c1f5938ae008969ca19063803043e7c435ed4ad162a9df774c9d3f23979a277"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4402,7 +4402,7 @@
     "height": 360,
     "mismatch": 0.0105859375,
     "ssim": 0.9158378774229433,
-    "ms": 29.444292000000132,
+    "ms": 33.69416700000875,
     "key": "text-pre-320-light-fidelity",
     "caseId": "text-pre",
     "viewportWidth": 320,
@@ -4418,7 +4418,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4428,10 +4428,10 @@
       "layout.json": "b267cbb48e933197bb2ec1c2529957088bbc709c9c8ac4915c8075a4ed72bd08",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "54920424c28c0a57e1678072e0ad1bf7477bf27c3455f6a3a3a4ada7b23f993b",
+      "typecheck.json": "204732d7401d612b52638f9195e3bc00565d09ed5475d6942749635374e12209",
       "text.json": "1c1f5938ae008969ca19063803043e7c435ed4ad162a9df774c9d3f23979a277"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4444,7 +4444,7 @@
     "height": 360,
     "mismatch": 0.008653846153846154,
     "ssim": 0.9281662999646356,
-    "ms": 36.38333300000522,
+    "ms": 38.10341700000572,
     "key": "text-pre-390-dark-app",
     "caseId": "text-pre",
     "viewportWidth": 390,
@@ -4460,7 +4460,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4470,10 +4470,10 @@
       "layout.json": "2b183382db15a764d6089fd0beb3ecfb4cc4ae9a3eafe68e0e6dc97c83bf2a83",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "99e6d839e40034eb1cf47e5adef5e5a0d891b8e11531d827a50e8fd02ecea431",
+      "typecheck.json": "71bf5a938b77bdf43a5fed3a407159fe59cc61132a3da0e664be07a401c363f7",
       "text.json": "c7d2838fd11e8bb96657768bd91eb307ffcd2a0bf92e06f72d24a43260edb5da"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4486,7 +4486,7 @@
     "height": 360,
     "mismatch": 0.008653846153846154,
     "ssim": 0.9281662999646356,
-    "ms": 37.23695799999405,
+    "ms": 34.79141599999275,
     "key": "text-pre-390-dark-fidelity",
     "caseId": "text-pre",
     "viewportWidth": 390,
@@ -4502,7 +4502,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4512,10 +4512,10 @@
       "layout.json": "2b183382db15a764d6089fd0beb3ecfb4cc4ae9a3eafe68e0e6dc97c83bf2a83",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "fe915a5595a7c687f30d4542eca08547a72f78cd0b364b7ac37b5348db4803b0",
+      "typecheck.json": "583607433f7e40682f1647d9d8072ce33ecb6c983f1eec24f1a53bd3632b8dbe",
       "text.json": "c7d2838fd11e8bb96657768bd91eb307ffcd2a0bf92e06f72d24a43260edb5da"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4528,7 +4528,7 @@
     "height": 360,
     "mismatch": 0.008685897435897436,
     "ssim": 0.9313414263187209,
-    "ms": 36.04612499999348,
+    "ms": 35.11529200000223,
     "key": "text-pre-390-light-app",
     "caseId": "text-pre",
     "viewportWidth": 390,
@@ -4544,7 +4544,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4554,10 +4554,10 @@
       "layout.json": "2a63d08ec14981b602173c26ddfb1f498df957868ca2ad69f2cbd1c2c59b64e9",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "343c13395fb83d72eb380edab9fa088dc884f96e057623602f7642a72cca27bf",
+      "typecheck.json": "2f42a8ae5afc5753e9912a9b05e0daab34c3da34a7621bddd052b4586a9bd8eb",
       "text.json": "1c1f5938ae008969ca19063803043e7c435ed4ad162a9df774c9d3f23979a277"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4570,7 +4570,7 @@
     "height": 360,
     "mismatch": 0.008685897435897436,
     "ssim": 0.9313414263187209,
-    "ms": 35.56154100000276,
+    "ms": 37.191208000003826,
     "key": "text-pre-390-light-fidelity",
     "caseId": "text-pre",
     "viewportWidth": 390,
@@ -4586,7 +4586,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--pre.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "36b0d0af31c39e046b8ec72cc869ab1dd435ec9768a60f0e0b1f6bdae20b102f",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4596,10 +4596,10 @@
       "layout.json": "2a63d08ec14981b602173c26ddfb1f498df957868ca2ad69f2cbd1c2c59b64e9",
       "diagnostics.json": "2f1024afa0099792a6bd37ca739387069fe837bc3dbdc9a23b325316da6d9944",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "6580f73c60fafa79073df98dbaafb4d7de464b70aa09b8d0929e33ef8d935b0c",
+      "typecheck.json": "000f18f390ab489159d2719b5b507fbb2739b32b40ddb461e470f7866445e120",
       "text.json": "1c1f5938ae008969ca19063803043e7c435ed4ad162a9df774c9d3f23979a277"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4612,7 +4612,7 @@
     "height": 360,
     "mismatch": 0.00030381944444444445,
     "ssim": 0.9892357983414212,
-    "ms": 29.767458999995142,
+    "ms": 34.328917000006186,
     "key": "text-rtl-320-dark-app",
     "caseId": "text-rtl",
     "viewportWidth": 320,
@@ -4628,7 +4628,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4638,10 +4638,10 @@
       "layout.json": "3c4cdd6a36aaa82086e5d6e57cd0cdbd69b72fab404ab2e82aa389804b68dd45",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "8c6825ce9894c58e62cbfccd183c77633ec3c41d325e8fa09d6120284a5d6643",
+      "typecheck.json": "0f6c5e37a6005e75ccc7fceff067e88482be220c8de1535f8a40c5dd08e82d6e",
       "text.json": "51d14a8c9a1535681e94106e07620d1e5bffddd5744f1313039bea5f68e645a0"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4654,7 +4654,7 @@
     "height": 360,
     "mismatch": 0.00030381944444444445,
     "ssim": 0.9892357983414212,
-    "ms": 30.74808300001314,
+    "ms": 31.849082999979146,
     "key": "text-rtl-320-dark-fidelity",
     "caseId": "text-rtl",
     "viewportWidth": 320,
@@ -4670,7 +4670,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4680,10 +4680,10 @@
       "layout.json": "3c4cdd6a36aaa82086e5d6e57cd0cdbd69b72fab404ab2e82aa389804b68dd45",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "dc2463fa1ecb54f50246d0835b96be092b1e4918167aab37c0f14eb646b2d699",
+      "typecheck.json": "cfa7015e75b477e19d66a7c10c4e010c37dabd55fec9e937d2a0f8af10edbe87",
       "text.json": "51d14a8c9a1535681e94106e07620d1e5bffddd5744f1313039bea5f68e645a0"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4696,7 +4696,7 @@
     "height": 360,
     "mismatch": 0.00026475694444444447,
     "ssim": 0.9894749258662863,
-    "ms": 30.151624999998603,
+    "ms": 32.695542000001296,
     "key": "text-rtl-320-light-app",
     "caseId": "text-rtl",
     "viewportWidth": 320,
@@ -4712,7 +4712,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4722,10 +4722,10 @@
       "layout.json": "ac17be25655ec767b19ffa843dc403da8e9c742bd21776bcf51ea0ba589a73d3",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "8c106c46b3dbb4578f40dcd7a7e0640d6e7f5087930172a51c4ba0581e5581f0",
+      "typecheck.json": "54761ecff9c551c32c73a8728bcc543e6cd6428c7a2bb7fe147cb8e72d800366",
       "text.json": "9703818629dd43f162855c7502c1b792274cbf4f90b9370dc878e04b8675bd4f"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4738,7 +4738,7 @@
     "height": 360,
     "mismatch": 0.00026475694444444447,
     "ssim": 0.9894749258662863,
-    "ms": 30.27070900000399,
+    "ms": 33.15133299998706,
     "key": "text-rtl-320-light-fidelity",
     "caseId": "text-rtl",
     "viewportWidth": 320,
@@ -4754,7 +4754,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4764,10 +4764,10 @@
       "layout.json": "ac17be25655ec767b19ffa843dc403da8e9c742bd21776bcf51ea0ba589a73d3",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "322de14fc57bb0865974ef8908b19769432daa49210c38f28285c4056e470dcf",
+      "typecheck.json": "7223c3c793bb86ce35fc9d6db69ccdc86ed0a37f0909dc232f4a2e0498fd3fbb",
       "text.json": "9703818629dd43f162855c7502c1b792274cbf4f90b9370dc878e04b8675bd4f"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4780,7 +4780,7 @@
     "height": 360,
     "mismatch": 0.00024572649572649575,
     "ssim": 0.9942819596757518,
-    "ms": 36.60641700000269,
+    "ms": 35.96654200000921,
     "key": "text-rtl-390-dark-app",
     "caseId": "text-rtl",
     "viewportWidth": 390,
@@ -4796,7 +4796,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4806,10 +4806,10 @@
       "layout.json": "aee1bcb67d01b29bb5dcde1b1e1a9aba3a2dff4d21e9f1c354263df9127aba6a",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f4a468da732e9e902890629e14b81dd3672764d3b4a43cb7234ccba5bfa8a291",
+      "typecheck.json": "5a5b2174647143b2a1cc4a8e20ecde315061c32dddca266bb3a96e0ec2215fe9",
       "text.json": "e202275b4cbffca2b127c472d3db576eed9a0718263bc307dd881872439b9d67"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4822,7 +4822,7 @@
     "height": 360,
     "mismatch": 0.00024572649572649575,
     "ssim": 0.9942819596757518,
-    "ms": 35.228917000000365,
+    "ms": 39.319458999991184,
     "key": "text-rtl-390-dark-fidelity",
     "caseId": "text-rtl",
     "viewportWidth": 390,
@@ -4838,7 +4838,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4848,10 +4848,10 @@
       "layout.json": "aee1bcb67d01b29bb5dcde1b1e1a9aba3a2dff4d21e9f1c354263df9127aba6a",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "94d7e982aa5678c69a4f96ad0b709dae8b2c95a9ea17107ee2a989380b985adc",
+      "typecheck.json": "9c0278f860aaf36508b3fed5c9b4695bfe723141dfcce93e225db13c145eaf02",
       "text.json": "e202275b4cbffca2b127c472d3db576eed9a0718263bc307dd881872439b9d67"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4864,7 +4864,7 @@
     "height": 360,
     "mismatch": 0.00010327635327635327,
     "ssim": 0.9949210207880368,
-    "ms": 34.113540999998804,
+    "ms": 35.49650000000838,
     "key": "text-rtl-390-light-app",
     "caseId": "text-rtl",
     "viewportWidth": 390,
@@ -4880,7 +4880,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4890,10 +4890,10 @@
       "layout.json": "5eace100ee12f7d51422ba134c0e48cd9b1efe72e3ae2b0e956844521999fdf8",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "72e2413a77920673daaf10f8fec3956e29abaee20c5a920807dbf6268ed2872b",
+      "typecheck.json": "8060b4007f85821fb468757ba4c27e6f1b430027f5373887334cb6d5695454a1",
       "text.json": "a4e316f43dedb69ca282d2dfb9b843b1ca949eb566554d5adaa407332188b72a"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4906,7 +4906,7 @@
     "height": 360,
     "mismatch": 0.00010327635327635327,
     "ssim": 0.9949210207880368,
-    "ms": 34.1419590000005,
+    "ms": 36.42829100001836,
     "key": "text-rtl-390-light-fidelity",
     "caseId": "text-rtl",
     "viewportWidth": 390,
@@ -4922,7 +4922,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--rtl.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "41627efa541b0d0df377bcd3afb90aedb95ad7d17d0d693e06ace187165abbf4",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4932,10 +4932,10 @@
       "layout.json": "5eace100ee12f7d51422ba134c0e48cd9b1efe72e3ae2b0e956844521999fdf8",
       "diagnostics.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "c60be722f7b83377cfe7ee240859b597a1c9ee77c4700acfef635468631d8762",
+      "typecheck.json": "57f94fd3ce0b06b71f6abea52693e41bf4c9eadb42970e4e006c45e036e70489",
       "text.json": "a4e316f43dedb69ca282d2dfb9b843b1ca949eb566554d5adaa407332188b72a"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4948,7 +4948,7 @@
     "height": 360,
     "mismatch": 0.0008420138888888889,
     "ssim": 0.9669261938743086,
-    "ms": 29.787042000010842,
+    "ms": 31.817791999987094,
     "key": "text-webfont-320-dark-app",
     "caseId": "text-webfont",
     "viewportWidth": 320,
@@ -4964,7 +4964,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -4974,10 +4974,10 @@
       "layout.json": "217a79369f6b69261a66d958104fdd671f7240fb64242257070593dfc7418e2e",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "b86ddf745b5a63562f11580ef645e3bc5728fb36fc11897b45de653d6ee27fe1",
+      "typecheck.json": "978026ddd46e272a610d0b56045a7d6b379f3746a9f2be7b91ac9117e5070b55",
       "text.json": "f46d0159c983e3b6fb0947a77b7b3e07c201689e55fa01b9d943be6291321a98"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -4990,7 +4990,7 @@
     "height": 360,
     "mismatch": 0.0008420138888888889,
     "ssim": 0.9669261938743086,
-    "ms": 31.277207999984967,
+    "ms": 32.66404199998942,
     "key": "text-webfont-320-dark-fidelity",
     "caseId": "text-webfont",
     "viewportWidth": 320,
@@ -5006,7 +5006,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5016,10 +5016,10 @@
       "layout.json": "217a79369f6b69261a66d958104fdd671f7240fb64242257070593dfc7418e2e",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "bf65a6a7ba6ad4c0d2b82185457dd50c0ba05a5a5f479d0c04e928246b45edfb",
+      "typecheck.json": "756d3d2d45134a2b76b6e515bebd080b6fce743c44ba172cf66b260213db14b6",
       "text.json": "f46d0159c983e3b6fb0947a77b7b3e07c201689e55fa01b9d943be6291321a98"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5032,7 +5032,7 @@
     "height": 360,
     "mismatch": 0.0009461805555555556,
     "ssim": 0.9675796627354876,
-    "ms": 30.34620800000266,
+    "ms": 31.961999999999534,
     "key": "text-webfont-320-light-app",
     "caseId": "text-webfont",
     "viewportWidth": 320,
@@ -5048,7 +5048,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5058,10 +5058,10 @@
       "layout.json": "99c86e3255b148c9d45fcd2e70af325dcc67fb3fd849690cba6774527cfdb447",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "f8683a060d1f1ee60f613d97ec1472e793dfa8be253be7e8ab26fc52c06b8c39",
+      "typecheck.json": "d3e17469f8b8fd147ae566d9be98d68b93985ebfa7a08392573ec38fd0ae112e",
       "text.json": "8d42a02d98179cac76e6117a4cbd71a6dcf07bf9cc9e61d096e3284be3e704e1"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5074,7 +5074,7 @@
     "height": 360,
     "mismatch": 0.0009461805555555556,
     "ssim": 0.9675796627354876,
-    "ms": 32.14500000001863,
+    "ms": 34.308416000014404,
     "key": "text-webfont-320-light-fidelity",
     "caseId": "text-webfont",
     "viewportWidth": 320,
@@ -5090,7 +5090,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5100,10 +5100,10 @@
       "layout.json": "99c86e3255b148c9d45fcd2e70af325dcc67fb3fd849690cba6774527cfdb447",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "7bc3b4fa1e37e6522f9a27b739af87287604649d2027713351a8154f67b5f966",
+      "typecheck.json": "1f5eb50a485f6ddedad1967723033b11fcadb7adce510004770f5a4ab85fa62d",
       "text.json": "8d42a02d98179cac76e6117a4cbd71a6dcf07bf9cc9e61d096e3284be3e704e1"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5116,7 +5116,7 @@
     "height": 360,
     "mismatch": 0.0007300569800569801,
     "ssim": 0.970750129571834,
-    "ms": 40.093332999997074,
+    "ms": 38.07566600001883,
     "key": "text-webfont-390-dark-app",
     "caseId": "text-webfont",
     "viewportWidth": 390,
@@ -5132,7 +5132,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5142,10 +5142,10 @@
       "layout.json": "935eec1a03732f7682efd5c3b8c39045e7bee09a6aa8cc6ac4c7a9590cc91eee",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "2a95a505f25c04f587860c5e1949a06080407b453e2265e5f0a6299e7759c01b",
+      "typecheck.json": "9d992f22385d03d1c1d6b0e8ecc65b4f8041ec9e5dca11ec147d318545c59691",
       "text.json": "bde7d093f8a6e072ce08833e87dbf611257660a2fc0d03aab29707af43519f82"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5158,7 +5158,7 @@
     "height": 360,
     "mismatch": 0.0007300569800569801,
     "ssim": 0.970750129571834,
-    "ms": 36.51570800002082,
+    "ms": 109.78354199999012,
     "key": "text-webfont-390-dark-fidelity",
     "caseId": "text-webfont",
     "viewportWidth": 390,
@@ -5174,7 +5174,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5184,10 +5184,10 @@
       "layout.json": "935eec1a03732f7682efd5c3b8c39045e7bee09a6aa8cc6ac4c7a9590cc91eee",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "861ee038f9747c8a2595eb74612e4eb58d9232472b2c8182466a1ff06505e1bd",
+      "typecheck.json": "d8985d1583f67b154b45f544e8af23b50efe66638d6e3579a8232f1657d2023e",
       "text.json": "bde7d093f8a6e072ce08833e87dbf611257660a2fc0d03aab29707af43519f82"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5200,7 +5200,7 @@
     "height": 360,
     "mismatch": 0.0008297720797720798,
     "ssim": 0.9715789904545571,
-    "ms": 35.614457999996375,
+    "ms": 37.54475000000093,
     "key": "text-webfont-390-light-app",
     "caseId": "text-webfont",
     "viewportWidth": 390,
@@ -5216,7 +5216,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5226,10 +5226,10 @@
       "layout.json": "2cf78575cb1a7a6ac7d389581984048aad591f8dd0907126cd807291938b0b40",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "bb8455c5b42bf6a57da9cb9c3a89db2871a7a30253f10e1a918d64ec92aefdc2",
+      "typecheck.json": "e30cf6242067a447a0db739000f80106d410091bb9aeb04bb45e6ecfa66d6a97",
       "text.json": "5a43b593b84c6aef7d1e87d595799c6d3550a4209e64b7e39aeb61ac4e253528"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",
@@ -5242,7 +5242,7 @@
     "height": 360,
     "mismatch": 0.0008297720797720798,
     "ssim": 0.9715789904545571,
-    "ms": 35.62404200001038,
+    "ms": 37.674291999981506,
     "key": "text-webfont-390-light-fidelity",
     "caseId": "text-webfont",
     "viewportWidth": 390,
@@ -5258,7 +5258,7 @@
     "typecheck": true,
     "fixture": "css-typography/text-pilot--webfont.html",
     "anchors": [],
-    "sourceRevision": "754b720d4fc98bdab6303e7059d6e6a06818b9c9",
+    "sourceRevision": "574b8a42636ea9effa992439a8e1505d83ffee03",
     "fixtureHash": "6577f234b9c4ede384076d288d440cbcdad541dd1f85cac2b541cbb72ca619bf",
     "harnessHash": "63dde88f384baf333b726f5ce7029ce543fd31ff4d591d1e3624ae30eba84255",
     "artifactHashes": {
@@ -5268,10 +5268,10 @@
       "layout.json": "2cf78575cb1a7a6ac7d389581984048aad591f8dd0907126cd807291938b0b40",
       "diagnostics.json": "78f95262c926c5e038228274decaaec29804420b26394da33fe2bda601fde702",
       "warnings.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "typecheck.json": "3760a02e6177d82ccbe82e00f4a82e32fb1cb7a12084e239cea251d499b20ed5",
+      "typecheck.json": "f9ef61c8ff66ed7c8a7a1ac7c3a16852d5ab18560c4ab362911cc7ec4a0a3499",
       "text.json": "5a43b593b84c6aef7d1e87d595799c6d3550a4209e64b7e39aeb61ac4e253528"
     },
-    "capturedAt": "2026-10-11T12:59:36.368Z",
+    "capturedAt": "2026-10-11T13:59:59.454Z",
     "chrome": "Chromium 153.0.8010.12",
     "xcode": "Xcode 27.0\nBuild version 27A266a",
     "renderer": "macOS 27.0.1 ImageRenderer",

@@ -210,6 +210,11 @@ export function sizeOf(
       else if (ml > mr) selfAlign = "end";
     }
   }
+  // `margin: 0 auto` / `margin-left: auto` on a box that does not fill its parent: the authored
+  // `auto` (Typed OM, `preferredSize.autoMargins`) placed it. Equal px margins are no such intent.
+  const auto = n.preferredSize?.autoMargins;
+  if (selfAlign === undefined && width.kind !== "fill" && ctx.parentAxis === "v" && !abs && auto?.includes("left"))
+    selfAlign = auto.includes("right") ? "center" : "end";
   if (selfAlign === undefined && placed && ctx.parentAxis === "v" && !abs) selfAlign = placed;
   const selfAlignV = placed && ctx.parentAxis === "h" && !abs ? placed : undefined;
   return {
