@@ -133,8 +133,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 /**
  * `main.swift` of a macOS command-line renderer: SwiftUI `ImageRenderer`, without a simulator. Fonts register from `fontsDir`; `Images/` resolves next to it.
+ * `forced` draws every pressed (or focused) look at once, as the browser reference forces the same pseudo-classes.
  */
-export function macRenderMain(result: ConversionResult, fontsDir: string, output: string): string {
+export function macRenderMain(
+  result: ConversionResult,
+  fontsDir: string,
+  output: string,
+  forced?: "pressed" | "focused",
+): string {
   const { w, h, color, dark } = canvas(result);
   return `import SwiftUI
 import AppKit
@@ -146,7 +152,7 @@ NSApplication.shared.appearance = NSAppearance(named: .${dark ? "darkAqua" : "aq
 let content = ${result.name}()
     .frame(width: ${w}, height: ${h}, alignment: .topLeading)
     .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
-    .environment(\\.colorScheme, .${dark ? "dark" : "light"})
+    .environment(\\.colorScheme, .${dark ? "dark" : "light"})${forced ? `\n    .environment(\\.markswiftForcedStates, .${forced})` : ""}
 let renderer = ImageRenderer(content: content)
 renderer.scale = 2
 renderer.proposedSize = ProposedViewSize(width: ${w}, height: ${h})
