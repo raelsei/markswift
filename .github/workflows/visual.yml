@@ -40,12 +40,25 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: ./node_modules/.bin/playwright-core install --no-shell chromium
       - name: Toolchain
-        run: sw_vers -productVersion && xcodebuild -version
+        run: |
+          sw_vers -productVersion
+          xcodebuild -version
+          xcode-select -p
+          bun --version
+          ./node_modules/.bin/playwright-core --version
+          xcrun simctl list runtimes available
+          xcrun simctl list devices available | grep -E "iPhone 17( |$)" || echo "no iPhone 17 device (plan 020 creates it)"
       - name: Render
         run: bun run pilot --renderer "$RENDERER" $([ "$SCOPE" = all ] && echo --all) --out "$RUNNER_TEMP/visual"
       - name: Gate
         if: ${{ !inputs.rebaseline }}
-        run: bun run quality "tests/conformance/baselines/visual-$SCOPE-$RENDERER.json" "$RUNNER_TEMP/visual" "tests/conformance/visual-policy-$RENDERER.json"
+        run: |
+          baseline="tests/conformance/baselines/visual-$SCOPE-$RENDERER.json"
+          if [ ! -f "$baseline" ]; then
+            echo "::error::$baseline is not tracked yet. Dispatch Visual with renderer=$RENDERER scope=$SCOPE rebaseline=true, review the candidate artifact and commit it."
+            exit 1
+          fi
+          bun run quality "$baseline" "$RUNNER_TEMP/visual" "tests/conformance/visual-policy-$RENDERER.json"
       - name: Candidate baseline (review, then commit by hand)
         if: ${{ inputs.rebaseline }}
         run: bun run quality --write-baseline "$RUNNER_TEMP/visual" "$RUNNER_TEMP/visual-$SCOPE-$RENDERER.json"
