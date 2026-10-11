@@ -19,6 +19,7 @@ __pycache__/
 /generated/
 /coverage/
 /out/
+/dist/
 /tests/conformance/out/
 /playground/.cache/
 /playground/dist/

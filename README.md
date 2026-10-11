@@ -10,16 +10,19 @@ always reported (see [Diagnostics](#diagnostics)).
 
 ## Requirements
 
-- Bun ≥ 1.4.2 (tested with 1.4.3) and an installed Google Chrome. Node.js cannot run the CLI.
+- Node.js ≥ 20 or Bun ≥ 1.4.2 (tested with 1.4.3), and an installed Google Chrome.
 - `python3` with `fontTools` and `brotli` to bundle webfonts. Without them the conversion still
   completes and reports each font it could not bundle.
 - Xcode, only to compile the generated Swift.
 
 ## Install
 
-The repository is private for now; both channels need read access.
+```sh
+npm install --save-dev markswift
+npx markswift --version    # or: bunx markswift --version
+```
 
-From a checkout:
+From a checkout (contributors):
 
 ```sh
 git clone git@github.com:raelsei/markswift.git && cd markswift
@@ -27,29 +30,21 @@ bun install --frozen-lockfile
 bun src/cli.ts --version
 ```
 
-As a Bun git dependency pinned to the release tag:
-
-```sh
-bun add github:raelsei/markswift#v0.1.0-alpha.1
-bunx markswift --version   # 0.1.0-alpha.1
-```
-
-The package is not published to npm. The examples below use the checkout; in a dependent project
-write `bunx markswift` for `bun src/cli.ts` and `from "markswift"` for `from "./src/index.ts"`.
+In a checkout write `bun src/cli.ts` for `npx markswift` and `from "./src/index.ts"` for `from "markswift"`.
 
 ## Quick start (CLI)
 
 ```sh
 printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18px system-ui">Hello Markswift</main>' \
-  | bun src/cli.ts convert - --name HelloCard --out ./generated-hello
+  | npx markswift convert - --name HelloCard --out ./generated-hello
 ```
 
 prints `Wrote 3 files for HelloCard to ./generated-hello`. `--out` must not exist yet; regenerate later with `--update`; one
-conversion writes several files. Other inputs: `bun src/cli.ts convert ./page.html --out ./out`
+conversion writes several files. Other inputs: `npx markswift convert ./page.html --out ./out`
 (relative assets resolve beside the file), `--css ./compiled.css` for a separate **compiled**
 stylesheet, and `--url http://localhost:5173/card --root '#preview'` for a running page.
 
-Options (`bun src/cli.ts convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
+Options (`npx markswift convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
 `ConvertedView`), `--root <selector>`, `--width`/`--height` (default 390 × 844),
 `--theme adaptive|light|dark` (default `adaptive`), `--dark-class <name>`, `--mode app|fidelity`
 (default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options or hand-edited files
@@ -79,7 +74,9 @@ and wrappers in your own files, and commit the output directory including `.mark
 ## Library API
 
 ```ts
-import { convertHtml } from "./src/index.ts";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { convertHtml } from "markswift";
 
 const result = await convertHtml(
   '<article data-markswift-root class="card"><h2>Hello SwiftUI</h2><p>Made from HTML.</p></article>',
@@ -94,8 +91,11 @@ const result = await convertHtml(
 );
 
 console.log(Object.keys(result.files), result.diagnostics.length, result.warnings);
-for (const [path, content] of Object.entries(result.files)) await Bun.write(`generated-welcome/${path}`, content);
-for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`generated-welcome/${path}`, bytes);
+for (const [path, data] of Object.entries({ ...result.files, ...result.assets })) {
+  const file = `generated-welcome/${path}`;
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, data);
+}
 ```
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
