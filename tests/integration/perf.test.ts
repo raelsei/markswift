@@ -46,6 +46,8 @@ nativeTest(
       expect(buildMs).toBeLessThanOrEqual(20000);
       expect(bytes).toBeLessThanOrEqual(400 * 1024);
       expect(images).toBe(1);
+      // Card (#fff / #27272a) and button (#2563eb) fills are opaque in both themes, every spread is 0.
+      expect(compositingGroups).toBe(0);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
