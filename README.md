@@ -100,7 +100,7 @@ for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`gene
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
   `convertHtml(html, options)` is the string shorthand. `compileLayout(layout, { name, mode, dark })`
-  recompiles a saved `LayoutDoc` (version 2) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
+  recompiles a saved `LayoutDoc` (version 3) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
   cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
   and rejects any other with an error naming both versions — recapture the source. A change to the captured style
   list or the schema bumps the LayoutDoc version and is a breaking release.
@@ -109,7 +109,8 @@ for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`gene
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion).
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
-  `warnings`, `layout` and, for adaptive conversions, `darkLayout`.
+  `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
+  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`.
 
 ## Modes
 

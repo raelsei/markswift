@@ -4,7 +4,7 @@ import { lstat, mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EditedFilesError } from "../../../src/cli/manifest.ts";
-import { formatDiagnostics, updateBundle, writeBundle } from "../../../src/cli/output.ts";
+import { formatDiagnostics, formatWarning, updateBundle, writeBundle } from "../../../src/cli/output.ts";
 
 test("bundle writing rejects names that collide on case-insensitive filesystems", async () => {
   const directory = await mkdtemp(join(tmpdir(), "markswift-output-"));
@@ -219,4 +219,14 @@ test("diagnostics print once per feature and message, unmapped first, naming the
       },
     ]),
   ).toEqual(["unmapped svg:use: u [1 node: #c]", "approximated float: m [2 nodes: #a, #b]"]);
+});
+
+test("warnings print the component and loss prefixes only when set", () => {
+  expect(formatWarning({ source: "fonts", level: "unmapped", feature: "font-family", message: "x" })).toBe(
+    "unmapped font-family: x",
+  );
+  expect(formatWarning({ source: "capture", message: "404 /a.png" })).toBe("404 /a.png");
+  expect(
+    formatWarning({ source: "build", component: "Card", level: "approximated", feature: "font-family", message: "y" }),
+  ).toBe("[Card] approximated font-family: y");
 });

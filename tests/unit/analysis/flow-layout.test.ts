@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
@@ -9,7 +10,7 @@ function element(bounds: Rect, styles: Record<string, string>, children: LayoutN
 
 function screen(root: LayoutNode): StackNode {
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "flow-layout-test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },

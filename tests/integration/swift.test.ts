@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -226,7 +227,7 @@ nativeTest(
       },
     ]);
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "silent-loss",
       combo: { screen: "s", theme: "light" },
       size: { w: 300, h: 380 },
@@ -333,7 +334,7 @@ nativeTest(
       },
     );
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "app-sizing",
       combo: { screen: "s", theme: "light" },
       size: { w: 390, h: 2000 },
@@ -496,7 +497,7 @@ nativeTest(
       },
     );
     const doc: LayoutDoc = {
-      version: 2,
+      version: LAYOUT_DOC_VERSION,
       source: "flex-direction",
       combo: { screen: "s", theme: "light" },
       size: { w: 390, h: 634 },
@@ -640,3 +641,49 @@ for (const mode of ["app", "fidelity"] as const) {
     300000,
   );
 }
+
+nativeTest(
+  "brightness() multiplies like CSS and a clipped max-height box shows its first lines",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-pixels-"));
+    try {
+      const result = await convert(
+        {
+          html: '<main data-markswift-root><div class="t" style="background:#0ea5e9;filter:brightness(1.4)"></div><div class="t" style="background:#7c3aed;filter:brightness(.6)"></div><div class="clip">Line one<br>Line two<br>Line three</div></main>',
+        },
+        {
+          name: "PixelProbe",
+          mode: "app",
+          theme: "light",
+          css: "body{margin:0;background:#fff} main{width:200px} .t{width:40px;height:40px} .clip{max-height:40px;overflow:hidden;padding:8px 12px;font:15px/20px system-ui;color:#000;background:#fff}",
+        },
+      );
+      const png = join(directory, "pixels.png");
+      await renderMac(result, join(directory, "mac"), png);
+      // Filtered views render in Display P3 on macOS; the browser's numbers are sRGB.
+      const { data, info } = await sharp(png)
+        .withIccProfile("srgb")
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const at = (x: number, y: number) => [...data.subarray((y * info.width + x) * 3, (y * info.width + x) * 3 + 3)];
+      // CSS brightness(k) is c·k per channel, clamped.
+      const css = (rgb: number[], k: number) => rgb.map((c) => Math.min(255, Math.round(c * k)));
+      const drift = (got: number[], want: number[]) => Math.max(...got.map((c, i) => Math.abs(c - want[i]!)));
+      expect(drift(at(40, 40), css([14, 165, 233], 1.4))).toBeLessThanOrEqual(3);
+      expect(drift(at(40, 120), css([124, 58, 237], 0.6))).toBeLessThanOrEqual(3);
+      // The clipped box starts at y = 80 CSS px (160 device px): its 8 px top padding stays blank, as in CSS.
+      let firstInk = -1;
+      for (let y = 160; y < info.height && firstInk < 0; y++)
+        for (let x = 0; x < info.width; x++)
+          if (at(x, y)[0]! < 128) {
+            firstInk = y - 160;
+            break;
+          }
+      expect(firstInk).toBeGreaterThanOrEqual(16);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  240000,
+);

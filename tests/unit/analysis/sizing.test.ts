@@ -163,3 +163,57 @@ test("ordinary inline text does not acquire CSS constraints that the browser ign
   ).toMatchObject({ width: { kind: "fixed", px: 30 } });
   expect(sizing(element(30, 20, { display: "inline", "min-width": "120px" })).minWidth).toBeUndefined();
 });
+
+const row: InferenceContext = { ...ctx, parentAxis: "h", parentDisplay: "flex" };
+const widthNotes = (n: LayoutNode, context = ctx) =>
+  sizing(n, context)
+    .diagnostics.filter((d) => d.feature === "width")
+    .map((d) => d.message);
+
+test("a percentage width kept as measured px is reported", () => {
+  const n = { ...element(180, 40, { display: "block" }), preferredSize: { width: "50%", height: "auto" } };
+  expect(widthNotes(n, row).join("\n")).toContain("width 50% pinned at 180px");
+});
+
+test("a px width laid out at another size is reported", () => {
+  const n = {
+    ...element(108, 40, { display: "block", "box-sizing": "border-box" }),
+    preferredSize: { width: "150px", height: "auto" },
+  };
+  expect(widthNotes(n, row).join("\n")).toContain("width 150px laid out at 108px");
+});
+
+test("a content-box px width plus its padding is not a pin", () => {
+  const styles = { display: "block", "box-sizing": "content-box", "padding-left": "10px", "padding-right": "10px" };
+  const n = { ...element(140, 40, styles), preferredSize: { width: "120px", height: "auto" } };
+  expect(widthNotes(n, row)).toEqual([]);
+});
+
+test("a px width laid out at its own size is not reported", () => {
+  const n = {
+    ...element(120, 40, { display: "block", "box-sizing": "border-box" }),
+    preferredSize: { width: "120px", height: "auto" },
+  };
+  expect(widthNotes(n, row)).toEqual([]);
+});
+
+test("the root's width is not reported: the screen sizes it", () => {
+  const n = { ...element(390, 40, { display: "block" }), preferredSize: { width: "100%", height: "auto" } };
+  expect(widthNotes(n, { root: n, bundledFamilies: {}, fixed: [] })).toEqual([]);
+});
+
+test.each([
+  [["right", "left"], "center"],
+  [["left"], "end"],
+  [["right"], undefined],
+  [undefined, undefined],
+] as const)("a fixed-width block with auto margins %p is placed %p", (autoMargins, expected) => {
+  // Parent content box is 350 px wide; 95 px used margins on each side make the margin box fill it.
+  const box: LayoutNode = {
+    ...element(160, 40, { display: "block", "margin-left": "95px", "margin-right": "95px" }),
+    preferredSize: { width: "160px", height: "auto", ...(autoMargins ? { autoMargins: [...autoMargins] } : {}) },
+  };
+  const s = sizing(box);
+  expect(s.width).toEqual({ kind: "fixed", px: 160 });
+  expect(s.selfAlign).toBe(expected);
+});

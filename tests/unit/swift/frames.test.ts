@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
@@ -6,7 +7,7 @@ import type { LayoutDoc } from "../../../src/model/layout.ts";
 
 function capturedText(styles: Record<string, string>): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "constraints.html",
     combo: { screen: "constraints", theme: "light" },
     size: { w: 200, h: 100 },
@@ -208,7 +209,7 @@ test("a measured fallback keeps its captured height in app mode instead of accep
 
 test("app-mode text controls treat a measured height as a floor", () => {
   const input: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "controls.html",
     combo: { screen: "controls", theme: "light" },
     size: { w: 200, h: 38 },

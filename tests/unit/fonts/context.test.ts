@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc } from "../../../src/model/layout.ts";
@@ -15,7 +16,7 @@ const styles = {
 };
 const bounds = { x: 0, y: 0, w: 200, h: 60 };
 const doc: LayoutDoc = {
-  version: 2,
+  version: LAYOUT_DOC_VERSION,
   source: "font-context",
   combo: { screen: "test", theme: "light" },
   size: { w: 200, h: 60 },

@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
@@ -5,7 +6,7 @@ import type { LayoutDoc } from "../../../src/model/layout.ts";
 
 function paragraph(): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "paragraph.html",
     combo: { screen: "paragraph", theme: "light" },
     size: { w: 320, h: 180 },

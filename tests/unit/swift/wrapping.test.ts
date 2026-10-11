@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -43,7 +44,7 @@ function fixture(wrap = "wrap"): LayoutDoc {
     },
   };
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "wrap-test",
     combo: { screen: "s", theme: "light" },
     size: { w: 200, h: 90 },

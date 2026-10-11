@@ -949,7 +949,7 @@ export default {
       ir: "TextNode",
       via: "structure",
       impl: "partial",
-      note: "Emitted as a Text leaf, but its parent table is not a Grid yet (see `table`).",
+      note: "Emitted as a Text leaf, but its parent table is not a Grid yet (see `table`). The table's own paint (background, border, radius, shadow) is applied to the rows only, as Chrome paints it.",
       spec: `${MDN}caption`,
     },
     {

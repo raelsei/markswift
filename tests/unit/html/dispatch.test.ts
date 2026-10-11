@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
@@ -21,7 +22,7 @@ function element(
 
 function document(root: LayoutNode): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "elements.html",
     combo: { screen: "elements", theme: "light" },
     size: { w: 120, h: 40 },

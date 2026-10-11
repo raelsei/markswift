@@ -79,7 +79,9 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
 
 /** Where a node sits inside its fill frame: follows its own alignment semantics. */
 function fillAlignment(n: SemNode, mode: EmitMode): string {
-  if (n.kind === "text") return textBoxAlignment(n, clipsFirstLine(n));
+  // A capped, clipping text box shows its first lines (CSS), however native metrics grow the text.
+  if (n.kind === "text")
+    return textBoxAlignment(n, clipsFirstLine(n) || (n.maxHeight !== undefined && n.style.clip === true));
   if (n.kind === "stack") {
     if (n.wrap) return ".topLeading";
     // Horizontal: cross alignment for columns, distribution for rows. Vertical: distribution

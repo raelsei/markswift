@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
  * Plan 010: app mode follows CSS intent instead of the capture device (object-fit, bottom slack,
  * viewport heights, page scroll, corner-anchored overlays). Hand-built measured trees.
@@ -35,7 +36,7 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 
 function doc(root: LayoutNode, viewport?: Rect): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
