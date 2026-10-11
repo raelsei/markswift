@@ -46,5 +46,11 @@ jobs:
       - run: bun run test
       - run: bun run test:browser
       - run: bun run test:native
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - run: bun run build
+      - name: npm package runs on Node 20 without Bun
+        run: tools/verify/npm-smoke.sh
       - name: Conformance pilot (capture, both modes, iOS typecheck)
         run: bun run pilot --renderer none --out "$RUNNER_TEMP/pilot"
