@@ -100,8 +100,27 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     // union between flow children) — the same test the padding used.
     if (n.frame.h - n.padding[0] - n.padding[2] < n.lines * lh - 0.5) args.push("halfLeading: false");
     out.push(`.markswiftLineHeight(${args.join(", ")})`);
+    // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
+    // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up
+    // that much shorter than the browser's. Pass both growths into the helper if that path matters.
+    if (n.lineBoxGrowth) {
+      const g = Math.min(n.lineBoxGrowth.px, nativeInlineGrowth(glyphs, lh / first.font.size));
+      if (g >= 0.5) out.push(`.padding(.${n.lineBoxGrowth.edge}, ${num(-g)})`);
+    }
   }
   return out;
+}
+
+/**
+ * Growth `.lineHeight(.multiple(factor:))` gives a line whose runs are larger or shifted: measured
+ * on macOS 26, every run spans `size + baselineOffset` above the baseline and `-baselineOffset`
+ * below it, and the line is `factor ×` that span.
+ */
+function nativeInlineGrowth(glyphs: TextRun[], factor: number): number {
+  const host = glyphs[0]!.font.size;
+  const above = Math.max(host, ...glyphs.map((r) => r.font.size + (r.baselineOffset ?? 0)));
+  const below = Math.max(0, ...glyphs.map((r) => -(r.baselineOffset ?? 0)));
+  return factor * (above + below - host);
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */

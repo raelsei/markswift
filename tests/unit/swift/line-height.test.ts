@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import type { LayoutDoc } from "../../../src/model/layout.ts";
+import type { SemNode, TextNode } from "../../../src/model/semantic.ts";
 
 function paragraph(styles: Record<string, string>, h: number, text = "Measured text shifts nearby layout."): LayoutDoc {
   return {
@@ -74,4 +75,26 @@ test("tight multi-line leading is reported as compressing on iOS 26+ only", () =
   const report = emit(paragraph({ "line-height": "15px" }, 30), "app").report;
   const msg = report.flatMap((r) => r.diagnostics).find((d) => d.feature === "line-height")?.message;
   expect(msg).toContain("iOS 26");
+});
+
+test("app subtracts the native sub/sup line-box growth the padding already carries", () => {
+  const subSup = (mode: "app" | "fidelity") => {
+    const screen = inferScreen(paragraph({}, 20, "Water H"), "Paragraph");
+    const root = screen.root as SemNode & { children?: SemNode[] };
+    const text = (root.kind === "text" ? root : root.children!.find((c) => c.kind === "text")) as TextNode;
+    const host = text.runs[0]!;
+    const small = { ...host.font, size: 12.5 };
+    text.runs = [
+      host,
+      { ...host, text: "2", font: small, baselineOffset: -4.6 },
+      { ...host, text: "O mc", font: host.font },
+      { ...host, text: "2", font: small, baselineOffset: 5.4 },
+    ];
+    text.padding = [text.padding[0], text.padding[1], text.padding[2] + 10, text.padding[3]];
+    text.lineBoxGrowth = { edge: "bottom", px: 10 };
+    return emitSwift(screen, "P", { mode }).view;
+  };
+  // 20/15 × (max(15, 12.5 + 5.4) + 4.6 − 15) = 10
+  expect(subSup("app")).toContain(".padding(.bottom, -10.0)");
+  expect(subSup("fidelity")).not.toContain("-10.0");
 });

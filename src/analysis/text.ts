@@ -214,6 +214,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
   let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
   if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
+  let growth: TextNode["lineBoxGrowth"];
   if (leaf) {
     // A box taller than its line boxes. The surplus becomes padding so the text lands where the
     // browser put it in both modes; a centred text stays as is (the emitter centres text in its box).
@@ -231,8 +232,10 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
       const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
       const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
-      if (Math.abs(above - below) > 2)
+      if (Math.abs(above - below) > 2) {
         base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+        growth = { edge: above > below ? "top" : "bottom", px: surplus };
+      }
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -297,6 +300,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           : "leading",
     lines,
   };
+  if (growth) node.lineBoxGrowth = growth;
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
