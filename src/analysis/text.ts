@@ -249,7 +249,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   ) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built, note);
+  markLineBreaks(built);
   markBaselineShifts(built, host, note);
   // An inline element with its own background or border cannot be expressed as a run — SwiftUI
   // has no per-run box. Its measured inline box becomes a background layer instead, so the
