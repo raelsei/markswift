@@ -145,9 +145,9 @@ Markswift, replace the runtime and re-convert older screens. A shared runtime pa
 
 Numbers come from the tracked macOS baseline `tests/conformance/baselines/visual-all-mac.json`:
 724 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
-both, in both modes), captured 2026-10-10 from source revision `afec5b1` with Playwright's pinned
+both, in both modes), captured 2026-10-11 from source revision `754b720` with Playwright's pinned
 Chromium 153 and rendered by macOS 27.0.1 `ImageRenderer`. The metric is colour SSIM (minimum
-over R, G and B, at 1×) plus pixel mismatch and element-region anchors. Regenerate the table with
+over R, G and B, at 1×, both images decoded to sRGB) plus pixel mismatch and element-region anchors. Regenerate the table with
 `bun run quality --summary tests/conformance/baselines/visual-all-mac.json` (which also prints the
 per-fixture table):
 
@@ -156,7 +156,7 @@ per-fixture table):
 | attribute | app | 14 | 0.7226 | 0.5420 (attr-dir-320-light-app) | 0.0394 | 0/0 |
 | css-layout | app | 52 | 0.7698 | 0.5072 (float--left-320-light-app) | 0.0407 | 16/16 |
 | css-misc | app | 8 | 0.7970 | 0.7351 (cursor-390-light-app) | 0.0225 | 0/0 |
-| css-paint | app | 80 | 0.7562 | 0.4790 (border-top-width-390-light-app) | 0.0582 | 12/12 |
+| css-paint | app | 80 | 0.7636 | 0.4790 (border-top-width-390-light-app) | 0.0500 | 12/12 |
 | css-typography | app | 100 | 0.7583 | 0.4234 (text-align--justify-320-dark-app) | 0.0301 | 0/0 |
 | html | app | 60 | 0.7119 | 0.4054 (input-390-dark-app) | 0.0641 | 4/4 |
 | svg | app | 40 | 0.8387 | 0.7633 (svg-use-320-dark-app) | 0.0253 | 0/0 |
@@ -164,13 +164,13 @@ per-fixture table):
 | attribute | fidelity | 14 | 0.9409 | 0.8480 (attr-alt-320-light-fidelity) | 0.0091 | 0/0 |
 | css-layout | fidelity | 52 | 0.9752 | 0.8285 (float--left-320-light-fidelity) | 0.0044 | 16/16 |
 | css-misc | fidelity | 8 | 0.9617 | 0.9322 (pointer-events--none-390-light-fidelity) | 0.0047 | 0/0 |
-| css-paint | fidelity | 80 | 0.9455 | 0.6927 (filter-390-dark-fidelity) | 0.0199 | 12/12 |
+| css-paint | fidelity | 80 | 0.9542 | 0.9039 (list-style-type-320-dark-fidelity) | 0.0113 | 12/12 |
 | css-typography | fidelity | 100 | 0.9143 | 0.6334 (font-family-320-dark-fidelity) | 0.0107 | 0/0 |
 | html | fidelity | 60 | 0.9205 | 0.7351 (text-level-320-light-fidelity) | 0.0111 | 4/4 |
 | svg | fidelity | 40 | 0.9698 | 0.9116 (svg-lineargradient-320-dark-fidelity) | 0.0045 | 0/0 |
 | tailwind-v4 | fidelity | 8 | 0.9472 | 0.8733 (gradients-390-dark-fidelity) | 0.0256 | 0/0 |
 
-Of 362 captures per mode, 37 `app` and 209 `fidelity` captures reach SSIM ≥ 0.95; 60 and 311
+Of 362 captures per mode, 37 `app` and 209 `fidelity` captures reach SSIM ≥ 0.95; 60 and 315
 reach ≥ 0.90 (`jq '[.[] | select(.mode == "app" and .ssim >= 0.95)] | length'` over the baseline).
 Read the table with these limits:
 
@@ -182,7 +182,8 @@ Read the table with these limits:
   runtime is authoritative for text. No iOS baseline exists yet: it is produced by the Visual
   workflow (`workflow_dispatch`, renderer `ios`) on a machine with an iOS Simulator runtime.
 - `ImageRenderer` cannot rasterise UIKit/AppKit controls, so the control fixtures (`input`,
-  `select`, `progress`, …) are not visually meaningful in these numbers.
+  `select`, `progress`, …) are not visually meaningful in these numbers (the iOS renderer draws
+  them; see the iOS baseline once plan 021 lands).
 
 Features outside this table may work but are not claimed; every captured feature is reported as
 mapped, approximated or unmapped in `diagnostics`.
