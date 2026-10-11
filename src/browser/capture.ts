@@ -58,20 +58,23 @@ export interface Capture {
   fontFiles: Array<{ file: string; bytes: Uint8Array }>;
 }
 
+export interface CaptureOptions {
+  dpr: number;
+  viewport: { width: number; height: number };
+  channel?: string;
+  restricted?: boolean;
+  signal?: AbortSignal;
+}
+
 export class BrowserCapture {
   private browser!: Browser;
   private context!: BrowserContext;
   private stopping?: Promise<void>;
+  private readonly opts: CaptureOptions;
 
-  constructor(
-    private readonly opts: {
-      dpr: number;
-      viewport: { width: number; height: number };
-      channel?: string;
-      restricted?: boolean;
-      signal?: AbortSignal;
-    },
-  ) {}
+  constructor(opts: CaptureOptions) {
+    this.opts = opts;
+  }
 
   async start(): Promise<void> {
     // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything

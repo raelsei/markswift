@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { EditedFilesError } from "./cli/manifest.ts";
 import { runConversion } from "./cli/run.ts";
