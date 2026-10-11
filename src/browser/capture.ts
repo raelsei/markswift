@@ -8,7 +8,7 @@
 import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
-import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
+import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
@@ -302,7 +302,7 @@ export class BrowserCapture {
       return {
         warnings: errors,
         layout: {
-          version: 2,
+          version: LAYOUT_DOC_VERSION,
           source,
           combo: { screen: spec.screen, theme: spec.theme },
           size: { w: Math.round(box.w), h: Math.round(box.h) },

@@ -1,7 +1,7 @@
 /** Synchronous compiler. No browser, filesystem, Python or Apple toolchain required. */
 import { validateName } from "./naming.ts";
-import { LayoutDoc } from "../model/layout.ts";
-import { GENERATED_BY } from "../model/version.ts";
+import { LAYOUT_DOC_VERSION, LayoutDoc } from "../model/layout.ts";
+import { GENERATED_BY, VERSION } from "../model/version.ts";
 import { inferScreen } from "../analysis/infer.ts";
 import { emitSwift, SWIFT_RUNTIME, type EmitMode, type SwiftOutput } from "../swift/emit.ts";
 import { extractTokens, emitDesignTokens, screenTokens, themeDrift } from "../swift/tokens.ts";
@@ -39,6 +39,13 @@ export interface CompileResult {
 export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): CompileResult {
   const name = options.name ?? "ConvertedView";
   validateName(name);
+  for (const d of [layout, options.dark]) {
+    const version = (d as { version?: unknown } | undefined)?.version;
+    if (d && version !== LAYOUT_DOC_VERSION)
+      throw new Error(
+        `LayoutDoc version ${String(version)} cannot be compiled by Markswift ${VERSION}, which reads LayoutDoc version ${LAYOUT_DOC_VERSION}; capture the source again.`,
+      );
+  }
   const doc = LayoutDoc.parse(layout);
   const darkDoc = options.dark && LayoutDoc.parse(options.dark);
   if (
