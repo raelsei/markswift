@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { runConversion } from "./cli/run.ts";
+import { VERSION } from "./model/version.ts";
 
 async function main(): Promise<number> {
   try {
@@ -10,8 +11,7 @@ async function main(): Promise<number> {
       return 0;
     }
     if (command.kind === "version") {
-      const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
-      process.stdout.write(`${manifest.version}\n`);
+      process.stdout.write(`${VERSION}\n`);
       return 0;
     }
     await runConversion(command);
