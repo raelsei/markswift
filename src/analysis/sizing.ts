@@ -162,6 +162,29 @@ export function sizeOf(
   } else if (hugsW || !ctx.parent) width = { kind: "hug" };
   else if (fillsW && !abs) width = { kind: "fill" };
   else width = measuredW;
+  // A width the native stacks keep at the captured size is reported, not silent: a percentage
+  // resolves against this container only, and a px width the layout shrank or clamped is pinned
+  // at the laid-out size.
+  if (declW && width.kind === "fixed" && s["display"] !== "inline") {
+    if (declW.includes("%"))
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        "width",
+        `width ${declW} pinned at ${width.px}px; it does not follow the container at other widths`,
+      );
+    else if (/^[\d.]+px$/.test(declW)) {
+      const [, ir, , il] = insetsOf(s);
+      const authored = px(declW) + (s["box-sizing"] === "border-box" ? 0 : ir + il);
+      if (Math.abs(authored - width.px) > 0.5)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "width",
+          `width ${declW} laid out at ${width.px}px (flex shrink or a min/max limit); pinned at the laid-out width`,
+        );
+    }
+  }
 
   let height: Size;
   if (declH && /px$/.test(declH)) height = measuredH;
