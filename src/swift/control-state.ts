@@ -24,7 +24,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "stepper":
       return { type: "Double", value: num(numericValue(n)) };
     case "datePicker":
-      return { type: "Date", value: ".now" };
+      return { type: "Date", value: dateSeed(n.value) };
     case "colorPicker": {
       const c = n.swatch ?? { r: 0, g: 0, b: 0, a: 1 };
       return { type: "Color", value: `.markswift(${colorArgs(c)})` };
@@ -115,4 +115,38 @@ export function numericValue(n: ControlNode): number {
 /** A design string on one line, for the doc comments that quote the design's own markup. */
 function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * An `<input type=date|time|datetime-local|month|week>` value as the wall-clock date the design
+ * wrote (`Date.markswift`, runtime/controls.swift). HTML sanitises an invalid value to empty, and
+ * an empty field has no date to show, so both start at `.now`.
+ */
+export function dateSeed(value: string | undefined): string {
+  const v = (value ?? "").trim();
+  let m: RegExpMatchArray | null;
+  let y = 2000,
+    mo = 1,
+    d = 1,
+    h = 0,
+    mi = 0,
+    s = 0;
+  if ((m = v.match(/^(\d{4,})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/))) {
+    [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (m[4] !== undefined) [h, mi, s] = [Number(m[4]), Number(m[5]), Number(m[6] ?? 0)];
+  } else if ((m = v.match(/^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/))) {
+    [h, mi, s] = [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)];
+  } else if ((m = v.match(/^(\d{4,})-(\d{2})$/))) {
+    [y, mo] = [Number(m[1]), Number(m[2])];
+  } else if ((m = v.match(/^(\d{4,})-W(\d{2})$/))) {
+    // ISO week: week 1 holds January 4th; weeks start on Monday.
+    const jan4 = Date.UTC(Number(m[1]), 0, 4);
+    const monday = new Date(
+      jan4 - ((new Date(jan4).getUTCDay() + 6) % 7) * 86_400_000 + (Number(m[2]) - 1) * 7 * 86_400_000,
+    );
+    [y, mo, d] = [monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate()];
+  } else return ".now";
+  const check = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  if (check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d || h > 23 || mi > 59 || s > 59) return ".now";
+  return `.markswift(year: ${y}, month: ${mo}, day: ${d}, hour: ${h}, minute: ${mi}, second: ${s})`;
 }

@@ -28,6 +28,12 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - `filter: brightness()` multiplies like CSS (`.contrast(x).brightness((x − 1)/2)`).
 - Clipped `max-height` text shows its first lines in `app` mode.
 - A table's background, border and radius no longer wrap its `<caption>`.
+- `<select>` is labelled by its selection (a `Menu` over an inline `Picker`), not by all its option labels.
+- `<textarea>` keeps its default text and shows its placeholder; text fields draw no macOS bezel inside the CSS box.
+- `<input type=submit|reset|button>` paint their caption (`@value`, else "Submit"/"Reset").
+- Date/time pickers show the components of their input type and start at the design's value instead of now.
+- `<details>` draws its captured summary and marker without a system chevron or a pinned closed height.
+- `appearance` and `accent-color` are captured: `accent-color` tints checkboxes, radios, ranges and progress bars; `appearance: none` removes the select arrow and keeps the author's box on checkboxes and ranges.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

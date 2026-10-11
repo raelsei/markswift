@@ -486,6 +486,12 @@ export interface ControlNode extends SemBase {
   font?: FontSpec;
   /** Colour of that text (the element's computed `color`). */
   color?: Color;
+  /** `datePicker` only: the `<input type>` it came from, which decides the components it shows. */
+  dateKind?: "date" | "time" | "datetime-local" | "month" | "week";
+  /** CSS `accent-color` (absent for `auto`): the tint Chrome gives checkboxes, radios, ranges and progress bars. */
+  accent?: Color;
+  /** Computed `appearance: none`: the author removed the native widget chrome (no select arrow). */
+  appearance?: "none";
 }
 
 export type SemNode = StackNode | GridNode | TextNode | SvgNode | ImageNode | BoxNode | ControlNode;

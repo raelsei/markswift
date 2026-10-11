@@ -109,4 +109,5 @@ test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecat
   const view = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view;
   expect(view).toContain("ScrollView(.vertical) {");
   expect(view).not.toContain("showsIndicators");
+  expect(view).toContain(".markswiftScrollEdgeEffectHidden()");
 });

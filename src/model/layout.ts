@@ -145,10 +145,12 @@ export type LayoutDoc = z.infer<typeof LayoutDoc>;
 
 /** Computed-style whitelist requested from DOMSnapshot. Keep sorted; order is the styles[] index. */
 export const STYLE_WHITELIST = [
+  "accent-color",
   "align-content",
   "align-items",
   "align-self",
   "animation-name",
+  "appearance",
   "aspect-ratio",
   "backdrop-filter",
   "background-blend-mode",

@@ -5,11 +5,13 @@
  * callback property per distinct `onclick` handler.
  *
  * Mode difference — live controls. `app` emits the real thing (`TextField`, `Slider`, `Picker`,
- * …). `ImageRenderer`, which the verifier draws with, cannot rasterise UIKit-backed controls and
- * paints a yellow placeholder instead, so `fidelity` emits what the browser painted: the field's
- * text, the slider's track, the picker's selection. Everything that is pure SwiftUI (`Button`,
- * `Toggle` with a drawn style, `ProgressView`/`Gauge` with a drawn style, `DisclosureGroup`) is
- * identical in both modes.
+ * …) in the CSS look: text fields are `.plain` (the CSS box is their chrome), `<select>` is a
+ * `Menu` labelled by its selection over an inline `Picker`. `ImageRenderer`, which the verifier
+ * draws with, cannot rasterise UIKit-backed controls and paints a yellow placeholder instead, so
+ * `fidelity` emits what the browser painted: the field's text, the slider's track, the picker's
+ * selection. Everything that is pure SwiftUI (`Button`, `Toggle` with a drawn style,
+ * `ProgressView`/`Gauge` with a drawn style, `DisclosureGroup` with `MarkswiftDisclosureStyle`)
+ * is identical in both modes.
  */
 import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
@@ -121,6 +123,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
       return [
         `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
+        ".textFieldStyle(.plain)",
         ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
       ];
     case "secureField":
@@ -128,24 +132,44 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
       return [
         `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
+        ".textFieldStyle(.plain)",
         ...(n.inputType ? INPUT_TRAITS[n.inputType] : []),
       ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
-      // The node paints its own background; the editor's would sit on top of it.
-      return [`TextEditor(text: ${binding})`, ".scrollContentBackground(.hidden)"];
+      // The node paints its own background; the editor's would sit on top of it. The editor insets
+      // its text inside its frame, which the CSS padding already does. It has no prompt: the
+      // placeholder is drawn while the text is empty, where the first line starts.
+      return [
+        `TextEditor(text: ${binding})`,
+        ".scrollContentBackground(.hidden)",
+        ".markswiftTextEditorInsets()",
+        ...(n.placeholder && state
+          ? [
+              ".overlay(alignment: .topLeading) {",
+              `    if ${state}.isEmpty {`,
+              `        Text(verbatim: ${str(n.placeholder)})`,
+              "        .foregroundStyle(Color.markswiftPlaceholderText)",
+              "        .allowsHitTesting(false)",
+              "    }",
+              "}",
+            ]
+          : []),
+      ];
     case "toggle":
     case "radio": {
       // A switch is the right control only when the design drew one: HTML checkboxes and radios
       // are small squares/circles, and an iOS switch would not fit their measured box.
-      const ua = UA[deps.theme];
+      const tint = n.accent ? colorExpr(n.accent, deps, deps.id) : UA[deps.theme].accent;
       const style =
         n.control === "radio"
-          ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${ua.accent})`
+          ? `MarkswiftMarkToggleStyle(mark: .dot, tint: ${tint})`
           : n.frame.w >= n.frame.h * 1.4 && n.frame.w >= 28
             ? ".switch"
-            : `MarkswiftMarkToggleStyle(mark: .check, tint: ${ua.accent})`;
+            : `MarkswiftMarkToggleStyle(mark: .check, tint: ${tint})`;
       const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
+      if (style === ".switch" && n.accent) out.push(`.tint(${tint})`);
       // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
       // (or `aria-label`); the representation does not inherit the visible style.
       if (n.a11y?.label)
@@ -158,12 +182,14 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "slider": {
       const r = n.range ?? { min: 0, max: 100 };
+      const tint = n.accent ? colorExpr(n.accent, deps, deps.id) : UA[deps.theme].accent;
       if (still)
         return [
-          `MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${UA[deps.theme].accent}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`,
+          `MarkswiftSliderTrack(fraction: ${num(fraction(n))}, height: ${num(n.frame.h)}, tint: ${tint}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge})`,
         ];
       return [
         `Slider(value: ${binding}, in: ${num(r.min)}...${num(Math.max(r.max, r.min + 0.001))}${r.step ? `, step: ${num(r.step)}` : ""})`,
+        ...(n.accent ? [`.tint(${tint})`] : []),
       ];
     }
     case "stepper": {
@@ -177,30 +203,40 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     }
     case "picker": {
-      // Closed, a picker shows its selection and a menu indicator — exactly what `<select>` paints.
-      if (still)
-        return [
-          "HStack(spacing: 4.0) {",
-          ...indent(painted(n.value ?? "", ".leading"), 1),
-          '    Image(systemName: "chevron.down")',
-          "}",
-        ];
+      // Closed, a picker shows its selection and, unless `appearance: none` removed it, the
+      // browser's arrow. App mode keeps that look as a Menu label (never the option list) over an
+      // inline Picker, so the native menu and selection behaviour stay.
+      const arrow = n.appearance === "none" ? [] : ['    Image(systemName: "chevron.down")'];
+      if (still) return ["HStack(spacing: 4.0) {", ...indent(painted(n.value ?? "", ".leading"), 1), ...arrow, "}"];
       const options = n.options?.length ? n.options : n.value !== undefined ? [n.value] : [];
       return [
-        `Picker(selection: ${binding}) {`,
-        `    ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
-        "        Text(option)",
+        "Menu {",
+        `    Picker(selection: ${binding}) {`,
+        `        ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
+        "            Text(option)",
+        "        }",
+        "    } label: {",
+        "        EmptyView()",
         "    }",
+        "    .pickerStyle(.inline)",
         "} label: {",
-        ...indent(body(n, deps), 1),
+        "    HStack(spacing: 4.0) {",
+        `        Text(verbatim: ${state ?? '""'})`,
+        ...(n.width.kind === "hug" ? [] : ["        .frame(maxWidth: .infinity, alignment: .leading)"]),
+        ...(arrow.length ? ['        Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))'] : []),
+        "    }",
+        "    .contentShape(Rectangle())",
         "}",
-        ".pickerStyle(.menu)",
+        ".menuStyle(.button)",
+        ".buttonStyle(.plain)",
+        ".menuIndicator(.hidden)",
+        ...(state ? [`.accessibilityValue(${state})`] : []),
       ];
     }
     case "datePicker":
       if (still) return painted(n.value ?? "", ".leading");
       return [
-        `DatePicker(selection: ${binding}, displayedComponents: .date) {`,
+        `DatePicker(selection: ${binding}, displayedComponents: ${DATE_COMPONENTS[n.dateKind ?? "date"]}) {`,
         ...indent(body(n, deps), 1),
         "}",
         ".labelsHidden()",
@@ -213,7 +249,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "progress": {
       const ua = UA[deps.theme];
-      const bar = `.progressViewStyle(MarkswiftBarProgressStyle(height: ${num(barHeight(n))}, tint: ${ua.accent}, track: ${ua.track}, edge: ${ua.edge}))`;
+      const tint = n.accent ? colorExpr(n.accent, deps, deps.id) : ua.accent;
+      const bar = `.progressViewStyle(MarkswiftBarProgressStyle(height: ${num(barHeight(n))}, tint: ${tint}, track: ${ua.track}, edge: ${ua.edge}))`;
       // Qualified: a generated view is named `<Screen>View`, which can be `ProgressView` itself.
       if (n.value === undefined) return ["SwiftUI.ProgressView()", bar];
       return [`SwiftUI.ProgressView(value: ${num(fraction(n))})`, bar];
@@ -228,16 +265,44 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         `.gaugeStyle(MarkswiftBarGaugeStyle(height: ${num(barHeight(n))}, tint: ${LEVEL_TINT[n.level ?? "optimum"]}, track: ${UA[deps.theme].track}, edge: ${UA[deps.theme].edge}))`,
       ];
     }
-    case "disclosure":
+    case "disclosure": {
+      // The summary (with its `::marker` run) is the whole label; the runtime style draws no system
+      // chevron and keeps the measured summary → content gap. The marker follows the state.
+      const first = n.content[0];
+      const gap = n.label && first ? Math.max(0, first.frame.y - (n.label.frame.y + n.label.frame.h)) : 0;
+      // ponytail: the marker swaps only when the summary is emitted inline (a text label); a summary
+      // split into its own `v_*` property keeps its captured marker.
+      const label = (n.label ? deps.child(n.label) : ["EmptyView()"]).map((l) =>
+        state
+          ? l.replace(
+              MARKER,
+              (_, closed: string) =>
+                `Text(verbatim: ${state} ? "\u25be " : ${str(`${closed === "\u25be" ? "\u25b8" : closed} `)})`,
+            )
+          : l,
+      );
       return [
         `DisclosureGroup(isExpanded: ${binding}) {`,
         ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
         "} label: {",
-        ...indent(n.label ? deps.child(n.label) : ["EmptyView()"], 1),
+        ...indent(label, 1),
         "}",
+        `.disclosureGroupStyle(MarkswiftDisclosureStyle(spacing: ${num(gap)}))`,
       ];
+    }
   }
 }
+
+const DATE_COMPONENTS: Record<NonNullable<ControlNode["dateKind"]>, string> = {
+  date: ".date",
+  time: ".hourAndMinute",
+  "datetime-local": "[.date, .hourAndMinute]",
+  month: ".date",
+  week: ".date",
+};
+
+/** Chrome's `::marker` text for `<summary>`: ▸ closed (◂ right-to-left), ▾ open. */
+const MARKER = /Text\(verbatim: "([\u25b8\u25be\u25c2]) "\)/;
 
 /** What iOS Safari gives the same input; `markswiftInputTraits` applies it on iOS only (runtime/controls.swift). */
 const INPUT_TRAITS: Record<NonNullable<ControlNode["inputType"]>, string[]> = {
@@ -288,12 +353,21 @@ function body(n: ControlNode, deps: ControlDeps): string[] {
 }
 
 /**
+ * An input button's caption (`@value`, or Chrome's "Submit"/"Reset"), painted by the control:
+ * centred across a fill-width box, as Chrome centres it.
+ */
+function caption(n: ControlNode): string[] | undefined {
+  if (n.control !== "button" || n.files || n.value === undefined || n.content.length) return undefined;
+  return [`Text(verbatim: ${str(n.value)})`, ...(n.width.kind === "fill" ? [".frame(maxWidth: .infinity)"] : [])];
+}
+
+/**
  * A button's or link's label with the node's box inside it, closed by the box shape: the whole box
  * is the hit and press area, not only the glyphs. `EmptyView` takes no padding or frame, so an
  * empty label with a box becomes `Color.clear`.
  */
 function pressable(n: ControlNode, deps: ControlDeps): string[] {
-  const label = body(n, deps);
+  const label = caption(n) ?? body(n, deps);
   if (!deps.box) return label;
   const lines = deps.box.length && label.length === 1 && label[0] === "EmptyView()" ? ["Color.clear"] : label;
   return [...lines, ...deps.box, `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`];

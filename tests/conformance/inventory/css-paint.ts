@@ -1986,8 +1986,8 @@ export default {
       target: ".tint(Color)",
       ir: "Style.tint (new)",
       via: "style",
-      impl: "no",
-      note: "Tints native Toggle/Slider/checkbox equivalents from the form domain; `auto` keeps the platform accent. Not whitelisted.",
+      impl: "partial",
+      note: "Whitelisted; tints the drawn checkbox/radio, Slider and progress bar. Chrome's contrast-adjusted check-mark colour is not reproduced.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/accent-color",
     },
     {

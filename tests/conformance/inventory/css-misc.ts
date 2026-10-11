@@ -483,7 +483,7 @@ export default {
       ir: "—",
       via: "none",
       impl: "yes",
-      note: "`auto` keeps native chrome, which the HTML domain's control rows (`<button>`, `<input>`, `<select>`) already reproduce with SwiftUI's default styles; only `none` changes the picture, see the value row.",
+      note: "Whitelisted. `auto`: native checkbox/radio/range ignore the author's background and border (dropped); `none`: the CSS box is painted and `<select>` loses its arrow.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/appearance",
     },
     {
