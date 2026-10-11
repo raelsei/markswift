@@ -490,3 +490,17 @@ test("readmeSummary lists exceptions sorted after the domain table, and nothing 
     "Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):",
   );
 });
+
+test("README evidence table is the generated iOS summary", async () => {
+  const root = join(import.meta.dir, "../../..");
+  const readme = await Bun.file(join(root, "README.md")).text();
+  const open = "<!-- quality-summary tests/conformance/baselines/visual-all-ios.json -->";
+  const block = readme.slice(readme.indexOf(open) + open.length, readme.indexOf("<!-- /quality-summary -->"));
+  expect(readme).toContain(open);
+  expect(block.trim()).toBe(
+    readmeSummary(
+      await Bun.file(join(root, "tests/conformance/baselines/visual-all-ios.json")).json(),
+      await Bun.file(join(root, "tests/conformance/visual-policy-ios.json")).json(),
+    ),
+  );
+});
