@@ -99,7 +99,13 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       ...n.overlays.filter((o) => o.fixed && o.layer === "background").reverse(),
       ...n.overlays.filter((o) => o.fixed && o.layer === "overlay"),
     ].flatMap((o) => overlayModifier(o, o.layer, ctx));
-    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`, ...indent(out, 1), `}`, ...fixed];
+    return [
+      `ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`,
+      ...indent(out, 1),
+      `}`,
+      ".markswiftScrollEdgeEffectHidden()",
+      ...fixed,
+    ];
   }
   return out;
 }

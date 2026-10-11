@@ -343,6 +343,22 @@ struct MarkswiftTile<Content: View>: View {
     }
 }
 
+extension View {
+    /// A CSS scroll box has no edge effect; iOS 26 blurs the content under a ScrollView's edges
+    /// and paints it outside the box's rounded clip. Earlier systems and SDKs draw none.
+    @ViewBuilder func markswiftScrollEdgeEffectHidden() -> some View {
+        #if os(iOS) && compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            scrollEdgeEffectHidden(true, for: .all)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 enum MarkswiftFonts {
     /// Registers bundled font files with CoreText. Call once before rendering.
     static func register(urls: [URL]) {
