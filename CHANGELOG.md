@@ -11,6 +11,12 @@ All notable changes to Markswift. Versions use SemVer pre-release tags; the pack
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
 - The quality gate names the old and new value of a changed capture configuration and prints a rebaseline hint on toolchain drift; the Visual Toolchain step lists simulator runtimes; a missing tracked baseline fails with instructions.
 
+### Fixed
+- `margin: 0 auto` / `margin-left: auto` on fixed- or content-width blocks centres / right-aligns them.
+- `filter: brightness()` multiplies like CSS (`.contrast(x).brightness((x − 1)/2)`).
+- Clipped `max-height` text shows its first lines in `app` mode.
+- A table's background, border and radius no longer wrap its `<caption>`.
+
 ## [0.1.0-alpha.1] — 2026-10-10
 
 First alpha: visually faithful SwiftUI starting code for one captured component (iOS 18+, Swift 6, `app` mode by default).
