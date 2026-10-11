@@ -166,6 +166,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     for (const v of numeric.split(/\s+/))
       if (v && !NUMERIC_FEATURES[v])
         note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
+    reportTextLosses(s, deco, note);
     const clipEl =
       [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
     const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
@@ -312,6 +313,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (dir === "rtl") node.layoutDirection = "rtl";
   if (ta === "justify")
     note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  const indent = host.styles["text-indent"];
+  if (indent && px(indent) !== 0) note("approximated", "text-indent", `text-indent ${indent} dropped`);
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb")
     note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
@@ -331,4 +334,41 @@ function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
     .map((r) => r.text)
     .join("");
   return ONE_WORD.test(text) && !SPACE_FREE.test(text);
+}
+
+/** Text properties SwiftUI `Text` cannot express; reported per value, never silently dropped. */
+function reportTextLosses(
+  s: Record<string, string>,
+  deco: TextRun["decoration"],
+  note: (level: DiagnosticLevel, feature: string, message: string) => void,
+): void {
+  if (s["hyphens"] === "auto")
+    note("approximated", "hyphens", "hyphens: auto → no automatic hyphenation (SwiftUI Text does not hyphenate)");
+  const wb = s["word-break"];
+  if (wb === "break-all" || wb === "keep-all" || wb === "break-word")
+    note("approximated", "word-break", `word-break: ${wb} → native word breaking`);
+  const ow = s["overflow-wrap"];
+  if (ow === "anywhere" || ow === "break-word")
+    note(
+      "approximated",
+      "overflow-wrap",
+      `overflow-wrap: ${ow} → native breaking decides where an overlong word splits`,
+    );
+  const tws = s["text-wrap-style"];
+  if (tws === "balance" || tws === "pretty" || tws === "stable")
+    note("approximated", "text-wrap-style", `text-wrap-style: ${tws} → native line breaking`);
+  const ws = s["word-spacing"];
+  if (ws && ws !== "normal" && px(ws) !== 0) note("approximated", "word-spacing", `word-spacing ${ws} dropped`);
+  const ffs = s["font-feature-settings"];
+  if (ffs && ffs !== "normal") note("approximated", "font-feature-settings", `font-feature-settings ${ffs} dropped`);
+  const caps = s["font-variant-caps"];
+  if (caps && caps !== "normal") note("approximated", "font-variant-caps", `font-variant-caps ${caps} dropped`);
+  if (deco) {
+    const t = s["text-decoration-thickness"];
+    if (t && t !== "auto" && t !== "from-font")
+      note("approximated", "text-decoration-thickness", `text-decoration-thickness ${t} → system line thickness`);
+    const o = s["text-underline-offset"];
+    if (deco.lines.includes("underline") && o && o !== "auto")
+      note("approximated", "text-underline-offset", `text-underline-offset ${o} → system underline position`);
+  }
 }

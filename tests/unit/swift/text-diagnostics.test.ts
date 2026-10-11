@@ -67,3 +67,50 @@ test("fidelity reports the browser's line division it bakes into the literal", (
   const fidelity = compileLayout(twoLines, { mode: "fidelity" }).diagnostics.flatMap((r) => r.diagnostics);
   expect(fidelity).toContainEqual(expect.objectContaining({ level: "approximated", feature: "text-wrap-mode" }));
 });
+
+const LOSSES: [string, Record<string, string>, string[]][] = [
+  ["hyphens: auto", { hyphens: "auto" }, ["hyphens"]],
+  ["word-break: break-all", { "word-break": "break-all" }, ["word-break"]],
+  ["overflow-wrap: anywhere", { "overflow-wrap": "anywhere" }, ["overflow-wrap"]],
+  ["text-wrap-style: balance", { "text-wrap-style": "balance" }, ["text-wrap-style"]],
+  ["word-spacing: 8px", { "word-spacing": "8px" }, ["word-spacing"]],
+  ["text-indent: 2em", { "text-indent": "32px" }, ["text-indent"]],
+  ['font-feature-settings: "liga" 0', { "font-feature-settings": '"liga" 0' }, ["font-feature-settings"]],
+  ["font-variant-caps: small-caps", { "font-variant-caps": "small-caps" }, ["font-variant-caps"]],
+  [
+    "underline thickness and offset",
+    {
+      "-webkit-text-decorations-in-effect": "underline",
+      "text-decoration-thickness": "3px",
+      "text-underline-offset": "4px",
+    },
+    ["text-decoration-thickness", "text-underline-offset"],
+  ],
+];
+
+for (const [name, styles, expected] of LOSSES)
+  test(`${name} is reported`, () => {
+    const found = features(doc(styles));
+    for (const feature of expected) expect(found).toContain(feature);
+  });
+
+test("default text property values are not reported", () => {
+  const found = features(
+    doc({
+      "word-spacing": "0px",
+      "text-indent": "0px",
+      "font-feature-settings": "normal",
+      hyphens: "manual",
+      "-webkit-text-decorations-in-effect": "underline",
+      "text-decoration-thickness": "auto",
+    }),
+  );
+  for (const feature of [
+    "word-spacing",
+    "text-indent",
+    "font-feature-settings",
+    "hyphens",
+    "text-decoration-thickness",
+  ])
+    expect(found).not.toContain(feature);
+});
