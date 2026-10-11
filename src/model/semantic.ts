@@ -349,10 +349,11 @@ export interface TextNode extends SemBase {
   lines: number;
   /**
    * Line-box growth the browser measured beyond `lines × line-height` (sub/sup, larger inline
-   * runs), already included in `padding` on `edge`. App mode subtracts the growth native text adds
-   * on its own, so it is not counted twice.
+   * runs, `kbd` borders) on `edge`. `padded`: over 2 px, already included in `padding` (both
+   * modes); smaller growth is app-only. App mode subtracts the growth native text adds on its own,
+   * so it is not counted twice.
    */
-  lineBoxGrowth?: { edge: "top" | "bottom"; px: number };
+  lineBoxGrowth?: { edge: "top" | "bottom"; px: number; padded: boolean };
 }
 
 export interface SvgNode extends SemBase {

@@ -6,10 +6,15 @@ import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine, SYSTEM_LINE_HEIGHT } from "./text-box.ts";
 
-/** Ascent, descent and natural line height of a run's face, as multiples of its size (SF Pro `hhea` for system faces and unpackaged families). */
+/**
+ * Ascent, descent and natural line height of a run's face, as multiples of its size. System faces
+ * and unpackaged families: SF Pro as the browser measures it on macOS (`hhea` 1980/432 per 2048)
+ * and the native line height (`SYSTEM_LINE_HEIGHT`).
+ */
 function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number; descent: number; natural: number } {
   const m = f.family.kind === "custom" ? metrics[f.family.name.toLowerCase()] : undefined;
-  if (!m) return { ascent: 1950 / 2048, descent: 494 / 2048, natural: SYSTEM_LINE_HEIGHT };
+  // ponytail: SF metrics of the converting Mac's Chrome (macOS 27); other macOS versions ship other SF builds.
+  if (!m) return { ascent: 1980 / 2048, descent: 432 / 2048, natural: SYSTEM_LINE_HEIGHT };
   return {
     ascent: m.ascent / m.upem,
     descent: m.descent / m.upem,
@@ -93,9 +98,17 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
   else if (first?.font.lineHeight !== undefined) {
     const lh = first.font.lineHeight;
     const r = faceRatios(first.font, ctx.fontMetrics);
-    const args = [`${num(lh)}, size: ${num(first.font.size)}, relativeTo: .${nearestTextStyle(first.font.size)}`];
+    const s = first.font.size;
+    const args = [`${num(lh)}, size: ${num(s)}, relativeTo: .${nearestTextStyle(s)}`];
+    // The browser's baseline: Blink rounds the face's ascent and descent to whole px and floors the
+    // half-leading above the baseline, so the odd part of the leading lies below.
+    const ascent = Math.round(r.ascent * s);
+    const descent = Math.round(r.descent * s);
+    const leadingPx = lh - ascent - descent;
+    const below = descent + leadingPx - 2 * Math.floor(leadingPx / 2);
+    args.push(`ascent: ${num(ascent / s)}, descent: ${num(below / s)}`);
     if (first.font.family.kind === "custom" && ctx.fontMetrics[first.font.family.name.toLowerCase()])
-      args.push(`ascent: ${num(r.ascent)}, descent: ${num(r.descent)}, natural: ${num(r.natural)}`);
+      args.push(`natural: ${num(r.natural)}`);
     // Half-leading only when the measured box is the line box (not a clipped box or a glyph-box
     // union between flow children) — the same test the padding used.
     if (n.frame.h - n.padding[0] - n.padding[2] < n.lines * lh - 0.5) args.push("halfLeading: false");
@@ -103,9 +116,12 @@ export function textExpr(n: TextNode, ctx: ColorCtx & { mode: EmitMode; fontMetr
     // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
     // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up
     // that much shorter than the browser's. Pass both growths into the helper if that path matters.
+    // Growth already in the box padding loses what native text adds itself; unpadded growth is
+    // added for the part native text does not grow.
     if (n.lineBoxGrowth) {
-      const g = Math.min(n.lineBoxGrowth.px, nativeInlineGrowth(glyphs, lh / first.font.size));
-      if (g >= 0.5) out.push(`.padding(.${n.lineBoxGrowth.edge}, ${num(-g)})`);
+      const { edge, px, padded } = n.lineBoxGrowth;
+      const g = (padded ? 0 : px) - Math.min(px, nativeInlineGrowth(glyphs, lh / first.font.size));
+      if (Math.abs(g) >= 0.5) out.push(`.padding(.${edge}, ${num(g)})`);
     }
   }
   return out;

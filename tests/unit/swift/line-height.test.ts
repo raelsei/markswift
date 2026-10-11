@@ -46,8 +46,9 @@ const emit = (doc: LayoutDoc, mode: "app" | "fidelity") => emitSwift(inferScreen
 test("app text with a line-height emits one markswiftLineHeight and no lineSpacing or vertical padding", () => {
   const app = emit(paragraph({}, 20), "app").view;
   expect(app.match(/\.markswiftLineHeight\(/g)).toHaveLength(1);
+  // SF at 15px: Blink's rounded ascent 15 and descent 3, 2px leading split evenly.
   expect(app).toMatch(
-    /\.fixedSize\(horizontal: false, vertical: true\)\n\s*\.markswiftLineHeight\(20\.0, size: 15\.0, relativeTo: \.subheadline\)\n/,
+    /\.fixedSize\(horizontal: false, vertical: true\)\n\s*\.markswiftLineHeight\(20\.0, size: 15\.0, relativeTo: \.subheadline, ascent: 1\.0, descent: 0\.2\)\n/,
   );
   expect(app).not.toContain(".lineSpacing(");
   expect(app).not.toContain(".padding(.vertical");
@@ -91,10 +92,17 @@ test("app subtracts the native sub/sup line-box growth the padding already carri
       { ...host, text: "2", font: small, baselineOffset: 5.4 },
     ];
     text.padding = [text.padding[0], text.padding[1], text.padding[2] + 10, text.padding[3]];
-    text.lineBoxGrowth = { edge: "bottom", px: 10 };
+    text.lineBoxGrowth = { edge: "bottom", px: 10, padded: true };
     return emitSwift(screen, "P", { mode }).view;
   };
   // 20/15 × (max(15, 12.5 + 5.4) + 4.6 − 15) = 10
   expect(subSup("app")).toContain(".padding(.bottom, -10.0)");
   expect(subSup("fidelity")).not.toContain("-10.0");
+});
+
+test("small line-box growth (a kbd border) is app-only padding", () => {
+  const doc = paragraph({}, 42, "Press Ctrl and abbreviation.");
+  const app = emit(doc, "app").view;
+  expect(app).toContain(".padding(.bottom, 2.0)");
+  expect(emit(doc, "fidelity").view).not.toContain(".padding(.bottom, 2.0)");
 });

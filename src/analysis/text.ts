@@ -228,14 +228,17 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // ponytail: block hosts keep the keyword rule; a line box grown by sub/sup or a fallback font
     // (emoji) reads as off-centre glyphs. Measure block hosts too (sub/sup paragraphs look better
     // centred) once the visual gate can tell which is right.
-    if (surplus > 2) {
+    // Fidelity pins the text frame, so only growth over 2 px becomes padding (both modes). Smaller
+    // growth (a `kbd` box's border) is recorded unpadded for app mode alone.
+    if (surplus > 0.5) {
       const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
       const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
       const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
-      if (Math.abs(above - below) > 2) {
-        base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
-        growth = { edge: above > below ? "top" : "bottom", px: surplus };
-      }
+      const edge = above > below ? "top" : "bottom";
+      if (surplus > 2 && Math.abs(above - below) > 2) {
+        base.padding = edge === "top" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+        growth = { edge, px: surplus, padded: true };
+      } else if (surplus <= 2 && Math.abs(above - below) > 0.5) growth = { edge, px: surplus, padded: false };
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries

@@ -104,9 +104,9 @@ extension Text {
 
 extension View {
     /// CSS `line-height` on a `Text` whose first run is `size` points, scaling like a font
-    /// `relativeTo: style`. `ascent`, `descent` and `natural` (ascent + descent + line gap) are
-    /// the face's vertical metrics as multiples of the size; the defaults are SF Pro's `hhea`
-    /// (1950, 494, 2444 per 2048).
+    /// `relativeTo: style`. `ascent` and `descent` place the browser's baseline (the face's
+    /// ascent and descent as the browser rounded them, multiples of the size); `natural` is the
+    /// face's native line height (default: SF Pro, 2444 per 2048).
     ///
     /// iOS/macOS 26+: `.lineHeight(.multiple(factor:))` makes every line exactly `lineHeight`
     /// (tight values compress) and puts the first baseline at y = size; the padding pair moves it
@@ -115,7 +115,7 @@ extension View {
     /// `halfLeading: false` (a measured box that is not the line box) leaves out the half-leading
     /// above the first and below the last line.
     func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
-                             ascent: CGFloat = 1950.0 / 2048, descent: CGFloat = 494.0 / 2048,
+                             ascent: CGFloat, descent: CGFloat,
                              natural: CGFloat = 2444.0 / 2048, halfLeading: Bool = true) -> some View {
         modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
                                      halfLeading: halfLeading, size: size, relativeTo: style))

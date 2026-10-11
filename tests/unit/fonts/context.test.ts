@@ -73,6 +73,7 @@ test("interleaved conversions retain their own font selection and leading", asyn
   );
   expect(emitSwift(a, "TestView", { mode: "app", fontMetrics: metricsA }).view).toBe(outputA.view);
   const system = emitSwift(fallback, "TestView", { mode: "app" }).view;
-  expect(system).toContain(".markswiftLineHeight(30.0, size: 20.0, relativeTo: .title3)");
+  // SF at 20px: Blink rounds ascent 19.34 → 19 and descent 4.22 → 4; the odd px of the 7px leading goes below.
+  expect(system).toContain(".markswiftLineHeight(30.0, size: 20.0, relativeTo: .title3, ascent: 0.95, descent: 0.25)");
   for (const view of [outputA.view, outputB.view, system]) expect(view).not.toContain(".lineSpacing(");
 });
