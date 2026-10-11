@@ -46,6 +46,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   });
   // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
   // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.
+  // Not yet reported upstream; repro: research/audit-2026-10-10/upstream-repros/pw.mjs.
   const stopOnTimeout = () => void renderer.stop().catch(() => {});
   deadline.addEventListener("abort", stopOnTimeout, { once: true });
   const timedOut = new Promise<never>((_, reject) =>
