@@ -13,13 +13,22 @@ export interface ConversionCommand {
   options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport">;
 }
 
-export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand;
+export interface BuildCommand {
+  kind: "build";
+  configPath: string;
+  force: boolean;
+}
+
+export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand | BuildCommand;
 
 export const HELP = `Markswift — convert rendered HTML and CSS to SwiftUI.
 
 Usage:
   markswift convert <file.html|-> --out <directory> [options]
   markswift convert --url <http(s)://...> --out <directory> [options]
+  markswift build [markswift.json] [--force]
+                    Build every component of the config into one Swift package
+                    (directory "out" of the config; replaces only files it wrote)
   markswift --help | --version
 
 Inputs:
@@ -65,6 +74,7 @@ const valueFlags = new Set([
 export function parseArgs(args: string[]): Command {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) return { kind: "help" };
   if (args.length === 1 && ["--version", "-v"].includes(args[0]!)) return { kind: "version" };
+  if (args[0] === "build") return parseBuild(args.slice(1));
   if (args[0] !== "convert") throw new UsageError(`Unknown command: ${args[0]}`);
   if (args.slice(1).some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
 
@@ -132,6 +142,22 @@ export function parseArgs(args: string[]): Command {
     force: flags.has("--force"),
     options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },
   };
+}
+
+/** `markswift build [config] [--force]`: one optional config path (default `markswift.json`). */
+function parseBuild(args: string[]): Command {
+  if (args.some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
+  let force = false;
+  const positional: string[] = [];
+  for (const arg of args) {
+    if (arg === "--force") {
+      if (force) throw new UsageError("Repeated option: --force");
+      force = true;
+    } else if (arg.startsWith("-")) throw new UsageError(`Unknown option: ${arg}`);
+    else positional.push(arg);
+  }
+  if (positional.length > 1) throw new UsageError("Choose at most one config file");
+  return { kind: "build", configPath: positional[0] ?? "markswift.json", force };
 }
 
 function dimension(value: string | undefined, flag: string, fallback: number): number {
