@@ -15,6 +15,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - Pressed and focused looks: `:hover`/`:active` and `:focus-visible` paint captured as paint-only state snapshots and emitted as `@MarkswiftPressed`/`@MarkswiftFocused` members driving colour, opacity and scale; state colours join the Palette tokens.
 - App mode: repeated sibling elements are emitted once as a nested subview and a static data array iterated with `ForEach` (pixel-identical; rows with controls bind through `ForEach($rows)`; per-row buttons collapse into one `(Row) -> Void` action).
 - Reflow gate: `bun run pilot --reflow` renders 390-compiled code at 320 and 768 against fresh Chrome; `reflowMaxLoss` fails app-mode reflow losses on fixtures tagged `markswift-reflow: native`.
+- App-mode grids keep their authored tracks (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) via `MarkswiftTracks`; percentage widths keep their fraction via `MarkswiftFraction`.
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
