@@ -1,4 +1,4 @@
-import type { SemNode } from "../model/semantic.ts";
+import type { SemNode, TextNode } from "../model/semantic.ts";
 import type { EmitContext, EmitMode } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { alignment, num } from "./format.ts";
@@ -13,6 +13,16 @@ const TEXT_CONTROLS: Record<string, true> = {
   textEditor: true,
   datePicker: true,
 };
+/**
+ * App: the line-box surplus the analysis moved into one edge's padding (text off its box's centre,
+ * `lineBoxGrowth.padded`). Emitted as a `minHeight` floor of the measured box aligned away from
+ * that edge instead, so growing text absorbs it like CSS does rather than adding it on top.
+ */
+export function surplusFloor(n: SemNode, ctx: Pick<EmitContext, "mode">): TextNode["lineBoxGrowth"] {
+  return ctx.mode === "app" && n.kind === "text" && n.lineBoxGrowth?.padded && n.maxHeight === undefined
+    ? n.lineBoxGrowth
+    : undefined;
+}
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
@@ -41,12 +51,20 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       ? n.height.px
       : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
-  const floor = app && h !== undefined && n.maxHeight === undefined && laysOutText(n) ? h : undefined;
+  const surplus = surplusFloor(n, ctx);
+  const floor = surplus
+    ? Math.max(h ?? 0, n.frame.h)
+    : app && h !== undefined && n.maxHeight === undefined && laysOutText(n)
+      ? h
+      : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
   const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined || (fraction !== undefined && app);
   const fillH = n.height.kind === "fill" || allocated === "both";
-  const align = fillAlignment(n, ctx.mode);
+  const align =
+    surplus && n.kind === "text"
+      ? alignment(n.align === "trailing" ? "end" : n.align, surplus.edge === "top" ? "end" : "start")
+      : fillAlignment(n, ctx.mode);
   // A fixed frame centres its content by default; the browser packs a container's content per
   // its own alignment (block flow / flex start), and text per its text-align.
   if (fixedW || fixedH)

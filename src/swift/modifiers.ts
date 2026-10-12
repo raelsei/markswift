@@ -11,7 +11,7 @@ import {
   strokeStyle,
   verticalAlignment,
 } from "./format.ts";
-import { frameModifier } from "./frames.ts";
+import { frameModifier, surplusFloor } from "./frames.ts";
 import { shapeExpr, fillModifier, blendedFillModifier, swiftBlend } from "./paint.ts";
 import { borderSideModifiers } from "./borders.ts";
 import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "./effects.ts";
@@ -53,10 +53,14 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A copy for the paint helpers; `frameModifier` and the overlays keep `n` (identity lookups).
   const p = paint ? ({ ...n, style: paint.style } as SemNode) : n;
   const st = p.style;
-  const [pt, pr, pb, pl] = n.padding;
+  // App: a padded line-box surplus is a `minHeight` floor instead (`surplusFloor`).
+  const surplus = surplusFloor(n, ctx);
+  const padding: [number, number, number, number] = [...n.padding];
+  if (surplus) padding[surplus.edge === "top" ? 0 : 2] -= surplus.px;
+  const [pt, pr, pb, pl] = padding;
   if (pt || pr || pb || pl) {
     if (pt === pr && pr === pb && pb === pl) m.push(`.padding(${num(pt)})`);
-    else m.push(`.padding(${edgeInsets(n.padding)})`);
+    else m.push(`.padding(${edgeInsets(padding)})`);
   }
   m.push(...frameModifier(n, ctx));
   // `object-fit: cover` overflows its box and `none` can; the browser clips both to the img box.
