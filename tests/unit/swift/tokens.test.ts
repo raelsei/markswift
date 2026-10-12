@@ -12,12 +12,55 @@ import { emitSwift } from "../../../src/swift/emit.ts";
 import type { Color } from "../../../src/model/values.ts";
 import type { Screen, SemNode, StackNode, Style, TextRun } from "../../../src/model/semantic.ts";
 import { classColorHints } from "../../../src/analysis/class-hints.ts";
+import { GENERATED_BY } from "../../../src/model/version.ts";
 
 const rgb = (r: number, g: number, b: number, a = 1): Color => ({ r, g, b, a });
 
 const WHITE = rgb(1, 1, 1);
 const NEAR_BLACK = rgb(0.04, 0.06, 0.08);
 const INDIGO = rgb(0.49, 0.36, 0.84);
+
+/** Plan 034 Step 1: `emitDesignTokens` output before the palette map existed (the version line follows the release). */
+const PINNED_NESTED = `// ${GENERATED_BY} — colour tokens paired from the light and dark captures of one page.
+//
+// The generated view references these names instead of inline Color.markswift(…) literals.
+// An adaptive token is Color.markswift(light:dark:) and follows the colour scheme; a static token
+// is the same colour in both themes.
+//
+// 3 tokens: 2 adaptive (light/dark pairs), 1 static.
+// 4 colour slots carry them; 0 single-use colours identical in both themes stay inline.
+import SwiftUI
+
+extension V {
+    enum Palette {
+        /// canvas · 1 use
+        static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))
+        /// fill · 1 use · --surface-raised
+        static let surfaceRaised = Color.markswift(light: .markswift(1.0, 1.0, 1.0), dark: .markswift(0.04, 0.06, 0.08))
+        /// fill · 2 uses
+        static let fillIndigo = Color.markswift(0.49, 0.36, 0.84)
+    }
+}
+`;
+const PINNED_MODULE = `// ${GENERATED_BY} — colour tokens shared by every view of this library.
+//
+// The generated view references these names instead of inline Color.markswift(…) literals.
+// An adaptive token is Color.markswift(light:dark:) and follows the colour scheme; a static token
+// is the same colour in both themes.
+//
+// 3 tokens: 2 adaptive (light/dark pairs), 1 static.
+// 4 colour slots carry them; 0 single-use colours identical in both themes stay inline.
+import SwiftUI
+
+public enum Palette {
+    /// canvas · 1 use
+    public static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))
+    /// fill · 1 use · --surface-raised
+    public static let surfaceRaised = Color.markswift(light: .markswift(1.0, 1.0, 1.0), dark: .markswift(0.04, 0.06, 0.08))
+    /// fill · 2 uses
+    public static let fillIndigo = Color.markswift(0.49, 0.36, 0.84)
+}
+`;
 
 function style(over: Partial<Style> = {}): Style {
   return { fills: [], shadows: [], ...over };
@@ -196,6 +239,15 @@ describe("emitDesignTokens", () => {
     expect(swift).toMatch(/static let fill\w+ = Color\.markswift\(0\.49, 0\.36, 0\.84\)\n/);
     expect(SWIFT_RUNTIME).toContain("static func markswift(light: Color, dark: Color)");
     expect(swift).not.toContain("extension Color");
+  });
+
+  test("without a palette map the file is byte-identical to the pre-map output", () => {
+    const [light, dark] = pair();
+    (light!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    (dark!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    const set = extractTokens([light!, dark!]);
+    expect(emitDesignTokens(set, "V", { adaptive: true })).toBe(PINNED_NESTED);
+    expect(emitDesignTokens(set, undefined, { adaptive: true, visibility: "public" })).toBe(PINNED_MODULE);
   });
 });
 
