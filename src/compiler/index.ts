@@ -8,8 +8,10 @@ import {
   extractTokens,
   emitDesignTokens,
   pairUsages,
+  paletteWarnings,
   screenTokens,
   themeDrift,
+  type PaletteMap,
   type TokenSet,
 } from "../swift/tokens.ts";
 import type { ScreenTokens } from "../swift/context.ts";
@@ -34,6 +36,8 @@ export interface CompileOptions {
   extract?: boolean;
   /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
   visibility?: "internal" | "public";
+  /** App colours for captured tokens (`--palette`); views keep referencing `Palette.x`. */
+  palette?: PaletteMap;
 }
 
 export interface CompileResult {
@@ -44,7 +48,7 @@ export interface CompileResult {
   diagnostics: SwiftOutput["report"];
   /** Binary resources referenced by the generated Swift (relative bundle path → bytes), e.g. `Images/<hash>.png`. Add these resources to the iOS target. */
   assets: Record<string, Uint8Array>;
-  /** Light/dark pairing limitations; empty for a single-theme compile. */
+  /** Light/dark pairing limitations and palette-map gaps; empty for a single-theme compile without a map. */
   warnings: ConversionWarning[];
 }
 
@@ -71,12 +75,12 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     name,
     code: result.view,
     diagnostics: result.report,
-    warnings: result.warnings,
+    warnings: options.palette ? [...result.warnings, ...paletteWarnings(tokens, options.palette)] : result.warnings,
     assets: result.images,
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,
-      [`${name}+Tokens.swift`]: emitDesignTokens(tokens, name, { adaptive: !!dark }),
+      [`${name}+Tokens.swift`]: emitDesignTokens(tokens, name, { adaptive: !!dark, palette: options.palette }),
       ...(shapes.length
         ? {
             [`${name}+Shapes.swift`]: `// ${GENERATED_BY} — SVG paths and clip polygons as Shapes.\nimport SwiftUI\n\nextension ${name} {\n${indent(shapes.join("\n").trimEnd().split("\n"), 1).join("\n")}\n}\n`,
@@ -178,7 +182,7 @@ export interface LibraryComponent {
   mode?: EmitMode;
 }
 
-export interface LibraryOptions extends Pick<CompileOptions, "bundledFamilies" | "fontMetrics"> {
+export interface LibraryOptions extends Pick<CompileOptions, "bundledFamilies" | "fontMetrics" | "palette"> {
   /** Library (Swift module) name; must differ from every component name. */
   library: string;
   /** Add `BundledFonts.register()` to every preview (the package bundles fonts). */
@@ -189,7 +193,7 @@ export interface LibraryResult {
   /** Module sources, relative to `Sources/<library>/`. */
   files: Record<string, string>;
   assets: Record<string, Uint8Array>;
-  /** Per-component compile warnings, each with `component` set to the component name. */
+  /** Per-component compile warnings, each with `component` set to the component name; palette-map warnings are library-wide. */
   warnings: ConversionWarning[];
   diagnostics: Record<string, CompileResult["diagnostics"]>;
 }
@@ -263,7 +267,9 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
   files["MarkswiftPalette.swift"] = emitDesignTokens(tokens, undefined, {
     adaptive: screens.some((s) => s.dark),
     visibility: "public",
+    palette: options.palette,
   });
+  if (options.palette) warnings.push(...paletteWarnings(tokens, options.palette));
   const shapeKeys = Object.keys(shapes).sort();
   if (shapeKeys.length)
     files["MarkswiftShapes.swift"] =
@@ -277,3 +283,4 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
 
 export type { LayoutDoc } from "../model/layout.ts";
 export type { EmitMode } from "../swift/emit.ts";
+export type { PaletteMap } from "../swift/tokens.ts";

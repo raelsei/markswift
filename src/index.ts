@@ -11,6 +11,7 @@ export type {
   CompileResult,
   LayoutDoc,
   EmitMode,
+  PaletteMap,
   Diagnostic,
   DiagnosticLevel,
   Confidence,

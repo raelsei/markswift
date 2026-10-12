@@ -91,6 +91,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       bundledFamilies: bundledFamilies(fonts),
       fontMetrics: metricsForFonts(fonts),
       dark: dark?.layout,
+      palette: options.palette,
     });
     const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
     if (fonts.faces.length) {
