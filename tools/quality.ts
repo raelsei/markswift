@@ -14,6 +14,8 @@ export interface QualityPolicy {
   maxDrop?: number;
   minSsim?: number;
   anchorMaxMismatch?: number;
+  /** Largest allowed app-mode SSIM loss of the 390-compiled code at another width (ssim − reflowSsim) for captures tagged reflowTag "native". */
+  reflowMaxLoss?: number;
   cases?: Record<string, CasePolicy>;
   features?: Record<string, CasePolicy>;
   /** `families` keys are `<domain>@<app|fidelity>`, domain = first path segment of a capture's `fixture`; a floor for
@@ -38,7 +40,8 @@ export interface QualityIssue {
     | "geometry"
     | "artifact"
     | "dimensions"
-    | "provenance";
+    | "provenance"
+    | "reflow";
   capture?: string;
   message: string;
 }
@@ -59,6 +62,8 @@ const positiveNumber = (v: unknown): v is number => typeof v === "number" && Num
 const nonempty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 const imageFiles = ["browser.png", "native.png", "diff.png"] as const;
 const requiredFiles = [...imageFiles, "layout.json", "diagnostics.json", "warnings.json", "typecheck.json"] as const;
+/** Evidence of the `--reflow` arm, required only when a capture records `reflowSsim`. */
+const reflowFiles = ["reflow.png", "reflow-diff.png"] as const;
 const configuration = [
   "chrome",
   "xcode",
@@ -169,6 +174,49 @@ function validateArtifacts(value: Record<string, unknown>, capture: string, issu
       message: "Browser, native and diff PNGs must have the declared identical dimensions.",
     });
   }
+  if (
+    value.reflowSsim !== undefined &&
+    (!record(files) ||
+      !record(declaredHashes) ||
+      !record(actualHashes) ||
+      !record(images) ||
+      reflowFiles.some(
+        (file) =>
+          files[file] !== true ||
+          !sha256(declaredHashes[file]) ||
+          declaredHashes[file] !== actualHashes[file] ||
+          !record(images[file]) ||
+          images[file].width !== value.width ||
+          images[file].height !== value.height,
+      ))
+  ) {
+    issues.push({
+      code: "artifact",
+      capture,
+      message:
+        "Reflow render and diff artifacts are required with reflowSsim and must match their recorded hashes and dimensions.",
+    });
+  }
+}
+
+/** `--reflow` fields: all or none, and `reflowDelta` is exactly `reflowSsim − ssim`. */
+function validateReflow(value: Record<string, unknown>, capture: string, issues: QualityIssue[]) {
+  const fields = [value.reflowTag, value.reflowSsim, value.reflowMismatch, value.reflowDelta];
+  if (fields.every((field) => field === undefined)) return;
+  if (
+    (value.reflowTag !== "native" && value.reflowTag !== "pinned") ||
+    !score(value.reflowSsim) ||
+    !score(value.reflowMismatch) ||
+    typeof value.reflowDelta !== "number" ||
+    !(Math.abs(value.reflowDelta - (value.reflowSsim - (value.ssim as number))) <= 1e-9)
+  ) {
+    issues.push({
+      code: "invalid",
+      capture,
+      message:
+        "Reflow fields must be complete: reflowTag native|pinned, reflowSsim/reflowMismatch in [0,1], reflowDelta = reflowSsim − ssim.",
+    });
+  }
 }
 
 /** Each key identifies one capture (including theme/viewport); each value has an SSIM score.
@@ -190,6 +238,7 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
           "maxDrop",
           "minSsim",
           "anchorMaxMismatch",
+          "reflowMaxLoss",
           "cases",
           "features",
           "families",
@@ -199,6 +248,7 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
         ].includes(k),
     ) ||
     (policy.anchorMaxMismatch !== undefined && !score(policy.anchorMaxMismatch)) ||
+    (policy.reflowMaxLoss !== undefined && !score(policy.reflowMaxLoss)) ||
     (policy.maxDrop !== undefined && !score(policy.maxDrop)) ||
     (policy.minSsim !== undefined && !score(policy.minSsim)) ||
     (policy.cases !== undefined && !record(policy.cases)) ||
@@ -272,6 +322,8 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
       continue;
     }
     checked++;
+    validateReflow(before, capture, issues);
+    validateReflow(after, capture, issues);
     if (policy.requireEvidence) {
       // A tracked manifest is a valid baseline (provenance only); the current side must be a run directory.
       validateProvenance(before, capture, issues);
@@ -324,6 +376,19 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
         code: "floor",
         capture,
         message: `Mismatch ${String(after.mismatch)} exceeds the allowed ${ceiling}.`,
+      });
+    }
+    if (
+      policy.reflowMaxLoss !== undefined &&
+      after.reflowTag === "native" &&
+      after.mode === "app" &&
+      score(after.reflowSsim) &&
+      after.ssim - after.reflowSsim > (policy.reflowMaxLoss as number) + 1e-12
+    ) {
+      issues.push({
+        code: "reflow",
+        capture,
+        message: `390-compiled code at this width scores ${after.reflowSsim} vs ${after.ssim} for its own capture; allowed loss ${policy.reflowMaxLoss}.`,
       });
     }
     const beforeAnchors = anchorsOf(before),
@@ -400,11 +465,13 @@ export async function loadComparisons(path: string): Promise<unknown> {
     }
     const directory = join(path, entry.name);
     const files = Object.fromEntries(
-      await Promise.all(requiredFiles.map(async (name) => [name, await Bun.file(join(directory, name)).exists()])),
+      await Promise.all(
+        [...requiredFiles, ...reflowFiles].map(async (name) => [name, await Bun.file(join(directory, name)).exists()]),
+      ),
     );
     const hashes = Object.fromEntries(
       await Promise.all(
-        requiredFiles.map(async (name) => [
+        [...requiredFiles, ...reflowFiles].map(async (name) => [
           name,
           files[name]
             ? createHash("sha256")
@@ -416,7 +483,7 @@ export async function loadComparisons(path: string): Promise<unknown> {
     );
     const images = Object.fromEntries(
       await Promise.all(
-        imageFiles.map(async (name) => {
+        [...imageFiles, ...reflowFiles].map(async (name) => {
           if (!files[name]) return [name, null];
           try {
             const metadata = await sharp(join(directory, name)).metadata();
@@ -516,6 +583,23 @@ export function summarize(manifest: unknown, policy: Record<string, unknown> = {
     const ssims = rows.map(([, c]) => c.ssim as number);
     lines.push(
       `| ${caseId} | ${mode} | ${rows.length} | ${Math.min(...ssims).toFixed(4)} | ${mean(ssims)} | ${Math.max(...rows.map(([, c]) => c.mismatch as number)).toFixed(4)} |`,
+    );
+  }
+  const reflowRows = Object.entries(manifest as Record<string, Record<string, unknown>>)
+    .filter(([, c]) => score(c.reflowSsim))
+    .map(([, c]) => c)
+    .sort(
+      (a, b) =>
+        String(a.mode).localeCompare(String(b.mode)) ||
+        String(a.caseId).localeCompare(String(b.caseId)) ||
+        (a.viewportWidth as number) - (b.viewportWidth as number),
+    );
+  if (reflowRows.length)
+    lines.push("", "| case | width | mode | tag | self ssim | reflow ssim | Δ |", "|---|---|---|---|---|---|---|");
+  for (const c of reflowRows) {
+    const d = c.reflowDelta as number;
+    lines.push(
+      `| ${String(c.caseId)} | ${String(c.viewportWidth)} | ${String(c.mode)} | ${String(c.reflowTag)} | ${(c.ssim as number).toFixed(4)} | ${(c.reflowSsim as number).toFixed(4)} | ${(d >= 0 ? "+" : "") + d.toFixed(4)} |`,
     );
   }
   return lines.join("\n");
