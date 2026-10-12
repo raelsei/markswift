@@ -30,11 +30,18 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
 export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[] {
   const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
   if (!name) return [...core, ...modifiers(n, ctx)];
+  // An ARIA toggle (`role=checkbox|switch|radio`): the tap changes the screen's state, then acts.
+  const tap = ctx.control.toggleOf.get(n)?.tap;
   if (n.action!.gesture)
-    return [...core, ...modifiers(n, ctx), ".contentShape(Rectangle())", `.onTapGesture { ${name}() }`];
+    return [
+      ...core,
+      ...modifiers(n, ctx),
+      ".contentShape(Rectangle())",
+      `.onTapGesture { ${tap?.join("; ") ?? `${name}()`} }`,
+    ];
   const press = ctx.control.pressOf.get(n);
   return [
-    `Button(action: ${name}) {`,
+    ...(tap ? ["Button {", ...indent(tap, 1), "} label: {"] : [`Button(action: ${name}) {`]),
     ...indent([...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`], 1),
     "}",
     `.buttonStyle(${press ? `MarkswiftPressStyle(isPressed: $${press})` : ".plain"})`,
@@ -184,10 +191,14 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     // A link-like Button (role=link) announces a link, not a button.
     if (a.trait === "isLink" && n.action && !n.action.gesture) m.push(".accessibilityRemoveTraits(.isButton)");
     if (a.toggle) m.push(".accessibilityAddTraits(.isToggle)");
-    if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
+    // An ARIA toggle's checked state is the screen's (`controlMembers`), so the trait and `mixed` follow it.
+    const state = ctx.control.toggleOf.get(n);
+    if (state) m.push(`.accessibilityAddTraits(${state.on} ? .isSelected : [])`);
+    else if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
     // Plan 025's disclosure style and select menu already announce their own state; never add a second value there.
     const ownsValue = n.kind === "control" && (n.control === "disclosure" || n.control === "picker");
-    if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
+    if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : "")`);
+    else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
   }

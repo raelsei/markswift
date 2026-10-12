@@ -19,7 +19,7 @@ import {
   type SemNode,
   addDiagnostic,
 } from "../model/semantic.ts";
-import { isActivatableRole } from "../model/interactive.ts";
+import { isActivatableRole, isToggleRole } from "../model/interactive.ts";
 import { textContent } from "./text-runs.ts";
 
 /** `save()` / `return app.save(event)` → `save` / `app.save`; "" when the handler is not a plain call. */
@@ -402,28 +402,33 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
 export interface LabelIndex {
   /** Control element → its label's text (the label's text content without the control's own). */
   text: Map<LayoutNode, string>;
-  /** Label element → the enabled toggle/radio element a tap on the label changes. */
+  /** Label element → the enabled toggle/radio element (native, or an ARIA toggle role) a tap on the label changes. */
   activates: Map<LayoutNode, LayoutNode>;
   /** Control element → its nearest ancestor `<form onsubmit>`. */
   forms: Map<LayoutNode, LayoutNode>;
   /** First element per DOM `id`. */
   byId: Map<string, LayoutNode>;
+  /** `role=radio` element → the id of its nearest `role=radiogroup` ancestor. */
+  radioGroups: Map<LayoutNode, string>;
 }
 
 export function labelIndex(root: LayoutNode): LabelIndex {
   const byId = new Map<string, LayoutNode>();
   const labels: LayoutNode[] = [];
   const forms = new Map<LayoutNode, LayoutNode>();
-  const index = (n: LayoutNode, form?: LayoutNode) => {
+  const radioGroups = new Map<LayoutNode, string>();
+  const index = (n: LayoutNode, form?: LayoutNode, group?: LayoutNode) => {
     const id = n.attrs["id"];
     if (id && !byId.has(id)) byId.set(id, n);
     if (n.tag === "label") labels.push(n);
     const owner = n.tag === "form" && n.attrs["onsubmit"]?.trim() ? n : form;
     if (owner && (n.tag === "button" || n.tag === "input")) forms.set(n, owner);
-    for (const c of n.children) index(c, owner);
+    const role = n.attrs["role"]?.trim().toLowerCase();
+    if (role === "radio" && group) radioGroups.set(n, group.id ?? "");
+    for (const c of n.children) index(c, owner, role === "radiogroup" ? n : group);
   };
   index(root);
-  const out: LabelIndex = { text: new Map(), activates: new Map(), forms, byId };
+  const out: LabelIndex = { text: new Map(), activates: new Map(), forms, byId, radioGroups };
   const firstControl = (n: LayoutNode): LayoutNode | undefined => {
     for (const c of n.children) {
       const hit = controlOf(c) ? c : firstControl(c);
@@ -439,7 +444,13 @@ export function labelIndex(root: LayoutNode): LabelIndex {
     const text = textOf(label, target).replace(/\s+/g, " ").trim();
     if (text && !out.text.has(target)) out.text.set(target, text);
     const spec = controlOf(target);
-    if ((spec?.control === "toggle" || spec?.control === "radio") && !spec.disabled) out.activates.set(label, target);
+    // An ARIA toggle is a `<button>` or an activatable box; HTML: a label's tap clicks its button too.
+    const toggle = spec
+      ? spec.control === "toggle" ||
+        spec.control === "radio" ||
+        (spec.control === "button" && isToggleRole(target.attrs["role"]))
+      : isToggleRole(target.attrs["role"]);
+    if (toggle && !spec?.disabled && target.attrs["aria-disabled"] !== "true") out.activates.set(label, target);
   }
   return out;
 }

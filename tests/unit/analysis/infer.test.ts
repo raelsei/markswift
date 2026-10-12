@@ -182,4 +182,58 @@ describe("paint invisible at rest", () => {
     const glow = { ...el("div", box, { position: "absolute", ...clear }), states: { pressed: { opacity: "1" } } };
     expect(positioned(glow).overlays).toHaveLength(1);
   });
+
+  test("an aria-hidden transparent control is dropped: neither seen nor announced (Radix's form-value input)", () => {
+    const input = (attrs: Record<string, string>) =>
+      positioned(el("input", { x: 0, y: 0, w: 13, h: 13 }, { position: "absolute", opacity: "0" }, [], attrs));
+    expect(input({ type: "checkbox", "aria-hidden": "true", checked: "" }).overlays).toHaveLength(0);
+    // Without aria-hidden Chrome still announces it (a visually hidden native input behind a drawn box).
+    expect(input({ type: "checkbox" }).overlays).toHaveLength(1);
+  });
+});
+
+describe("ARIA names", () => {
+  const tab = el(
+    "button",
+    { x: 0, y: 0, w: 40, h: 20 },
+    { display: "inline-block" },
+    [textNode("All", { x: 0, y: 0, w: 20, h: 20 })],
+    {
+      id: "t",
+      role: "tab",
+    },
+  );
+  const page = (panel: LayoutNode) =>
+    inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 60 }, { display: "block" }, [tab, panel])), "s").root;
+
+  test("a text-only tabpanel keeps its words: the tab's name is dropped with a diagnostic, not set as the Text's label", () => {
+    const panel = el(
+      "div",
+      { x: 0, y: 30, w: 200, h: 20 },
+      { display: "block" },
+      [textNode("Body copy", { x: 0, y: 30, w: 80, h: 20 })],
+      {
+        role: "tabpanel",
+        "aria-labelledby": "t",
+      },
+    );
+    const text = flatten(page(panel)).find((n): n is TextNode => n.kind === "text" && n.runs[0]?.text === "Body copy");
+    expect(text?.a11y?.label).toBeUndefined();
+    expect(text?.diagnostics.some((d) => d.feature === "aria-labelledby")).toBe(true);
+  });
+
+  test("a tabpanel container keeps its name: it labels the group, not a child", () => {
+    const panel = el(
+      "div",
+      { x: 0, y: 30, w: 200, h: 30 },
+      { display: "block" },
+      [
+        el("p", { x: 0, y: 30, w: 200, h: 15 }, { display: "block" }, [textNode("One", { x: 0, y: 30, w: 30, h: 15 })]),
+        el("p", { x: 0, y: 45, w: 200, h: 15 }, { display: "block" }, [textNode("Two", { x: 0, y: 45, w: 30, h: 15 })]),
+      ],
+      { role: "tabpanel", "aria-labelledby": "t" },
+    );
+    const named = flatten(page(panel)).filter((n) => n.a11y?.label === "All");
+    expect(named.map((n) => n.kind)).toEqual(["stack"]);
+  });
 });

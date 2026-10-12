@@ -352,6 +352,8 @@ export function componentNames(
       }
       return COLOR_ROLES[/(\w*)$/.exec(col.at.slice(0, Math.max(i, 0)))![1]!] ?? "color";
     }
+    // An ARIA toggle drawn as a Button holds what a native checkbox or radio group would.
+    if (n && ctx.control.toggleOf.has(n)) return n.a11y?.group !== undefined ? "selection" : "isOn";
     if (n?.kind !== "control") return "value";
     if (n.files) return "isPresented";
     return CONTROL_FIELDS[n.control === "radio" && n.group !== undefined ? "radioGroup" : n.control] ?? "value";

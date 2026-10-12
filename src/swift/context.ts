@@ -120,10 +120,16 @@ export interface ControlMembers {
   stateOf: Map<SemNode, string>;
   /** `Action.key` → callback member. */
   actionOf: Map<string, string>;
-  /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
+  /** Toggle/radio id (native or ARIA toggle) → the Swift statement a tap on its `<label>` runs. */
   activate: Map<string, string>;
   /** Grouped radio → its tag in the group's `String` selection (its `stateOf` name). */
   radioTag: Map<SemNode, string>;
+  /**
+   * ARIA toggle drawn as a Button (`role=checkbox|switch|radio…`) → the statements its tap runs
+   * (change the state, then the action), the condition `.isSelected` follows, and the one
+   * `aria-checked="mixed"` follows (`Bool?` state, `nil` = mixed).
+   */
+  toggleOf: Map<SemNode, { tap: string[]; on: string; mixed?: string }>;
   /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
   statePaint: Map<string, StatePaint>;
   /** Pressable owner → its `@MarkswiftPressed` member. */

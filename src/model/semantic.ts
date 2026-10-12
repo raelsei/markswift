@@ -354,6 +354,8 @@ export interface SemBase extends SizeConstraints {
     selected?: true;
     /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio. */
     toggle?: true;
+    /** `role=radio` inside a `role=radiogroup`: the group element's id. Its radios share one selection. */
+    group?: string;
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
