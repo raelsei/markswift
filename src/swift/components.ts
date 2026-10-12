@@ -41,11 +41,14 @@ interface NodeTemplate {
 type Role = "field" | "literal" | "binding" | "pass" | "collapse" | "move";
 
 interface Run {
-  parent: StackNode | GridNode;
+  /** The run's members, in order. */
   members: SemNode[];
   /** Per slot column (DFS order over a member): marker and each member's value. */
   columns: Array<{ marker: string; values: string[] }>;
-  /** First column whose value vector equals this one's (`$` stripped): columns sharing one field or parameter. */
+  /**
+   * First column whose value vector equals this one's (`$` stripped): columns sharing one field or
+   * parameter. Design-literal columns are classed and given their role over every run of the type.
+   */
   cls: number[];
   roles: Role[];
   forEach: boolean;
@@ -220,7 +223,7 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       !(start === 0 && n.leadInset !== 0);
     // ponytail: runs whose state/action columns play different roles (a field in one, a constant in another) get separate types; merge per column if designs need it.
     const sig = `${tpl(members[0]!).key}|${columns.map((col, c) => (LITERAL[col.marker] ? "" : `${roles[c]}:${cls[c]}`)).join(",")}`;
-    return { parent, members, columns, cls, roles, forEach, sig };
+    return { members, columns, cls, roles, forEach, sig };
   };
   const runs: Run[] = [];
   const walk = (n: SemNode): void => {
