@@ -16,7 +16,18 @@ import { chromium } from "playwright-core";
 import { compare } from "../../tools/verify/compare.ts";
 import { forceStates } from "../../src/browser/states.ts";
 import { PRESSABLE_SELECTOR, TEXT_ENTRY_SELECTOR } from "../../src/model/interactive.ts";
-import { GRID_RADIO, GRID_RADIO_CSS, ICONS, ICONS_CSS, SETTINGS, SETTINGS_CSS } from "../helpers/component-fixtures.ts";
+import {
+  GRID_RADIO,
+  GRID_RADIO_CSS,
+  ICONS,
+  ICONS_CSS,
+  PREFS,
+  PREFS_CSS,
+  SETTINGS,
+  SETTINGS_CSS,
+  TEAM,
+  TEAM_CSS,
+} from "../helpers/component-fixtures.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
@@ -899,4 +910,71 @@ nativeTest(
     }
   },
   900_000,
+);
+
+nativeTest(
+  "generated component API is usable from another module",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-031-"));
+    const usage = await Bun.file(join(import.meta.dir, "../helpers/component-usage.swift")).text();
+    try {
+      const results = [
+        { name: "TeamCard", result: await convertHtml(TEAM, { name: "TeamCard", css: TEAM_CSS }) },
+        { name: "SettingsCard", result: await convertHtml(PREFS, { name: "SettingsCard", css: PREFS_CSS }) },
+      ];
+      // Internal: the app's own module calls the views, the row structs and the memberwise subviews.
+      const internal = join(directory, "internal");
+      for (const { result } of results)
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(internal, file), content);
+      await Bun.write(join(internal, "Usage.swift"), usage);
+      const check = await typecheck(internal);
+      if (!check.ok) throw new Error(check.output);
+      // Public: a library module, called from a client through `import Generated`.
+      const gen = join(directory, "gen");
+      for (const { name, result } of results) {
+        const lib = compileLayout(result.layout, { name, dark: result.darkLayout, visibility: "public" });
+        expect(lib.code).toContain(`public struct ${name}: View`);
+        for (const [file, content] of Object.entries(lib.files)) await Bun.write(join(gen, file), content);
+      }
+      await Bun.write(join(directory, "Usage.swift"), `import Generated\n${usage}`);
+      const sdk = (await command(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"])).trim();
+      const flags = [
+        "-parse-as-library",
+        "-sdk",
+        sdk,
+        "-target",
+        "arm64-apple-ios18.0-simulator",
+        "-swift-version",
+        "6",
+        "-strict-concurrency=complete",
+        "-default-isolation",
+        "MainActor",
+      ];
+      const sources = [...new Bun.Glob("*.swift").scanSync(gen)].map((f) => join(gen, f));
+      const module = await command([
+        "xcrun",
+        "swiftc",
+        "-emit-module",
+        "-module-name",
+        "Generated",
+        "-emit-module-path",
+        join(directory, "Generated.swiftmodule"),
+        ...flags,
+        ...sources,
+      ]);
+      const client = await command([
+        "xcrun",
+        "swiftc",
+        "-typecheck",
+        "-I",
+        directory,
+        ...flags,
+        join(directory, "Usage.swift"),
+      ]);
+      expect(`${module}${client}`.split("\n").filter((l) => /\b(?:warning|error):/.test(l))).toEqual([]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  300_000,
 );
