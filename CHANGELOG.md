@@ -48,6 +48,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - Date/time pickers show the components of their input type and start at the design's value instead of now.
 - `<details>` draws its captured summary and marker without a system chevron or a pinned closed height.
 - `appearance` and `accent-color` are captured: `accent-color` tints checkboxes, radios, ranges and progress bars; `appearance: none` removes the select arrow and keeps the author's box on checkboxes and ranges.
+- App mode grows with Dynamic Type: fixed heights on boxes that lay out text are floors, `MarkswiftMeasuredLayout` moves frames below a grown child, hugging label columns fit their text (`markswiftFitWidth`), `TextEditor` sizes to its text, fields honour CSS `line-height` growth, an off-centre text's line-box surplus is a floor instead of padding, and a control's chevron stays beside its label. The R7 behaviour check scales the Chrome reference to true AX3 (measured per-text-style factors; it launched at AX2 before) and treats authored heights as floors.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

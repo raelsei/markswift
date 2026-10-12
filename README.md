@@ -149,8 +149,11 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 ## Modes
 
 - `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
-  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`); text-bearing
-  controls treat their measured height as a floor; pages taller than the viewport scroll.
+  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`) and boxes grow
+  with their text: a measured or authored height on anything that lays out text (text, stacks,
+  grids, text-bearing controls) is a floor, measured layouts move what lies below a grown child,
+  hugging label columns fit their text instead of a pinned width, and text editors size to their
+  text. Pages taller than the viewport scroll.
   CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
   compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
   ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
