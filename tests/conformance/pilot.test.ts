@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildMatrix, loadPilot, validatePilot } from "./pilot.ts";
+import { buildMatrix, loadFixtureSet, loadPilot, reflowTag, validatePilot } from "./pilot.ts";
 
 const fixtureRoot = join(import.meta.dir, "fixtures");
 
@@ -81,4 +81,32 @@ test("pilot expands each feature into two widths, themes and output modes withou
       .map((item) => item.width)
       .sort(),
   ).toEqual([320, 320, 320, 320, 390, 390, 390, 390]);
+});
+
+test("--reflow adds 768 captures only for reflow-tagged cases", async () => {
+  const cases = await loadFixtureSet(await loadPilot());
+  const keys = (reflow: boolean) => buildMatrix(cases, reflow).map((item) => item.key);
+  expect(keys(true)).toContain("grid-templates-768-light-app");
+  expect(keys(true)).toContain("display-flex-768-dark-fidelity");
+  expect(keys(false).filter((key) => key.includes("-768-"))).toEqual([]);
+});
+
+test("an invalid markswift-reflow tag throws", () => {
+  expect(() => reflowTag('<meta name="markswift-reflow" content="maybe">', "x")).toThrow("invalid markswift-reflow");
+});
+
+test("pilot rejects expectedText on a reflow-tagged fixture", async () => {
+  const entry = {
+    id: "flex",
+    feature: "layout",
+    tier: "native",
+    fixture: "css-layout/display--flex.html",
+    themes: ["light"],
+    diagnosticFamily: null,
+    expectedText: "x",
+    expectedLines: { "320": 1, "390": 1 },
+  };
+  await expect(validatePilot({ version: 1, cases: [entry] }, fixtureRoot)).rejects.toThrow(
+    "pilot flex: reflow-tagged cases cannot have expectedText",
+  );
 });

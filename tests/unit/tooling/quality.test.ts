@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { assessQuality, driftHint, loadComparisons, ratchetFamilies, readmeSummary } from "../../../tools/quality.ts";
+import {
+  assessQuality,
+  driftHint,
+  loadComparisons,
+  ratchetFamilies,
+  readmeSummary,
+  summarize,
+} from "../../../tools/quality.ts";
 
 const baseline = { "card-light": { ssim: 0.95 }, "card-dark": { ssim: 0.94 } };
 test("allows the boundary drop per capture, never hiding a regression with an improved average", () => {
@@ -366,6 +373,66 @@ test("maxMismatch caps pixel mismatch as a floor", () => {
     assessQuality(a, a, { features: { "display-flex@app": { maxMismatch: 0.05 } } }).issues.map((i) => i.code),
   ).toEqual(["floor"]);
   expect(assessQuality(a, a, { cases: { a: { maxMismatch: 0.06 } } }).ok).toBe(true);
+});
+
+const reflowHashes = { ...artifactHashes, "reflow.png": "a".repeat(64), "reflow-diff.png": "a".repeat(64) };
+/** A 768 capture with self SSIM 0.8 and the 390-compiled code at `reflowSsim`. */
+const reflowed = (reflowSsim: number, overrides: Record<string, unknown> = {}) =>
+  evidence({
+    ssim: 0.8,
+    viewportWidth: 768,
+    reflowTag: "native",
+    reflowSource: "display-flex-390-light-app",
+    reflowSsim,
+    reflowMismatch: 0.1,
+    reflowDelta: reflowSsim - 0.8,
+    artifactHashes: { ...reflowHashes },
+    _hashes: { ...reflowHashes },
+    _files: { ...files, "reflow.png": true, "reflow-diff.png": true },
+    _images: Object.fromEntries(
+      ["browser.png", "native.png", "diff.png", "reflow.png", "reflow-diff.png"].map((f) => [
+        f,
+        { width: 640, height: 200 },
+      ]),
+    ),
+    ...overrides,
+  });
+const reflowCodes = (after: object, policy: object = { reflowMaxLoss: 0.03 }) =>
+  codes(assessQuality({ a: reflowed(0.8) }, { a: after }, policy));
+
+test("reflowMaxLoss fails a native app capture whose 390 code loses more than the allowance", () => {
+  expect(reflowCodes(reflowed(0.76))).toEqual(["reflow"]);
+  expect(reflowCodes(reflowed(0.78))).toEqual([]);
+  expect(reflowCodes(reflowed(0.77))).toEqual([]);
+});
+
+test("reflowMaxLoss never gates pinned or fidelity captures", () => {
+  expect(reflowCodes(reflowed(0.5, { reflowTag: "pinned" }))).toEqual([]);
+  expect(reflowCodes(reflowed(0.5, { mode: "fidelity" }))).toEqual([]);
+});
+
+test("reflowMaxLoss outside [0,1] is a policy error", () => {
+  expect(reflowCodes(reflowed(0.8), { reflowMaxLoss: 1.5 })).toEqual(["policy"]);
+});
+
+test("reflow fields are all or none, with reflowDelta = reflowSsim − ssim", () => {
+  expect(reflowCodes(reflowed(0.78, { reflowTag: undefined }))).toEqual(["invalid"]);
+  expect(reflowCodes(reflowed(0.78, { reflowDelta: 0 }))).toEqual(["invalid"]);
+});
+
+test("strict evidence requires the reflow render with reflowSsim", () => {
+  const missing = reflowed(0.8, { _files: { ...files, "reflow.png": false, "reflow-diff.png": true } });
+  expect(reflowCodes(missing, { requireEvidence: true })).toEqual(["artifact"]);
+  expect(reflowCodes(reflowed(0.8), { requireEvidence: true })).toEqual([]);
+});
+
+test("summary adds a reflow table only for captures with reflowSsim", () => {
+  const fixture = "css-layout/grid-templates.html";
+  const pinned = reflowed(0.4, { caseId: "grid-templates", fixture, reflowTag: "pinned" });
+  expect(summarize({ a: pinned }).split("\n")).toContain(
+    "| grid-templates | 768 | app | pinned | 0.8000 | 0.4000 | -0.4000 |",
+  );
+  expect(summarize({ a: evidence({ fixture }) })).not.toContain("| tag |");
 });
 
 test("anchor regions catch regressions, changed anchor lists and failing approved features", () => {
