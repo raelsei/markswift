@@ -49,9 +49,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   };
   // App mode: repeated siblings become one subview fed by a `ForEach` (`components.ts`).
   const extraction =
-    opts.mode === "app" && opts.extract !== false
-      ? extractComponents(screen, ctx, viewName, opts.visibility)
-      : undefined;
+    opts.mode === "app" && opts.extract !== false ? extractComponents(screen, ctx, viewName, opts) : undefined;
   const acc = access(opts.visibility);
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
@@ -108,7 +106,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     `#Preview("${title}") {`,
     ...indent(
       [
-        `${viewName}()`,
+        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}()`] : [`${viewName}()`]),
         `.frame(width: ${num(screen.size.w)}, height: ${num(screen.size.h)})`,
         `.background(Color.markswift(${colorArgs(theme === "dark" ? { r: 0.043, g: 0.055, b: 0.075, a: 1 } : { r: 0.957, g: 0.965, b: 0.98, a: 1 })}))`,
         `.preferredColorScheme(.${theme})`,
@@ -118,7 +116,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     "}",
   ];
   const lines = [
-    `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift convert --update\`; customise through the initializer or your own files. Source: ` +
+    `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift ${opts.regenerate === "build" ? "build" : "convert --update"}\`; customise through the initializer or your own files. Source: ` +
       comment(screen.source) +
       " (" +
       comment(screen.name) +

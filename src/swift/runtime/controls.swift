@@ -133,7 +133,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
                 if configuration.isOn { fill }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
@@ -249,7 +249,7 @@ nonisolated struct MarkswiftDisclosureStyle: DisclosureGroupStyle {
             } label: {
                 configuration.label.contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlainButtonStyle())
             .accessibilityValue(configuration.isExpanded ? Text("Expanded") : Text("Collapsed"))
             if configuration.isExpanded { configuration.content }
         }
