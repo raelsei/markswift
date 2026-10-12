@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { sizeOf } from "../../../src/analysis/sizing.ts";
 import { parseDeclared } from "../../../src/css/index.ts";
-import type { LayoutNode } from "../../../src/model/layout.ts";
+import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import type { InferenceContext } from "../../../src/analysis/context.ts";
 import type { Diagnostic } from "../../../src/model/semantic.ts";
 
@@ -216,4 +217,68 @@ test.each([
   const s = sizing(box);
   expect(s.width).toEqual({ kind: "fixed", px: 160 });
   expect(s.selfAlign).toBe(expected);
+});
+
+const block300 = element(300, 200, { display: "block" });
+const half = (w: number, styles: Record<string, string> = {}, width = "50%"): LayoutNode => ({
+  ...element(w, 40, { display: "block", ...styles }),
+  preferredSize: { width, height: "auto" },
+});
+
+test("a percentage width that is exactly its fraction of the containing block keeps the fraction", () => {
+  const s = sizing(half(150), { ...ctx, parent: block300 });
+  expect(s.width).toEqual({ kind: "fraction", fraction: 0.5, px: 150 });
+  expect(s.diagnostics.filter((d) => d.feature === "width")).toEqual([]);
+});
+
+test.each<[string, LayoutNode, InferenceContext]>([
+  ["a calc() percentage", half(142, {}, "calc(50% - 8px)"), { ...ctx, parent: block300 }],
+  ["a side margin", half(150, { "margin-left": "8px" }), { ...ctx, parent: block300 }],
+  ["a box-sizing mismatch (140px measured)", half(140), { ...ctx, parent: block300 }],
+  ["absolute position", half(150, { position: "absolute" }), { ...ctx, parent: block300 }],
+  ["a flex-row parent", half(150), { ...row, parent: block300 }],
+  ["a centring column", half(150), { ...ctx, parent: block300, parentAlign: "center" }],
+])("no fraction: %s", (_label, n, context) => {
+  expect(sizing(n, context).width.kind).not.toBe("fraction");
+});
+
+test("app wraps a fraction box in markswiftFraction after its paint; fidelity pins the captured px", () => {
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "fraction.html",
+    combo: { screen: "fraction", theme: "light" },
+    size: { w: 300, h: 100 },
+    dpr: 1,
+    canvas: "white",
+    fonts: [],
+    root: {
+      id: "root",
+      tag: "main",
+      attrs: {},
+      styles: { display: "block" },
+      bounds: { x: 0, y: 0, w: 300, h: 100 },
+      preferredSize: { width: "300px", height: "100px" },
+      children: [
+        {
+          id: "half",
+          tag: "div",
+          attrs: {},
+          styles: { display: "block", "background-color": "rgb(220, 80, 60)" },
+          bounds: { x: 0, y: 0, w: 150, h: 40 },
+          preferredSize: { width: "50%", height: "40px" },
+          children: [],
+        },
+      ],
+    },
+  };
+  const app = compileLayout(doc, { name: "FractionView", mode: "app" }).code;
+  expect(app).toContain(".markswiftFraction(0.5)");
+  expect(app.indexOf(".background(")).toBeGreaterThan(-1);
+  expect(app.indexOf(".background(")).toBeLessThan(app.indexOf(".markswiftFraction(0.5)"));
+  const fidelity = compileLayout(doc, { name: "FractionView", mode: "fidelity" });
+  expect(fidelity.code).toContain(".frame(width: 150.0");
+  expect(fidelity.code).not.toContain("markswiftFraction");
+  expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message)).toContain(
+    "width 50% pinned at 150px; it does not follow the container at other widths",
+  );
 });

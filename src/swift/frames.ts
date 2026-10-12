@@ -1,5 +1,6 @@
 import type { SemNode } from "../model/semantic.ts";
 import type { EmitContext, EmitMode } from "./context.ts";
+import { note } from "./diagnostics.ts";
 import { alignment, num } from "./format.ts";
 import { textBoxAlignment, clipsFirstLine } from "./text-box.ts";
 /** Controls whose height follows their label: in app mode a measured CSS height is a floor, so Dynamic Type can grow it. */
@@ -21,7 +22,16 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const app = ctx.mode === "app";
   // App: a runtime Layout (MarkswiftTracks) allocates this cell's width, and with stretch its height.
   const allocated = app ? ctx.allocated.get(n) : undefined;
-  const w = n.width.kind === "fixed" && !allocated ? n.width.px : undefined;
+  // A percentage width: app fills the MarkswiftFraction wrapper (`boxModifiers`); fidelity keeps the captured px.
+  const fraction = n.width.kind === "fraction" ? n.width : undefined;
+  if (fraction && !app)
+    note(
+      n,
+      "approximated",
+      "width",
+      `width ${+(fraction.fraction * 100).toFixed(4)}% pinned at ${fraction.px}px; it does not follow the container at other widths`,
+    );
+  const w = allocated ? undefined : n.width.kind === "fixed" ? n.width.px : fraction && !app ? fraction.px : undefined;
   // App: a disclosure grows when it opens, so its captured (closed or open) height is not kept.
   const h =
     n.height.kind === "fixed" && allocated !== "both" && !(app && n.kind === "control" && n.control === "disclosure")
@@ -42,7 +52,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
-  const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined;
+  const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined || (fraction !== undefined && app);
   const fillH = n.height.kind === "fill" || allocated === "both";
   const align = fillAlignment(n, ctx.mode);
   // A fixed frame centres its content by default; the browser packs a container's content per

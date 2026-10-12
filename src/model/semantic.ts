@@ -50,7 +50,12 @@ export interface ConversionWarning {
   message: string;
 }
 
-export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
+export type Size =
+  | { kind: "fixed"; px: number }
+  | { kind: "fill" }
+  | { kind: "hug" }
+  /** CSS percentage width of the containing block; `px` is the captured width (fidelity keeps it). */
+  | { kind: "fraction"; fraction: number; px: number };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
 export interface MeasuredLayout {
