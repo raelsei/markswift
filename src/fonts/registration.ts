@@ -19,13 +19,16 @@ export function plistFragment(files: string[]): string {
  * generated code registers the same files with CoreText — the mechanism the render harness
  * already uses (`MarkswiftFonts.register`), reused rather than duplicated, so a generated view renders
  * identically in the harness, in `#Preview` and in the app. Nested in the view type
- * (`<View>.BundledFonts`) so several conversions coexist in one target.
+ * (`<View>.BundledFonts`) so several conversions coexist in one target. Without `owner` it is the
+ * module-level `public enum BundledFonts` of a generated library package (`markswift build`), which
+ * reads `Bundle.module` itself: a public default argument cannot name the internal `Bundle.module`.
  */
-export function registrationSwift(faces: PackagedFace[], viewName: string): string {
+export function registrationSwift(faces: PackagedFace[], owner?: string): string {
+  const pad = owner === undefined ? "" : "    ";
   const entries = faces
     .map((f) => f.file)
     .sort()
-    .map((f) => `            ${JSON.stringify(f)},`)
+    .map((f) => `${pad}        ${JSON.stringify(f)},`)
     .join("\n");
   const doc = faces
     .map(
@@ -33,12 +36,52 @@ export function registrationSwift(faces: PackagedFace[], viewName: string): stri
         `/// - ${f.family} (${f.file}): weight ${f.weight[0]}–${f.weight[1]}${f.axes["wght"] ? ", variable wght" : ""}${f.converted ? ", converted from WOFF2" : ""}${f.renamed ? ", name table rewritten so the CSS family name resolves" : ""}`,
     )
     .join("\n");
-  return `// ${GENERATED_BY} — bundled webfaces of ${viewName}.
+  const register =
+    `let urls = files.compactMap { bundle.url(forResource: "Fonts/" + $0, withExtension: nil) ?? bundle.url(forResource: $0, withExtension: nil) }
+var error: Unmanaged<CFError>?
+for url in urls {
+    // \`kCTFontManagerErrorAlreadyRegistered\` (105) is expected when \`UIAppFonts\`
+    // already loaded the file; every other failure would mean text renders in the
+    // system font, so it is surfaced instead of ignored.
+    if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error), let taken = error?.takeRetainedValue() {
+        let code = CFErrorGetCode(taken)
+        if code != 105 { print("[markswift] font registration failed: \\(url.lastPathComponent) (\\(code))") }
+        error = nil
+    }
+}`
+      .split("\n")
+      .map((line) => `${pad}        ${line}`)
+      .join("\n");
+  if (owner === undefined)
+    return `// ${GENERATED_BY} — bundled webfaces of this library.
 import CoreText
 import SwiftUI
 
 ${doc}
-extension ${viewName} {
+public enum BundledFonts {
+    /// File names under the \`Fonts/\` resource directory, in bundle order.
+    static let files: [String] = [
+${entries}
+    ]
+
+    /// Registers every bundled face with CoreText, once per process. Call once at app launch
+    /// (previews call it themselves).
+    public static func register() {
+        guard !registered else { return }
+        registered = true
+        let bundle = Bundle.module
+${register}
+    }
+
+    private nonisolated(unsafe) static var registered = false
+}
+`;
+  return `// ${GENERATED_BY} — bundled webfaces of ${owner}.
+import CoreText
+import SwiftUI
+
+${doc}
+extension ${owner} {
     enum BundledFonts {
         /// File names under the \`Fonts/\` resource directory, in bundle order.
         static let files: [String] = [
@@ -51,18 +94,7 @@ ${entries}
         static func register(in bundle: Bundle = .main) {
             guard !registered else { return }
             registered = true
-            let urls = files.compactMap { bundle.url(forResource: "Fonts/" + $0, withExtension: nil) ?? bundle.url(forResource: $0, withExtension: nil) }
-            var error: Unmanaged<CFError>?
-            for url in urls {
-                // \`kCTFontManagerErrorAlreadyRegistered\` (105) is expected when \`UIAppFonts\`
-                // already loaded the file; every other failure would mean text renders in the
-                // system font, so it is surfaced instead of ignored.
-                if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error), let taken = error?.takeRetainedValue() {
-                    let code = CFErrorGetCode(taken)
-                    if code != 105 { print("[markswift] font registration failed: \\(url.lastPathComponent) (\\(code))") }
-                    error = nil
-                }
-            }
+${register}
         }
 
         private nonisolated(unsafe) static var registered = false

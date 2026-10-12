@@ -31,6 +31,10 @@ export interface EmitOptions {
   extract?: boolean;
   /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
   visibility?: "internal" | "public";
+  /** Previews call `BundledFonts.register()` first: the library package bundles fonts (plan 033's `build`). */
+  registerFonts?: boolean;
+  /** Command the view header names for regeneration. Default `convert`. */
+  regenerate?: "convert" | "build";
 }
 
 /** Everything the recursive emitters need; built once per screen. */
