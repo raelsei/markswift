@@ -143,6 +143,16 @@ const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: 
     ),
   },
   { feature: "img", level: "unmapped", node: IMG },
+  {
+    feature: "@data-markswift-component",
+    level: "approximated",
+    node: box({}, { attrs: { "data-markswift-component": "Card" } }),
+  },
+  {
+    feature: "@data-markswift-field",
+    level: "approximated",
+    node: box({}, { attrs: { "data-markswift-field": "title" } }),
+  },
 ];
 
 for (const c of CASES) {

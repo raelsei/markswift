@@ -5,7 +5,7 @@ import { GENERATED_BY } from "../model/version.ts";
 import { colorArgs, identifier, indent, num, uniqueName } from "./format.ts";
 import { controlMembers } from "./control-state.ts";
 import type { EmitContext, EmitOptions, SwiftOutput } from "./context.ts";
-import { extractComponents } from "./components.ts";
+import { access, asMember, extractComponents } from "./components.ts";
 import { refOf } from "./nodes.ts";
 import { containerExpr } from "./layout.ts";
 import { visit } from "./traversal.ts";
@@ -56,11 +56,15 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     renderNode: (node) => extraction?.call(node) ?? refOf(node, ctx),
   };
   // App mode: repeated siblings become one subview fed by a `ForEach` (`components.ts`).
-  const extraction = opts.mode === "app" && opts.extract !== false ? extractComponents(screen, ctx) : undefined;
+  const extraction =
+    opts.mode === "app" && opts.extract !== false
+      ? extractComponents(screen, ctx, viewName, opts.visibility)
+      : undefined;
+  const acc = access(opts.visibility);
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   // Body first: emitting it registers the `@ScaledMetric` font sizes declared above it.
-  const body = ["var body: some View {", ...indent(refOf(screen.root, ctx), 1), "}"];
+  const body = [`${acc}var body: some View {`, ...indent(refOf(screen.root, ctx), 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;
     body.push(
@@ -77,12 +81,37 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     .filter(([name]) => !extraction || new RegExp(`\\b${name}\\b`).test(bodyText))
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, decl]) => decl);
+  // Screen state renamed to an annotated field.
+  const renamed = Object.keys(extraction?.rename ?? {});
+  if (renamed.length) {
+    const re = new RegExp(`\\b(?:${renamed.join("|")})\\b`, "g");
+    for (const [i, line] of body.entries()) body[i] = line.replace(re, (m) => extraction!.rename[m]!);
+  }
+  // Every screen has an explicit `init`: data arrays, annotated fields, then actions, each defaulting to the design.
+  const screenMembers = extraction?.members ?? control.members.map(asMember);
+  const params = screenMembers.flatMap((m) => (m.param ? [m.param] : []));
+  const decls = screenMembers.flatMap(({ decl, param: p }) => [
+    ...decl,
+    ...(!p
+      ? []
+      : p.state
+        ? [`@State private var ${p.name}: ${p.type}`]
+        : [`${acc}var ${p.name}: ${p.type} = ${p.value}`]),
+  ]);
+  const init = params.length
+    ? [
+        `${acc}init(${params.map((p) => `${p.name}: ${p.type.includes("->") ? "@escaping " : ""}${p.type} = ${p.value}`).join(", ")}) {`,
+        ...params.map((p) =>
+          p.state ? `    _${p.name} = State(initialValue: ${p.name})` : `    self.${p.name} = ${p.name}`,
+        ),
+        "}",
+      ]
+    : [`${acc}init() {}`];
   const members = [...scaled];
   if (scaled.length) members.push("");
-  const decls = extraction?.decls ?? control.decls;
   members.push(...decls);
   if (decls.length) members.push("");
-  members.push(...body);
+  members.push(...init, "", ...body);
   const preview = (theme: Theme, title: string) => [
     `#Preview("${title}") {`,
     ...indent(
@@ -106,14 +135,15 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       ")",
     "import SwiftUI",
     "",
-    `struct ${viewName}: View {`,
+    `${acc}struct ${viewName}: View {`,
     ...indent(members, 1),
     "}",
     "",
-    ...(extraction ? [`extension ${viewName} {`, ...indent(extraction.extension, 1), "}", ""] : []),
+    ...(extraction?.extension.length ? [`extension ${viewName} {`, ...indent(extraction.extension, 1), "}", ""] : []),
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
+    ...(extraction?.previews.length ? ["", ...extraction.previews] : []),
   ];
   // After emission: `note()` may have regraded nodes for emit-time losses.
   visit(screen.root, (n) => {

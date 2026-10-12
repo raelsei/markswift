@@ -128,7 +128,10 @@ export function pascalWords(s: string): string {
     .join("");
 }
 
-/** K1 member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`. Registered in `seen`. */
+/**
+ * K1 member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`.
+ * Without a prefix the name starts lower-case (`item title` → `itemTitle`). Registered in `seen`.
+ */
 export function memberName(
   prefix: string,
   words: string,
@@ -136,7 +139,8 @@ export function memberName(
   fallback: string,
   suffix = "",
 ): string {
-  const base = prefix + (pascalWords(words) || fallback) + suffix;
+  const raw = prefix + (pascalWords(words) || fallback) + suffix;
+  const base = prefix ? raw : raw[0]!.toLowerCase() + raw.slice(1);
   let name = base;
   for (let k = 2; seen[name]; k++) name = `${base}${k}`;
   seen[name] = 1;

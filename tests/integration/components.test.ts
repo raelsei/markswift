@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
 import { convert, convertHtml } from "../../src/index.ts";
-import { GRID_RADIO, GRID_RADIO_CSS, ICONS, ICONS_CSS, SETTINGS, SETTINGS_CSS } from "../helpers/component-fixtures.ts";
+import { readdir } from "node:fs/promises";
+import {
+  GRID_RADIO,
+  GRID_RADIO_CSS,
+  ICONS,
+  ICONS_CSS,
+  PREFS,
+  PREFS_CSS,
+  SETTINGS,
+  SETTINGS_CSS,
+  TEAM,
+  TEAM_CSS,
+} from "../helpers/component-fixtures.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const LIST24 = "tests/conformance/fixtures/components/shadcn-list-24.html";
@@ -13,8 +25,8 @@ browserTest(
     expect(count(code, /ForEach\(/g)).toBe(1);
     expect(code.split("\n").length).toBeLessThanOrEqual(200);
     expect(count(code, /private var v_/g)).toBeLessThanOrEqual(6);
-    expect(code).toContain("static let rows: [Row] = [");
-    expect(count(code, /^\s+Row\(id: /gm)).toBe(24);
+    expect(code).toContain("static let items: [Item] = [");
+    expect(count(code, /^\s+Item\(id: /gm)).toBe(24);
   },
   60000,
 );
@@ -33,13 +45,13 @@ browserTest(
   "rows with controls bind through ForEach($rows) and collapse their actions",
   async () => {
     const { code } = await convertHtml(SETTINGS, { name: "Settings", css: SETTINGS_CSS });
-    expect(code).toContain("ForEach($rows) { $row in");
-    expect(code).toContain("@Binding var row: Row");
-    expect(code).toContain("$row.isOn");
-    expect(code).toContain("row.isOn.toggle()");
-    expect(count(code, /\(Row\) -> Void = \{ _ in \}/g)).toBe(1);
-    const action = code.match(/var (on\w+): \(Row\) -> Void = \{ _ in \}/)![1]!;
-    expect(code).toContain(`{ ${action}(row) }`);
+    expect(code).toContain("ForEach($emailItems) { $emailItem in");
+    expect(code).toContain("@Binding var emailItem: EmailItem");
+    expect(code).toContain("$emailItem.isOn");
+    expect(code).toContain("emailItem.isOn.toggle()");
+    expect(count(code, /var on\w+: \(EmailItem\) -> Void = \{ _ in \}/g)).toBe(1);
+    const action = code.match(/var (on\w+): \(EmailItem\) -> Void = \{ _ in \}/)![1]!;
+    expect(code).toContain(`{ ${action}(emailItem) }`);
     expect(count(code, /var onSave: \(\) -> Void = \{\}/g)).toBe(1);
   },
   60000,
@@ -60,9 +72,106 @@ browserTest(
   "grid tiles are unrolled calls and radio rows pass their group binding through",
   async () => {
     const { code } = await convertHtml(GRID_RADIO, { name: "GridRadio", css: GRID_RADIO_CSS });
-    expect(code).not.toContain("ForEach(Self.rows)");
-    expect(code).toContain("RowView(row: Self.rows[3]");
-    expect(code).toMatch(/@Binding var s_\w+: String/);
+    expect(code).not.toContain("ForEach(ts)");
+    expect(code).toContain("TView(t: Self.ts[3]");
+    expect(code).toMatch(/@Binding var (?!s_)\w+: String/);
+    expect(code).toMatch(/: \$s_\w+/);
   },
   60000,
+);
+
+browserTest(
+  "annotated markup names the component, its fields and the screen init",
+  async () => {
+    const team = (await convertHtml(TEAM, { name: "TeamCard", css: TEAM_CSS })).code;
+    for (const s of [
+      "struct Member: Identifiable",
+      "struct MemberView: View",
+      "var members: [Member] = Self.members",
+      "var name: String",
+      "var role: String",
+      'var title: String = "Team members"',
+      "var onMessage: (Member) -> Void = { _ in }",
+      'init(members: [Member] = Self.members, title: String = "Team members", onMessage: @escaping (Member) -> Void = { _ in })',
+    ])
+      expect(team).toContain(s);
+    const settings = (await convertHtml(PREFS, { name: "SettingsCard", css: PREFS_CSS })).code;
+    for (const s of [
+      "@State private var preferences: [Preference]",
+      "_preferences = State(initialValue: preferences)",
+      "@Binding var preference: Preference",
+      "var isOn: Bool",
+      '#Preview("SettingsCard.PreferenceView")',
+      "@Previewable @State var preference",
+    ])
+      expect(settings).toContain(s);
+  },
+  60000,
+);
+
+const CORPUS = "tests/conformance/fixtures/components";
+const corpus = async () => (await readdir(CORPUS)).filter((f) => f.endsWith(".html")).sort();
+
+browserTest(
+  "K1: no private-style name reaches a non-private member or an init over the component corpus",
+  async () => {
+    const leaks: string[] = [];
+    for (const f of await corpus()) {
+      const { files } = await convert({ file: `${CORPUS}/${f}` });
+      for (const [file, text] of Object.entries(files))
+        for (const line of text.split("\n"))
+          if (
+            (/\b(?:var|let|func)\s+(?:v|s|on)_\w+/.test(line) && !line.includes("private")) ||
+            (/\binit\(/.test(line) && /\b(?:v|s|on)_\w+:/.test(line))
+          )
+            leaks.push(`${f} ${file}: ${line.trim()}`);
+    }
+    expect(leaks).toEqual([]);
+  },
+  300000,
+);
+
+/** Every extracted name, checked by eye against the markup; a rule change shows up here as a renamed API. */
+// shadcn-avatar: three avatar runs (`data-slot="avatar"`) differ in shape, so three types. tw-cards: the
+// nearest heading of the member cards is the following "Invite a teammate" card's (Step 2 rule order).
+const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[]; actions: string[] }> = {
+  "shadcn-avatar": {
+    types: ["Avatar", "Avatar2", "Avatar3"],
+    views: ["AvatarView", "Avatar2View", "Avatar3View"],
+    arrays: ["avatars", "avatars2", "avatars3"],
+    actions: [],
+  },
+  "shadcn-list-24": { types: ["Item"], views: ["ItemView"], arrays: ["items"], actions: [] },
+  "shadcn-table": { types: ["TableRow"], views: ["TableRowView"], arrays: ["tableRows"], actions: [] },
+  "tw-cards": {
+    types: ["InviteATeammateCard"],
+    views: ["InviteATeammateCardView"],
+    arrays: ["inviteATeammateCards"],
+    actions: ["onMessage", "onManage"],
+  },
+};
+
+browserTest(
+  "golden name table over the component corpus, deterministic",
+  async () => {
+    const all = (s: string, re: RegExp) => [...s.matchAll(re)].map((m) => m[1]!);
+    const table = async () => {
+      const out: typeof GOLDEN = {};
+      for (const f of await corpus()) {
+        const { code } = await convert({ file: `${CORPUS}/${f}` });
+        const t = {
+          types: all(code, /^ {4}(?:public )?struct (\w+): Identifiable/gm),
+          views: all(code, /^ {4}(?:public )?struct (\w+): View/gm),
+          arrays: all(code, /^ {4}(?:public )?static let (\w+):/gm),
+          actions: all(code, /var (on\w+): \(\w+\) -> Void/g),
+        };
+        if (t.types.length) out[f.replace(/\.html$/, "")] = t;
+      }
+      return out;
+    };
+    const first = await table();
+    expect(first).toEqual(GOLDEN);
+    expect(await table()).toEqual(first);
+  },
+  300000,
 );

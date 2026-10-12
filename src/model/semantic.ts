@@ -359,6 +359,10 @@ export interface SemBase extends SizeConstraints {
   };
   /** `<label>`: id of the toggle/radio its tap changes. */
   labelFor?: string;
+  /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
+  nameHint?: { words: string; source: "component" | "id" | "slot" | "aria" | "class" | "tag" };
+  /** `data-markswift-field`: the design names the data field this node's content becomes. */
+  field?: string;
   /**
    * What activating this element does; set on Buttons, in-app links, text fields inside a
    * `<form onsubmit>` (Return), and activatable non-controls.

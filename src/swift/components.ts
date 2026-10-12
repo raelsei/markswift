@@ -3,12 +3,13 @@
  * mode). The emitter is the equality test: every node is emitted once with a placeholder line per
  * child it asks `ctx.renderNode` for, and siblings whose emitted Swift differs only in design
  * literals (strings, colours, shapes, control state/action names) form a run. The subview is the
- * first member's own emitted code with the differing literals read from `row`, so the pixels are
- * the unrolled view's by construction.
+ * first member's own emitted code with the differing literals read from its row, so the pixels are
+ * the unrolled view's by construction. Names come from the markup (`componentNames`).
  */
 import type { GridNode, Screen, SemNode, StackNode } from "../model/semantic.ts";
-import type { EmitContext } from "./context.ts";
-import { indent, str } from "./format.ts";
+import type { ControlMembers, EmitContext, EmitOptions } from "./context.ts";
+import { note } from "./diagnostics.ts";
+import { indent, memberName, num, pascalWords, str } from "./format.ts";
 import { containerExpr } from "./layout.ts";
 import { refOf } from "./nodes.ts";
 import { visit } from "./traversal.ts";
@@ -41,10 +42,15 @@ interface NodeTemplate {
 type Role = "field" | "literal" | "binding" | "pass" | "collapse" | "move";
 
 interface Run {
+  /** The stack or grid holding the members. */
+  parent: StackNode | GridNode;
   /** The run's members, in order. */
   members: SemNode[];
-  /** Per slot column (DFS order over a member): marker and each member's value. */
-  columns: Array<{ marker: string; values: string[] }>;
+  /**
+   * Per slot column (DFS order over a member): marker, each member's value and slot node, and the
+   * first member's text before the slot on its line (a colour's role).
+   */
+  columns: Array<{ marker: string; values: string[]; nodes: SemNode[]; at: string }>;
   /**
    * First column whose value vector equals this one's (`$` stripped): columns sharing one field or
    * parameter. Design-literal columns are classed and given their role over every run of the type.
@@ -57,41 +63,18 @@ interface Run {
 }
 
 export interface Extraction {
-  /** Lines for a run member, undefined for any other node. */
+  /** Lines for a run member or an annotated text, undefined for any other node. */
   call(node: SemNode): string[] | undefined;
   /** Every node inside a run member (all members). */
   absorbed: Set<SemNode>;
-  /** The screen's member declarations replacing `ctx.control.decls`. */
-  decls: string[];
-  /** `extension <View> { … }` body lines. */
+  /** The screen's members replacing `ctx.control.members`, in declaration (= `init` parameter) order. */
+  members: ScreenMember[];
+  /** Screen `@State` renamed to its annotated field: old → new, applied to the screen body. */
+  rename: Record<string, string>;
+  /** `extension <View> { … }` body lines; empty without runs. */
   extension: string[];
-}
-
-/** Every name extraction mints. Placeholders: plan 031 replaces them here and nowhere else. */
-export function componentNames() {
-  const counted = (base: string, i: number) => (i === 0 ? base : `${base}${i + 1}`);
-  return {
-    row: "row",
-    type: (i: number) => counted("Row", i),
-    view: (i: number) => `${counted("Row", i)}View`,
-    data: (i: number) => counted("rows", i),
-    /** Field of a slot kind; repeats in one type count up (`text`, `text2`). */
-    field: (marker: string, seen: Record<string, number>) => {
-      const kind = strip(marker);
-      const base =
-        kind === "S"
-          ? "text"
-          : kind === "C"
-            ? "color"
-            : kind === "I"
-              ? "icon"
-              : kind === "value:Bool"
-                ? "isOn"
-                : "value";
-      seen[base] = (seen[base] ?? 0) + 1;
-      return counted(base, seen[base] - 1);
-    },
-  };
+  /** One `#Preview` per extracted subview. */
+  previews: string[];
 }
 
 const isContainer = (n: SemNode): n is StackNode | GridNode => n.kind === "stack" || n.kind === "grid";
@@ -184,8 +167,16 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const makeRun = (parent: StackNode | GridNode, start: number, members: SemNode[]): Run | undefined => {
     if (tpl(parent).children.some((c, i, all) => members.includes(c) && all.indexOf(c) !== i)) return undefined;
     const subtrees = members.map((m) => new Set(collect(m)));
-    const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots));
-    const columns = flats[0]!.map((s, c) => ({ marker: s.marker, values: flats.map((f) => f[c]!.value) }));
+    const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
+    const columns = flats[0]!.map(({ s, n }, c) => {
+      const own = tpl(n).own;
+      return {
+        marker: s.marker,
+        values: flats.map((f) => f[c]!.s.value),
+        nodes: flats.map((f) => f[c]!.n),
+        at: own.slice(own.lastIndexOf("\n", s.start - 1) + 1, s.start),
+      };
+    });
     const vectors = columns.map((c) => c.values.map(strip).join("\u0000"));
     const cls = vectors.map((v) => vectors.indexOf(v));
     const roles: Role[] = [];
@@ -223,7 +214,7 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       !(start === 0 && n.leadInset !== 0);
     // ponytail: runs whose state/action columns play different roles (a field in one, a constant in another) get separate types; merge per column if designs need it.
     const sig = `${tpl(members[0]!).key}|${columns.map((col, c) => (LITERAL[col.marker] ? "" : `${roles[c]}:${cls[c]}`)).join(",")}`;
-    return { members, columns, cls, roles, forEach, sig };
+    return { parent, members, columns, cls, roles, forEach, sig };
   };
   const runs: Run[] = [];
   const walk = (n: SemNode): void => {
@@ -253,35 +244,286 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   return runs;
 }
 
+const RESERVED_TYPES: Readonly<Record<string, true>> = Object.fromEntries(
+  (
+    "View Text Image Color Shape AnyShape Button Link Label Toggle Picker Slider Stepper TextField SecureField " +
+    "TextEditor DatePicker ColorPicker ProgressView Gauge Menu List Section Form Group Grid GridRow Table ScrollView " +
+    "NavigationView NavigationStack HStack VStack ZStack LazyVStack LazyHStack ForEach Spacer Divider Circle Rectangle " +
+    "RoundedRectangle Capsule Ellipse Path Font Edge Alignment Animation Binding State Environment Data String Int " +
+    "Double Float Bool Date URL UUID Array Set Dictionary Optional Result Error Never Character Identifiable Hashable " +
+    "Palette BundledFonts"
+  )
+    .split(" ")
+    .map((n) => [n, true]),
+);
+/** Member names that need a suffix: Swift keywords plus the row's `id` and a view's `body`. */
+const RESERVED_MEMBERS: Readonly<Record<string, true>> = Object.fromEntries(
+  (
+    "associatedtype class deinit enum extension fileprivate func import init inout internal let open operator private " +
+    "protocol public rethrows static struct subscript typealias var break case catch continue default defer do else " +
+    "fallthrough for guard if in repeat return throw switch where while as false is nil self super throws true try " +
+    "any some id body"
+  )
+    .split(" ")
+    .map((n) => [n, true]),
+);
+/** A bound control's field name by what it holds. */
+const CONTROL_FIELDS: Readonly<Record<string, string>> = {
+  toggle: "isOn",
+  radio: "isSelected",
+  radioGroup: "selection",
+  textField: "text",
+  secureField: "text",
+  textEditor: "text",
+  picker: "selection",
+  slider: "value",
+  stepper: "value",
+  datePicker: "date",
+  colorPicker: "color",
+  disclosure: "isExpanded",
+};
+const COLOR_ROLES: Readonly<Record<string, string>> = {
+  background: "backgroundColor",
+  foregroundStyle: "foregroundColor",
+  fill: "fillColor",
+  strokeBorder: "borderColor",
+  stroke: "borderColor",
+  shadow: "shadowColor",
+};
+
+/** Design words as an UpperCamel Swift identifier; "" when none survive or it would start with a digit. */
+const ident = (s: string) => {
+  const p = pascalWords(s);
+  return /^[A-Z]/.test(p) ? p : "";
+};
+const lowerFirst = (s: string) => s[0]!.toLowerCase() + s.slice(1);
+
+/** Names of one row type: `<base>`, `<base>View`, its closure variable, fields and pass-through bindings by column. */
+interface TypeNames {
+  type: string;
+  view: string;
+  row: string;
+  fields: Map<number, string>;
+  pass: Map<number, string>;
+}
+
 /**
- * Repeated sibling containers of an app-mode screen as nested row types, data arrays and subviews;
- * undefined when the screen repeats nothing. Strict equality: optional children, variants and
- * `:last-child` edges break a run (post-1.0 "loose extraction"); grids and measured, wrapping or
- * distributed stacks get the shared subview called once per member instead of a `ForEach`.
+ * Every name extraction mints, from the markup (`nameHint`, `field`) and nearby headings; never from
+ * paths. Types/arrays share one record with the screen's own members; fields are per type.
  */
-export function extractComponents(screen: Screen, ctx: EmitContext): Extraction | undefined {
+export function componentNames(
+  screen: Screen,
+  viewName: string,
+  ctx: EmitContext,
+  types: Array<{ run: Run; group: Run[]; fieldCols: number[] }>,
+  runType: number[],
+  screenFields: SemNode[],
+): { types: TypeNames[]; data: string[]; fields: Map<SemNode, string> } {
+  const seen: Record<string, number> = { body: 1 };
+  for (const m of ctx.control.members) seen[m.name] = 1;
+  for (const name of ctx.nameOf.values()) seen[name] = 1;
+  for (const name of ctx.scaledFonts?.keys() ?? []) seen[name] = 1;
+  const unique = (base: string) => {
+    let name = base;
+    for (let k = 2; seen[name]; k++) name = `${base}${k}`;
+    seen[name] = 1;
+    return name;
+  };
+  const controlOf = new Map<string, SemNode>();
+  for (const [n, name] of ctx.control.stateOf) if (!controlOf.has(name)) controlOf.set(name, n);
+  /** The node a slot column names itself after: a binding's control, else the slot's own node. */
+  const nodeAt = (run: Run, c: number, i: number) => {
+    const col = run.columns[c]!;
+    return LITERAL[strip(col.marker)] ? col.nodes[i] : controlOf.get(strip(col.values[i]!));
+  };
+  /** Rule 3: a name by what the slot holds. */
+  const kindName = (run: Run, c: number) => {
+    const col = run.columns[c]!;
+    const kind = strip(col.marker);
+    const n = nodeAt(run, c, 0);
+    if (kind === "S") return n?.a11y?.heading ? "title" : "text";
+    if (kind === "I") return "icon";
+    if (kind === "C") {
+      // The innermost call still open before the slot on its line.
+      let i = col.at.length - 1;
+      for (let depth = 0; i >= 0; i--) {
+        if (col.at[i] === ")") depth++;
+        else if (col.at[i] === "(" && depth-- === 0) break;
+      }
+      return COLOR_ROLES[/(\w*)$/.exec(col.at.slice(0, Math.max(i, 0)))![1]!] ?? "color";
+    }
+    if (n?.kind !== "control") return "value";
+    if (n.files) return "isPresented";
+    return CONTROL_FIELDS[n.control === "radio" && n.group !== undefined ? "radioGroup" : n.control] ?? "value";
+  };
+  /** Rules 1–2: `data-markswift-field`, else a component/slot/class hint every node agrees on minus the type's leading words. */
+  const fieldName = (nodes: Array<SemNode | undefined>, fallback: string, own: Record<string, number>, base = "") => {
+    const n = nodes[0];
+    let words = n?.field ?? "";
+    const hint = n?.nameHint;
+    if (
+      !words &&
+      hint &&
+      (hint.source === "component" || hint.source === "slot" || hint.source === "class") &&
+      nodes.every((x) => x?.nameHint?.words === hint.words)
+    ) {
+      const parts = ident(hint.words).split(/(?=[A-Z])/);
+      const lead = base.split(/(?=[A-Z])/);
+      let k = 0;
+      while (k < lead.length && parts[k] === lead[k]) k++;
+      words = parts.slice(k).join(" ");
+    }
+    const raw = ident(words) || ident(fallback);
+    return memberName("", RESERVED_MEMBERS[lowerFirst(raw)] ? `${raw} value` : raw, own, fallback);
+  };
+
+  const out: TypeNames[] = [];
+  const bases: string[] = [];
+  for (const t of types) {
+    const m = t.run.members[0]!;
+    const hint = m.nameHint;
+    const members = t.group.flatMap((r) => r.members);
+    let base =
+      hint && hint.source !== "tag" && members.every((x) => x.nameHint?.words === hint.words) ? ident(hint.words) : "";
+    if (!base) {
+      const noun = (hint?.source === "tag" && ident(hint.words)) || "Item";
+      const heading = headingNear(screen, t.run);
+      base = (heading && ident(`${heading.split(/\s+/).slice(0, 3).join(" ")} ${noun}`)) || noun;
+    }
+    if (RESERVED_TYPES[base] || RESERVED_TYPES[`${base}View`] || base === viewName) base += "Item";
+    bases.push(base);
+    const type = unique(base);
+    seen[`${type}View`] = 1;
+    const own: Record<string, number> = {};
+    const fields = new Map<number, string>();
+    // A node's markup names its first field (a text's string, a control's value); its others go by kind.
+    const named = new Set<SemNode | undefined>();
+    for (const c of t.fieldCols) {
+      const nodes = t.group.flatMap((r) => r.members.map((_, i) => nodeAt(r, c, i)));
+      fields.set(c, fieldName(named.has(nodes[0]) ? [] : nodes, kindName(t.run, c), own, base));
+      named.add(nodes[0]);
+    }
+    // Subview parameters: the row, actions and moved members keep their names; screen bindings handed through get field-like ones.
+    const row = unique(lowerFirst(type));
+    const params: Record<string, number> = { [row]: 1, body: 1 };
+    t.run.roles.forEach((r, c) => {
+      if (r === "pass" || r === "collapse" || r === "move") params[strip(t.run.columns[c]!.values[0]!)] = 1;
+    });
+    const pass = new Map<number, string>();
+    t.run.roles.forEach((r, c) => {
+      if (r === "binding" && t.run.cls[c] === c)
+        pass.set(c, fieldName([nodeAt(t.run, c, 0)], kindName(t.run, c), params));
+    });
+    out.push({ type, view: `${type}View`, row, fields, pass });
+  }
+  const data = runType.map((t) => {
+    const b = lowerFirst(bases[t]!);
+    return unique(/[^aeiou]y$/i.test(b) ? `${b.slice(0, -1)}ies` : /(s|x|z|ch|sh)$/.test(b) ? `${b}es` : `${b}s`);
+  });
+  const fields = new Map(screenFields.map((n) => [n, fieldName([n], "value", seen)]));
+  return { types: out, data, fields };
+}
+
+/** The type's naming heading: nearest preceding, then following, siblings of the run, then one level up at a time. */
+function headingNear(screen: Screen, run: Run): string | undefined {
+  const kids = (n: SemNode): SemNode[] => [
+    ...(n.kind === "stack" || n.kind === "grid" ? n.children : []),
+    ...(n.kind === "control" ? [...(n.label ? [n.label] : []), ...n.content] : []),
+    ...n.overlays.map((o) => o.node),
+  ];
+  const parentOf = new Map<SemNode, SemNode>();
+  visit(screen.root, (n) => {
+    for (const c of kids(n)) parentOf.set(c, n);
+  });
+  const headingIn = (n: SemNode): string | undefined => {
+    if (n.kind === "text" && n.a11y?.heading) {
+      const text = n.runs
+        .map((r) => r.text)
+        .join("")
+        .trim();
+      if (text) return text;
+    }
+    for (const c of kids(n)) {
+      const h = headingIn(c);
+      if (h) return h;
+    }
+    return undefined;
+  };
+  let inner: SemNode[] = run.members;
+  for (let p: SemNode | undefined = run.parent; p; inner = [p], p = parentOf.get(p)) {
+    const all = kids(p);
+    const near = [...all.slice(0, all.indexOf(inner[0]!)).reverse(), ...all.slice(all.indexOf(inner.at(-1)!) + 1)];
+    for (const s of near) {
+      const h = headingIn(s);
+      if (h) return h;
+    }
+  }
+  return undefined;
+}
+
+/** An `init` parameter of the screen: a stored property with its design default (`state`: seeds a private `@State`). */
+export interface Param {
+  name: string;
+  type: string;
+  value: string;
+  state?: true;
+}
+/** A screen member: leading lines (docs, private decls), then the stored property behind `param`, if any. */
+export interface ScreenMember {
+  decl: string[];
+  param?: Param;
+}
+
+/** `public ` for a generated library's API, nothing for app output. */
+export const access = (v: EmitOptions["visibility"]) => (v === "public" ? "public " : "");
+
+/** A control member as a screen member: an action callback is an `init` parameter. */
+export function asMember(m: ControlMembers["members"][number]): ScreenMember {
+  return m.kind === "action"
+    ? { decl: m.decl.slice(0, -1), param: { name: m.name, type: m.type, value: "{}" } }
+    : { decl: m.decl };
+}
+
+/**
+ * Repeated sibling containers of an app-mode screen as nested row types, data arrays and subviews,
+ * plus the screen's `data-markswift-field` texts and controls as `init` parameters; undefined when
+ * the screen has neither. Strict equality: optional children, variants and `:last-child` edges
+ * break a run (post-1.0 "loose extraction"); grids and measured, wrapping or distributed stacks get
+ * the shared subview called once per member (`Self.<array>[i]`, not a parameter) instead of a `ForEach`.
+ */
+export function extractComponents(
+  screen: Screen,
+  ctx: EmitContext,
+  viewName: string,
+  visibility?: EmitOptions["visibility"],
+): Extraction | undefined {
   if (ctx.mode !== "app") return undefined;
+  const acc = access(visibility);
   const templates = nodeTemplates(screen.root, ctx);
   const runs = findRuns(screen.root, templates);
-  if (!runs.length) return undefined;
-  const names = componentNames();
   const tpl = (n: SemNode) => templates.get(n)!;
   const memberOf = new Map(ctx.control.members.map((m) => [m.name, m]));
+  /** A control state's design seed (its `@State` initial value). */
+  const seed = (name: string) => {
+    const decl = memberOf.get(name)!.decl.at(-1)!;
+    return decl.slice(decl.indexOf(" = ") + 3);
+  };
 
   interface Type {
     index: number;
     /** The first run: its first member is the subview's code, its member names the parameter labels. */
     run: Run;
-    /** Column class → field name. */
-    fields: Map<number, string>;
+    group: Run[];
+    /** Field columns (one per class), in DFS order. */
+    fieldCols: number[];
     binding: boolean;
   }
   // Runs with equal signatures share a type. One subview renders all of them, so a design literal
   // is a field when it differs anywhere across their members, and literal only when all agree.
   const groups = new Map<string, Run[]>();
   for (const run of runs) groups.set(run.sig, [...(groups.get(run.sig) ?? []), run]);
-  const types = new Map<string, Type>();
-  for (const [sig, group] of groups) {
+  const types: Type[] = [];
+  for (const group of groups.values()) {
     const head = group[0]!;
     const vectors = head.columns.map((col, c) =>
       LITERAL[col.marker] ? group.flatMap((run) => run.columns[c]!.values).join("\u0000") : undefined,
@@ -295,88 +537,161 @@ export function extractComponents(screen: Screen, ctx: EmitContext): Extraction 
         run.cls[c] = vectors.indexOf(v);
       }
     }
-    const seen: Record<string, number> = {};
-    const fields = new Map<number, string>();
-    for (const [c, r] of head.roles.entries())
-      if (r === "field" && head.cls[c] === c) fields.set(c, names.field(head.columns[c]!.marker, seen));
-    const binding = head.roles.some((r, c) => r === "field" && !LITERAL[strip(head.columns[c]!.marker)]);
-    types.set(sig, { index: types.size, run: head, fields, binding });
+    const fieldCols = head.roles.flatMap((r, c) => (r === "field" && head.cls[c] === c ? [c] : []));
+    const binding = fieldCols.some((c) => !LITERAL[strip(head.columns[c]!.marker)]);
+    types.push({ index: types.length, run: head, group, fieldCols, binding });
   }
-  const runType = runs.map((run) => types.get(run.sig)!);
+  const runType = runs.map((run) => types.find((t) => t.group.includes(run))!);
   /** One column per class with `role`. */
   const classes = (run: Run, role: Role) => run.roles.flatMap((r, c) => (r === role && run.cls[c] === c ? [c] : []));
   /** Member name of column `c` (all members, for non-varying roles; the first member's otherwise). */
   const nameAt = (run: Run, c: number) => strip(run.columns[c]!.values[0]!);
 
-  const calls = new Map<SemNode, string[]>();
   const absorbed = new Set<SemNode>();
+  for (const run of runs) for (const m of run.members) visit(m, (n) => absorbed.add(n));
+  const memberNodes = new Set(runs.flatMap((run) => run.members));
+  // Annotated single instances: a text with one string, or a control's design state.
+  const screenFields: SemNode[] = [];
+  const claimed: Record<string, true> = {};
+  visit(screen.root, (n) => {
+    if (n.nameHint?.source === "component" && !memberNodes.has(n))
+      note(
+        n,
+        "approximated",
+        "@data-markswift-component",
+        "data-markswift-component names repeated sibling elements; this element has no equal sibling, so it stays inline",
+      );
+    if (!n.field || absorbed.has(n)) return;
+    const state = ctx.control.stateOf.get(n);
+    if (n.kind === "text" && templates.get(n)?.slots.filter((s) => s.marker === "S").length === 1) screenFields.push(n);
+    else if (state && memberOf.get(state)?.kind === "value") {
+      if (!claimed[state]) screenFields.push(n);
+      claimed[state] = true;
+    } else
+      note(
+        n,
+        "approximated",
+        "@data-markswift-field",
+        "data-markswift-field applies to text with one run or to a form control; ignored",
+      );
+  });
+  if (!runs.length && !screenFields.length) return undefined;
+  const names = componentNames(
+    screen,
+    viewName,
+    ctx,
+    types,
+    runType.map((t) => t.index),
+    screenFields,
+  );
+
+  /** `n`'s template with each slot from `slot` and each child placeholder from `child`. */
+  const fill = (n: SemNode, slot: (s: Slot, i: number) => string, child: (c: SemNode) => string[]): string[] => {
+    const { own, slots, children } = tpl(n);
+    let text = "";
+    let last = 0;
+    for (const [i, s] of slots.entries()) {
+      text += own.slice(last, s.start) + slot(s, i);
+      last = s.end;
+    }
+    text += own.slice(last);
+    return text.split("\n").flatMap((line) => {
+      const m = PLACEHOLDER.exec(line);
+      if (!m) return [line];
+      return child(children[Number(m[2])]!).map((l) => (l ? m[1] + l : l));
+    });
+  };
+
+  const calls = new Map<SemNode, string[]>();
   /** Screen member that moves into a run's rows → that run. */
   const removed = new Map<string, Run>();
   runs.forEach((run, r) => {
     const t = runType[r]!;
-    const view = names.view(t.index);
-    const data = names.data(r);
-    for (const m of run.members) visit(m, (n) => absorbed.add(n));
+    const { view, row, pass } = names.types[t.index]!;
+    const data = names.data[r]!;
     for (const [c, role] of run.roles.entries())
       if ((role === "field" && !LITERAL[strip(run.columns[c]!.marker)]) || role === "collapse" || role === "move")
         for (const v of run.columns[c]!.values) removed.set(strip(v), run);
-    const args = (row: string, value: string) =>
+    const args = (item: string, value: string) =>
       [
-        `${names.row}: ${value}`,
-        ...classes(run, "binding").map((c) => `${nameAt(t.run, c)}: $${nameAt(run, c)}`),
+        `${row}: ${value}`,
+        ...classes(run, "binding").map((c) => `${pass.get(c)}: $${nameAt(run, c)}`),
         ...classes(run, "pass").map((c) => `${nameAt(t.run, c)}: ${nameAt(run, c)}`),
-        ...classes(run, "collapse").map((c) => `${nameAt(t.run, c)}: { ${nameAt(run, c)}(${row}) }`),
+        ...classes(run, "collapse").map((c) => `${nameAt(t.run, c)}: { ${nameAt(run, c)}(${item}) }`),
       ].join(", ");
     if (run.forEach) {
-      const row = names.row;
       calls.set(
         run.members[0]!,
         t.binding
           ? [`ForEach($${data}) { $${row} in`, `    ${view}(${args(row, `$${row}`)})`, "}"]
-          : [`ForEach(Self.${data}) { ${row} in`, `    ${view}(${args(row, row)})`, "}"],
+          : [`ForEach(${data}) { ${row} in`, `    ${view}(${args(row, row)})`, "}"],
       );
       for (const m of run.members.slice(1)) calls.set(m, []);
     } else
       run.members.forEach((m, i) => {
-        const row = t.binding ? `${data}[${i}]` : `Self.${data}[${i}]`;
-        calls.set(m, [`${view}(${args(row, t.binding ? `$${row}` : row)})`]);
+        const item = t.binding ? `${data}[${i}]` : `Self.${data}[${i}]`;
+        calls.set(m, [`${view}(${args(item, t.binding ? `$${item}` : item)})`]);
       });
   });
 
-  // Screen members: a run's own state/actions/presses leave; its rows state and collapsed actions
-  // take the place of the first one that left.
-  const decls: string[] = [];
+  // Screen members in `init` order: ForEach data, annotated fields, then the controls' members
+  // (a run's own state/actions/presses leave; its collapsed actions take the first one's place).
+  const members: ScreenMember[] = [];
+  runs.forEach((run, r) => {
+    const t = runType[r]!;
+    const data = names.data[r]!;
+    const type = names.types[t.index]!.type;
+    if (run.forEach)
+      members.push({
+        decl: [],
+        param: { name: data, type: `[${type}]`, value: `Self.${data}`, ...(t.binding ? { state: true as const } : {}) },
+      });
+    else if (t.binding) members.push({ decl: [`@State private var ${data} = Self.${data}`] });
+  });
+  const rename: Record<string, string> = {};
+  for (const n of screenFields) {
+    const name = names.fields.get(n)!;
+    const state = ctx.control.stateOf.get(n);
+    if (state) {
+      rename[state] = name;
+      members.push({ decl: [], param: { name, type: memberOf.get(state)!.type, value: seed(state), state: true } });
+    } else {
+      const s = tpl(n).slots.find((x) => x.marker === "S")!;
+      calls.set(
+        n,
+        fill(
+          n,
+          (x) => (x === s ? name : x.value),
+          (c) => ctx.renderNode(c),
+        ),
+      );
+      members.push({ decl: [], param: { name, type: "String", value: s.value } });
+    }
+  }
   const placed = new Set<Run>();
   for (const m of ctx.control.members) {
+    if (rename[m.name]) continue;
     const run = removed.get(m.name);
-    if (!run) decls.push(...m.decl);
+    if (!run) members.push(asMember(m));
     else if (!placed.has(run)) {
       placed.add(run);
-      const r = runs.indexOf(run);
-      const t = runType[r]!;
-      if (t.binding) decls.push(`@State private var ${names.data(r)} = Self.${names.data(r)}`);
+      const type = names.types[runType[runs.indexOf(run)]!.index]!.type;
       for (const c of classes(run, "collapse"))
-        decls.push(
-          ...memberOf.get(nameAt(run, c))!.decl.slice(0, -1),
-          `var ${nameAt(run, c)}: (${names.type(t.index)}) -> Void = { _ in }`,
-        );
+        members.push({
+          decl: memberOf.get(nameAt(run, c))!.decl.slice(0, -1),
+          param: { name: nameAt(run, c), type: `(${type}) -> Void`, value: "{ _ in }" },
+        });
     }
   }
 
   // Per type, in document order of its first run: the row struct, each run's data, the subview.
   const extension: string[] = [];
-  for (const t of types.values()) {
-    const type = names.type(t.index);
+  const previews: string[] = [];
+  for (const t of types) {
+    const n = names.types[t.index]!;
     const head = t.run;
-    const own = runs.flatMap((run, r) => (runType[r] === t ? [{ run, data: names.data(r) }] : []));
-    if (extension.length) extension.push("");
-    extension.push(
-      `/// One row of \`${own[0]!.data}\`: the content that differs between the repeated elements of the design.`,
-      `struct ${type}: Identifiable {`,
-      "    /// Template path of the captured element: stable across regenerations of the same design.",
-      "    let id: String",
-    );
-    for (const [c, f] of t.fields) {
+    const own = runs.flatMap((run, r) => (runType[r] === t ? [{ run, data: names.data[r]! }] : []));
+    const fields = t.fieldCols.map((c) => {
       const kind = strip(head.columns[c]!.marker);
       const swiftType =
         kind === "S"
@@ -386,70 +701,99 @@ export function extractComponents(screen: Screen, ctx: EmitContext): Extraction 
             : kind === "I"
               ? "AnyShape"
               : memberOf.get(nameAt(head, c))!.type;
-      extension.push(`    var ${f}: ${swiftType}`);
-    }
+      return { c, name: n.fields.get(c)!, type: swiftType };
+    });
+    if (extension.length) extension.push("");
+    extension.push(
+      `/// One row of \`${own[0]!.data}\`: the content that differs between the repeated elements of the design.`,
+      `${acc}struct ${n.type}: Identifiable {`,
+      "    /// Template path of the captured element: stable across regenerations of the same design.",
+      `    ${acc}let id: String`,
+      ...fields.map((f) => `    ${acc}var ${f.name}: ${f.type}`),
+    );
+    if (acc)
+      extension.push(
+        "",
+        `    ${acc}init(${["id: String", ...fields.map((f) => `${f.name}: ${f.type}`)].join(", ")}) {`,
+        ...["id", ...fields.map((f) => f.name)].map((f) => `        self.${f} = ${f}`),
+        "    }",
+      );
     extension.push("}");
     for (const { run, data } of own) {
       const ids = run.members.map((m) => m.id);
       const unique = new Set(ids).size === ids.length;
-      extension.push("", `static let ${data}: [${type}] = [`);
+      extension.push("", `${acc}static let ${data}: [${n.type}] = [`);
       for (const [i, m] of run.members.entries()) {
-        const values = [...t.fields].map(([c, f]) => {
+        const values = fields.map(({ c, name }) => {
           const col = run.columns[c]!;
           const v = col.values[i]!;
           const kind = strip(col.marker);
-          if (kind === "S" || kind === "C") return `${f}: ${v}`;
-          if (kind === "I") return `${f}: AnyShape(${v})`;
+          if (kind === "S" || kind === "C") return `${name}: ${v}`;
+          if (kind === "I") return `${name}: AnyShape(${v})`;
           // A binding field starts at the member's `@State` seed.
-          const decl = memberOf.get(strip(v))!.decl.at(-1)!;
-          return `${f}: ${decl.slice(decl.indexOf(" = ") + 3)}`;
+          return `${name}: ${seed(strip(v))}`;
         });
-        extension.push(`    ${type}(${[`id: ${str(unique ? m.id : String(i))}`, ...values].join(", ")}),`);
+        extension.push(`    ${n.type}(${[`id: ${str(unique ? m.id : String(i))}`, ...values].join(", ")}),`);
       }
       extension.push("]");
     }
-    extension.push("", ...subview(t, type));
+    extension.push("", ...subview(t, n));
+    const first = `${viewName}.${own[0]!.data}[0]`;
+    const args = [
+      `${n.row}: ${t.binding ? `$${n.row}` : first}`,
+      ...classes(head, "binding").map((c) => `${n.pass.get(c)}: .constant(${seed(nameAt(head, c))})`),
+    ];
+    if (previews.length) previews.push("");
+    previews.push(
+      `#Preview("${viewName}.${n.view}") {`,
+      ...indent(
+        [
+          ...(t.binding ? [`@Previewable @State var ${n.row} = ${first}`] : []),
+          `${viewName}.${n.view}(${args.join(", ")})`,
+          `.frame(width: ${num(head.members[0]!.frame.w)})`,
+        ],
+        1,
+      ),
+      "}",
+    );
   }
 
-  /** The subview: the type's first member as emitted, with every field slot reading from `row`. */
-  function subview(t: Type, type: string): string[] {
+  /** The subview: the type's first member as emitted, with every field slot reading from the row. */
+  function subview(t: Type, n: TypeNames): string[] {
     const run = t.run;
     const first = run.members[0]!;
     // Column of each node's first slot, in the member's DFS slot order.
     const offset = new Map<SemNode, number>();
     let next = 0;
-    const number = (n: SemNode) => {
-      if (!offset.has(n)) offset.set(n, next);
-      next += tpl(n).slots.length;
-      for (const c of tpl(n).children) number(c);
+    const number = (node: SemNode) => {
+      if (!offset.has(node)) offset.set(node, next);
+      next += tpl(node).slots.length;
+      for (const c of tpl(node).children) number(c);
     };
     number(first);
-    const expand = (n: SemNode): string[] => {
-      const { own, slots, children } = tpl(n);
-      const base = offset.get(n)!;
-      let text = "";
-      let last = 0;
-      for (const [i, s] of slots.entries()) {
-        const field = t.fields.get(run.cls[base + i]!);
-        text += own.slice(last, s.start) + (field ? `${s.value[0] === "$" ? "$" : ""}${names.row}.${field}` : s.value);
-        last = s.end;
-      }
-      text += own.slice(last);
-      return text.split("\n").flatMap((line) => {
-        const m = PLACEHOLDER.exec(line);
-        if (!m) return [line];
-        const c = children[Number(m[2])]!;
-        return (isContainer(c) ? [ctx.nameOf.get(c)!] : expand(c)).map((l) => (l ? m[1] + l : l));
-      });
+    const expand = (node: SemNode): string[] => {
+      const base = offset.get(node)!;
+      return fill(
+        node,
+        (s, i) => {
+          const cls = run.cls[base + i]!;
+          const dollar = s.value[0] === "$" ? "$" : "";
+          const field = n.fields.get(cls);
+          if (field) return `${dollar}${n.row}.${field}`;
+          const pass = run.roles[base + i] === "binding" ? n.pass.get(cls) : undefined;
+          return pass ? dollar + pass : s.value;
+        },
+        (c) => (isContainer(c) ? [ctx.nameOf.get(c)!] : expand(c)),
+      );
     };
-    const body = ["var body: some View {", ...indent(expand(first), 1), "}"];
-    visit(first, (n) => {
-      if (n !== first && isContainer(n))
+    const body = [`${acc}var body: some View {`, ...indent(expand(first), 1), "}"];
+    visit(first, (node) => {
+      if (node !== first && isContainer(node))
         body.push(
           "",
-          `// ${n.id.replace(/[\r\n\u2028\u2029]/g, " ")}`,
-          `private var ${ctx.nameOf.get(n)!}: some View {`,
-          ...indent(expand(n), 1),
+          `// ${node.id.replace(/[\r\n\u2028\u2029]/g, " ")}`,
+          `private var ${ctx.nameOf.get(node)!}: some View {`,
+          ...indent(expand(node), 1),
           "}",
         );
     });
@@ -458,18 +802,37 @@ export function extractComponents(screen: Screen, ctx: EmitContext): Extraction 
       .filter(([name]) => new RegExp(`\\b${name}\\b`).test(text))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([, decl]) => decl);
+    const bindings = classes(run, "binding").map((c) => ({
+      name: n.pass.get(c)!,
+      type: memberOf.get(nameAt(run, c))!.type,
+    }));
+    const actions = [...classes(run, "pass"), ...classes(run, "collapse")].map((c) => nameAt(run, c));
+    const init = acc
+      ? [
+          `${acc}init(${[
+            `${n.row}: ${t.binding ? `Binding<${n.type}>` : n.type}`,
+            ...bindings.map((b) => `${b.name}: Binding<${b.type}>`),
+            ...actions.map((a) => `${a}: @escaping () -> Void = {}`),
+          ].join(", ")}) {`,
+          `    ${t.binding ? "_" : "self."}${n.row} = ${n.row}`,
+          ...bindings.map((b) => `    _${b.name} = ${b.name}`),
+          ...actions.map((a) => `    self.${a} = ${a}`),
+          "}",
+          "",
+        ]
+      : [];
     const members = [
       ...scaled,
-      t.binding ? `@Binding var ${names.row}: ${type}` : `let ${names.row}: ${type}`,
-      ...classes(run, "binding").map((c) => `@Binding var ${nameAt(run, c)}: ${memberOf.get(nameAt(run, c))!.type}`),
-      ...classes(run, "pass").map((c) => `var ${nameAt(run, c)}: () -> Void = {}`),
-      ...classes(run, "collapse").map((c) => `var ${nameAt(run, c)}: () -> Void = {}`),
+      t.binding ? `@Binding ${acc}var ${n.row}: ${n.type}` : `${acc}let ${n.row}: ${n.type}`,
+      ...bindings.map((b) => `@Binding ${acc}var ${b.name}: ${b.type}`),
+      ...actions.map((a) => `${acc}var ${a}: () -> Void = {}`),
       ...classes(run, "move").flatMap((c) => memberOf.get(nameAt(run, c))!.decl),
       "",
+      ...init,
       ...body,
     ];
-    return [`struct ${names.view(t.index)}: View {`, ...indent(members, 1), "}"];
+    return [`${acc}struct ${n.view}: View {`, ...indent(members, 1), "}"];
   }
 
-  return { call: (n) => calls.get(n), absorbed, decls, extension };
+  return { call: (n) => calls.get(n), absorbed, members, rename, extension, previews };
 }
