@@ -30,6 +30,9 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
         if (autoMargins.length) entry.autoMargins = autoMargins;
         const tracks = map?.get("grid-template-columns")?.toString();
         if (tracks && tracks !== "none") entry.gridTemplateColumns = tracks;
+        const display = map?.get("display")?.toString();
+        const rows = map?.get("grid-template-rows")?.toString();
+        if ((display === "grid" || display === "inline-grid") && rows && rows !== "none") entry.gridTemplateRows = rows;
         out[path] = entry;
       }
       Array.from(el.children).forEach((child, i) => {

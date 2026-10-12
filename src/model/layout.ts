@@ -17,6 +17,8 @@ export const PreferredSize = z.object({
   autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
   /** Typed-OM computed `grid-template-columns` as authored (`repeat(auto-fit, minmax(100px, 1fr))`, `1fr 2fr`); absent when `none`. */
   gridTemplateColumns: z.string().optional(),
+  /** Authored `grid-template-rows` (Typed OM), only when not `none`; absent = implicit rows. */
+  gridTemplateRows: z.string().optional(),
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
