@@ -18,23 +18,24 @@ function doc(root: LayoutNode, screen = "probe"): LayoutDoc {
   };
 }
 
-/** A `flex: 1 0 0px` / `flex: 2 0 0px` row (gap 8) with the captured item widths. */
-function flexRow(width: number, widths: [number, number], screen?: string): LayoutDoc {
+const GROW = (i: number) => ({ "flex-grow": String(i + 1), "flex-shrink": "0", "flex-basis": "0px" });
+
+/** A row (gap 8) of items with the captured widths; default `flex: 1 0 0px` / `flex: 2 0 0px`. */
+function flexRow(
+  width: number,
+  widths: number[],
+  screen?: string,
+  flex: (i: number) => Record<string, string> = GROW,
+  preferred = "auto",
+): LayoutDoc {
   const items: LayoutNode[] = widths.map((w, i) => ({
     id: `item${i}`,
     tag: "div",
     attrs: {},
-    preferredSize: { width: "auto", height: "auto" },
-    bounds: { x: i === 0 ? 0 : widths[0] + 8, y: 0, w, h: 40 },
+    preferredSize: { width: preferred, height: "auto" },
+    bounds: { x: widths.slice(0, i).reduce((x, v) => x + v + 8, 0), y: 0, w, h: 40 },
     children: [],
-    styles: {
-      ...BOX,
-      "flex-grow": String(i + 1),
-      "flex-shrink": "0",
-      "flex-basis": "0px",
-      "min-width": "0px",
-      "max-width": "none",
-    },
+    styles: { ...BOX, "min-width": "0px", "max-width": "none", ...flex(i) },
   }));
   const row: LayoutNode = {
     id: "row",
@@ -96,6 +97,13 @@ test("a probe the flex solver does not reproduce pins the row with a diagnostic"
   const result = app(P1, flexRow(290, [141, 141]));
   expect(result.code).not.toContain("MarkswiftFlexRow(");
   expect(features(result, "row")).toContain("flex-grow");
+});
+
+test("a wider probe where shrunk items no longer shrink still confirms the row", () => {
+  const shrink = () => ({ "flex-grow": "0", "flex-shrink": "1", "flex-basis": "auto" });
+  const row = (width: number, w: number) => flexRow(width, [w, w, w], undefined, shrink, "150px");
+  expect(app(row(340, 108), row(600, 150)).code).toContain("MarkswiftFlexRow(");
+  expect(app(row(340, 108), row(600, 120)).code).not.toContain("MarkswiftFlexRow(");
 });
 
 test("the same holds for an admitted 1fr 2fr grid", () => {

@@ -167,7 +167,7 @@ function verifyAtProbe(screen: Screen, probe: LayoutDoc): void {
       note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", t.fidelityNote);
     } else if (n.kind === "stack" && n.flex) {
       const f = n.flex;
-      const p = at && admitFlexRow(at);
+      const p = at && admitFlexRow(at, true);
       if (p && isDeepStrictEqual([p.items, p.align], [f.items, f.align])) return;
       delete n.flex;
       note(

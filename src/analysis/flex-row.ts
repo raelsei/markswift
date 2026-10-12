@@ -32,16 +32,19 @@ const SELF: Record<string, true> = { auto: true, normal: true };
 const MIN: Record<string, true> = { auto: true, "0px": true };
 const BASIS = /^(auto|content|0%|\d+(\.\d+)?px)$/;
 
-const memo = new WeakMap<LayoutNode, FlexRow | null>();
+const memo = new WeakMap<LayoutNode, { row: FlexRow; candidate: boolean } | null>();
 
-/** The admitted row, or undefined. Pure on the captured LayoutNode (also used for the probe capture). Memoised. */
-export function admitFlexRow(n: LayoutNode): FlexRow | undefined {
-  let row = memo.get(n);
-  if (row === undefined) {
-    row = admit(n) ?? null;
-    memo.set(n, row);
+/**
+ * The admitted row, or undefined. Pure on the captured LayoutNode, memoised. `atProbe` skips the candidate gate
+ * (step 5): a probe capture verifies the solver, and at another width the native HStack may suffice (unshrunk items).
+ */
+export function admitFlexRow(n: LayoutNode, atProbe = false): FlexRow | undefined {
+  let found = memo.get(n);
+  if (found === undefined) {
+    found = admit(n) ?? null;
+    memo.set(n, found);
   }
-  return row ?? undefined;
+  return found && (found.candidate || atProbe) ? found.row : undefined;
 }
 
 const hasText = (n: LayoutNode): boolean =>
@@ -69,7 +72,7 @@ function maxContent(item: LayoutNode): number | undefined {
   return (right > left ? right - left : 0) + r + l;
 }
 
-function admit(n: LayoutNode): FlexRow | undefined {
+function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined {
   const s = n.styles;
   // 1. Container.
   if (s.display !== "flex" || (s["flex-direction"] ?? "row") !== "row" || (s["flex-wrap"] ?? "nowrap") !== "nowrap")
@@ -122,7 +125,7 @@ function admit(n: LayoutNode): FlexRow | undefined {
   const shrinkable = items.map((item, i) => (authored[i] ?? 0) > 0 && item.shrink > 0);
   const c2 = nodes.some((node, i) => shrinkable[i] && node.bounds.w < items[i]!.basis! - 0.5);
   const c3 = shrinkable.includes(true) && nodes.some((node, i) => items[i]!.basis === null && hasText(node));
-  if (!c1 && !c2 && !c3) return undefined;
+  const candidate = c1 || c2 || c3;
   // 6. Container alignment.
   const align = ALIGN[s["align-items"] ?? "normal"];
   if (!align) return undefined;
@@ -162,5 +165,5 @@ function admit(n: LayoutNode): FlexRow | undefined {
             "shrunk flex items pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
         }
       : undefined;
-  return { items, align, ...(fidelityNote ? { fidelityNote } : {}) };
+  return { row: { items, align, ...(fidelityNote ? { fidelityNote } : {}) }, candidate };
 }
