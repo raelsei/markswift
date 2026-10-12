@@ -3,6 +3,7 @@ import { type Axis, type Size, type Diagnostic, addDiagnostic } from "../model/s
 import type { InferenceContext } from "./context.ts";
 import { px, round2 } from "../css/index.ts";
 import { isFlex, outOfFlow } from "./geometry.ts";
+import { admitFlexRow } from "./flex-row.ts";
 
 function inFlow(node: LayoutNode): boolean {
   return node.tag !== "#text" && node.styles.display !== "none" && !outOfFlow(node);
@@ -35,6 +36,8 @@ export function flexGrowthSize(
     reasons.push(
       `unequal measured ${dimension}s [${sizes.map(round2).join(",")}] (basis, shrink or content constraints)`,
     );
+  // An admitted row keeps its captured px in fidelity; app mode reflows it (MarkswiftFlexRow).
+  if (axis === "h" && admitFlexRow(parent)) return { kind: "fixed", px: round2(n.bounds.w) };
   addDiagnostic(diagnostics, "approximated", "flex-grow", `${reasons.join("; ")}; measured ${dimension} pinned`);
   return { kind: "fixed", px: round2(axis === "h" ? n.bounds.w : n.bounds.h) };
 }
