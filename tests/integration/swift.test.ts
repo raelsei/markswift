@@ -7,6 +7,7 @@ import { convert, convertHtml } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
+import { typecheckLoose } from "../../tools/verify/typecheck-loose.ts";
 import { buildRenderApp, renderMac } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
 import sharp from "sharp";
@@ -728,6 +729,8 @@ for (const mode of ["app", "fidelity"] as const) {
         }
         const check = await typecheck(directory);
         if (!check.ok) throw new Error(check.output);
+        const loose = await typecheckLoose(directory);
+        if (!loose.ok) throw new Error(loose.output);
       } finally {
         await rm(directory, { recursive: true, force: true });
       }
