@@ -31,7 +31,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     const tracks = opts.mode === "app" && n.kind === "grid" ? n.template : undefined;
     if ((!n.measured || tracks) && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
       for (const c of n.children) contentMinWidth.add(c);
-    if (tracks) for (const [i, c] of n.children.entries()) if (!tracks.fixed.includes(i)) allocated.set(c, "both");
+    if (tracks)
+      for (const [i, c] of tracks.cells.entries()) if (!tracks.fixed.includes(i)) allocated.set(n.children[c]!, "both");
   });
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);

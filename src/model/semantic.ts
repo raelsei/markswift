@@ -397,9 +397,10 @@ export interface GridNode extends SemBase {
   measured?: MeasuredLayout;
   /**
    * Admitted authored template: app mode emits MarkswiftTracks; fidelity keeps the captured geometry and reports
-   * `fidelityNote`. `fixed`: child indices sized in px on both axes, which keep their frames (CSS does not stretch them).
+   * `fidelityNote`. `cells`: the `children` index of each grid item in DOM (row-major) order. `fixed`: positions in
+   * `cells` of items sized in px on both axes, which keep their frames (CSS does not stretch them).
    */
-  template?: GridTemplate & { stretch: boolean; fidelityNote: string; fixed: number[] };
+  template?: GridTemplate & { stretch: boolean; fidelityNote: string; cells: number[]; fixed: number[] };
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];

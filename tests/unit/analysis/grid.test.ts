@@ -315,6 +315,7 @@ test("an fr template the solver reproduces is admitted; children keep their capt
       { kind: "fr", fr: 2 },
     ],
     stretch: true,
+    cells: [0, 1],
     fixed: [],
     fidelityNote: expect.stringContaining("fixed column widths") as unknown as string,
   });
@@ -478,7 +479,7 @@ test("align-items: start cells shorter than their row are admitted; fidelity kee
   expect(fidelity.diagnostics).toEqual(reference.diagnostics);
 });
 
-test("a px-sized icon keeps its frame in an auto column (CSS does not stretch it)", () => {
+test("a px-sized icon painted last keeps its frame and its DOM cell in an auto column", () => {
   const input = authored(
     "auto 1fr",
     [
@@ -490,12 +491,20 @@ test("a px-sized icon keeps its frame in an auto column (CSS does not stretch it
       d.root.styles["align-items"] = "start";
       d.root.children[0]!.styles["margin-top"] = "2px";
       d.root.children[0]!.preferredSize = { width: "16px", height: "16px" };
+      d.root.children[0]!.paint = 9;
+      d.root.children[1]!.paint = 3;
     },
   );
-  expect(grid(input).template).toMatchObject({ tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }], fixed: [0] });
+  const n = grid(input);
+  expect(n.children.map((c) => c.id)).toEqual(["cell1", "cell0"]);
+  expect(n.template).toMatchObject({ tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }], cells: [1, 0], fixed: [0] });
   const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
-  expect(app).toContain("MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {");
-  expect(app).toContain(".frame(width: 16.0, height: 16.0");
+  const tracks = app.slice(
+    app.indexOf("MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {"),
+  );
+  expect(tracks).not.toBe(app.slice(-1));
+  expect(tracks.indexOf(".frame(width: 16.0, height: 16.0")).toBeGreaterThan(0);
+  expect(tracks.indexOf(".frame(width: 16.0, height: 16.0")).toBeLessThan(tracks.indexOf(".frame(maxWidth: .infinity"));
 });
 
 test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical to the unadmitted grid", () => {

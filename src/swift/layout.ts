@@ -14,7 +14,7 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
   const stretch = t.stretch ? "" : ", stretch: false";
   return [
     `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
-    ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
+    ...t.cells.flatMap((c) => indent(ctx.renderNode(n.children[c]!), 1)),
     "}",
   ];
 }

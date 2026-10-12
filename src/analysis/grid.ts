@@ -29,13 +29,15 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   const xs = starts(widths ?? [], hSpacing, base.frame.x + base.padding[3]);
   const ys = starts(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
   const ordered = [...items].sort((a, b) => a.sem.frame.y - b.sem.frame.y || a.sem.frame.x - b.sem.frame.x);
-  // MarkswiftTracks lays out exactly these cells in this order; `admitTracks` proves the DOM's in-flow
-  // element children against the capture, so both must be the same nodes in DOM order.
+  // `admitTracks` proves the DOM's in-flow element children against the capture; MarkswiftTracks
+  // lays them out row-major in that order (`cells`), whatever order `children` keeps for paint.
   const inFlow = n.children.filter((c) => c.tag !== "#text" && renders(c) && !outOfFlow(c));
-  const admit = (cells: SemNode[]) =>
-    cells.length === inFlow.length && cells.every((c, i) => items[i]?.node === inFlow[i] && c === items[i]!.sem)
-      ? admitTracks(n)
-      : undefined;
+  const admit = (children: SemNode[], fidelityNote: string): GridNode["template"] => {
+    const cells = inFlow.map((node) => children.findIndex((c) => items.some((it) => it.node === node && it.sem === c)));
+    if (cells.length !== children.length || cells.includes(-1)) return undefined;
+    const admitted = admitTracks(n);
+    return admitted && { ...admitted.template, stretch: admitted.stretch, fixed: admitted.fixed, cells, fidelityNote };
+  };
   // Native Grid can omit only the final row's trailing cells after all columns are established.
   const regular =
     widths &&
@@ -70,11 +72,8 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     // Cells shorter than their row (`align-items: start`) are not "regular", yet an authored
     // template may still place them: app lays them out with MarkswiftTracks, fidelity keeps the
     // measured placement and reports the note at emission (`containerExpr`).
-    const admitted = admit(children);
-    if (admitted) {
-      const { template, stretch, fixed } = admitted;
-      return { ...measured, template: { ...template, stretch, fixed, fidelityNote: message } };
-    }
+    const template = admit(children, message);
+    if (template) return { ...measured, template };
     addDiagnostic(base.diagnostics, "approximated", "display: grid", message);
     return measured;
   }
@@ -107,11 +106,8 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   // App mode lays an admitted template out with MarkswiftTracks; fidelity keeps the captured
   // widths and reports the note at emission (`containerExpr`).
   const grid: GridNode = { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
-  const admitted = note ? admit(children) : undefined;
-  if (admitted) {
-    const { template, stretch, fixed } = admitted;
-    return { ...grid, template: { ...template, stretch, fixed, fidelityNote: note! } };
-  }
+  const admitted = note ? admit(children, note) : undefined;
+  if (admitted) return { ...grid, template: admitted };
   if (note) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", note);
   return grid;
 }
