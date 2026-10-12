@@ -5,6 +5,7 @@
  *
  *   bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>
  */
+import type { Page } from "playwright-core";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -12,6 +13,7 @@ import { inferScreen } from "../../src/analysis/infer.ts";
 import { convert } from "../../src/index.ts";
 import { walk } from "../../src/model/semantic.ts";
 import { controlMembers } from "../../src/swift/control-state.ts";
+import { nearestTextStyle } from "../../src/swift/format.ts";
 import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
 import { ensureSimulator } from "./native.ts";
 import { command } from "./process.ts";
@@ -21,8 +23,26 @@ const FIXTURES = join(ROOT, "tests/conformance/fixtures");
 const PROJECT_DIR = join(import.meta.dir, "ios-behaviour");
 const GENERATED = join(PROJECT_DIR, "Generated");
 const PROJECT = join(PROJECT_DIR, "MarkswiftBehaviour.xcodeproj");
-/** Chrome font scale of the R7 capture: 40/17, body text at `.accessibility3` over `.large`. */
-const R7_SCALE = 2.35;
+/**
+ * `@ScaledMetric(relativeTo:)` / `.custom(_:size:relativeTo:)` multiplier of each `Font.TextStyle` at
+ * `.accessibilityExtraLarge` (AX3, `UICTContentSizeCategoryAccessibilityXL`) over `.large`, for a 100 pt value.
+ * Not the text styles' own point-size ratios (body 40/17 = 2.35): app-mode text scales a CSS size through UIFontMetrics,
+ * whose curve is flatter for titles and steeper for captions.
+ * ponytail: calibration measured with SwiftUI ImageRenderer + UIFontMetrics on iPhone 17 Pro / iOS 27.0 (2026-10-12);
+ * re-measure when Apple changes the Dynamic Type curves.
+ */
+const AX3_FACTOR: Record<string, number> = {
+  largeTitle: 1.49,
+  title: 1.68,
+  title2: 1.86,
+  title3: 2.04,
+  body: 2.18,
+  callout: 2.19,
+  subheadline: 2.15,
+  footnote: 2.22,
+  caption: 2.44,
+  caption2: 2.69,
+};
 
 interface Known {
   case: string;
@@ -41,7 +61,7 @@ interface Prepared {
   id: string;
   view: string;
   ax: AxNamed[];
-  chromeHeight235: number;
+  chromeHeightAx3: number;
   pickers: Array<{ current: string; next: string }>;
   /** Option names of every picker: a closed picker exposes only its selection, and a menu picker's value is one of these. */
   pickerValues: string[];
@@ -128,6 +148,48 @@ function elements(tree: El): El[] {
   return out;
 }
 
+/**
+ * R7 page at AX3, as the app-mode emitter scales it: each element's font-size (and px line-height, which native text
+ * derives from the same scaled size) grows by the AX3 factor of the text style `nearestTextStyle` maps it to, and every
+ * HTML box with an authored height that holds text or a form control turns that height into a floor (`min-height`):
+ * app mode never pins text in a box (Chrome would overflow or clip it), so neither does the reference.
+ */
+export async function scaleToAx3(page: Page) {
+  const root = "[data-markswift-root], [data-markswift-root] *";
+  const sizes = await page.evaluate(
+    (root) => [...new Set([...document.querySelectorAll(root)].map((e) => getComputedStyle(e).fontSize))],
+    root,
+  );
+  const factors = Object.fromEntries(sizes.map((s) => [s, AX3_FACTOR[nearestTextStyle(Number.parseFloat(s))]!]));
+  await page.evaluate(
+    ({ root, factors }) => {
+      const all = [...document.querySelectorAll<HTMLElement>(root)];
+      const before = all.map((e) => {
+        const s = getComputedStyle(e);
+        const floor =
+          e instanceof HTMLElement &&
+          e.computedStyleMap().get("height")?.toString() !== "auto" &&
+          (/\S/.test(e.textContent ?? "") ||
+            /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) ||
+            !!e.querySelector("input, select, textarea"));
+        return { fontSize: s.fontSize, lineHeight: s.lineHeight, height: floor ? s.height : undefined };
+      });
+      all.forEach((e, i) => {
+        const { fontSize, lineHeight, height } = before[i]!;
+        const scale = factors[fontSize]!;
+        e.style.setProperty("font-size", `${Number.parseFloat(fontSize) * scale}px`, "important");
+        if (lineHeight.endsWith("px"))
+          e.style.setProperty("line-height", `${Number.parseFloat(lineHeight) * scale}px`, "important");
+        if (height?.endsWith("px")) {
+          e.style.setProperty("min-height", height, "important");
+          e.style.setProperty("height", "auto", "important");
+        }
+      });
+    },
+    { root, factors },
+  );
+}
+
 async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Record<string, Uint8Array> }> {
   const fixture = join(FIXTURES, "components", `${id}.html`);
   const view = `Behaviour${id.replace(/(^|-)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
@@ -154,18 +216,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       theme: "light",
       browserChannel: "chromium",
       probe: false,
-      prepare: (page) =>
-        page.evaluate((scale) => {
-          const all = [...document.querySelectorAll<HTMLElement>("[data-markswift-root], [data-markswift-root] *")];
-          const before = all.map((e) => getComputedStyle(e));
-          const sizes = before.map((s) => [s.fontSize, s.lineHeight] as const);
-          all.forEach((e, i) => {
-            const [fontSize, lineHeight] = sizes[i]!;
-            e.style.setProperty("font-size", `${Number.parseFloat(fontSize) * scale}px`, "important");
-            if (lineHeight.endsWith("px"))
-              e.style.setProperty("line-height", `${Number.parseFloat(lineHeight) * scale}px`, "important");
-          });
-        }, R7_SCALE),
+      prepare: scaleToAx3,
     },
   );
   const screen = inferScreen(result.layout, id);
@@ -203,7 +254,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       id,
       view,
       ax,
-      chromeHeight235: scaled.layout.size.h,
+      chromeHeightAx3: scaled.layout.size.h,
       pickers,
       pickerValues,
       actions,
@@ -294,12 +345,8 @@ function judge(item: Prepared, log: CaseLog | undefined) {
   }
   const ax3 = log?.launches.ax3;
   if (log && !ax3) errors.push(`${item.id}: ax3 launch missing`);
-  if (ax3 && Math.abs(ax3.rootHeight / item.chromeHeight235 - 1) > 0.1)
-    fail(
-      "height",
-      "rootHeight",
-      `accessibility3 root ${ax3.rootHeight} pt vs Chrome ×${R7_SCALE} ${item.chromeHeight235} px`,
-    );
+  if (ax3 && Math.abs(ax3.rootHeight / item.chromeHeightAx3 - 1) > 0.1)
+    fail("height", "rootHeight", `AX3 root ${ax3.rootHeight} pt vs Chrome AX3-scaled ${item.chromeHeightAx3} px`);
   const rtl = log?.launches.rtl;
   if (log && !rtl) errors.push(`${item.id}: rtl launch missing`);
   if (large && rtl) {
@@ -438,4 +485,4 @@ async function main() {
   if (!ok) process.exit(1);
 }
 
-await main();
+if (import.meta.main) await main();
