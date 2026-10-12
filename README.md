@@ -168,6 +168,26 @@ colour slots present in one theme only, or whose geometry differs by more than 0
 light values and are reported in one `warnings` entry. `light` or `dark` captures one theme.
 `compileLayout(light, { dark })` pairs saved captures without a browser.
 
+### Using your app's colours (--palette)
+
+`--palette map.json` (`palette` in `ConvertOptions`, `BuildOptions` and `markswift.json`) points generated `Palette`
+tokens at colours your app already has:
+
+```json
+{
+  "--primary": "Color.accentColor",
+  "#e2e8f0": "Color(\"Border\")",
+  "#ffffff/#0a0a0a": "Color(\"Card\")"
+}
+```
+
+A key is the design's CSS variable (`--primary`), a static token's hex colour (`#rrggbb` or `#rrggbbaa`), or an
+adaptive token's `#light/#dark` pair; the CSS variable wins over the hex. Values are one-line Swift `Color`
+expressions emitted verbatim (your app's typecheck validates them). Views keep referencing `Palette.x`; only the
+token's value changes, and its doc comment keeps the captured colour. Tokens without an entry and entries that matched
+no token are listed as `palette` warnings. Single-use colours stay inline and are not mapped. Mapped colours are not
+part of the visual verification.
+
 ## Adding the output to Xcode
 
 Add **all** generated `.swift` files to one target. For webfonts add `Fonts/` as resources and
