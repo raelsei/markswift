@@ -139,6 +139,8 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       mode: "app",
       theme: "light",
       browserChannel: "chromium",
+      // `prepare` collects this capture's AX nodes; a probe capture's second `prepare` would overwrite them.
+      probe: false,
       prepare: async (page) => {
         ax = await browserAxNodes(page, "[data-markswift-root]");
       },
@@ -151,6 +153,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       mode: "app",
       theme: "light",
       browserChannel: "chromium",
+      probe: false,
       prepare: (page) =>
         page.evaluate((scale) => {
           const all = [...document.querySelectorAll<HTMLElement>("[data-markswift-root], [data-markswift-root] *")];
