@@ -51,7 +51,7 @@ export interface EmitContext extends ColorCtx {
    */
   contentMinWidth: Set<SemNode>;
   /**
-   * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells; MarkswiftFlexRow items in plan 037).
+   * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells, MarkswiftFlexRow items).
    * "width": accept the proposed width; "both": also the proposed height (grid stretch).
    */
   allocated: Map<SemNode, "width" | "both">;

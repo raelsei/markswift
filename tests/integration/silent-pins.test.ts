@@ -41,7 +41,9 @@ browserTest(
         .flatMap((d) => d.diagnostics)
         .map((d) => `${d.feature}: ${d.message}`)
         .join("\n");
-    expect(notes(result, "#shrunk")).toContain("width: width 150px laid out at 100px");
+    // The shrunk 150px item sits in an admitted row: app mode reflows it (MarkswiftFlexRow), fidelity pins the row.
+    expect(notes(result, "#shrunk")).not.toContain("laid out at");
+    expect(result.code).toContain("MarkswiftFlexRow(");
     expect(notes(result, "#email")).toContain(":invalid: ");
     // Its items have a px height, so the auto-fit grid is not admitted and stays pinned in app mode.
     expect(notes(result, "#fit")).toContain(
@@ -51,6 +53,9 @@ browserTest(
     expect(notes(result, "#half")).not.toContain("pinned");
     const fidelity = await convert("fidelity");
     expect(notes(fidelity, "#half")).toContain("width: width 50% pinned at 195px");
+    expect(fidelity.diagnostics.flatMap((d) => d.diagnostics)).toContainEqual(
+      expect.objectContaining({ feature: "flex-shrink", message: expect.stringContaining("shrunk flex items pinned") }),
+    );
   },
   60000,
 );

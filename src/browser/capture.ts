@@ -116,6 +116,7 @@ export class BrowserCapture {
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
     const page = await this.context.newPage();
+    const viewport = spec.viewport ?? this.opts.viewport;
     const errors: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
@@ -162,6 +163,7 @@ export class BrowserCapture {
       }
     });
     try {
+      if (spec.viewport) await page.setViewportSize(spec.viewport);
       await page.emulateMedia({ colorScheme: spec.theme });
       // Public pasted markup is captured as a document, but cannot reach the host's network.
       // The exact document route below is registered last and fulfills that one request.
@@ -245,7 +247,7 @@ export class BrowserCapture {
         { sel: spec.root, mark: ROOT_MARK },
       );
       const cdp = await this.context.newCDPSession(page);
-      const conditional = await readConditionalRules(page, spec.root, this.opts.viewport.width);
+      const conditional = await readConditionalRules(page, spec.root, viewport.width);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
@@ -319,7 +321,7 @@ export class BrowserCapture {
           combo: { screen: spec.screen, theme: spec.theme },
           size,
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
-          viewport: { x: -box.x || 0, y: -box.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
+          viewport: { x: -box.x || 0, y: -box.y || 0, w: viewport.width, h: viewport.height },
           dpr: this.opts.dpr,
           canvas,
           fonts,

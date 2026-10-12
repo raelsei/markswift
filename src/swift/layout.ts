@@ -23,6 +23,34 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
   ];
 }
 
+/**
+ * Content-height rows need an intrinsic height proposal, or stretch children (and app `align-self` children with
+ * `maxHeight: .infinity`) take all the height offered. Fixed/fill rows already get one; discarding it collapses
+ * overlay-only Color children to their 10pt ideal height.
+ */
+function hugsRowHeight(n: StackNode, ctx: EmitContext): boolean {
+  return (
+    n.axis === "h" &&
+    n.height.kind === "hug" &&
+    n.children.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))
+  );
+}
+
+/** App mode: an admitted flex row (`StackNode.flex`) laid out by the runtime `MarkswiftFlexRow`. */
+function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: EmitContext): string[] {
+  const items = flex.items.map(
+    (i) => `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)})`,
+  );
+  const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
+  const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
+  return [
+    `MarkswiftFlexRow(items: [${items.join(", ")}], spacing: ${num(spacing)}${align}) {`,
+    ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
+    "}",
+    ...(hugsRowHeight(n, ctx) ? [".fixedSize(horizontal: false, vertical: true)"] : []),
+  ];
+}
+
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
   // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
@@ -31,6 +59,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
+  else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
   else if (n.kind === "grid") {
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
@@ -42,6 +71,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     }
     out.push("}");
   } else {
+    // Fidelity keeps an admitted flex row's captured widths and reports what app mode reconstructs.
+    if (n.flex?.fidelityNote) note(n, "approximated", n.flex.fidelityNote.feature, n.flex.fidelityNote.message);
     const kids = n.children;
     const uniform = typeof n.spacing === "number";
     const spacers = n.distribution === "between" || n.distribution === "around" || n.distribution === "evenly";
@@ -95,16 +126,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
     });
     out.push("}");
-    // Only content-height rows need an intrinsic proposal to keep stretch children from
-    // consuming all available height (and `align-self` children their `maxHeight: .infinity`).
-    // Fixed/fill rows already receive a height proposal; discarding it collapses overlay-only
-    // Color children to their 10pt ideal height.
-    if (
-      n.axis === "h" &&
-      n.height.kind === "hug" &&
-      kids.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))
-    )
-      out.push(".fixedSize(horizontal: false, vertical: true)");
+    if (hugsRowHeight(n, ctx)) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
   const body = decorate(n, out, ctx);
   if (n.scroll) {

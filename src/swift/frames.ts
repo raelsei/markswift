@@ -20,7 +20,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // can grow it without clipping.
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
-  // App: a runtime Layout (MarkswiftTracks) allocates this cell's width, and with stretch its height.
+  // App: a runtime Layout (MarkswiftTracks, MarkswiftFlexRow) allocates this cell's width, and with grid stretch its height.
   const allocated = app ? ctx.allocated.get(n) : undefined;
   // A percentage width: app fills the MarkswiftFraction wrapper (`boxModifiers`); fidelity keeps the captured px.
   const fraction = n.width.kind === "fraction" ? n.width : undefined;
