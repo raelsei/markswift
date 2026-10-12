@@ -1,6 +1,6 @@
 import { LAYOUT_DOC_VERSION } from "../../src/model/layout.ts";
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convert, convertHtml } from "../../src/index.ts";
@@ -738,6 +738,134 @@ for (const mode of ["app", "fidelity"] as const) {
     300000,
   );
 }
+
+/** Write FAMILIES entries as HTML pages (plus the Geist webfont they may load) and `markswift build` them as `library`. */
+async function buildFamilies(dir: string, library: string, components: Array<{ name: string; family: string }>) {
+  await mkdir(dir, { recursive: true });
+  await copyFile(join(ASSETS, "geist-latin-wght-normal.woff2"), join(dir, "geist-latin-wght-normal.woff2"));
+  for (const { name, family } of components) {
+    const f = FAMILIES.find((f) => f.name === family)!;
+    const css = `body{margin:0} :root{--primary:#2563eb} main{width:320px;font:16px system-ui} ${f.css ?? ""}`;
+    await writeFile(
+      join(dir, `${name}.html`),
+      `<!doctype html><html><head><style>${css}</style></head><body><main data-markswift-root>${f.html}</main></body></html>`,
+    );
+  }
+  const config = join(dir, "markswift.json");
+  await writeFile(
+    config,
+    JSON.stringify({
+      library,
+      out: library,
+      components: components.map((c) => ({ name: c.name, source: `${c.name}.html` })),
+    }),
+  );
+  await command([process.execPath, join(import.meta.dir, "../../src/cli.ts"), "build", config], dir, 300_000);
+  return join(dir, library);
+}
+
+const xcodebuild = (scheme: string, cwd: string, dd: string) =>
+  command(
+    [
+      "xcodebuild",
+      "-scheme",
+      scheme,
+      "-destination",
+      "generic/platform=iOS Simulator",
+      "-derivedDataPath",
+      dd,
+      "build",
+    ],
+    cwd,
+    900_000,
+  );
+
+nativeTest(
+  "package of every emitter family builds for iOS with 0 warnings",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-package-"));
+    try {
+      const pkg = await buildFamilies(
+        directory,
+        "Families",
+        FAMILIES.map((f) => ({ name: f.name, family: f.name })),
+      );
+      const files = await readdir(pkg, { recursive: true });
+      expect(files.filter((f) => f.endsWith("MarkswiftRuntime.swift"))).toHaveLength(1);
+      expect(await readdir(join(pkg, "Sources/Families/Fonts"))).toHaveLength(1);
+      expect((await readdir(join(pkg, "Sources/Families/Images"))).length).toBeGreaterThan(0);
+      const output = await xcodebuild("Families", pkg, join(directory, "dd"));
+      expect(output).toContain("** BUILD SUCCEEDED **");
+      expect(output.split("\n").filter((l) => l.includes("warning:"))).toEqual([]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  1_200_000,
+);
+
+nativeTest(
+  "two generated libraries build in one host",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-host-"));
+    try {
+      await buildFamilies(join(directory, "a"), "LibA", [
+        { name: "CardView", family: "EffectsFamily" },
+        { name: "SvgView", family: "SvgFamily" },
+      ]);
+      await buildFamilies(join(directory, "b"), "LibB", [
+        { name: "CardView", family: "WebfontFamily" },
+        { name: "ImageView", family: "ImageFamily" },
+      ]);
+      const host = join(directory, "Host");
+      await mkdir(join(host, "Sources/Host"), { recursive: true });
+      await writeFile(
+        join(host, "Package.swift"),
+        `// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+    name: "Host",
+    platforms: [.iOS(.v18), .macOS(.v15)],
+    products: [.library(name: "Host", targets: ["Host"])],
+    dependencies: [.package(path: "../a/LibA"), .package(path: "../b/LibB")],
+    targets: [
+        .target(
+            name: "Host",
+            dependencies: [.product(name: "LibA", package: "LibA"), .product(name: "LibB", package: "LibB")],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+    ]
+)
+`,
+      );
+      await writeFile(
+        join(host, "Sources/Host/HostView.swift"),
+        `import SwiftUI
+import LibA
+import LibB
+
+public struct HostView: View {
+    public init() {}
+
+    public var body: some View {
+        VStack {
+            LibA.CardView()
+            LibB.CardView()
+        }
+    }
+}
+`,
+      );
+      const output = await xcodebuild("Host", host, join(directory, "dd"));
+      expect(output).toContain("** BUILD SUCCEEDED **");
+      expect(output.split("\n").filter((l) => l.includes("warning:"))).toEqual([]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  1_200_000,
+);
 
 nativeTest(
   "brightness() multiplies like CSS and a clipped max-height box shows its first lines",
