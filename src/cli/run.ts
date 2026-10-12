@@ -5,7 +5,7 @@ import { convert } from "../api/convert.ts";
 import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
 import type { BuildCommand, ConversionCommand } from "./args.ts";
-import { loadBuildConfig } from "./config.ts";
+import { loadBuildConfig, loadPalette } from "./config.ts";
 import { inlineRelativeUrls } from "./css.ts";
 import { ensureVacant, formatDiagnostics, formatWarning, updatable, updateBundle, writeBundle } from "./output.ts";
 
@@ -47,7 +47,8 @@ export async function runConversion(command: ConversionCommand): Promise<void> {
     for (const ref of inlined.missing)
       process.stderr.write(`Warning: --css reference not found next to ${command.cssPath}: ${ref}\n`);
   }
-  const result = await convert(source, { ...command.options, css });
+  const palette = command.palettePath === undefined ? undefined : await loadPalette(command.palettePath);
+  const result = await convert(source, { ...command.options, css, palette });
   const files = command.update
     ? await updateBundle(result, command.outDir, { version: VERSION, force: command.force })
     : await writeBundle(result, command.outDir, { version: VERSION });

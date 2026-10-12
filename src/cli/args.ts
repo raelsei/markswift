@@ -8,6 +8,7 @@ export interface ConversionCommand {
   source: { file: string } | { url: string } | { stdin: true };
   outDir: string;
   cssPath?: string;
+  palettePath?: string;
   update: boolean;
   force: boolean;
   options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport">;
@@ -52,6 +53,8 @@ Options:
   --dark-class <name>
                     Class added to <html> for the dark capture (class-based themes, e.g. dark)
   --mode <value>    app or fidelity (default: app)
+  --palette <file>  JSON map from CSS variables or hex colours to app colours
+                    (e.g. {"--primary": "Color.accentColor"})
   -h, --help        Show this help
   -v, --version     Show version
 
@@ -69,6 +72,7 @@ const valueFlags = new Set([
   "--theme",
   "--dark-class",
   "--mode",
+  "--palette",
 ]);
 
 export function parseArgs(args: string[]): Command {
@@ -138,6 +142,7 @@ export function parseArgs(args: string[]): Command {
     source,
     outDir,
     cssPath: values.get("--css"),
+    palettePath: values.get("--palette"),
     update: flags.has("--update"),
     force: flags.has("--force"),
     options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },

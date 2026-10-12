@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { convert, convertHtml } from "../../src/index.ts";
+import { convert, convertHtml, type PaletteMap } from "../../src/index.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
@@ -643,7 +643,14 @@ const EFFECTS = [
  * One bundle per emitter family. `app` markers prove the family reached its emitter (checked in
  * app mode only: fidelity paints controls statically); a marker ending in `.swift` is a file name.
  */
-const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: string; app: string[] }> = [
+const FAMILIES: Array<{
+  name: string;
+  html: string;
+  css?: string;
+  assetsDir?: string;
+  palette?: PaletteMap;
+  app: string[];
+}> = [
   {
     name: "EffectsFamily",
     html: EFFECTS.map((s) => `<div style="width:40px;height:40px;background:#e11d48;${s}"></div>`).join(""),
@@ -694,6 +701,13 @@ const FAMILIES: Array<{ name: string; html: string; css?: string; assetsDir?: st
   // Identical sources: identical token names and shape hashes in two views of one target.
   { name: "CoexistA", html: SHARED, app: ["Palette.primary", "MarkswiftShape_"] },
   { name: "CoexistB", html: SHARED, app: ["Palette.primary", "MarkswiftShape_"] },
+  // App colours from a palette map: the emitted expressions must compile next to the captured ones.
+  {
+    name: "PaletteFamily",
+    html: SHARED,
+    palette: { "--primary": "Color.accentColor", "#16a34a": 'Color("Brand")' },
+    app: ["static let primary = Color.accentColor", "app colour from palette key --primary"],
+  },
 ];
 
 for (const mode of ["app", "fidelity"] as const) {
@@ -710,6 +724,7 @@ for (const mode of ["app", "fidelity"] as const) {
               name: f.name,
               mode,
               css: `body{margin:0} :root{--primary:#2563eb} main{width:320px;font:16px system-ui} ${f.css ?? ""}`,
+              palette: f.palette,
             },
           );
           if (mode === "app") {

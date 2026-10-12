@@ -3,7 +3,13 @@ import { relative, resolve, sep } from "node:path";
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { serveDir, type StaticServer } from "../input/server.ts";
 import { BrowserCapture, type Capture } from "../browser/capture.ts";
-import { compileLayouts, validateLibrary, type CompileResult, type EmitMode } from "../compiler/index.ts";
+import {
+  compileLayouts,
+  validateLibrary,
+  type CompileResult,
+  type EmitMode,
+  type PaletteMap,
+} from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
@@ -35,6 +41,8 @@ export interface BuildOptions {
   serveRoot?: string;
   /** Whole-build deadline in ms. Default 600000. */
   timeoutMs?: number;
+  /** App colours for the library's `Palette` tokens; unmapped tokens and unused keys become warnings. */
+  palette?: PaletteMap;
 }
 
 export interface BuildResult {
@@ -154,6 +162,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
         bundledFamilies: bundledFamilies(fonts),
         fontMetrics: metricsForFonts(fonts),
         registerFonts: fonts.faces.length > 0,
+        palette: options.palette,
       },
     );
 
@@ -200,6 +209,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       for (const w of [...primary.warnings, ...(dark?.warnings ?? [])]) add({ ...w, component: c.name });
       for (const w of compiled.warnings) if (w.component === c.name) add(w);
     }
+    for (const w of compiled.warnings) if (w.component === undefined) add(w);
     for (const w of fonts.notes) add(w);
     return { files, assets, warnings: [...warnings.values()], diagnostics: compiled.diagnostics };
   } catch (error) {

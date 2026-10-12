@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { UsageError } from "../../../src/cli/args.ts";
-import { loadBuildConfig } from "../../../src/cli/config.ts";
+import { loadBuildConfig, loadPalette } from "../../../src/cli/config.ts";
 
 const entry = join(import.meta.dir, "../../../src/cli.ts");
 const dir = await mkdtemp(join(tmpdir(), "markswift-build-config-"));
@@ -97,4 +97,18 @@ test("paths resolve against the config, and component fields override top-level 
   await expect(loadBuildConfig(await config("bad-name.json", { ...valid, library: "kit" }))).rejects.toBeInstanceOf(
     UsageError,
   );
+});
+
+test("palette maps: bad keys and multi-line values are usage errors naming the key; a valid map round-trips", async () => {
+  const map = { "--primary": "Color.accentColor", "#E2E8F0": 'Color("Card")', "#ffffff/#0a0f14cc": "Color.red" };
+  expect(await loadPalette(await config("palette.json", map))).toEqual(map);
+  const badKey = loadPalette(await config("bad-key.json", { primary: "Color.red" }));
+  await expect(badKey).rejects.toBeInstanceOf(UsageError);
+  await expect(badKey).rejects.toThrow(/primary: key must be --name/);
+  const multiLine = loadPalette(await config("multi-line.json", { "--primary": "Color.red\n.opacity(0.5)" }));
+  await expect(multiLine).rejects.toBeInstanceOf(UsageError);
+  await expect(multiLine).rejects.toThrow(/--primary: value must be a single-line Swift expression/);
+  await expect(loadPalette(join(dir, "absent.json"))).rejects.toThrow("palette map not found");
+  const loaded = await loadBuildConfig(await config("with-palette.json", { ...valid, palette: "palette.json" }));
+  expect(loaded.options.palette).toEqual(map);
 });
