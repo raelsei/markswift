@@ -1,14 +1,31 @@
 import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
+import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
 import { decorate, overlayModifier } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
+
+/** App mode: an admitted authored template (`GridNode.template`) laid out by the runtime `MarkswiftTracks`. */
+function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: EmitContext): string[] {
+  const layout = t.autoRepeat
+    ? `autoRepeat: .${t.autoRepeat.mode}(min: ${num(t.autoRepeat.min)})`
+    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)})`)).join(", ")}]`;
+  const stretch = t.stretch ? "" : ", stretch: false";
+  return [
+    `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
+    ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
+    "}",
+  ];
+}
+
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
   if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
+  else if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
   else if (n.kind === "grid") {
+    if (n.template) note(n, "approximated", "grid-template-columns", n.template.fidelityNote);
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
     );

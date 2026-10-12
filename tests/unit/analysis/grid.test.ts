@@ -418,3 +418,33 @@ test.each<[string, LayoutDoc]>([
   expect(n.template).toBeUndefined();
   expect(pinned(n)).toBe(true);
 });
+
+test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical to the unadmitted grid", () => {
+  const input = authored("1fr 2fr", FR_1_2);
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  expect(app).toContain("MarkswiftTracks(tracks: [.fr(1.0), .fr(2.0)], hSpacing: 10.0, vSpacing: 10.0) {");
+  expect(app).toContain(".frame(maxWidth: .infinity");
+  expect(app).not.toContain(".frame(width: 112.67");
+  const plain = structuredClone(input);
+  delete plain.root.preferredSize!.gridTemplateColumns;
+  const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
+  const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
+  expect(fidelity.code).toBe(reference.code);
+  expect(fidelity.diagnostics).toEqual(reference.diagnostics);
+  expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.feature)).toContain("grid-template-columns");
+});
+
+test("auto-repeat without stretch emits its minimum and stretch: false", () => {
+  const input = authored(
+    "repeat(auto-fill, minmax(100px, 1fr))",
+    [
+      [0, 0, 109.333, 20],
+      [119.333, 0, 109.333, 20],
+      [238.667, 0, 109.333, 20],
+    ],
+    (d) => void (d.root.styles["align-items"] = "start"),
+  );
+  expect(compileLayout(input, { name: "GridView", mode: "app" }).code).toContain(
+    "MarkswiftTracks(autoRepeat: .fill(min: 100.0), hSpacing: 10.0, vSpacing: 10.0, stretch: false) {",
+  );
+});

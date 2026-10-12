@@ -19,10 +19,14 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // can grow it without clipping.
   // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
   const app = ctx.mode === "app";
-  const w = n.width.kind === "fixed" ? n.width.px : undefined;
+  // App: a runtime Layout (MarkswiftTracks) allocates this cell's width, and with stretch its height.
+  const allocated = app ? ctx.allocated.get(n) : undefined;
+  const w = n.width.kind === "fixed" && !allocated ? n.width.px : undefined;
   // App: a disclosure grows when it opens, so its captured (closed or open) height is not kept.
   const h =
-    n.height.kind === "fixed" && !(app && n.kind === "control" && n.control === "disclosure") ? n.height.px : undefined;
+    n.height.kind === "fixed" && allocated !== "both" && !(app && n.kind === "control" && n.control === "disclosure")
+      ? n.height.px
+      : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
   const floor =
     app &&
@@ -38,8 +42,8 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
-  const fillW = n.width.kind === "fill" || screenWide;
-  const fillH = n.height.kind === "fill";
+  const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined;
+  const fillH = n.height.kind === "fill" || allocated === "both";
   const align = fillAlignment(n, ctx.mode);
   // A fixed frame centres its content by default; the browser packs a container's content per
   // its own alignment (block flow / flex start), and text per its text-align.
