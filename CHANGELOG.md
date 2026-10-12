@@ -18,6 +18,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - Reflow gate: `bun run pilot --reflow` renders 390-compiled code at 320 and 768 against fresh Chrome; `reflowMaxLoss` fails app-mode reflow losses on fixtures tagged `markswift-reflow: native`.
 - `markswift build [markswift.json] [--force]` captures every component of a config in one browser session (4 pages at a time) and writes ONE local Swift package (swift-tools 6.2, iOS 18): public views, one module-level `public enum Palette` (one name per light/dark value pair across all components), shared `MarkswiftShapes.swift`, one `BundledFonts` and font copy, one runtime; regenerated through `.markswift.json` like `convert --update`. Library API: `buildLibrary(options)` and the browser-free `compileLayouts(components, { library })`.
 - `--palette map.json` (`palette` option of `convert`, `buildLibrary`, `compileLayout`, `compileLayouts` and `markswift.json`) maps captured colour tokens, keyed by CSS variable or hex, to the app's own Swift colours; views keep referencing `Palette.x`; unmapped tokens and unused keys are `palette` warnings.
+- App-mode grids keep their authored tracks (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) via `MarkswiftTracks`; percentage widths keep their fraction via `MarkswiftFraction`.
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).

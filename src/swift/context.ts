@@ -50,6 +50,11 @@ export interface EmitContext extends ColorCtx {
    * may grow to it. Every other fill-width box takes its container's width; see `frameModifier`.
    */
   contentMinWidth: Set<SemNode>;
+  /**
+   * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells; MarkswiftFlexRow items in plan 037).
+   * "width": accept the proposed width; "both": also the proposed height (grid stretch).
+   */
+  allocated: Map<SemNode, "width" | "both">;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */

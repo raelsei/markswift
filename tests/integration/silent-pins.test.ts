@@ -24,13 +24,9 @@ const CSS = `html,body{margin:0}main{width:390px;font:15px/20px system-ui}
 browserTest(
   "breakpoints, width and grid pins and baked validation styling are reported",
   async () => {
-    const result = await convertHtml(HTML, {
-      name: "SilentPins",
-      css: CSS,
-      mode: "app",
-      theme: "light",
-      viewport: { width: 390, height: 900 },
-    });
+    const convert = (mode: "app" | "fidelity") =>
+      convertHtml(HTML, { name: "SilentPins", css: CSS, mode, theme: "light", viewport: { width: 390, height: 900 } });
+    const result = await convert("app");
     const media = result.warnings.find((w) => w.feature === "media-query");
     expect(media).toMatchObject({ source: "capture", level: "approximated", feature: "media-query" });
     expect(media!.message).toContain("@media (min-width: 600px)");
@@ -39,16 +35,22 @@ browserTest(
     expect(result.warnings.find((w) => w.feature === "container-query")?.message).toContain(".inner");
     expect(formatWarning(media!)).toStartWith("approximated media-query: @media (min-width: 600px)");
 
-    const notes = (id: string) =>
-      result.diagnostics
-        .filter((r) => r.id === id)
-        .flatMap((r) => r.diagnostics)
+    const notes = (r: typeof result, id: string) =>
+      r.diagnostics
+        .filter((d) => d.id === id)
+        .flatMap((d) => d.diagnostics)
         .map((d) => `${d.feature}: ${d.message}`)
         .join("\n");
-    expect(notes("#shrunk")).toContain("width: width 150px laid out at 100px");
-    expect(notes("#half")).toContain("width: width 50% pinned at 195px");
-    expect(notes("#fit")).toContain("grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) pinned at 3 columns");
-    expect(notes("#email")).toContain(":invalid: ");
+    expect(notes(result, "#shrunk")).toContain("width: width 150px laid out at 100px");
+    expect(notes(result, "#email")).toContain(":invalid: ");
+    // Its items have a px height, so the auto-fit grid is not admitted and stays pinned in app mode.
+    expect(notes(result, "#fit")).toContain(
+      "grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) pinned at 3 columns",
+    );
+    // App mode keeps the fraction (MarkswiftFraction); fidelity pins it with the same note.
+    expect(notes(result, "#half")).not.toContain("pinned");
+    const fidelity = await convert("fidelity");
+    expect(notes(fidelity, "#half")).toContain("width: width 50% pinned at 195px");
   },
   60000,
 );

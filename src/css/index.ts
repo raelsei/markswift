@@ -9,4 +9,4 @@ export { parseFilters, parseClipPath } from "./effects.ts";
 export { parseBackgroundRepeat, parseBackgroundSize, parseBackgroundPosition } from "./background.ts";
 export { fontWeight, fontFamilies } from "./typography.ts";
 export { parseRadiusXY } from "./radius.ts";
-export { resolvedGridTracks } from "./grid.ts";
+export { parseTrackTemplate, resolvedGridTracks } from "./grid.ts";

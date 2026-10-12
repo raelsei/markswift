@@ -141,12 +141,27 @@ export function sizeOf(
   }
   let fillsW = false,
     fillsH = false;
+  // A percentage width of a stretched block in a vertical flow keeps its fraction of the
+  // containing block (MarkswiftFraction), when the capture shows exactly that fraction.
+  let fraction: number | undefined;
   if (ctx.parent) {
     const [ppt, ppr, ppb, ppl] = insetsOf(ctx.parent.styles);
     const outerW = n.bounds.w + px(s["margin-left"]) + px(s["margin-right"]);
     const outerH = n.bounds.h + px(s["margin-top"]) + px(s["margin-bottom"]);
     fillsW = Math.abs(outerW - (ctx.parent.bounds.w - ppl - ppr)) <= 1;
     fillsH = Math.abs(outerH - (ctx.parent.bounds.h - ppt - ppb)) <= 1;
+    const pct = declW && declW !== "100%" && /^\d+(\.\d+)?%$/.test(declW) ? Number.parseFloat(declW) / 100 : undefined;
+    if (
+      pct !== undefined &&
+      ctx.parentAxis === "v" &&
+      align === "stretch" &&
+      !abs &&
+      !/inline/.test(s["display"] ?? "") &&
+      px(s["margin-left"]) === 0 &&
+      px(s["margin-right"]) === 0 &&
+      Math.abs(n.bounds.w - pct * (ctx.parent.bounds.w - ppl - ppr)) <= 1
+    )
+      fraction = pct;
   }
   const measuredW: Size = { kind: "fixed", px: round2(n.bounds.w) };
   const measuredH: Size = { kind: "fixed", px: round2(n.bounds.h) };
@@ -156,6 +171,7 @@ export function sizeOf(
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
+  else if (fraction !== undefined) width = { kind: "fraction", fraction, px: round2(n.bounds.w) };
   else if (growthW) width = growthW;
   else if (ctx.parentAxis === "v" && align === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
