@@ -2,9 +2,10 @@
 import type { LayoutNode } from "../model/layout.ts";
 import { type GridNode, type SemBase, addDiagnostic } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
-import { px, round2, resolvedGridTracks } from "../css/index.ts";
+import { parseTrackTemplate, px, round2, resolvedGridTracks } from "../css/index.ts";
 import { renders, insetsOf } from "./geometry.ts";
 import { measuredLayoutOf, paintOrder } from "./measured-layout.ts";
+import { admitTracks } from "./grid-tracks.ts";
 
 function starts(tracks: number[], gap: number, origin: number): number[] {
   let at = origin;
@@ -65,22 +66,28 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     if (item.sem.height.kind === "fill") item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
     return item.sem;
   });
+  const authored = parseTrackTemplate(n.preferredSize?.gridTemplateColumns);
+  // Authored px tracks the capture reproduces are CSS at every width: nothing to report.
+  const pxExact =
+    authored !== undefined &&
+    !authored.autoRepeat &&
+    authored.tracks.length === columns &&
+    authored.tracks.every((t, c) => t.kind === "px" && Math.abs(t.px - widths[c]!) <= 1);
   // An equal-fill auto-fill/auto-fit template changes its column count at other widths; the
   // captured px tracks cannot, so the count is pinned and reported.
-  const authored = n.preferredSize?.gridTemplateColumns ?? "";
-  if (equalFill && /repeat\(\s*auto-(fill|fit)/.test(authored))
-    addDiagnostic(
-      base.diagnostics,
-      "approximated",
-      "grid-template-columns",
-      `${authored} pinned at ${columns} columns; the column count does not change at other widths`,
-    );
-  if (!equalFill)
-    addDiagnostic(
-      base.diagnostics,
-      "approximated",
-      "grid-template-columns",
-      "regular captured tracks mapped to native Grid with fixed column widths; columns do not resize at another width",
-    );
-  return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
+  const template = n.preferredSize?.gridTemplateColumns ?? "";
+  const note = pxExact
+    ? undefined
+    : equalFill && /repeat\(\s*auto-(fill|fit)/.test(template)
+      ? `${template} pinned at ${columns} columns; the column count does not change at other widths`
+      : !equalFill
+        ? "regular captured tracks mapped to native Grid with fixed column widths; columns do not resize at another width"
+        : undefined;
+  // App mode lays an admitted template out with MarkswiftTracks; fidelity keeps the captured
+  // widths and reports the note at emission (`containerExpr`).
+  const grid: GridNode = { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
+  const admitted = note ? admitTracks(n) : undefined;
+  if (admitted) return { ...grid, template: { ...admitted.template, stretch: admitted.stretch, fidelityNote: note! } };
+  if (note) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", note);
+  return grid;
 }
