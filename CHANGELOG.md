@@ -31,6 +31,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - Action members are renamed `on_x` → `onX`; `<div role=button>` is a `Button` instead of a view with an `.isButton` trait.
 
 ### Fixed
+- An unstyled `<button>`, input button or text field paints Chrome's control theme (1px grey edge, 2px corners) instead of its computed UA `2px outset`/`2px inset` border; an author background, border, radius or `appearance: none` keeps the CSS paint.
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
 - `margin: 0 auto` / `margin-left: auto` on fixed- or content-width blocks centres / right-aligns them.
 - `filter: brightness()` multiplies like CSS (`.contrast(x).brightness((x − 1)/2)`).

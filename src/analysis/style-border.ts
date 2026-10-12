@@ -38,6 +38,43 @@ function litEdge(c: Color): Color {
   return (Math.max(y, d) + 0.05) / (Math.min(y, d) + 0.05) < 1.75 ? shade(c, "light") : c;
 }
 
+/**
+ * Chrome's form-control theme. A `<button>`/`<input>` whose author set no background, border or
+ * radius (a text field: nor `box-shadow`) and kept `appearance` is not painted from its computed
+ * UA border (`2px outset`/`2px inset`): Chrome draws a flat 1px edge with 2px corners over the
+ * computed fill, keeping the 2px layout. Keyed by the UA default's computed `border-style
+ * border-color / background-color` per colour scheme (light, dark); the value is the edge colour.
+ * ponytail: calibrated at DPR 2, light + dark, on Chrome 155 and the corpus's Chromium 153 (same
+ * pixels); re-measure if Chrome restyles its controls. Disabled defaults are not listed, so a
+ * disabled control keeps its CSS paint; textarea/select (1px solid UA border) keep square corners.
+ */
+const THEMED_EDGE: Record<string, Color> = {
+  "outset rgb(0, 0, 0) / rgb(239, 239, 239)": parseColor("rgb(118, 118, 118)")!,
+  "outset rgb(255, 255, 255) / rgb(107, 107, 107)": parseColor("rgb(107, 107, 107)")!,
+  "inset rgb(118, 118, 118) / rgb(255, 255, 255)": parseColor("rgb(118, 118, 118)")!,
+  "inset rgb(133, 133, 133) / rgb(59, 59, 59)": parseColor("rgb(133, 133, 133)")!,
+};
+const THEMED_RADIUS = 2;
+
+/** The 1px themed edge Chrome paints instead of `s`'s computed border, when it draws its theme. */
+export function themedBorder(tag: string, s: Record<string, string>): Partial<Style> | undefined {
+  if (tag !== "button" && tag !== "input") return undefined;
+  if (s["appearance"] === "none" || s["background-image"] !== "none") return undefined;
+  const st = s["border-top-style"];
+  const c = s["border-top-color"];
+  const color = THEMED_EDGE[`${st} ${c} / ${s["background-color"]}`];
+  if (!color || (st === "inset" && s["box-shadow"] !== "none")) return undefined;
+  const ua = EDGES.every(
+    (e) => s[`border-${e}-style`] === st && s[`border-${e}-width`] === "2px" && s[`border-${e}-color`] === c,
+  );
+  const square = ["top-left", "top-right", "bottom-right", "bottom-left"].every(
+    (k) => s[`border-${k}-radius`] === "0px",
+  );
+  if (!ua || !square) return undefined;
+  const r = THEMED_RADIUS;
+  return { border: { width: 1, color }, radius: [r, r, r, r] };
+}
+
 export function borderStyle(
   s: Record<string, string>,
   w: number,

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="appearance; button; input: button; input: submit; input: text">
+<meta name="markswift-themes" content="light,dark">
+<title>appearance</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pad { padding: 4px 10px; }
+.styled { padding: 4px 10px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="ua-default">
+  <p class="cap">unstyled button / submit / reset / button input / text field</p>
+  <div class="row">
+    <button type="button" class="pad">Message</button>
+    <input type="submit" value="Send">
+    <input type="reset">
+    <input type="button" value="More">
+  </div>
+  <div class="row" style="margin-top: 10px;"><input type="text" value="Ada Lovelace" aria-label="Name"></div>
+</section>
+<section class="v" id="author-radius">
+  <p class="cap">author radius drops the theme: computed 2px outset paints</p>
+  <div class="row"><button type="button" class="styled">Rounded</button></div>
+</section>
+</main>
+</body>
+</html>
