@@ -29,6 +29,8 @@ export interface EmitOptions {
   adaptive?: boolean;
   /** Repeated-sibling extraction (app mode). `false` only for the pixel-identity check; default on. */
   extract?: boolean;
+  /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
+  visibility?: "internal" | "public";
 }
 
 /** Everything the recursive emitters need; built once per screen. */

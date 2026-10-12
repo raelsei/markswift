@@ -24,6 +24,8 @@ export interface CompileOptions {
   dark?: LayoutDoc;
   /** @internal Pixel-identity check only: disables repeated-sibling extraction. */
   extract?: boolean;
+  /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
+  visibility?: "internal" | "public";
 }
 
 export interface CompileResult {
@@ -82,6 +84,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     fontMetrics: options.fontMetrics,
     adaptive: !!dark,
     extract: options.extract,
+    visibility: options.visibility,
   });
   const warnings: ConversionWarning[] = [];
   if (dark) {

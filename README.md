@@ -55,13 +55,46 @@ refused by `--update`, 1 conversion or file error. Warnings and diagnostics go t
 
 | File | When |
 | --- | --- |
-| `<Name>.swift` | Always: the view, with a light and a dark `#Preview`, plus `extension <Name>` with extracted row types, data and subviews when the design repeats sibling elements |
+| `<Name>.swift` | Always: the view with an explicit `init`, a light and a dark `#Preview`, plus `extension <Name>` with extracted row types, data, subviews and one `#Preview` per subview when the design repeats sibling elements |
 | `<Name>+Tokens.swift` | Always: colours in `<Name>.Palette` |
 | `MarkswiftRuntime.swift` | Always: shared helpers; its header names the Markswift version, and every conversion by that version produces the identical file |
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |
 | `<Name>+Fonts.swift`, `<Name>+UIAppFonts.plist.fragment`, `Fonts/*.ttf` | When webfonts were bundled |
 | `Images/<hash>.<ext>` | When the component shows raster images (one file per distinct image) |
 | `.markswift.json` | Always: what this run wrote (for `--update`) |
+
+## Components
+
+Repeated sibling elements (app mode) become a row type `<Type>`, a subview `<Type>View` and a data array `<types>`
+(`static let`, the design's rows) iterated with `ForEach`. The screen always has an explicit `init` whose parameters
+all default to the design, in this order: data arrays, annotated fields, actions:
+
+```swift
+TeamCard()                                                        // the design as captured
+TeamCard(members: team, title: "Crew", onMessage: { router.chat($0.id) })
+```
+
+- Per-row buttons collapse into one `on<Name>: (<Type>) -> Void` that receives the tapped row; other actions are `() -> Void`.
+- State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
+  Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
+- Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first
+  non-utility class, else the nearest heading plus a tag noun (`li` → `Row`, `article` → `Card`, else `Item`). Fields use
+  `data-markswift-field`, then `data-slot`/class, then their kind (`title`, `text`, `foregroundColor`, `isOn`, …).
+  Override poor names with the two attributes:
+
+```html
+<h2 data-markswift-field="title">Team members</h2>
+<ul>
+  <li data-markswift-component="Member">
+    <span data-markswift-field="name">Ada</span> <span data-markswift-field="role">Owner</span>
+  </li>
+</ul>
+```
+
+  `data-markswift-field` outside a repeated row turns a single-run text into `var <field>: String` or seeds a form
+  control's state through `init`. Names are API: a rule change renames them on regeneration (noted in the changelog).
+- `convert` emits internal types; the `visibility: "public"` compile option (for a generated library) makes the
+  view, its `init`, row structs (with an explicit `public init`), data arrays and subviews `public`.
 
 ## Regenerating
 
