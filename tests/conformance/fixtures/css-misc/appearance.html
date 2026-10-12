@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
-<meta name="markswift-rows" content="appearance; button; input: button; input: submit; input: text">
+<meta name="markswift-rows" content="appearance; button">
 <meta name="markswift-themes" content="light,dark">
 <title>appearance</title>
 <style>
@@ -16,25 +16,18 @@ main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px;
 .v { margin: 0 0 16px; }
 .v:last-child { margin-bottom: 0; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+button { font: inherit; font-size: 14px; line-height: 20px; }
 .pad { padding: 4px 10px; }
-.styled { padding: 4px 10px; border-radius: 6px; }
 </style>
 </head>
 <body>
 <main data-markswift-root>
 <section class="v" id="ua-default">
-  <p class="cap">unstyled button / submit / reset / button input / text field</p>
+  <p class="cap">no author background, border or radius: Chrome's themed button</p>
   <div class="row">
+    <button type="button">Default</button>
     <button type="button" class="pad">Message</button>
-    <input type="submit" value="Send">
-    <input type="reset">
-    <input type="button" value="More">
   </div>
-  <div class="row" style="margin-top: 10px;"><input type="text" value="Ada Lovelace" aria-label="Name"></div>
-</section>
-<section class="v" id="author-radius">
-  <p class="cap">author radius drops the theme: computed 2px outset paints</p>
-  <div class="row"><button type="button" class="styled">Rounded</button></div>
 </section>
 </main>
 </body>
