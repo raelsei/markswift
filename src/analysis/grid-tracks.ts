@@ -33,8 +33,11 @@ function singleLine(n: LayoutNode): boolean {
   return n.tag === "#text" ? (n.lines?.length ?? 0) <= 1 : n.children.every(singleLine);
 }
 
-/** The authored template when the solver reproduces every captured cell within 1px; else undefined. */
-export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: boolean } | undefined {
+/**
+ * The authored template when the solver reproduces every captured cell within 1px; else undefined.
+ * `fixed`: indices of items sized in px on both axes; CSS does not stretch them, so they keep their frames.
+ */
+export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: boolean; fixed: number[] } | undefined {
   const s = n.styles;
   if (s.display !== "grid" && s.display !== "inline-grid") return undefined;
   if (s.direction === "rtl" || (s["grid-auto-flow"] ?? "row") !== "row") return undefined;
@@ -49,14 +52,18 @@ export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: b
     const self = item.styles["align-self"] ?? "auto";
     if (self !== "auto" && self !== "normal" && self !== alignItems) return undefined;
   }
-  for (const item of items) {
+  const fixed: number[] = [];
+  for (const [i, item] of items.entries()) {
     if (px(item.styles["margin-left"]) !== 0 || px(item.styles["margin-right"]) !== 0) return undefined;
+    const width = item.preferredSize?.width ?? "auto";
     const height = item.preferredSize?.height ?? "auto";
-    if (height !== "auto") return undefined;
+    if (/px$/.test(width) && /px$/.test(height)) fixed.push(i);
+    else if (height !== "auto" || /px$/.test(width)) return undefined;
   }
   const firstXs: number[] = [];
+  const rowTop = (item: LayoutNode) => item.bounds.y - px(item.styles["margin-top"]);
   for (const item of items)
-    if (near(item.bounds.y, items[0]!.bounds.y) && !firstXs.some((x) => near(x, item.bounds.x)))
+    if (near(rowTop(item), rowTop(items[0]!)) && !firstXs.some((x) => near(x, item.bounds.x)))
       firstXs.push(item.bounds.x);
   const k = template.autoRepeat ? firstXs.length : template.tracks.length;
   const autoWidths: number[] = [];
@@ -81,11 +88,10 @@ export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: b
   for (let r = 0; r * k < items.length; r++) {
     let bottom = top;
     for (const item of items.slice(r * k, r * k + k)) {
-      const mt = px(item.styles["margin-top"]);
-      if (!near(item.bounds.y - mt, top)) return undefined;
+      if (!near(rowTop(item), top)) return undefined;
       bottom = Math.max(bottom, item.bounds.y + item.bounds.h + px(item.styles["margin-bottom"]));
     }
     top = bottom + px(s["row-gap"]);
   }
-  return { template, stretch: alignItems === "normal" || alignItems === "stretch" };
+  return { template, stretch: alignItems === "normal" || alignItems === "stretch", fixed };
 }

@@ -71,8 +71,10 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     // template may still place them: app lays them out with MarkswiftTracks, fidelity keeps the
     // measured placement and reports the note at emission (`containerExpr`).
     const admitted = admit(children);
-    if (admitted)
-      return { ...measured, template: { ...admitted.template, stretch: admitted.stretch, fidelityNote: message } };
+    if (admitted) {
+      const { template, stretch, fixed } = admitted;
+      return { ...measured, template: { ...template, stretch, fixed, fidelityNote: message } };
+    }
     addDiagnostic(base.diagnostics, "approximated", "display: grid", message);
     return measured;
   }
@@ -106,7 +108,10 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   // widths and reports the note at emission (`containerExpr`).
   const grid: GridNode = { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
   const admitted = note ? admit(children) : undefined;
-  if (admitted) return { ...grid, template: { ...admitted.template, stretch: admitted.stretch, fidelityNote: note! } };
+  if (admitted) {
+    const { template, stretch, fixed } = admitted;
+    return { ...grid, template: { ...template, stretch, fixed, fidelityNote: note! } };
+  }
   if (note) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", note);
   return grid;
 }

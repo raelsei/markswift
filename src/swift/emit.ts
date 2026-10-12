@@ -27,11 +27,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     // A measured layout proposes each child its captured box, which already holds CSS's minimum.
     // App mode: MarkswiftTracks proposes each cell its column width and, with stretch, its row
     // height; without stretch it proposes no height, so a filling cell takes its content height
-    // (its captured height, measured or not, is dropped either way).
-    const tracks = opts.mode === "app" && n.kind === "grid" && n.template !== undefined;
+    // (its captured height, measured or not, is dropped either way). px-sized cells keep their frames.
+    const tracks = opts.mode === "app" && n.kind === "grid" ? n.template : undefined;
     if ((!n.measured || tracks) && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
       for (const c of n.children) contentMinWidth.add(c);
-    if (tracks) for (const c of n.children) allocated.set(c, "both");
+    if (tracks) for (const [i, c] of n.children.entries()) if (!tracks.fixed.includes(i)) allocated.set(c, "both");
   });
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);

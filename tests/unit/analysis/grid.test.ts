@@ -315,6 +315,7 @@ test("an fr template the solver reproduces is admitted; children keep their capt
       { kind: "fr", fr: 2 },
     ],
     stretch: true,
+    fixed: [],
     fidelityNote: expect.stringContaining("fixed column widths") as unknown as string,
   });
   expect(n.diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
@@ -402,6 +403,14 @@ test.each<[string, LayoutDoc]>([
     "an item with a px height",
     authored("1fr 2fr", FR_1_2, (d) => void (d.root.children[0]!.preferredSize = { width: "auto", height: "40px" })),
   ],
+  [
+    "an item with a px width but a content height",
+    authored(
+      "1fr 2fr",
+      FR_1_2,
+      (d) => void (d.root.children[0]!.preferredSize = { width: "112.67px", height: "auto" }),
+    ),
+  ],
   ["align-items: center", authored("1fr 2fr", FR_1_2, (d) => void (d.root.styles["align-items"] = "center"))],
   ["a percentage track", authored("50% 1fr", FR_1_2)],
   [
@@ -467,6 +476,26 @@ test("align-items: start cells shorter than their row are admitted; fidelity kee
   const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
   expect(fidelity.code).toBe(reference.code);
   expect(fidelity.diagnostics).toEqual(reference.diagnostics);
+});
+
+test("a px-sized icon keeps its frame in an auto column (CSS does not stretch it)", () => {
+  const input = authored(
+    "auto 1fr",
+    [
+      [0, 2, 16, 16],
+      [26, 0, 322, 40],
+    ],
+    (d) => {
+      d.root.styles["grid-template-rows"] = "40px";
+      d.root.styles["align-items"] = "start";
+      d.root.children[0]!.styles["margin-top"] = "2px";
+      d.root.children[0]!.preferredSize = { width: "16px", height: "16px" };
+    },
+  );
+  expect(grid(input).template).toMatchObject({ tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }], fixed: [0] });
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  expect(app).toContain("MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {");
+  expect(app).toContain(".frame(width: 16.0, height: 16.0");
 });
 
 test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical to the unadmitted grid", () => {
