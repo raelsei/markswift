@@ -19,5 +19,188 @@
     "tw-form",
     "tw-settings"
   ],
-  "known": []
+  "known": [
+    {
+      "case": "shadcn-button",
+      "check": "audit:dynamicType",
+      "match": "VARIANTS",
+      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-button",
+      "check": "audit:dynamicType",
+      "match": "SIZES",
+      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-button",
+      "check": "audit:dynamicType",
+      "match": "ICON + STATE",
+      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-native-select",
+      "check": "audit:dynamicType",
+      "match": "SIZES",
+      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-progress",
+      "check": "audit:dynamicType",
+      "match": "VALUES",
+      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-checkbox",
+      "check": "audit:textClipped",
+      "match": "Email me about deploys",
+      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-radio-group",
+      "check": "audit:textClipped",
+      "match": "Custom (contact sales)",
+      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-input",
+      "check": "audit:textClipped",
+      "match": "Email",
+      "reason": "audit reports the field's label/value text clipped at every content size: the TextField keeps the measured 32 pt height (h-8)",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-native-select",
+      "check": "audit:textClipped",
+      "match": "Small",
+      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-native-select",
+      "check": "audit:textClipped",
+      "match": "Default",
+      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-native-select",
+      "check": "audit:textClipped",
+      "match": "Disabled",
+      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "tw-form",
+      "check": "audit:textClipped",
+      "match": "Preview deployments",
+      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "tw-settings",
+      "check": "audit:sufficientElementDescription",
+      "match": "ada@example.com",
+      "reason": "the account e-mail is a plain Text whose label is the address itself; the audit wants a human-readable description (the design gives none)",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-checkbox",
+      "check": "interaction",
+      "match": "switch:Email me about deploys",
+      "reason": "ARIA role=checkbox <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-checkbox",
+      "check": "interaction",
+      "match": "switch:Unchecked",
+      "reason": "ARIA role=checkbox <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-checkbox",
+      "check": "interaction",
+      "match": "switch:Indeterminate",
+      "reason": "ARIA role=checkbox <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-checkbox",
+      "check": "interaction",
+      "match": "switch:Invalid",
+      "reason": "ARIA role=checkbox <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-switch",
+      "check": "interaction",
+      "match": "switch:Push notifications",
+      "reason": "ARIA role=switch <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-switch",
+      "check": "interaction",
+      "match": "switch:Weekly digest",
+      "reason": "ARIA role=switch <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-switch",
+      "check": "interaction",
+      "match": "switch:Invalid",
+      "reason": "ARIA role=switch <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-radio-group",
+      "check": "interaction",
+      "match": "switch:Monthly",
+      "reason": "ARIA role=radio <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-radio-group",
+      "check": "interaction",
+      "match": "switch:Yearly",
+      "reason": "ARIA role=radio <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-radio-group",
+      "check": "interaction",
+      "match": "switch:Left",
+      "reason": "ARIA role=radio <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-radio-group",
+      "check": "interaction",
+      "match": "switch:Right",
+      "reason": "ARIA role=radio <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-field",
+      "check": "interaction",
+      "match": "switch:",
+      "reason": "ARIA role=switch <button> (Radix) is emitted as a stateless Button + on<Name> action (plan 027): aria-checked is design-time state and the host app owns the toggle, so the tap reaches the action but the exposed value does not flip; this switch (#f-auto) also has no accessible name in the design (its 'Auto-renew' caption is a div, not a <label>), so the match is the empty label",
+      "owner": "post-1.0"
+    },
+    {
+      "case": "shadcn-tabs",
+      "check": "snapshot",
+      "match": "StaticText:the line variant draws an underline instead of a pill.",
+      "reason": "role=tabpanel aria-labelledby lands on the panel's only Text: .accessibilityLabel(\"All\") replaces the paragraph, so VoiceOver reads the tab name instead of the text (aria-labelledby resolution, plan 028 area)",
+      "owner": "post-1.0"
+    }
+  ]
 }

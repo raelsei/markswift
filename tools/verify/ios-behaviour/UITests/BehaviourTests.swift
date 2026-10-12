@@ -6,6 +6,8 @@ final class BehaviourTests: XCTestCase {
         struct Picker: Decodable { let current: String; let next: String }
         let view: String
         let pickers: [Picker]
+        /// Every picker's options: a menu picker is a button whose value is its selection, never tapped as a plain button.
+        let pickerValues: [String]
         let actions: [String]
     }
 
@@ -111,44 +113,56 @@ private func rootHeight(_ app: XCUIApplication) -> Double {
     return root.exists ? Double(root.frame.height) : -1
 }
 
+/// Interactions inside `markswift.root` (never the keyboard or system chrome). Disabled elements are skipped: the design
+/// disables them, and typing into one is a fatal XCUITest failure. Fields come last, in a fresh launch after the log is
+/// read: their keyboard cannot cover the buttons, and a sheet a button presented (a file importer) cannot cover them.
 @MainActor
 private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [String: Any] {
+    let root = app.otherElements["markswift.root"].firstMatch
     var switches: [[String: String]] = []
-    for element in app.switches.allElementsBoundByIndex where element.isHittable {
+    for element in root.switches.allElementsBoundByIndex where element.isHittable && element.isEnabled {
         let before = valueText(element.value)
         element.tap()
         switches.append(["label": element.label, "before": before, "after": valueText(element.value)])
     }
-    var fields: [[String: String]] = []
-    for query in [app.textFields, app.secureTextFields, app.textViews] {
-        for element in query.allElementsBoundByIndex where element.isHittable {
-            element.tap()
-            element.typeText("mk")
-            fields.append(["type": typeName(element.elementType), "label": element.label, "value": valueText(element.value)])
-        }
-    }
     var pickers: [[String: Any]] = []
     for picker in item.pickers {
-        let current = app.buttons[picker.current].firstMatch
+        let current = root.buttons.matching(NSPredicate(format: "label == %@ OR value == %@", picker.current, picker.current)).firstMatch
         var reached = false
-        if current.exists && current.isHittable {
+        if current.exists && current.isHittable && current.isEnabled {
             current.tap()
             let next = app.buttons[picker.next].firstMatch
-            if next.exists {
+            if next.waitForExistence(timeout: 2) {
                 next.tap()
-                reached = app.buttons[picker.next].exists
+                reached = root.buttons.matching(NSPredicate(format: "label == %@ OR value == %@", picker.next, picker.next)).firstMatch
+                    .waitForExistence(timeout: 2)
             }
         }
         pickers.append(["current": picker.current, "next": picker.next, "reached": reached])
     }
-    let skip = Set(item.pickers.flatMap { [$0.current, $0.next] })
+    let skip = Set(item.pickers.flatMap { [$0.current, $0.next] } + item.pickerValues)
     var tapped: [String] = []
-    for index in 0..<app.buttons.count {
-        let button = app.buttons.element(boundBy: index)
-        guard button.exists, button.isHittable, !skip.contains(button.label), button.identifier != "markswift.log" else { continue }
-        tapped.append(button.label)
-        button.tap()
+    for query in [root.buttons, root.links] {
+        for index in 0..<query.count {
+            let element = query.element(boundBy: index)
+            guard element.exists, element.isHittable, element.isEnabled, !skip.contains(element.label), !skip.contains(valueText(element.value)) else { continue }
+            tapped.append(element.label)
+            element.tap()
+        }
     }
     let log = app.staticTexts["markswift.log"].firstMatch
-    return ["switches": switches, "fields": fields, "pickers": pickers, "tapped": tapped, "log": log.exists ? log.label : ""]
+    let hits = log.exists ? log.label : ""
+    app.launch()
+    var fields: [[String: String]] = []
+    for query in [root.textFields, root.secureTextFields, root.textViews] {
+        for element in query.allElementsBoundByIndex where element.isHittable && element.isEnabled {
+            element.tap()
+            let focused = NSPredicate(format: "hasKeyboardFocus == true")
+            if XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: focused, object: element)], timeout: 2) == .completed {
+                element.typeText("mk")
+            }
+            fields.append(["type": typeName(element.elementType), "label": element.label, "value": valueText(element.value)])
+        }
+    }
+    return ["switches": switches, "fields": fields, "pickers": pickers, "tapped": tapped, "log": hits]
 }

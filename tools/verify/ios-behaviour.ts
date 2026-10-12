@@ -11,6 +11,7 @@ import { parseArgs } from "node:util";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { convert } from "../../src/index.ts";
 import { walk } from "../../src/model/semantic.ts";
+import { controlMembers } from "../../src/swift/control-state.ts";
 import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
 import { ensureSimulator } from "./native.ts";
 import { command } from "./process.ts";
@@ -42,10 +43,10 @@ interface Prepared {
   ax: AxNamed[];
   chromeHeight235: number;
   pickers: Array<{ current: string; next: string }>;
-  /** Normalised option names of every picker: a closed picker exposes only its selection. */
-  options: Record<string, true>;
-  /** The screen's own action members in source order (= its `init` order). */
-  actions: Array<{ name: string; takesArgs: boolean }>;
+  /** Option names of every picker: a closed picker exposes only its selection, and a menu picker's value is one of these. */
+  pickerValues: string[];
+  /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
+  actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
   fonts: boolean;
 }
 interface El {
@@ -115,14 +116,15 @@ const FAILING_AUDITS: Record<string, true> = {
 /** iOS joins a combined element's parts with ", "; Chrome with a space. */
 const flat = (s: string) => normalizeName(s.replace(/,/g, " "));
 
+/** The `markswift.root` element and its descendants, in document order (scroll bars and the log are outside it). */
 function elements(tree: El): El[] {
   const out: El[] = [];
-  const visit = (e: El) => {
-    if (e.identifier === "markswift.log") return;
-    out.push(e);
-    e.children.forEach(visit);
+  const visit = (e: El, inside: boolean) => {
+    const now = inside || e.identifier === "markswift.root";
+    if (now) out.push(e);
+    for (const c of e.children) visit(c, now);
   };
-  visit(tree);
+  visit(tree, false);
   return out;
 }
 
@@ -165,18 +167,29 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   );
   const screen = inferScreen(result.layout, id);
   const pickers: Prepared["pickers"] = [];
-  const options: Prepared["options"] = {};
+  const pickerValues: string[] = [];
   walk(screen.root, (n) => {
     if (n.kind !== "control" || n.control !== "picker") return;
-    for (const o of n.options ?? []) options[normalizeName(o)] = true;
+    pickerValues.push(...(n.options ?? []));
     const current = n.value ?? n.options?.[0];
     const next = n.options?.find((o) => o !== current);
     if (current && next) pickers.push({ current, next });
   });
   const code = result.files[`${view}.swift`] ?? "";
+  // Callbacks only disabled elements call cannot fire: `controlMembers` is the emitter's own key → member naming.
+  const { actionOf } = controlMembers(screen.root);
+  const live: Record<string, true> = {};
+  walk(screen.root, (n) => {
+    if ((n.kind === "control" && n.disabled) || n.a11y?.disabled) return;
+    for (const a of [n.action, ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : [])]) {
+      const name = a && actionOf.get(a.key);
+      if (name) live[name] = true;
+    }
+  });
   const actions = [...code.matchAll(/^ {4}(?:public )?var (on[A-Z]\w*): (\([^)]*\)) -> Void/gm)].map((m) => ({
     name: m[1]!,
     takesArgs: m[2] !== "()",
+    live: !!live[m[1]!],
   }));
   const files: Record<string, Uint8Array> = {};
   for (const [name, source] of Object.entries(result.files))
@@ -189,7 +202,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       ax,
       chromeHeight235: scaled.layout.size.h,
       pickers,
-      options,
+      pickerValues,
       actions,
       fonts: `${view}+Fonts.swift` in result.files,
     },
@@ -238,8 +251,9 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         .map((e) => e.label)
         .join(" "),
     );
-    for (const { role, name } of item.ax) {
-      if (role === "option" && item.options[name]) continue; // a closed picker shows only its selection; covered by interaction
+    for (const { role, name: chromeName } of item.ax) {
+      if (role === "option" && item.pickerValues.some((o) => normalizeName(o) === chromeName)) continue; // covered by interaction
+      const name = flat(chromeName);
       const types = SNAPSHOT_TYPES[role];
       const found = types
         ? all.some(
@@ -248,7 +262,8 @@ function judge(item: Prepared, log: CaseLog | undefined) {
               (flat(e.label).includes(name) || (FIELD_TYPES[e.type] && flat(e.value).includes(name))),
           )
         : text.includes(name);
-      if (!found) fail("snapshot", `${role}:${name}`, `no ${types?.join("/") ?? "text"} element exposes "${name}"`);
+      if (!found)
+        fail("snapshot", `${role}:${chromeName}`, `no ${types?.join("/") ?? "text"} element exposes "${chromeName}"`);
     }
     const ix = large.interactions;
     for (const s of ix.switches)
@@ -259,8 +274,8 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     for (const p of ix.pickers)
       if (!p.reached) fail("interaction", `picker:${p.next}`, `could not select "${p.next}" from "${p.current}"`);
     const hits = ix.log.split(",");
-    for (const { name } of item.actions)
-      if (!hits.includes(name)) fail("interaction", `action:${name}`, "never called");
+    for (const { name, live } of item.actions)
+      if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
   }
   for (const [size, launch] of [
     ["large", large],
@@ -289,24 +304,27 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       const seen: Record<string, number> = {};
       const out: Record<string, El> = {};
       for (const e of elements(tree)) {
-        if (!e.label || !e.frame[2] || !e.frame[3]) continue;
+        // System scroll indicators (a TextEditor's) sit on the scroll view's trailing edge, not in the design's layout.
+        if (!e.label || !e.frame[2] || !e.frame[3] || /scroll bar/i.test(e.label)) continue;
         const key = `${e.type}:${e.label}`;
         seen[key] = (seen[key] ?? -1) + 1;
         out[`${key}#${seen[key]}`] = e;
       }
       return out;
     };
-    const root = (tree: El) => elements(tree).find((e) => e.identifier === "markswift.root")?.frame;
-    const R = root(large.tree);
-    const RR = root(rtl.tree);
+    const R = elements(large.tree)[0]?.frame;
+    const RR = elements(rtl.tree)[0]?.frame;
     if (!R || !RR) errors.push(`${item.id}: markswift.root missing from the rtl comparison`);
     else {
       const ltr = keyed(large.tree);
       for (const [key, r] of Object.entries(keyed(rtl.tree))) {
         const l = ltr[key];
         if (!l) continue;
-        const mirrored = R[0] + R[2] - (l.frame[0] + l.frame[2]);
-        if (Math.abs(r.frame[0] - RR[0] - mirrored) > 1 || Math.abs(r.frame[1] - l.frame[1]) > 1)
+        // Mirrored: the LTR leading edge's inset becomes the RTL trailing edge's, or (equal widths) the trailing one the leading
+        // one's. Either suffices: text shaping can change a label's width by a few points between directions.
+        const startMirrors = Math.abs(RR[0] + RR[2] - (r.frame[0] + r.frame[2]) - (l.frame[0] - R[0])) <= 1;
+        const endMirrors = Math.abs(r.frame[0] - RR[0] - (R[0] + R[2] - (l.frame[0] + l.frame[2]))) <= 1;
+        if (!(startMirrors || endMirrors) || Math.abs(r.frame[1] - l.frame[1]) > 1)
           fail("rtl", key.replace(/#\d+$/, ""), `ltr ${l.frame.join(",")} → rtl ${r.frame.join(",")}`);
       }
     }
@@ -345,7 +363,12 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, actions }) => ({ view, pickers, actions: actions.map((a) => a.name) })),
+      prepared.map(({ view, pickers, pickerValues, actions }) => ({
+        view,
+        pickers,
+        pickerValues,
+        actions: actions.map((a) => a.name),
+      })),
     ),
   );
 
@@ -362,11 +385,13 @@ async function main() {
   }
 
   const sim = await ensureSimulator();
-  process.env.TEST_RUNNER_MARKSWIFT_BEHAVIOUR_DIR = out;
   const runErrors: string[] = [];
   try {
+    // xcodebuild hands `TEST_RUNNER_`-prefixed variables to the test process without the prefix.
     await command(
       [
+        "env",
+        `TEST_RUNNER_MARKSWIFT_BEHAVIOUR_DIR=${out}`,
         ...xcode,
         "test-without-building",
         "-destination",
