@@ -16,6 +16,9 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode: repeated sibling elements are emitted once as a nested subview and a static data array iterated with `ForEach` (pixel-identical; rows with controls bind through `ForEach($rows)`; per-row buttons collapse into one `(Row) -> Void` action).
 - Component interface: every screen has an explicit `init` with design defaults (data arrays, `data-markswift-field` texts and controls, then actions); per-row actions `(Row) -> Void`; rows with controls are screen `@State` seeded via `init` and `@Binding` in the subview; one `#Preview` per extracted subview. Names come from the markup (`data-markswift-component`, `id`, `data-slot`, `aria-label`, non-utility class, nearest heading) with `data-markswift-component`/`data-markswift-field` overrides. `CompileOptions.visibility: "public"` emits public views, inits, row structs and subviews.
 - Reflow gate: `bun run pilot --reflow` renders 390-compiled code at 320 and 768 against fresh Chrome; `reflowMaxLoss` fails app-mode reflow losses on fixtures tagged `markswift-reflow: native`.
+- `markswift build [markswift.json] [--force]` captures every component of a config in one browser session (4 pages at a time) and writes ONE local Swift package (swift-tools 6.2, iOS 18): public views, one module-level `public enum Palette` (one name per light/dark value pair across all components), shared `MarkswiftShapes.swift`, one `BundledFonts` and font copy, one runtime; regenerated through `.markswift.json` like `convert --update`. Library API: `buildLibrary(options)` and the browser-free `compileLayouts(components, { library })`.
+- `--palette map.json` (`palette` option of `convert`, `buildLibrary`, `compileLayout`, `compileLayouts` and `markswift.json`) maps captured colour tokens, keyed by CSS variable or hex, to the app's own Swift colours; views keep referencing `Palette.x`; unmapped tokens and unused keys are `palette` warnings.
+- App-mode grids keep their authored tracks (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) via `MarkswiftTracks`; percentage widths keep their fraction via `MarkswiftFraction`.
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
@@ -32,6 +35,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 
 ### Fixed
 - An unstyled `<button>`, input button or text field paints Chrome's control theme (1px grey edge, 2px corners) instead of its computed UA `2px outset`/`2px inset` border; an author background, border, radius or `appearance: none` keeps the CSS paint.
+- Generated code also compiles in targets without MainActor default isolation (`MarkswiftMarkToggleStyle` and `MarkswiftDisclosureStyle` used the main-actor `.plain` button style from a `nonisolated` style).
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
 - `margin: 0 auto` / `margin-left: auto` on fixed- or content-width blocks centres / right-aligns them.
 - `filter: brightness()` multiplies like CSS (`.contrast(x).brightness((x − 1)/2)`).

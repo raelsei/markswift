@@ -4,7 +4,7 @@ import type { LayoutDoc, Theme } from "../model/layout.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 export type { HtmlSource } from "../input/types.ts";
 
-export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
+export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "palette"> {
   /** Already compiled CSS. Utility and CSS Modules selectors work exactly like normal CSS. */
   css?: string;
   root?: string;

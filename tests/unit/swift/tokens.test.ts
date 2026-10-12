@@ -4,7 +4,15 @@
  * same design produce the same file.
  */
 import { describe, expect, test } from "bun:test";
-import { extractTokens, emitDesignTokens, camelize, screenBase, screenTokens } from "../../../src/swift/tokens.ts";
+import {
+  extractTokens,
+  emitDesignTokens,
+  camelize,
+  paletteWarnings,
+  screenBase,
+  screenTokens,
+  tokenHex,
+} from "../../../src/swift/tokens.ts";
 import { colorExpr } from "../../../src/swift/format.ts";
 import { SWIFT_RUNTIME } from "../../../src/swift/runtime.ts";
 import type { ColorCtx } from "../../../src/swift/context.ts";
@@ -12,12 +20,55 @@ import { emitSwift } from "../../../src/swift/emit.ts";
 import type { Color } from "../../../src/model/values.ts";
 import type { Screen, SemNode, StackNode, Style, TextRun } from "../../../src/model/semantic.ts";
 import { classColorHints } from "../../../src/analysis/class-hints.ts";
+import { GENERATED_BY } from "../../../src/model/version.ts";
 
 const rgb = (r: number, g: number, b: number, a = 1): Color => ({ r, g, b, a });
 
 const WHITE = rgb(1, 1, 1);
 const NEAR_BLACK = rgb(0.04, 0.06, 0.08);
 const INDIGO = rgb(0.49, 0.36, 0.84);
+
+/** Plan 034 Step 1: `emitDesignTokens` output before the palette map existed (the version line follows the release). */
+const PINNED_NESTED = `// ${GENERATED_BY} — colour tokens paired from the light and dark captures of one page.
+//
+// The generated view references these names instead of inline Color.markswift(…) literals.
+// An adaptive token is Color.markswift(light:dark:) and follows the colour scheme; a static token
+// is the same colour in both themes.
+//
+// 3 tokens: 2 adaptive (light/dark pairs), 1 static.
+// 4 colour slots carry them; 0 single-use colours identical in both themes stay inline.
+import SwiftUI
+
+extension V {
+    enum Palette {
+        /// canvas · 1 use
+        static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))
+        /// fill · 1 use · --surface-raised
+        static let surfaceRaised = Color.markswift(light: .markswift(1.0, 1.0, 1.0), dark: .markswift(0.04, 0.06, 0.08))
+        /// fill · 2 uses
+        static let fillIndigo = Color.markswift(0.49, 0.36, 0.84)
+    }
+}
+`;
+const PINNED_MODULE = `// ${GENERATED_BY} — colour tokens shared by every view of this library.
+//
+// The generated view references these names instead of inline Color.markswift(…) literals.
+// An adaptive token is Color.markswift(light:dark:) and follows the colour scheme; a static token
+// is the same colour in both themes.
+//
+// 3 tokens: 2 adaptive (light/dark pairs), 1 static.
+// 4 colour slots carry them; 0 single-use colours identical in both themes stay inline.
+import SwiftUI
+
+public enum Palette {
+    /// canvas · 1 use
+    public static let canvas = Color.markswift(light: .markswift(0.96, 0.96, 0.98), dark: .markswift(0.04, 0.05, 0.07))
+    /// fill · 1 use · --surface-raised
+    public static let surfaceRaised = Color.markswift(light: .markswift(1.0, 1.0, 1.0), dark: .markswift(0.04, 0.06, 0.08))
+    /// fill · 2 uses
+    public static let fillIndigo = Color.markswift(0.49, 0.36, 0.84)
+}
+`;
 
 function style(over: Partial<Style> = {}): Style {
   return { fills: [], shadows: [], ...over };
@@ -196,6 +247,87 @@ describe("emitDesignTokens", () => {
     expect(swift).toMatch(/static let fill\w+ = Color\.markswift\(0\.49, 0\.36, 0\.84\)\n/);
     expect(SWIFT_RUNTIME).toContain("static func markswift(light: Color, dark: Color)");
     expect(swift).not.toContain("extension Color");
+  });
+
+  test("without a palette map the file is byte-identical to the pre-map output", () => {
+    const [light, dark] = pair();
+    (light!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    (dark!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    const set = extractTokens([light!, dark!]);
+    expect(emitDesignTokens(set, "V", { adaptive: true })).toBe(PINNED_NESTED);
+    expect(emitDesignTokens(set, undefined, { adaptive: true, visibility: "public" })).toBe(PINNED_MODULE);
+  });
+});
+
+describe("palette map", () => {
+  /** `pair()` with the card hinted `--surface-raised`: tokens canvas, surfaceRaised (semantic), fillIndigo (static). */
+  function hinted() {
+    const [light, dark] = pair();
+    (light!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    (dark!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
+    return extractTokens([light!, dark!]);
+  }
+  const CARD = `${tokenHex(WHITE)}/${tokenHex(NEAR_BLACK)}`;
+
+  test("tokenHex rounds each channel and adds alpha only when not opaque", () => {
+    expect(tokenHex({ r: 1, g: 0, b: 0, a: 0.5 })).toBe("#ff000080");
+    expect(tokenHex({ r: 1, g: 0, b: 0, a: 1 })).toBe("#ff0000");
+    expect(tokenHex(NEAR_BLACK)).toBe("#0a0f14");
+    expect(tokenHex({ r: 1.2, g: -0.1, b: 0.5, a: 1 })).toBe("#ff0080");
+  });
+
+  test("a CSS variable key replaces the token's value and the doc line keeps the captured colours", () => {
+    const swift = emitDesignTokens(hinted(), "V", {
+      adaptive: true,
+      palette: { "--surface-raised": "Color.accentColor" },
+    });
+    expect(swift).toContain(
+      `        /// fill · 1 use · --surface-raised · app colour from palette key --surface-raised; captured ${tokenHex(WHITE)} / ${tokenHex(NEAR_BLACK)}\n        static let surfaceRaised = Color.accentColor\n`,
+    );
+    expect(swift).toContain("// Palette map: 1 of 3 tokens use app colours; the others keep the captured values.");
+    expect(swift).toContain("static let fillIndigo = Color.markswift(0.49, 0.36, 0.84)");
+  });
+
+  test("hex keys: a static token by its colour, a semantic one only by its light/dark pair", () => {
+    const set = extractTokens(pair());
+    const swift = emitDesignTokens(set, undefined, {
+      adaptive: true,
+      visibility: "public",
+      palette: { [tokenHex(INDIGO).toUpperCase()]: 'Color("Brand")', [CARD]: 'Color("Card")' },
+    });
+    expect(swift).toMatch(/\n    public static let fill\w+ = Color\("Brand"\)\n/);
+    expect(swift).toMatch(/\n    public static let fill\w+ = Color\("Card"\)\n/);
+    const lightOnly = emitDesignTokens(set, "V", { adaptive: true, palette: { [tokenHex(WHITE)]: 'Color("Card")' } });
+    expect(lightOnly).not.toContain('Color("Card")');
+  });
+
+  test("the CSS variable wins over the hex key", () => {
+    const swift = emitDesignTokens(hinted(), "V", {
+      adaptive: true,
+      palette: { [CARD]: 'Color("Hex")', "--surface-raised": 'Color("Var")' },
+    });
+    expect(swift).toContain('static let surfaceRaised = Color("Var")');
+    expect(swift).not.toContain('Color("Hex")');
+  });
+
+  test("warnings list unmapped tokens with the key they could use and keys that matched nothing", () => {
+    const set = hinted();
+    const warnings = paletteWarnings(set, { "--surface-raised": "Color.accentColor", "--nope": "Color.red" });
+    const canvas = set.tokens.find((t) => t.role === "canvas")!;
+    expect(warnings).toEqual([
+      {
+        source: "palette",
+        message: `2 token(s) have no entry in the palette map and keep their captured colour: canvas (${tokenHex(canvas.light)}/${tokenHex(canvas.dark)}), fillIndigo (${tokenHex(INDIGO)})`,
+      },
+      { source: "palette", message: "1 palette map entry matched no token: --nope" },
+    ]);
+    const complete = Object.fromEntries(
+      set.tokens.map((t) => [
+        t.hint ? `--${t.hint}` : t.kind === "semantic" ? `${tokenHex(t.light)}/${tokenHex(t.dark)}` : tokenHex(t.light),
+        "Color.red",
+      ]),
+    );
+    expect(paletteWarnings(set, complete)).toEqual([]);
   });
 });
 

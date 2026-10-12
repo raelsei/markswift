@@ -20,12 +20,19 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
 
   // Collect container properties depth-first so the body reads top-down.
   const contentMinWidth = new Set<SemNode>();
+  const allocated = new Map<SemNode, "width" | "both">();
   visit(screen.root, (n) => {
     if (n.kind !== "stack" && n.kind !== "grid") return;
     props.push({ name: uniqueName(`v_${identifier(n.id) || "n" + props.length}`, seen), node: n });
     // A measured layout proposes each child its captured box, which already holds CSS's minimum.
-    if (!n.measured && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
+    // App mode: MarkswiftTracks proposes each cell its column width and, with stretch, its row
+    // height; without stretch it proposes no height, so a filling cell takes its content height
+    // (its captured height, measured or not, is dropped either way). px-sized cells keep their frames.
+    const tracks = opts.mode === "app" && n.kind === "grid" ? n.template : undefined;
+    if ((!n.measured || tracks) && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
       for (const c of n.children) contentMinWidth.add(c);
+    if (tracks)
+      for (const [i, c] of tracks.cells.entries()) if (!tracks.fixed.includes(i)) allocated.set(n.children[c]!, "both");
   });
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);
@@ -36,6 +43,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     fontMetrics: opts.fontMetrics ?? {},
     nameOf,
     contentMinWidth,
+    allocated,
     shapes,
     images,
     screen,
@@ -49,9 +57,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   };
   // App mode: repeated siblings become one subview fed by a `ForEach` (`components.ts`).
   const extraction =
-    opts.mode === "app" && opts.extract !== false
-      ? extractComponents(screen, ctx, viewName, opts.visibility)
-      : undefined;
+    opts.mode === "app" && opts.extract !== false ? extractComponents(screen, ctx, viewName, opts) : undefined;
   const acc = access(opts.visibility);
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
@@ -108,7 +114,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     `#Preview("${title}") {`,
     ...indent(
       [
-        `${viewName}()`,
+        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}()`] : [`${viewName}()`]),
         `.frame(width: ${num(screen.size.w)}, height: ${num(screen.size.h)})`,
         `.background(Color.markswift(${colorArgs(theme === "dark" ? { r: 0.043, g: 0.055, b: 0.075, a: 1 } : { r: 0.957, g: 0.965, b: 0.98, a: 1 })}))`,
         `.preferredColorScheme(.${theme})`,
@@ -118,7 +124,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     "}",
   ];
   const lines = [
-    `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift convert --update\`; customise through the initializer or your own files. Source: ` +
+    `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift ${opts.regenerate === "build" ? "build" : "convert --update"}\`; customise through the initializer or your own files. Source: ` +
       comment(screen.source) +
       " (" +
       comment(screen.name) +

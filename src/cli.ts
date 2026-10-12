@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { EditedFilesError } from "./cli/manifest.ts";
-import { runConversion } from "./cli/run.ts";
+import { runBuild, runConversion } from "./cli/run.ts";
 import { VERSION } from "./model/version.ts";
 
 async function main(): Promise<number> {
@@ -15,11 +15,13 @@ async function main(): Promise<number> {
       process.stdout.write(`${VERSION}\n`);
       return 0;
     }
-    await runConversion(command);
+    if (command.kind === "build") await runBuild(command);
+    else await runConversion(command);
     return 0;
   } catch (error) {
     if (error instanceof UsageError) {
-      process.stderr.write(`${error.message}\nRun markswift convert --help for usage.\n`);
+      const help = process.argv[2] === "build" ? "build" : "convert";
+      process.stderr.write(`${error.message}\nRun markswift ${help} --help for usage.\n`);
       return 2;
     }
     if (error instanceof EditedFilesError) {

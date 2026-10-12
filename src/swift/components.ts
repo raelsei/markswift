@@ -495,10 +495,10 @@ export function extractComponents(
   screen: Screen,
   ctx: EmitContext,
   viewName: string,
-  visibility?: EmitOptions["visibility"],
+  opts: Pick<EmitOptions, "visibility" | "registerFonts">,
 ): Extraction | undefined {
   if (ctx.mode !== "app") return undefined;
-  const acc = access(visibility);
+  const acc = access(opts.visibility);
   const templates = nodeTemplates(screen.root, ctx);
   const runs = findRuns(screen.root, templates);
   const tpl = (n: SemNode) => templates.get(n)!;
@@ -749,7 +749,9 @@ export function extractComponents(
       ...indent(
         [
           ...(t.binding ? [`@Previewable @State var ${n.row} = ${first}`] : []),
-          `${viewName}.${n.view}(${args.join(", ")})`,
+          // `@Previewable` items must open the preview block, so registration follows them.
+          ...(opts.registerFonts ? ["BundledFonts.register()"] : []),
+          `${opts.registerFonts ? "return " : ""}${viewName}.${n.view}(${args.join(", ")})`,
           `.frame(width: ${num(head.members[0]!.frame.w)})`,
         ],
         1,

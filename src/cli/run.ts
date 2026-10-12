@@ -1,11 +1,29 @@
 import { access, readFile } from "node:fs/promises";
 import { text } from "node:stream/consumers";
+import { buildLibrary } from "../api/build.ts";
 import { convert } from "../api/convert.ts";
 import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
-import type { ConversionCommand } from "./args.ts";
+import type { BuildCommand, ConversionCommand } from "./args.ts";
+import { loadBuildConfig, loadPalette } from "./config.ts";
 import { inlineRelativeUrls } from "./css.ts";
 import { ensureVacant, formatDiagnostics, formatWarning, updatable, updateBundle, writeBundle } from "./output.ts";
+
+/** `markswift build`: capture every component of the config and regenerate one Swift package in its `out`. */
+export async function runBuild(command: BuildCommand): Promise<void> {
+  const config = await loadBuildConfig(command.configPath);
+  // Refuse an unwritable `out` (no manifest, hand edits) before minutes of captures; `updateBundle` checks again.
+  await updatable(config.out, command.force);
+  const result = await buildLibrary(config.options);
+  const files = await updateBundle(result, config.out, { version: VERSION, force: command.force });
+  process.stdout.write(
+    `Wrote ${files.length} files for ${config.options.library} (${config.options.components.length} components) to ${config.out}\n`,
+  );
+  for (const warning of [...config.warnings, ...result.warnings])
+    process.stderr.write(`Warning: ${formatWarning(warning)}\n`);
+  for (const [component, report] of Object.entries(result.diagnostics))
+    for (const line of formatDiagnostics(report)) process.stderr.write(`Note [${component}] ${line}\n`);
+}
 
 export async function runConversion(command: ConversionCommand): Promise<void> {
   if (command.update) await updatable(command.outDir, command.force);
@@ -29,7 +47,8 @@ export async function runConversion(command: ConversionCommand): Promise<void> {
     for (const ref of inlined.missing)
       process.stderr.write(`Warning: --css reference not found next to ${command.cssPath}: ${ref}\n`);
   }
-  const result = await convert(source, { ...command.options, css });
+  const palette = command.palettePath === undefined ? undefined : await loadPalette(command.palettePath);
+  const result = await convert(source, { ...command.options, css, palette });
   const files = command.update
     ? await updateBundle(result, command.outDir, { version: VERSION, force: command.force })
     : await writeBundle(result, command.outDir, { version: VERSION });

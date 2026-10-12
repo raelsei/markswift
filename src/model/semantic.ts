@@ -50,13 +50,29 @@ export interface ConversionWarning {
   message: string;
 }
 
-export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
+export type Size =
+  | { kind: "fixed"; px: number }
+  | { kind: "fill" }
+  | { kind: "hug" }
+  /** CSS percentage width of the containing block; `px` is the captured width (fidelity keeps it). */
+  | { kind: "fraction"; fraction: number; px: number };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
 export interface MeasuredLayout {
   width: number;
   height: number;
   frames: Rect[];
+}
+
+/** One authored grid column track the runtime can size: px, fr, or content (`auto`). */
+export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number } | { kind: "auto" };
+/**
+ * An authored `grid-template-columns` that `MarkswiftTracks` reproduces. Either explicit `tracks`, or
+ * `autoRepeat` (`repeat(auto-fill|auto-fit, minmax(<min>px, 1fr))`, equal columns, count from the width).
+ */
+export interface GridTemplate {
+  tracks: GridTrack[];
+  autoRepeat?: { mode: "fill" | "fit"; min: number };
 }
 
 export type Axis = "v" | "h";
@@ -383,6 +399,19 @@ export interface GridNode extends SemBase {
   hSpacing: number;
   vSpacing: number;
   measured?: MeasuredLayout;
+  /**
+   * Admitted authored template: app mode emits MarkswiftTracks; fidelity keeps the captured geometry and reports
+   * `fidelityNote`. `cells`: the `children` index of each grid item in DOM (row-major) order; `margins`: each item's
+   * [top, bottom] margin, same order. `fixed`: positions in `cells` of items sized in px on both axes, which keep
+   * their frames (CSS does not stretch them).
+   */
+  template?: GridTemplate & {
+    stretch: boolean;
+    fidelityNote: string;
+    cells: number[];
+    margins: Array<[number, number]>;
+    fixed: number[];
+  };
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];

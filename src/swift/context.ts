@@ -31,6 +31,10 @@ export interface EmitOptions {
   extract?: boolean;
   /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
   visibility?: "internal" | "public";
+  /** Previews call `BundledFonts.register()` first: the library package bundles fonts (plan 033's `build`). */
+  registerFonts?: boolean;
+  /** Command the view header names for regeneration. Default `convert`. */
+  regenerate?: "convert" | "build";
 }
 
 /** Everything the recursive emitters need; built once per screen. */
@@ -46,6 +50,11 @@ export interface EmitContext extends ColorCtx {
    * may grow to it. Every other fill-width box takes its container's width; see `frameModifier`.
    */
   contentMinWidth: Set<SemNode>;
+  /**
+   * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells; MarkswiftFlexRow items in plan 037).
+   * "width": accept the proposed width; "both": also the proposed height (grid stretch).
+   */
+  allocated: Map<SemNode, "width" | "both">;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */

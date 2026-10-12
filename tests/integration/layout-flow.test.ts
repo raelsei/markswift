@@ -69,6 +69,7 @@ for (const width of [320, 390, 768]) {
           { kind: "fixed", px: 100 },
           { kind: "fixed", px: contentBox("unequal-grid").w - 110 },
         ]);
+        expect(unequal.template).toBeDefined();
         for (const id of ["hole-grid", "aligned-grid", "span-grid", "empty-grid", "areas-grid", "overlap-grid"])
           matchesCaptured(id);
         expect((node("hole-grid") as GridNode).columns).toBe(3);

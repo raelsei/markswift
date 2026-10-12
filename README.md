@@ -168,6 +168,26 @@ colour slots present in one theme only, or whose geometry differs by more than 0
 light values and are reported in one `warnings` entry. `light` or `dark` captures one theme.
 `compileLayout(light, { dark })` pairs saved captures without a browser.
 
+### Using your app's colours (--palette)
+
+`--palette map.json` (`palette` in `ConvertOptions`, `BuildOptions` and `markswift.json`) points generated `Palette`
+tokens at colours your app already has:
+
+```json
+{
+  "--primary": "Color.accentColor",
+  "#e2e8f0": "Color(\"Border\")",
+  "#ffffff/#0a0a0a": "Color(\"Card\")"
+}
+```
+
+A key is the design's CSS variable (`--primary`), a static token's hex colour (`#rrggbb` or `#rrggbbaa`), or an
+adaptive token's `#light/#dark` pair; the CSS variable wins over the hex. Values are one-line Swift `Color`
+expressions emitted verbatim (your app's typecheck validates them). Views keep referencing `Palette.x`; only the
+token's value changes, and its doc comment keeps the captured colour. Tokens without an entry and entries that matched
+no token are listed as `palette` warnings. Single-use colours stay inline and are not mapped. Mapped colours are not
+part of the visual verification.
+
 ## Adding the output to Xcode
 
 Add **all** generated `.swift` files to one target. For webfonts add `Fonts/` as resources and
@@ -179,6 +199,44 @@ Several conversions can share one target: every per-view declaration (palette, s
 fonts) is nested in the view's type and its files are prefixed with the view name. Add
 `MarkswiftRuntime.swift`, each `Fonts/` file and each `Images/` file once. When you upgrade
 Markswift, replace the runtime and re-convert older screens. A shared runtime package is post-alpha.
+
+## Building a component library (markswift build)
+
+`markswift build [markswift.json] [--force]` captures every component of a config in one browser session and writes
+ONE local Swift package. Paths are relative to the config file; `serve` (default: the config's directory) is served
+over `http://127.0.0.1` so relative URLs such as `../assets/geist.woff2` resolve inside it. `root`, `viewport`,
+`theme`, `darkClass`, `mode`, `css` and `waitFor` apply to every component; a component may override any of them.
+`source` is a file inside `serve` or an `http(s)` URL. Names must be Swift type names that SwiftUI does not already
+use (`ButtonView`, not `Button`).
+
+```json
+{
+  "library": "ShadcnKit",
+  "out": "ShadcnKit",
+  "serve": "fixtures",
+  "root": "[data-markswift-root]",
+  "theme": "adaptive",
+  "components": [
+    { "name": "AccordionView", "source": "fixtures/components/shadcn-accordion.html" },
+    { "name": "CardView", "source": "fixtures/components/shadcn-card.html", "theme": "light" }
+  ]
+}
+```
+
+The package (`Package.swift`, swift-tools 6.2, iOS 18 / macOS 15, Xcode 26) holds `Sources/<Library>/` with one
+public `<Component>.swift` per component, `MarkswiftPalette.swift` (one module-level `public enum Palette`: one name
+per light/dark colour pair across all components), `MarkswiftShapes.swift`, `MarkswiftFonts.swift` and `Fonts/`
+(each webfont once), `Images/`, and one `MarkswiftRuntime.swift` (reading resources from `Bundle.module`). Add it once
+with **File ▸ Add Package Dependencies ▸ Add Local…**, call `BundledFonts.register()` once at app launch (previews
+call it themselves), then `import ShadcnKit` and use `AccordionView()`. Libraries generated separately coexist in one
+app: each keeps its runtime internal.
+
+Regeneration works like `convert --update`: rerunning `markswift build` replaces only the files listed in
+`.markswift.json` and deletes listed files it no longer produces (a component removed from the config loses its
+view); a hand-edited generated file stops the build with exit 2 unless `--force`; your own files in the directory are
+never touched; an existing `out` without the manifest is refused. Customise through parameters and your own files,
+not by editing generated files. From code: `buildLibrary({ library, components, serveRoot })`, or
+`compileLayouts(components, { library })` for saved `LayoutDoc`s without Chrome.
 
 ## Supported subset (evidence)
 
