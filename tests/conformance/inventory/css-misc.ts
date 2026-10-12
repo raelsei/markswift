@@ -483,7 +483,7 @@ export default {
       ir: "—",
       via: "none",
       impl: "yes",
-      note: "Whitelisted. `auto`: native checkbox/radio/range ignore the author's background and border (dropped); `none`: the CSS box is painted and `<select>` loses its arrow.",
+      note: "Whitelisted. `auto`: native checkbox/radio/range ignore the author's background and border (dropped); an unstyled button or text field (no author background, border or radius; a text field also no `box-shadow`) paints Chrome's theme (1px edge, 2px corners) instead of its computed `2px outset`/`2px inset` border; `none`: the CSS box is painted and `<select>` loses its arrow.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/appearance",
     },
     {
