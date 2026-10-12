@@ -59,6 +59,17 @@ export interface MeasuredLayout {
   frames: Rect[];
 }
 
+/** One authored grid column track the runtime can size: px, fr, or content (`auto`). */
+export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number } | { kind: "auto" };
+/**
+ * An authored `grid-template-columns` that `MarkswiftTracks` reproduces. Either explicit `tracks`, or
+ * `autoRepeat` (`repeat(auto-fill|auto-fit, minmax(<min>px, 1fr))`, equal columns, count from the width).
+ */
+export interface GridTemplate {
+  tracks: GridTrack[];
+  autoRepeat?: { mode: "fill" | "fit"; min: number };
+}
+
 export type Axis = "v" | "h";
 
 /** Cross-axis alignment of children inside a stack. */
@@ -379,6 +390,8 @@ export interface GridNode extends SemBase {
   hSpacing: number;
   vSpacing: number;
   measured?: MeasuredLayout;
+  /** Admitted authored template: app mode emits MarkswiftTracks; fidelity keeps fixed widths and reports `fidelityNote`. */
+  template?: GridTemplate & { stretch: boolean; fidelityNote: string };
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];
