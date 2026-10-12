@@ -21,6 +21,7 @@ __pycache__/
 /out/
 /dist/
 /tests/conformance/out/
+/tools/verify/ios-behaviour/Generated/
 /playground/.cache/
 /playground/dist/
 /playground/dist-service/

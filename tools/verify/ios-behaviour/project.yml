@@ -1,0 +1,36 @@
+name: MarkswiftBehaviour
+options:
+  bundleIdPrefix: dev.markswift
+  deploymentTarget: { iOS: "18.0" }
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGNING_ALLOWED: "NO"
+    GENERATE_INFOPLIST_FILE: "YES"
+targets:
+  BehaviourHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: Host
+      - path: Generated
+        type: syncedFolder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.markswift.BehaviourHost
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+  BehaviourTests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies: [{ target: BehaviourHost }]
+    settings:
+      base:
+        TEST_TARGET_NAME: BehaviourHost
+        PRODUCT_BUNDLE_IDENTIFIER: dev.markswift.BehaviourTests
+schemes:
+  Behaviour:
+    build: { targets: { BehaviourHost: all, BehaviourTests: [test] } }
+    test: { targets: [BehaviourTests] }
