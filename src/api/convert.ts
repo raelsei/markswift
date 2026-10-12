@@ -3,7 +3,7 @@ import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
 import { BrowserCapture, type Capture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
-import { compileLayout } from "../compiler/index.ts";
+import { compileLayout, needsProbe } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
@@ -61,22 +61,35 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     deadline.throwIfAborted(); // the deadline fired mid-launch, before there was a browser to close
     const name = options.name ?? "ConvertedView";
     // :has is resolved by Chromium. A fragment and a full document use identical root rules.
-    const { primary: capture, dark } = await captureThemes(
-      renderer,
-      {
-        name,
-        url,
-        html,
-        label,
-        root: options.root ?? DEFAULT_ROOT,
-        theme,
-        css: options.css,
-        darkClass: options.darkClass,
-        waitFor: options.waitFor,
-        prepare: options.prepare,
-      },
-      timedOut,
-    );
+    const req = {
+      name,
+      url,
+      html,
+      label,
+      root: options.root ?? DEFAULT_ROOT,
+      theme,
+      css: options.css,
+      darkClass: options.darkClass,
+      waitFor: options.waitFor,
+      prepare: options.prepare,
+    };
+    const { primary: capture, dark } = await captureThemes(renderer, req, timedOut);
+    // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
+    // show another allocation, so its probe proves nothing and is not compiled.
+    const probe =
+      options.probe !== false && needsProbe(capture.layout)
+        ? (
+            await captureThemes(
+              renderer,
+              {
+                ...req,
+                theme: capture.layout.combo.theme,
+                viewport: { width: viewport.width > 320 ? 320 : 390, height: viewport.height },
+              },
+              timedOut,
+            )
+          ).primary.layout
+        : undefined;
     const sources = new Map([...capture.fontFiles, ...(dark?.fontFiles ?? [])].map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
       dark ? unionFaces([capture.layout.fonts, dark.layout.fonts]) : capture.layout.fonts,
@@ -91,6 +104,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       bundledFamilies: bundledFamilies(fonts),
       fontMetrics: metricsForFonts(fonts),
       dark: dark?.layout,
+      probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
       palette: options.palette,
     });
     const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
@@ -138,6 +152,7 @@ export async function captureThemes(
     darkClass?: string;
     waitFor?: string;
     prepare?: (page: Page) => Promise<void>;
+    viewport?: { width: number; height: number };
   },
   timedOut: Promise<never>,
 ): Promise<{ primary: Capture; dark?: Capture }> {
@@ -151,6 +166,7 @@ export async function captureThemes(
           html: req.html,
           root: req.root,
           waitFor: req.waitFor,
+          viewport: req.viewport,
           async prepare(page) {
             if (req.css) await page.addStyleTag({ content: req.css });
             if (scheme === "dark" && req.darkClass)

@@ -16,6 +16,11 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
   /** Class added to `<html>` for the dark capture, for class-based themes such as `.dark`. */
   darkClass?: string;
   viewport?: { width: number; height: number };
+  /**
+   * Default true: when the capture contains a grid or flex row that a runtime Layout would reflow, a second capture
+   * at 320px (390px when the viewport is ≤ 320px) must agree, or the layout stays pinned.
+   */
+  probe?: boolean;
   dpr?: number;
   /** Installed Playwright browser channel; defaults to chrome. */
   browserChannel?: string;
