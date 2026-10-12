@@ -10,15 +10,15 @@ const TEXT_CONTROLS: Record<string, true> = {
   textField: true,
   secureField: true,
   picker: true,
+  textEditor: true,
   datePicker: true,
 };
 export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const parts: string[] = [];
   // Mode difference — sizing. Fidelity keeps every measured fixed size. App: a width equal to
-  // the screen width is "fill" (the device decides), and a fixed height on an ordinary
-  // text-only stack or a text-bearing control is a floor (`minHeight`) so native text metrics
-  // can grow it without clipping.
-  // Measured and wrapping layouts own their geometry, so their fixed heights remain exact.
+  // the screen width is "fill" (the device decides), and a fixed height on a box that lays out
+  // text is a floor (`minHeight`) so native text metrics (Dynamic Type) can grow it without
+  // clipping — measured or authored alike: CSS would overflow or clip the text, an app must not.
   const app = ctx.mode === "app";
   // App: a runtime Layout (MarkswiftTracks, MarkswiftFlexRow) allocates this cell's width, and with grid stretch its height.
   const allocated = app ? ctx.allocated.get(n) : undefined;
@@ -31,25 +31,17 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       "width",
       `width ${+(fraction.fraction * 100).toFixed(4)}% pinned at ${fraction.px}px; it does not follow the container at other widths`,
     );
-  const w = allocated ? undefined : n.width.kind === "fixed" ? n.width.px : fraction && !app ? fraction.px : undefined;
+  // App: a box that hugs in CSS, pinned only against its filling children's greed, fits its native content instead.
+  const fit = app && n.width.kind === "fixed" && n.width.hug === true && !allocated;
+  const w =
+    allocated || fit ? undefined : n.width.kind === "fixed" ? n.width.px : fraction && !app ? fraction.px : undefined;
   // App: a disclosure grows when it opens, so its captured (closed or open) height is not kept.
   const h =
     n.height.kind === "fixed" && allocated !== "both" && !(app && n.kind === "control" && n.control === "disclosure")
       ? n.height.px
       : undefined;
   const screenWide = app && w !== undefined && Math.abs(w - ctx.screen.size.w) <= 0.5;
-  const floor =
-    app &&
-    h !== undefined &&
-    n.maxHeight === undefined &&
-    ((n.kind === "stack" &&
-      !n.measured &&
-      !n.wrap &&
-      n.children.length > 0 &&
-      n.children.every((c) => c.kind === "text")) ||
-      (n.kind === "control" && TEXT_CONTROLS[n.control] === true))
-      ? h
-      : undefined;
+  const floor = app && h !== undefined && n.maxHeight === undefined && laysOutText(n) ? h : undefined;
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
   const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined || (fraction !== undefined && app);
@@ -90,7 +82,16 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
   const hugH = !fixedH && n.height.kind === "hug" && n.maxHeight !== undefined;
   if (hugW || hugH) parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
+  if (fit) parts.push(".markswiftFitWidth()");
   return parts;
+}
+
+/** Text the node lays out in flow (overlays excluded): its height follows the text's native metrics. */
+function laysOutText(n: SemNode): boolean {
+  if (n.kind === "text") return true;
+  if (n.kind === "stack" || n.kind === "grid") return n.children.some(laysOutText);
+  if (n.kind === "control") return TEXT_CONTROLS[n.control] === true || n.content.some(laysOutText);
+  return false;
 }
 
 /** Where a node sits inside its fill frame: follows its own alignment semantics. */

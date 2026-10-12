@@ -277,6 +277,45 @@ extension View {
         self
         #endif
     }
+
+    /// App mode: an editor as tall as `text` laid out at its width and font (CSS `field-sizing: content`), so it grows
+    /// with its text and with Dynamic Type; `TextEditor` alone takes whatever height it is offered. A trailing newline
+    /// still opens an empty line, as it does in the editor.
+    func markswiftFitsText(_ text: String) -> some View {
+        Text(verbatim: text.isEmpty || text.hasSuffix("\n") ? text + " " : text)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hidden()
+            .overlay { self }
+    }
+
+    /// App mode: CSS `line-height` on a text field or editor whose text is `size` points, scaling like a font
+    /// `relativeTo: style`. The leading over the face's natural line (default: SF Pro, 2444 per 2048) spaces an editor's
+    /// lines; what Dynamic Type adds to it pads the text above and below, so the field grows like the browser's line box.
+    /// At the default size the captured box already holds the line (Chrome centres it in a shorter input, too).
+    func markswiftFieldLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
+                                  natural: CGFloat = 2444.0 / 2048) -> some View {
+        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, relativeTo: style))
+    }
+}
+
+struct MarkswiftFieldLineHeight: ViewModifier {
+    let factor: CGFloat
+    let natural: CGFloat
+    let base: CGFloat
+    @ScaledMetric private var size: CGFloat
+
+    init(factor: CGFloat, natural: CGFloat, base: CGFloat, relativeTo style: Font.TextStyle) {
+        self.factor = factor
+        self.natural = natural
+        self.base = base
+        _size = ScaledMetric(wrappedValue: base, relativeTo: style)
+    }
+
+    func body(content: Content) -> some View {
+        let leading = max(0, factor - natural)
+        content.lineSpacing(leading * size).padding(.vertical, max(0, leading * (size - base)) / 2)
+    }
 }
 
 /// Interaction states a render harness forces on every element at once (the browser reference forces the same).

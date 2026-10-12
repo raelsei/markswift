@@ -51,7 +51,11 @@ export interface ConversionWarning {
 }
 
 export type Size =
-  | { kind: "fixed"; px: number }
+  /**
+   * `hug`: CSS sizes the box to its content; the captured px only keeps a filling descendant from making it greedy
+   * (fidelity pins it, app mode fits it to its native content).
+   */
+  | { kind: "fixed"; px: number; hug?: true }
   | { kind: "fill" }
   | { kind: "hug" }
   /** CSS percentage width of the containing block; `px` is the captured width (fidelity keeps it). */

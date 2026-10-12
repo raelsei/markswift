@@ -196,15 +196,32 @@ test("a height cap clipping the first line keeps its top rather than its center"
   }
 });
 
-test("a measured fallback keeps its captured height in app mode instead of accepting extra space", () => {
+test("a measured fallback grows with its text in app mode but is never stretched", () => {
   const screen = inferScreen(capturedText({}), "constraints");
   if (screen.root.kind !== "stack") throw new Error("expected stack");
   screen.root.height = { kind: "fixed", px: 100 };
   screen.root.padding = [0, 0, 0, 0];
   screen.root.measured = { width: 200, height: 100, frames: [{ x: 0, y: 0, w: 200, h: 30 }] };
-  expect(emitSwift(screen, "ConstraintView", { mode: "app" }).view).toContain(
-    ".frame(height: 100.0, alignment: .topLeading)",
-  );
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  // MarkswiftMeasuredLayout sizes itself (captured height plus its children's growth), so a floor takes no extra space.
+  expect(app).toContain("], grows: true) {");
+  expect(app).toContain("minHeight: 100.0");
+  expect(app).not.toContain("maxHeight: .infinity");
+  const fidelity = emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view;
+  expect(fidelity).toContain(".frame(height: 100.0, alignment: .topLeading)");
+  expect(fidelity).not.toContain("grows:");
+});
+
+test("a box pinned only against its filling children fits its content in app mode", () => {
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  screen.root.children[0]!.width = { kind: "fixed", px: 123, hug: true };
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  expect(app).toContain(".markswiftFitWidth()");
+  expect(app).not.toContain("width: 123.0");
+  const fidelity = emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view;
+  expect(fidelity).toContain("width: 123.0");
+  expect(fidelity).not.toContain("markswiftFitWidth");
 });
 
 test("app-mode text controls treat a measured height as a floor", () => {
