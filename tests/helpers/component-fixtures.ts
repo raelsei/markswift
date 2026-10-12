@@ -1,4 +1,4 @@
-/** Inline sources for repeated-sibling extraction (plan 030): rows with controls, icons, a grid and radios. */
+/** Inline sources for repeated-sibling extraction (plan 030): rows with controls, icons, a grid and radios; annotated names (plan 031). */
 export const SETTINGS = `<form data-markswift-root class="f"><h3>Email</h3>
  ${["Marketing", "Security", "Social"].map((t, i) => `<div class="row"><div><label for="c${i}">${t}</label><p>About ${t.toLowerCase()}</p></div><input id="c${i}" type="checkbox" role="switch" ${i ? "checked" : ""}><button type="button">Edit</button></div>`).join("")}
  <button type="button" onclick="save()">Save</button></form>`;
@@ -13,3 +13,16 @@ export const GRID_RADIO = `<main data-markswift-root class="m"><div class="g">${
 export const GRID_RADIO_CSS = `body{margin:0} .m{width:320px;padding:12px;display:flex;flex-direction:column;gap:8px;font:14px system-ui;background:#fff;color:#111}
  .g{display:grid;grid-template-columns:1fr 1fr;gap:8px} .t{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid #ccc;border-radius:6px}
  .o{display:flex;align-items:center;gap:8px}`;
+export const TEAM = `<section data-markswift-root class="c"><h2 data-markswift-field="title">Team members</h2><ul class="l">${[
+  ["Ada", "Owner"],
+  ["Grace", "Editor"],
+  ["Alan", "Viewer"],
+]
+  .map(
+    ([n, r]) =>
+      `<li data-markswift-component="Member"><span data-markswift-field="name">${n}</span><span data-markswift-field="role">${r}</span><button type="button">Message</button></li>`,
+  )
+  .join("")}</ul></section>`;
+export const TEAM_CSS = `body{margin:0} .c{width:343px;padding:16px;font:15px system-ui;background:#fff;color:#111} .l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px} li{display:flex;align-items:center;gap:8px} li span:first-child{flex:1}`;
+export const PREFS = `<form data-markswift-root class="c">${["Marketing", "Security"].map((t, i) => `<div class="r" data-markswift-component="Preference"><label for="p${i}" data-markswift-field="title">${t}</label><input id="p${i}" type="checkbox" role="switch" data-markswift-field="isOn" ${i ? "checked" : ""}></div>`).join("")}<button type="button" onclick="save()">Save</button></form>`;
+export const PREFS_CSS = `body{margin:0} .c{width:343px;padding:16px;display:flex;flex-direction:column;gap:12px;font:15px system-ui;background:#fff;color:#111} .r{display:flex;align-items:center;justify-content:space-between;gap:12px}`;
