@@ -16,6 +16,7 @@ import { chromium } from "playwright-core";
 import { compare } from "../../tools/verify/compare.ts";
 import { forceStates } from "../../src/browser/states.ts";
 import { PRESSABLE_SELECTOR, TEXT_ENTRY_SELECTOR } from "../../src/model/interactive.ts";
+import { GRID_RADIO, GRID_RADIO_CSS, ICONS, ICONS_CSS, SETTINGS, SETTINGS_CSS } from "../helpers/component-fixtures.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
@@ -841,4 +842,61 @@ nativeTest(
     }
   },
   300000,
+);
+
+nativeTest(
+  "extraction is pixel-identical to the unrolled view",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-030-"));
+    const sources = [
+      { name: "List24", result: () => convert({ file: "tests/conformance/fixtures/components/shadcn-list-24.html" }) },
+      { name: "Settings", result: () => convertHtml(SETTINGS, { name: "Settings", css: SETTINGS_CSS }) },
+      { name: "Icons", result: () => convertHtml(ICONS, { name: "Icons", css: ICONS_CSS }) },
+      { name: "GridRadio", result: () => convertHtml(GRID_RADIO, { name: "GridRadio", css: GRID_RADIO_CSS }) },
+    ];
+    try {
+      for (const source of sources) {
+        const { name } = source;
+        const result = await source.result();
+        const dark = result.darkLayout!;
+        const on = compileLayout(result.layout, { name, dark });
+        const off = compileLayout(result.layout, { name, dark, extract: false });
+        // The experiment really exercised extraction.
+        expect(on.code).not.toBe(off.code);
+        expect(on.code).toContain(`extension ${name} {`);
+        const swiftDir = join(directory, name, "swift");
+        for (const [file, content] of Object.entries(on.files)) await Bun.write(join(swiftDir, file), content);
+        const check = await typecheck(swiftDir);
+        if (!check.ok) throw new Error(check.output);
+        const render = async (arm: typeof on, theme: "light" | "dark", tag: string) => {
+          const png = join(directory, name, `${tag}-${theme}.png`);
+          const layout = theme === "dark" ? dark : result.layout;
+          await renderMac(
+            { ...result, name, files: arm.files, assets: arm.assets, layout },
+            join(directory, name, tag),
+            png,
+          );
+          return sharp(png).raw().toBuffer();
+        };
+        for (const theme of ["light", "dark"] as const) {
+          const a = await render(on, theme, "on");
+          const b = await render(off, theme, "off");
+          expect(Buffer.compare(a, b)).toBe(0);
+          if (name !== "Settings" || theme !== "light") continue;
+          // Negative control: one data value changed must change the render.
+          const file = `${name}.swift`;
+          const lines = on.files[file]!.split("\n");
+          const row = lines.findIndex(
+            (l, i) => i > lines.findIndex((s) => s.includes("static let ")) && /^\s*[A-Z]\w*\(id: /.test(l),
+          );
+          lines[row] = lines[row]!.replace(/(\(id: "(?:[^"\\]|\\.)*", [^"]*)"(?:[^"\\]|\\.)*"/, '$1"Zzzz"');
+          const changed = await render({ ...on, files: { ...on.files, [file]: lines.join("\n") } }, theme, "control");
+          expect(Buffer.compare(changed, b)).not.toBe(0);
+        }
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  900_000,
 );

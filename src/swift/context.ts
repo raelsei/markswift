@@ -27,6 +27,8 @@ export interface EmitOptions {
   tokens?: ScreenTokens;
   /** The light screen of a light/dark pair: the view must look right in both colour schemes. */
   adaptive?: boolean;
+  /** Repeated-sibling extraction (app mode). `false` only for the pixel-identity check; default on. */
+  extract?: boolean;
 }
 
 /** Everything the recursive emitters need; built once per screen. */

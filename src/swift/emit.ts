@@ -5,6 +5,7 @@ import { GENERATED_BY } from "../model/version.ts";
 import { colorArgs, identifier, indent, num, uniqueName } from "./format.ts";
 import { controlMembers } from "./control-state.ts";
 import type { EmitContext, EmitOptions, SwiftOutput } from "./context.ts";
+import { extractComponents } from "./components.ts";
 import { refOf } from "./nodes.ts";
 import { containerExpr } from "./layout.ts";
 import { visit } from "./traversal.ts";
@@ -44,13 +45,16 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     adaptive: opts.adaptive,
     scaledFonts,
     statePaint: control.statePaint,
-    renderNode: (node) => refOf(node, ctx),
+    renderNode: (node) => extraction?.call(node) ?? refOf(node, ctx),
   };
+  // App mode: repeated siblings become one subview fed by a `ForEach` (`components.ts`).
+  const extraction = opts.mode === "app" && opts.extract !== false ? extractComponents(screen, ctx) : undefined;
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   // Body first: emitting it registers the `@ScaledMetric` font sizes declared above it.
   const body = ["var body: some View {", ...indent(refOf(screen.root, ctx), 1), "}"];
   for (const p of props) {
+    if (extraction?.absorbed.has(p.node)) continue;
     body.push(
       "",
       `// ${comment(p.node.id)}`,
@@ -59,11 +63,17 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       "}",
     );
   }
-  const scaled = [...scaledFonts].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, decl]) => decl);
+  // Extraction emitted every node once more for its templates: keep only sizes this view uses.
+  const bodyText = extraction ? body.join("\n") : "";
+  const scaled = [...scaledFonts]
+    .filter(([name]) => !extraction || new RegExp(`\\b${name}\\b`).test(bodyText))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, decl]) => decl);
   const members = [...scaled];
   if (scaled.length) members.push("");
-  members.push(...control.decls);
-  if (control.decls.length) members.push("");
+  const decls = extraction?.decls ?? control.decls;
+  members.push(...decls);
+  if (decls.length) members.push("");
   members.push(...body);
   const preview = (theme: Theme, title: string) => [
     `#Preview("${title}") {`,
@@ -92,6 +102,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...indent(members, 1),
     "}",
     "",
+    ...(extraction ? [`extension ${viewName} {`, ...indent(extraction.extension, 1), "}", ""] : []),
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),

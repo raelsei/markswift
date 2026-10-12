@@ -4,7 +4,8 @@ Convert rendered HTML and CSS into SwiftUI source.
 
 **Alpha (0.1.0-alpha.1).** One component per conversion. The output is
 **visually faithful starting code, not a reusable component**: it reproduces one captured state of one component, with no
-parameters, no `ForEach` over repeated content and generated (not meaningful) names. Expect to
+parameters and generated (not meaningful) names. In `app` mode repeated sibling elements become one nested `<Name>View`
+subview plus a `static let` data array iterated with `ForEach` (pixel-identical to the unrolled view). Expect to
 refactor it. Generated code targets iOS 18+ and Swift 6. Unsupported or approximated features are
 always reported (see [Diagnostics](#diagnostics)).
 
@@ -54,7 +55,7 @@ refused by `--update`, 1 conversion or file error. Warnings and diagnostics go t
 
 | File | When |
 | --- | --- |
-| `<Name>.swift` | Always: the view, with a light and a dark `#Preview` |
+| `<Name>.swift` | Always: the view, with a light and a dark `#Preview`, plus `extension <Name>` with extracted row types, data and subviews when the design repeats sibling elements |
 | `<Name>+Tokens.swift` | Always: colours in `<Name>.Palette` |
 | `MarkswiftRuntime.swift` | Always: shared helpers; its header names the Markswift version, and every conversion by that version produces the identical file |
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |

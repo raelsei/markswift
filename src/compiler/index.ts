@@ -22,6 +22,8 @@ export interface CompileOptions {
    * from the light layout and every colour that differs in dark becomes a `Color.markswift(light:dark:)` token.
    */
   dark?: LayoutDoc;
+  /** @internal Pixel-identity check only: disables repeated-sibling extraction. */
+  extract?: boolean;
 }
 
 export interface CompileResult {
@@ -79,6 +81,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     tokens: dark ? tracked : lookup,
     fontMetrics: options.fontMetrics,
     adaptive: !!dark,
+    extract: options.extract,
   });
   const warnings: ConversionWarning[] = [];
   if (dark) {
