@@ -316,6 +316,10 @@ test("an fr template the solver reproduces is admitted; children keep their capt
     ],
     stretch: true,
     cells: [0, 1],
+    margins: [
+      [0, 0],
+      [0, 0],
+    ],
     fixed: [],
     fidelityNote: expect.stringContaining("fixed column widths") as unknown as string,
   });
@@ -497,13 +501,21 @@ test("a px-sized icon painted last keeps its frame and its DOM cell in an auto c
   );
   const n = grid(input);
   expect(n.children.map((c) => c.id)).toEqual(["cell1", "cell0"]);
-  expect(n.template).toMatchObject({ tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }], cells: [1, 0], fixed: [0] });
+  expect(n.template).toMatchObject({
+    tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }],
+    cells: [1, 0],
+    margins: [
+      [2, 0],
+      [0, 0],
+    ],
+    fixed: [0],
+  });
   const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
-  const tracks = app.slice(
-    app.indexOf("MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {"),
-  );
-  expect(tracks).not.toBe(app.slice(-1));
-  expect(tracks.indexOf(".frame(width: 16.0, height: 16.0")).toBeGreaterThan(0);
+  const head = "MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {";
+  expect(app).toContain(head);
+  const tracks = app.slice(app.indexOf(head));
+  // The icon (DOM cell 0) comes first, keeps its frame and its 2px top margin.
+  expect(tracks).toMatch(/\.frame\(width: 16\.0, height: 16\.0[^\n]*\n(?:[^\n]*\n)*?\s*\.padding\(\.top, 2\.0\)/);
   expect(tracks.indexOf(".frame(width: 16.0, height: 16.0")).toBeLessThan(tracks.indexOf(".frame(maxWidth: .infinity"));
 });
 

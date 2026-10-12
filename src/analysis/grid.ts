@@ -36,7 +36,11 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     const cells = inFlow.map((node) => children.findIndex((c) => items.some((it) => it.node === node && it.sem === c)));
     if (cells.length !== children.length || cells.includes(-1)) return undefined;
     const admitted = admitTracks(n);
-    return admitted && { ...admitted.template, stretch: admitted.stretch, fixed: admitted.fixed, cells, fidelityNote };
+    if (!admitted) return undefined;
+    // Vertical margins are not in the IR (stacks turn them into spacing); the runtime needs them as padding.
+    const margins = inFlow.map((c): [number, number] => [px(c.styles["margin-top"]), px(c.styles["margin-bottom"])]);
+    const { template, stretch, fixed } = admitted;
+    return { ...template, stretch, fixed, cells, margins, fidelityNote };
   };
   // Native Grid can omit only the final row's trailing cells after all columns are established.
   const regular =
