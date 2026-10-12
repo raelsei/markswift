@@ -139,6 +139,8 @@ for (const width of [320, 390, 768]) {
         expect(node("percent-fill").width).toEqual({ kind: "fill" });
         expect(node("percent-fill").height).toEqual({ kind: "fill" });
 
+        // Admitted rows (MarkswiftFlexRow in app mode): fidelity keeps the captured widths and reports the pin on the
+        // row, not as a per-item flex-grow diagnostic.
         const rowWidth = contentSize(measured("basis-row")).w;
         for (const [id, expected] of [
           ["basis-a", (rowWidth + 100) / 2],
@@ -146,9 +148,8 @@ for (const width of [320, 390, 768]) {
         ] as const) {
           expect(measured(id).bounds.w).toBe(expected);
           expect(node(id).width).toEqual({ kind: "fixed", px: expected });
-          approximation(id, "unequal measured widths");
-          approximation(id, "basis");
         }
+        approximation("basis-row", "unequal flex allocation pinned to captured widths in fidelity mode");
         for (const [id, expected] of [
           ["column-a", 40],
           ["column-b", 80],
@@ -162,8 +163,8 @@ for (const width of [320, 390, 768]) {
           const expected = contentSize(measured("partial-row")).w * 0.25;
           expect(measured(id).bounds.w).toBe(expected);
           expect(node(id).width).toEqual({ kind: "fixed", px: expected });
-          approximation(id, "flex-grow total 0.5 < 1");
         }
+        approximation("partial-row", "unequal flex allocation pinned to captured widths in fidelity mode");
         for (const id of ["equal-a", "equal-b"]) {
           expect(measured(id).bounds.w).toBe(rowWidth / 2);
           expect(node(id).width).toEqual({ kind: "fill" });

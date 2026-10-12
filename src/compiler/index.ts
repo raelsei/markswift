@@ -1,8 +1,13 @@
 /** Synchronous compiler. No browser, filesystem, Python or Apple toolchain required. */
 import { validateName } from "./naming.ts";
-import { LAYOUT_DOC_VERSION, LayoutDoc } from "../model/layout.ts";
+import { isDeepStrictEqual } from "node:util";
+import { LAYOUT_DOC_VERSION, LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import { GENERATED_BY, VERSION } from "../model/version.ts";
 import { inferScreen } from "../analysis/infer.ts";
+import { admitTracks } from "../analysis/grid-tracks.ts";
+import { admitFlexRow } from "../analysis/flex-row.ts";
+import { note } from "../swift/diagnostics.ts";
+import { visit } from "../swift/traversal.ts";
 import { emitSwift, SWIFT_RUNTIME, type EmitMode, type EmitOptions, type SwiftOutput } from "../swift/emit.ts";
 import {
   extractTokens,
@@ -32,6 +37,11 @@ export interface CompileOptions {
    * from the light layout and every colour that differs in dark becomes a `Color.markswift(light:dark:)` token.
    */
   dark?: LayoutDoc;
+  /**
+   * Capture of the same screen and theme at another viewport width. Admitted MarkswiftTracks/MarkswiftFlexRow nodes
+   * whose authored inputs do not reproduce the probe geometry within 1px fall back to pinned output with a diagnostic.
+   */
+  probe?: LayoutDoc;
   /** @internal Pixel-identity check only: disables repeated-sibling extraction. */
   extract?: boolean;
   /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
@@ -56,10 +66,11 @@ export interface CompileResult {
 export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): CompileResult {
   const name = options.name ?? "ConvertedView";
   validateName(name);
-  const [doc, darkDoc] = parseDocs(layout, options.dark);
+  const [doc, darkDoc, probeDoc] = parseDocs(layout, options.dark, options.probe);
   const infer = (d: LayoutDoc) =>
     inferScreen(d, `${d.combo.screen}-${d.combo.theme}`, { bundledFamilies: options.bundledFamilies });
   const screen = infer(doc);
+  if (probeDoc) verifyAtProbe(screen, probeDoc);
   const dark = darkDoc && infer(darkDoc);
   const tokens = extractTokens(dark ? [screen, dark] : [screen]);
   const result = compileView(screen, dark, name, tokens, {
@@ -90,9 +101,13 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
   };
 }
 
-/** Version-check and parse a light layout and its optional dark capture of the same screen. */
-function parseDocs(layout: LayoutDoc, dark: LayoutDoc | undefined): [LayoutDoc, LayoutDoc | undefined] {
-  for (const d of [layout, dark]) {
+/** Version-check and parse a light layout, its optional dark capture and its optional probe capture. */
+function parseDocs(
+  layout: LayoutDoc,
+  dark: LayoutDoc | undefined,
+  probe?: LayoutDoc,
+): [LayoutDoc, LayoutDoc | undefined, LayoutDoc | undefined] {
+  for (const d of [layout, dark, probe]) {
     const version = (d as { version?: unknown } | undefined)?.version;
     if (d && version !== LAYOUT_DOC_VERSION)
       throw new Error(
@@ -107,7 +122,62 @@ function parseDocs(layout: LayoutDoc, dark: LayoutDoc | undefined): [LayoutDoc, 
   ) {
     throw new Error("options.dark must be the dark capture of the same screen as a light layout");
   }
-  return [doc, darkDoc];
+  const probeDoc = probe && LayoutDoc.parse(probe);
+  if (
+    probeDoc &&
+    (probeDoc.combo.screen !== doc.combo.screen ||
+      probeDoc.combo.theme !== doc.combo.theme ||
+      probeDoc.size.w === doc.size.w)
+  ) {
+    throw new Error("options.probe must be a capture of the same screen and theme at another width");
+  }
+  return [doc, darkDoc, probeDoc];
+}
+
+function walk(n: LayoutNode, fn: (n: LayoutNode) => void): void {
+  fn(n);
+  for (const c of n.children) walk(c, fn);
+}
+
+/** A runtime Layout (MarkswiftTracks, MarkswiftFlexRow) would reflow some node of `layout`: a probe capture can verify it. */
+export function needsProbe(layout: LayoutDoc): boolean {
+  let found = false;
+  walk(LayoutDoc.parse(layout).root, (n) => {
+    found ||= admitTracks(n) !== undefined || admitFlexRow(n) !== undefined;
+  });
+  return found;
+}
+
+/** Demotes admitted layouts whose authored inputs do not reproduce the probe capture (same node id) within 1px. */
+function verifyAtProbe(screen: Screen, probe: LayoutDoc): void {
+  const byId = new Map<string, LayoutNode>();
+  walk(probe.root, (n) => {
+    if (n.id !== undefined) byId.set(n.id, n);
+  });
+  visit(screen.root, (n) => {
+    const at = n.id ? byId.get(n.id) : undefined;
+    if (n.kind === "grid" && n.template) {
+      const t = n.template;
+      const p = at && admitTracks(at);
+      const same =
+        p &&
+        isDeepStrictEqual([p.template.tracks, p.template.autoRepeat, p.stretch], [t.tracks, t.autoRepeat, t.stretch]);
+      if (same) return;
+      delete n.template;
+      note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", t.fidelityNote);
+    } else if (n.kind === "stack" && n.flex) {
+      const f = n.flex;
+      const p = at && admitFlexRow(at, true);
+      if (p && isDeepStrictEqual([p.items, p.align], [f.items, f.align])) return;
+      delete n.flex;
+      note(
+        n,
+        "approximated",
+        f.fidelityNote?.feature ?? "flex-shrink",
+        `flex allocation not reproduced at the ${probe.size.w}px probe; captured widths pinned`,
+      );
+    }
+  });
 }
 
 const colorKey = (c: Color) => `${c.r},${c.g},${c.b},${c.a}`;

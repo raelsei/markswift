@@ -22,6 +22,7 @@ import { isInlineText, collectRuns, groupRuns } from "./text-runs.ts";
 import { linesOf, stackOf } from "./flow-layout.ts";
 import { buildGrid } from "./grid.ts";
 import { buildWrapping } from "./wrapping.ts";
+import { admitFlexRow } from "./flex-row.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
@@ -271,6 +272,11 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
+    // Admission excludes reverse rows and `order`, so the x-sorted children are the items in order.
+    if (axis === "h") {
+      const flex = admitFlexRow(n);
+      if (flex && flex.items.length === stack.children.length) stack.flex = flex;
+    }
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
       if (g > 0) stack.minGap = round2(g);

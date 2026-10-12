@@ -33,6 +33,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       for (const c of n.children) contentMinWidth.add(c);
     if (tracks)
       for (const [i, c] of tracks.cells.entries()) if (!tracks.fixed.includes(i)) allocated.set(n.children[c]!, "both");
+    // App mode: MarkswiftFlexRow proposes each item its allocated width; heights stay as the IR says.
+    if (opts.mode === "app" && n.kind === "stack" && n.flex) for (const c of n.children) allocated.set(c, "width");
   });
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);

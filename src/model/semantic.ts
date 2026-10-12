@@ -75,6 +75,23 @@ export interface GridTemplate {
   autoRepeat?: { mode: "fill" | "fit"; min: number };
 }
 
+/**
+ * One CSS flex item MarkswiftFlexRow sizes: `basis` the border-box px of a px/0/0% basis (CSS adds padding and
+ * border to the flex base size), or null = content (measured natively).
+ */
+export interface FlexItem {
+  grow: number;
+  shrink: number;
+  basis: number | null;
+}
+/** An admitted nowrap flex row; app mode emits MarkswiftFlexRow, fidelity keeps the children's captured widths. */
+export interface FlexRow {
+  items: FlexItem[];
+  align: "start" | "center" | "end" | "stretch";
+  /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink"; message: string };
+}
+
 export type Axis = "v" | "h";
 
 /** Cross-axis alignment of children inside a stack. */
@@ -390,6 +407,8 @@ export interface StackNode extends SemBase {
   wrap?: { columnGap: number; rowGap: number };
   /** Captured positions for wrapping combinations without a native layout mapping. */
   measured?: MeasuredLayout;
+  /** Admitted CSS flex allocation (row, nowrap); see analysis/flex-row.ts. */
+  flex?: FlexRow;
   children: SemNode[];
 }
 

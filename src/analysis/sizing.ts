@@ -8,6 +8,7 @@ import { type InferenceContext } from "./context.ts";
 import { crossAlign, alignSelfOf } from "./alignment.ts";
 import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
+import { admitFlexRow } from "./flex-row.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -189,7 +190,7 @@ export function sizeOf(
         "width",
         `width ${declW} pinned at ${width.px}px; it does not follow the container at other widths`,
       );
-    else if (/^[\d.]+px$/.test(declW)) {
+    else if (/^[\d.]+px$/.test(declW) && !(ctx.parentAxis === "h" && admitFlexRow(ctx.parent))) {
       const [, ir, , il] = insetsOf(s);
       const authored = px(declW) + (s["box-sizing"] === "border-box" ? 0 : ir + il);
       if (Math.abs(authored - width.px) > 0.5)
