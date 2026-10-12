@@ -416,10 +416,57 @@ test.each<[string, LayoutDoc]>([
       return doc;
     })(),
   ],
+  [
+    "an item placed in a later row, leaving an empty row",
+    (() => {
+      const doc = capture("169px 169px", "20px 20px 20px", [
+        [0, 0, 169, 20],
+        [179, 60, 169, 20],
+      ]);
+      doc.root.preferredSize = { width: "360px", height: "200px", gridTemplateColumns: "1fr 1fr" };
+      return doc;
+    })(),
+  ],
+  [
+    "rows offset from the content box (align-content)",
+    authored(
+      "1fr 2fr",
+      FR_1_2.map(([x, y, w, h]) => [x, y + 20, w, h]),
+      (d) => void (d.root.styles["grid-template-rows"] = "20px"),
+    ),
+  ],
 ])("no admission: %s", (_label, doc) => {
   const n = grid(doc);
   expect(n.template).toBeUndefined();
   expect(pinned(n)).toBe(true);
+});
+
+test("align-items: start cells shorter than their row are admitted; fidelity keeps the measured layout", () => {
+  const input = authored(
+    "1fr auto",
+    [
+      [0, 0, 300, 40],
+      [310, 0, 38, 20],
+    ],
+    (d) => {
+      d.root.styles["grid-template-rows"] = "40px";
+      d.root.styles["align-items"] = "start";
+      text(d, 1, 1);
+    },
+  );
+  const n = grid(input);
+  expect(n.measured).toBeDefined();
+  expect(n.template).toMatchObject({ tracks: [{ kind: "fr", fr: 1 }, { kind: "auto" }], stretch: false });
+  expect(n.diagnostics.filter((d) => d.feature === "display: grid")).toEqual([]);
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  expect(app).toContain("MarkswiftTracks(tracks: [.fr(1.0), .auto], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {");
+  expect(app).not.toContain("MarkswiftMeasuredLayout(");
+  const plain = structuredClone(input);
+  delete plain.root.preferredSize!.gridTemplateColumns;
+  const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
+  const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
+  expect(fidelity.code).toBe(reference.code);
+  expect(fidelity.diagnostics).toEqual(reference.diagnostics);
 });
 
 test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical to the unadmitted grid", () => {

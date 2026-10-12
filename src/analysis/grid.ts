@@ -1,9 +1,9 @@
 /** Native-grid admission is proven from resolved tracks and captured cell geometry. */
 import type { LayoutNode } from "../model/layout.ts";
-import { type GridNode, type SemBase, addDiagnostic } from "../model/semantic.ts";
+import { type GridNode, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
 import { parseTrackTemplate, px, round2, resolvedGridTracks } from "../css/index.ts";
-import { renders, insetsOf } from "./geometry.ts";
+import { renders, insetsOf, outOfFlow } from "./geometry.ts";
 import { measuredLayoutOf, paintOrder } from "./measured-layout.ts";
 import { admitTracks } from "./grid-tracks.ts";
 
@@ -29,6 +29,13 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   const xs = starts(widths ?? [], hSpacing, base.frame.x + base.padding[3]);
   const ys = starts(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
   const ordered = [...items].sort((a, b) => a.sem.frame.y - b.sem.frame.y || a.sem.frame.x - b.sem.frame.x);
+  // MarkswiftTracks lays out exactly these cells in this order; `admitTracks` proves the DOM's in-flow
+  // element children against the capture, so both must be the same nodes in DOM order.
+  const inFlow = n.children.filter((c) => c.tag !== "#text" && renders(c) && !outOfFlow(c));
+  const admit = (cells: SemNode[]) =>
+    cells.length === inFlow.length && cells.every((c, i) => items[i]?.node === inFlow[i] && c === items[i]!.sem)
+      ? admitTracks(n)
+      : undefined;
   // Native Grid can omit only the final row's trailing cells after all columns are established.
   const regular =
     widths &&
@@ -49,13 +56,25 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
       child.width = { kind: "fixed", px: round2(child.frame.w) };
       child.height = { kind: "fixed", px: round2(child.frame.h) };
     }
-    addDiagnostic(
-      base.diagnostics,
-      "approximated",
-      "display: grid",
-      "captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed",
-    );
-    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
+    const message =
+      "captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed";
+    const measured: GridNode = {
+      ...base,
+      kind: "grid",
+      columns,
+      hSpacing,
+      vSpacing,
+      children,
+      measured: measuredLayoutOf(base, children),
+    };
+    // Cells shorter than their row (`align-items: start`) are not "regular", yet an authored
+    // template may still place them: app lays them out with MarkswiftTracks, fidelity keeps the
+    // measured placement and reports the note at emission (`containerExpr`).
+    const admitted = admit(children);
+    if (admitted)
+      return { ...measured, template: { ...admitted.template, stretch: admitted.stretch, fidelityNote: message } };
+    addDiagnostic(base.diagnostics, "approximated", "display: grid", message);
+    return measured;
   }
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
   const equalFill =
@@ -86,7 +105,7 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   // App mode lays an admitted template out with MarkswiftTracks; fidelity keeps the captured
   // widths and reports the note at emission (`containerExpr`).
   const grid: GridNode = { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
-  const admitted = note ? admitTracks(n) : undefined;
+  const admitted = note ? admit(children) : undefined;
   if (admitted) return { ...grid, template: { ...admitted.template, stretch: admitted.stretch, fidelityNote: note! } };
   if (note) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", note);
   return grid;

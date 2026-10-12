@@ -21,11 +21,13 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
 
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
-  if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
+  // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
+  if (n.kind === "grid" && n.template && ctx.mode === "fidelity")
+    note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", n.template.fidelityNote);
+  if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
+  else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
-  else if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
   else if (n.kind === "grid") {
-    if (n.template) note(n, "approximated", "grid-template-columns", n.template.fidelityNote);
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
     );

@@ -73,6 +73,19 @@ export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: b
   const cols = solveTracks(template, W, gap, items.length, autoWidths);
   if (cols.length !== k) return undefined;
   const starts = cols.map((_, c) => x0 + cols.slice(0, c).reduce((sum, w) => sum + w + gap, 0));
-  const fits = items.every((item, i) => near(item.bounds.x, starts[i % k]!) && near(item.bounds.w, cols[i % k]!));
-  return fits ? { template, stretch: alignItems === "normal" || alignItems === "stretch" } : undefined;
+  if (!items.every((item, i) => near(item.bounds.x, starts[i % k]!) && near(item.bounds.w, cols[i % k]!)))
+    return undefined;
+  // Rows: row-major DOM order, each item's margin box at its row's top, each row as tall as its
+  // tallest margin box (implicit auto rows; the runtime sizes rows the same way).
+  let top = n.bounds.y + insets[0];
+  for (let r = 0; r * k < items.length; r++) {
+    let bottom = top;
+    for (const item of items.slice(r * k, r * k + k)) {
+      const mt = px(item.styles["margin-top"]);
+      if (!near(item.bounds.y - mt, top)) return undefined;
+      bottom = Math.max(bottom, item.bounds.y + item.bounds.h + px(item.styles["margin-bottom"]));
+    }
+    top = bottom + px(s["row-gap"]);
+  }
+  return { template, stretch: alignItems === "normal" || alignItems === "stretch" };
 }
