@@ -9,6 +9,7 @@ import { insetsOf } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
+import { fieldOf, nameHintOf } from "./naming.ts";
 
 /** Roles whose element AT announces as a toggle. */
 const TOGGLE_ROLES: Readonly<Record<string, true>> = {
@@ -52,6 +53,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   // A Button already announces itself as one; the explicit trait only stays where no Button is emitted.
   if (action && !action.gesture && a11y?.trait === "isButton") delete a11y.trait;
   const labelFor = ctx.labels?.activates.get(n)?.id;
+  const hint = nameHintOf(n.tag, n.attrs);
+  const field = fieldOf(n.attrs);
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -67,6 +70,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     overlays: [],
     ...(a11y && Object.keys(a11y).length ? { a11y } : {}),
     ...(action ? { action } : {}),
+    ...(hint ? { nameHint: hint } : {}),
+    ...(field ? { field } : {}),
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
   };
