@@ -13,6 +13,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - VoiceOver: `aria-labelledby`, `aria-describedby`, values (`aria-valuenow/valuetext/expanded`), selected/toggle traits and `aria-disabled`; iOS keyboards from `autocomplete`, `inputmode` and `enterkeyhint`.
 - Tracked component corpus (`tests/conformance/fixtures/components/`, 21 shadcn/ui components, a 24-row list and 3 Tailwind pages, compiled offline with Tailwind 4.1); iOS visual baselines; per-family regression floors (`families`, `bun run quality --ratchet`) with reviewed per-capture `exceptions`; `bun run quality --readme` regenerates the README evidence block; release tags gate every fixture on iOS.
 - Pressed and focused looks: `:hover`/`:active` and `:focus-visible` paint captured as paint-only state snapshots and emitted as `@MarkswiftPressed`/`@MarkswiftFocused` members driving colour, opacity and scale; state colours join the Palette tokens.
+- App mode: repeated sibling elements are emitted once as a nested subview and a static data array iterated with `ForEach` (pixel-identical; rows with controls bind through `ForEach($rows)`; per-row buttons collapse into one `(Row) -> Void` action).
 
 ### Changed
 - `compileLayout` rejects a `LayoutDoc` of another version with an error naming both versions; a style-list or schema change now requires a LayoutDoc version bump (enforced by `tests/architecture/layout-doc.test.ts`).
