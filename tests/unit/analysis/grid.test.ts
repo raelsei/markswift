@@ -340,9 +340,12 @@ test("px + fr and auto + fr templates are admitted", () => {
     [50, 0, 252, 20],
     [312, 0, 36, 20],
   ];
-  const single = grid(authored("auto 1fr auto", autos, (d) => [0, 1, 2].forEach((i) => text(d, i, 1))));
+  const withText = (lines: number[]) => (d: LayoutDoc) => {
+    for (const [i, n] of lines.entries()) text(d, i, n);
+  };
+  const single = grid(authored("auto 1fr auto", autos, withText([1, 1, 1])));
   expect(single.template?.tracks.map((t) => t.kind)).toEqual(["auto", "fr", "auto"]);
-  const wrapped = grid(authored("auto 1fr auto", autos, (d) => [0, 1, 2].forEach((i) => text(d, i, i === 0 ? 2 : 1))));
+  const wrapped = grid(authored("auto 1fr auto", autos, withText([2, 1, 1])));
   expect(wrapped.template).toBeUndefined();
   expect(pinned(wrapped)).toBe(true);
 });

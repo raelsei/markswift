@@ -107,7 +107,7 @@ nativeTest(
         const swift = JSON.parse(lines[i]!) as number[];
         const ts = solveTracks(c.t, c.width, c.gap, c.count, c.autoWidths);
         expect(swift).toHaveLength(ts.length);
-        swift.forEach((w, j) => expect(Math.abs(w - ts[j]!)).toBeLessThanOrEqual(0.001));
+        for (const [j, w] of swift.entries()) expect(Math.abs(w - ts[j]!)).toBeLessThanOrEqual(0.001);
       });
     } finally {
       await rm(directory, { recursive: true, force: true });

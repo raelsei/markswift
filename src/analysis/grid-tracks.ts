@@ -54,13 +54,11 @@ export function admitTracks(n: LayoutNode): { template: GridTemplate; stretch: b
     const height = item.preferredSize?.height ?? "auto";
     if (height !== "auto") return undefined;
   }
-  const firstRow = items.filter((item) => near(item.bounds.y, items[0]!.bounds.y));
-  const k = template.autoRepeat
-    ? firstRow.reduce<number[]>(
-        (xs, item) => (xs.some((x) => near(x, item.bounds.x)) ? xs : [...xs, item.bounds.x]),
-        [],
-      ).length
-    : template.tracks.length;
+  const firstXs: number[] = [];
+  for (const item of items)
+    if (near(item.bounds.y, items[0]!.bounds.y) && !firstXs.some((x) => near(x, item.bounds.x)))
+      firstXs.push(item.bounds.x);
+  const k = template.autoRepeat ? firstXs.length : template.tracks.length;
   const autoWidths: number[] = [];
   for (const [i, item] of items.entries()) {
     const c = i % k;
