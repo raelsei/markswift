@@ -206,7 +206,7 @@ describe("ARIA names", () => {
   const page = (panel: LayoutNode) =>
     inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 60 }, { display: "block" }, [tab, panel])), "s").root;
 
-  test("a text-only tabpanel keeps its words: the tab's name is dropped with a diagnostic, not set as the Text's label", () => {
+  test("a text-only tabpanel's name labels a group around its Text, never the Text's words", () => {
     const panel = el(
       "div",
       { x: 0, y: 30, w: 200, h: 20 },
@@ -218,8 +218,19 @@ describe("ARIA names", () => {
       },
     );
     const text = flatten(page(panel)).find((n): n is TextNode => n.kind === "text" && n.runs[0]?.text === "Body copy");
-    expect(text?.a11y?.label).toBeUndefined();
-    expect(text?.diagnostics.some((d) => d.feature === "aria-labelledby")).toBe(true);
+    expect(text?.a11y).toEqual({ label: "All", container: true });
+    // A heading's name stands for its words (Chrome's name from author on a name-from-content role).
+    const heading = el(
+      "h2",
+      { x: 0, y: 30, w: 200, h: 20 },
+      { display: "block" },
+      [textNode("Body copy", { x: 0, y: 30, w: 80, h: 20 })],
+      {
+        "aria-label": "Summary",
+      },
+    );
+    const h2 = flatten(page(heading)).find((n) => n.kind === "text" && n.a11y?.heading);
+    expect(h2?.a11y?.container).toBeUndefined();
   });
 
   test("a tabpanel container keeps its name: it labels the group, not a child", () => {

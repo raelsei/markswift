@@ -340,6 +340,8 @@ export interface SemBase extends SizeConstraints {
   a11y?: {
     /** `aria-labelledby` text, else `aria-label`, else the text of the `<label>` that names this control. */
     label?: string;
+    /** A text-only element of a container role (tabpanel, region, …): `label` names a group around the Text, not its words. */
+    container?: true;
     /** `aria-hidden="true"`. */
     hidden?: true;
     /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */

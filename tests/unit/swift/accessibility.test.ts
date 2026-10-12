@@ -379,6 +379,23 @@ test("028: selected tabs, current links and checked checkboxes add .isSelected",
   expect(box).toContain(".accessibilityAddTraits(s_box ? .isSelected : [])");
 });
 
+test("a text-only tabpanel's name labels a group around the Text, which keeps its words", () => {
+  const app = swift(
+    [
+      el("button", { id: "t", role: "tab" }, { x: 0, y: 0, w: 60, h: 30 }, [text("All", 8, 4, 40, 22)]),
+      el("div", { id: "panel", role: "tabpanel", "aria-labelledby": "t" }, { x: 0, y: 40, w: 320, h: 22 }, [
+        text("Body copy", 0, 40, 80, 22),
+      ]),
+    ],
+    "app",
+  );
+  const body = viewOf(app, 'Text(verbatim: "Body copy")');
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeGreaterThan(-1);
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeLessThan(
+    body.indexOf('.accessibilityLabel("All")'),
+  );
+});
+
 test("ARIA toggle Buttons own their checked state: a tap flips it, then runs the action", () => {
   const toggle = (id: string, attrs: Record<string, string>, y: number) =>
     el("button", { id, type: "button", ...attrs }, { x: 0, y, w: 16, h: 16 }, [], { display: "inline-block" });
@@ -401,10 +418,11 @@ test("ARIA toggle Buttons own their checked state: a tap flips it, then runs the
   expect(app).not.toContain(".accessibilityAddTraits(.isSelected)");
   // HTML: a tap on the `<label for>` clicks the button.
   expect(app).toContain(".onTapGesture { s_on.toggle(); onOn() }");
-  // `mixed` is the third state: `nil` until the first tap checks it.
+  // `mixed` is the third state: `nil` until the first tap checks it. The explicit value replaces the
+  // "1"/"0" iOS derives from `.isSelected` on a toggle, so it spells them out.
   expect(app).toContain("@State private var s_mix: Bool? = nil");
   expect(app).toContain("s_mix = !(s_mix ?? false)");
-  expect(app).toContain('.accessibilityValue(s_mix == nil ? "mixed" : "")');
+  expect(app).toContain('.accessibilityValue(s_mix == nil ? "mixed" : s_mix == true ? "1" : "0")');
   expect(app).toContain(".accessibilityAddTraits(s_mix == true ? .isSelected : [])");
   expect(app).toContain("@State private var s_sw: Bool = false");
   expect(app).not.toContain(".onTapGesture { s_off");

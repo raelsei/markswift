@@ -106,18 +106,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const note = (level: DiagnosticLevel, feature: string, message: string) =>
     addDiagnostic(base.diagnostics, level, feature, message);
   // A container holding only text becomes that Text, whose accessibility label would replace its
-  // words. The container's name is what is lost: iOS has no element left for it.
+  // words: its name labels a group around the Text instead (Chrome: tabpanel "All" › StaticText).
   const role = host.attrs["role"]?.trim().toLowerCase();
-  if (leaf && base.a11y?.label && (role ? CONTAINER_ROLES[role] : CONTAINER_TAGS[host.tag])) {
-    const feature = host.attrs["aria-labelledby"] ? "aria-labelledby" : "aria-label";
-    note(
-      "approximated",
-      feature,
-      `${role ?? host.tag} name "${base.a11y.label}" dropped: the element holds only text, which keeps its own words`,
-    );
-    delete base.a11y.label;
-    if (!Object.keys(base.a11y).length) delete base.a11y;
-  }
+  if (leaf && base.a11y?.label && (role ? CONTAINER_ROLES[role] : CONTAINER_TAGS[host.tag])) base.a11y.container = true;
   const out: TextRun[] = [];
   const built: MeasuredTextRun[] = [];
   const painted: LayoutNode[] = [];

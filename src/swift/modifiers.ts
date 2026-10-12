@@ -179,7 +179,7 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
   const a = n.a11y;
   if (a) {
-    const container = n.kind === "stack" || n.kind === "grid";
+    const container = n.kind === "stack" || n.kind === "grid" || a.container;
     // A heading container reads as one element; a labelled one names its group.
     if (container && a.heading) m.push(".accessibilityElement(children: .combine)");
     else if (container && a.label) m.push(".accessibilityElement(children: .contain)");
@@ -197,7 +197,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     else if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
     // Plan 025's disclosure style and select menu already announce their own state; never add a second value there.
     const ownsValue = n.kind === "control" && (n.control === "disclosure" || n.control === "picker");
-    if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : "")`);
+    // `.accessibilityValue` replaces the "1"/"0" a toggle trait derives from `.isSelected`, so it spells them out.
+    if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : ${state.on} ? "1" : "0")`);
     else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
