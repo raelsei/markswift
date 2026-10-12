@@ -23,7 +23,8 @@
     "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/conformance/pilot-run.test.ts tests/integration/perf.test.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture",
-    "test:conformance": "bun test tests/conformance"
+    "test:conformance": "bun test tests/conformance",
+    "test:ios-behaviour": "bun run tools/verify/ios-behaviour.ts"
   },
   "dependencies": {
     "domhandler": "^5.0.3",

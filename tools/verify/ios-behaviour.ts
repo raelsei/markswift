@@ -1,0 +1,413 @@
+/**
+ * V4b: converts the curated component cases, builds them into the XCUITest host app
+ * (`tools/verify/ios-behaviour/`), runs it on the iOS simulator and judges what iOS exposed:
+ * accessibility tree, Apple's audit, Dynamic Type height (R7), RTL mirroring and interaction.
+ *
+ *   bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>
+ */
+import { mkdir, readdir, rm } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
+import { inferScreen } from "../../src/analysis/infer.ts";
+import { convert } from "../../src/index.ts";
+import { walk } from "../../src/model/semantic.ts";
+import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
+import { ensureSimulator } from "./native.ts";
+import { command } from "./process.ts";
+
+const ROOT = resolve(import.meta.dir, "../..");
+const FIXTURES = join(ROOT, "tests/conformance/fixtures");
+const PROJECT_DIR = join(import.meta.dir, "ios-behaviour");
+const GENERATED = join(PROJECT_DIR, "Generated");
+const PROJECT = join(PROJECT_DIR, "MarkswiftBehaviour.xcodeproj");
+/** Chrome font scale of the R7 capture: 40/17, body text at `.accessibility3` over `.large`. */
+const R7_SCALE = 2.35;
+
+interface Known {
+  case: string;
+  check: string;
+  match: string;
+  reason: string;
+  owner: string;
+}
+interface Failure {
+  case: string;
+  check: string;
+  match: string;
+  detail: string;
+}
+interface Prepared {
+  id: string;
+  view: string;
+  ax: AxNamed[];
+  chromeHeight235: number;
+  pickers: Array<{ current: string; next: string }>;
+  /** Normalised option names of every picker: a closed picker exposes only its selection. */
+  options: Record<string, true>;
+  /** The screen's own action members in source order (= its `init` order). */
+  actions: Array<{ name: string; takesArgs: boolean }>;
+  fonts: boolean;
+}
+interface El {
+  type: string;
+  label: string;
+  identifier: string;
+  value: string;
+  selected: boolean;
+  frame: [number, number, number, number];
+  children: El[];
+}
+interface AuditIssue {
+  type: string;
+  label: string;
+  description: string;
+}
+interface CaseLog {
+  launches: {
+    large?: {
+      tree: El;
+      audit: AuditIssue[];
+      rootHeight: number;
+      interactions: {
+        switches: Array<{ label: string; before: string; after: string }>;
+        fields: Array<{ type: string; label: string; value: string }>;
+        pickers: Array<{ current: string; next: string; reached: boolean }>;
+        log: string;
+      };
+    };
+    rtl?: { tree: El };
+    xSmall?: { audit: AuditIssue[] };
+    ax5?: { audit: AuditIssue[] };
+    ax3?: { rootHeight: number };
+  };
+  errors: string[];
+}
+
+/** XCUITest element types an iOS counterpart of a Chrome role may have. */
+const SNAPSHOT_TYPES: Record<string, string[]> = {
+  button: ["button"],
+  tab: ["button"],
+  menuitem: ["button"],
+  option: ["button"],
+  link: ["link", "button"],
+  heading: ["staticText", "other"],
+  image: ["image"],
+  img: ["image"],
+  checkbox: ["switch", "toggle", "button"],
+  switch: ["switch", "toggle", "button"],
+  radio: ["button", "switch"],
+  textbox: ["textField", "secureTextField", "textView", "searchField"],
+  searchbox: ["textField", "secureTextField", "textView", "searchField"],
+  combobox: ["button", "popUpButton", "picker"],
+  slider: ["slider"],
+  progressbar: ["progressIndicator", "other"],
+  meter: ["progressIndicator", "other"],
+};
+const FIELD_TYPES: Record<string, true> = { textField: true, secureTextField: true, textView: true, searchField: true };
+const TEXT_TYPES: Record<string, true> = { staticText: true, button: true, link: true, other: true };
+const FAILING_AUDITS: Record<string, true> = {
+  dynamicType: true,
+  textClipped: true,
+  sufficientElementDescription: true,
+  trait: true,
+};
+
+/** iOS joins a combined element's parts with ", "; Chrome with a space. */
+const flat = (s: string) => normalizeName(s.replace(/,/g, " "));
+
+function elements(tree: El): El[] {
+  const out: El[] = [];
+  const visit = (e: El) => {
+    if (e.identifier === "markswift.log") return;
+    out.push(e);
+    e.children.forEach(visit);
+  };
+  visit(tree);
+  return out;
+}
+
+async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Record<string, Uint8Array> }> {
+  const fixture = join(FIXTURES, "components", `${id}.html`);
+  const view = `Behaviour${id.replace(/(^|-)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
+  let ax: AxNamed[] = [];
+  const result = await convert(
+    { file: fixture },
+    {
+      name: view,
+      mode: "app",
+      theme: "light",
+      browserChannel: "chromium",
+      prepare: async (page) => {
+        ax = await browserAxNodes(page, "[data-markswift-root]");
+      },
+    },
+  );
+  const scaled = await convert(
+    { file: fixture },
+    {
+      name: view,
+      mode: "app",
+      theme: "light",
+      browserChannel: "chromium",
+      prepare: (page) =>
+        page.evaluate((scale) => {
+          const all = [...document.querySelectorAll<HTMLElement>("[data-markswift-root], [data-markswift-root] *")];
+          const before = all.map((e) => getComputedStyle(e));
+          const sizes = before.map((s) => [s.fontSize, s.lineHeight] as const);
+          all.forEach((e, i) => {
+            const [fontSize, lineHeight] = sizes[i]!;
+            e.style.setProperty("font-size", `${Number.parseFloat(fontSize) * scale}px`, "important");
+            if (lineHeight.endsWith("px"))
+              e.style.setProperty("line-height", `${Number.parseFloat(lineHeight) * scale}px`, "important");
+          });
+        }, R7_SCALE),
+    },
+  );
+  const screen = inferScreen(result.layout, id);
+  const pickers: Prepared["pickers"] = [];
+  const options: Prepared["options"] = {};
+  walk(screen.root, (n) => {
+    if (n.kind !== "control" || n.control !== "picker") return;
+    for (const o of n.options ?? []) options[normalizeName(o)] = true;
+    const current = n.value ?? n.options?.[0];
+    const next = n.options?.find((o) => o !== current);
+    if (current && next) pickers.push({ current, next });
+  });
+  const code = result.files[`${view}.swift`] ?? "";
+  const actions = [...code.matchAll(/^ {4}(?:public )?var (on[A-Z]\w*): (\([^)]*\)) -> Void/gm)].map((m) => ({
+    name: m[1]!,
+    takesArgs: m[2] !== "()",
+  }));
+  const files: Record<string, Uint8Array> = {};
+  for (const [name, source] of Object.entries(result.files))
+    if (name.endsWith(".swift")) files[name] = new TextEncoder().encode(source);
+  for (const [path, bytes] of Object.entries(result.assets)) files[basename(path)] = bytes;
+  return {
+    prepared: {
+      id,
+      view,
+      ax,
+      chromeHeight235: scaled.layout.size.h,
+      pickers,
+      options,
+      actions,
+      fonts: `${view}+Fonts.swift` in result.files,
+    },
+    files,
+  };
+}
+
+function registrySwift(entries: Prepared[]) {
+  const fonts = entries.filter((e) => e.fonts).map((e) => `        ${e.view}.BundledFonts.register(in: .main)`);
+  const cases = entries.map(({ view, actions }) => {
+    const args = actions.map(
+      (a) => `${a.name}: { ${a.takesArgs ? "_ in " : ""}BehaviourLog.shared.hit(${JSON.stringify(a.name)}) }`,
+    );
+    return `        case ${JSON.stringify(view)}: ${view}(${args.join(", ")})`;
+  });
+  return `// Generated by tools/verify/ios-behaviour.ts — do not edit.
+import SwiftUI
+
+enum BehaviourRegistry {
+    static func registerFonts() {
+${fonts.join("\n")}
+    }
+
+    @ViewBuilder static func view(named name: String) -> some View {
+        switch name {
+${cases.join("\n")}
+        default: Text("unknown \\(name)")
+        }
+    }
+}
+`;
+}
+
+function judge(item: Prepared, log: CaseLog | undefined) {
+  const failures: Failure[] = [];
+  const hitRegion: AuditIssue[] = [];
+  const errors = log ? log.errors.map((e) => `${item.id}: ${e}`) : [`${item.id}: no result file`];
+  const fail = (check: string, match: string, detail: string) => failures.push({ case: item.id, check, match, detail });
+  const large = log?.launches.large;
+  if (log && !large) errors.push(`${item.id}: large launch missing`);
+  if (large) {
+    const all = elements(large.tree);
+    const text = flat(
+      all
+        .filter((e) => TEXT_TYPES[e.type])
+        .map((e) => e.label)
+        .join(" "),
+    );
+    for (const { role, name } of item.ax) {
+      if (role === "option" && item.options[name]) continue; // a closed picker shows only its selection; covered by interaction
+      const types = SNAPSHOT_TYPES[role];
+      const found = types
+        ? all.some(
+            (e) =>
+              types.includes(e.type) &&
+              (flat(e.label).includes(name) || (FIELD_TYPES[e.type] && flat(e.value).includes(name))),
+          )
+        : text.includes(name);
+      if (!found) fail("snapshot", `${role}:${name}`, `no ${types?.join("/") ?? "text"} element exposes "${name}"`);
+    }
+    const ix = large.interactions;
+    for (const s of ix.switches)
+      if (s.before === s.after) fail("interaction", `switch:${s.label}`, `value stayed ${s.before}`);
+    for (const f of ix.fields)
+      if (!(f.type === "secureTextField" ? /•{2}/.test(f.value) : f.value.includes("mk")))
+        fail("interaction", `field:${f.label}`, `value after typing: "${f.value}"`);
+    for (const p of ix.pickers)
+      if (!p.reached) fail("interaction", `picker:${p.next}`, `could not select "${p.next}" from "${p.current}"`);
+    const hits = ix.log.split(",");
+    for (const { name } of item.actions)
+      if (!hits.includes(name)) fail("interaction", `action:${name}`, "never called");
+  }
+  for (const [size, launch] of [
+    ["large", large],
+    ["xSmall", log?.launches.xSmall],
+    ["ax5", log?.launches.ax5],
+  ] as const) {
+    if (log && !launch) errors.push(`${item.id}: ${size} launch missing`);
+    for (const issue of launch?.audit ?? []) {
+      if (issue.type === "hitRegion") hitRegion.push(issue);
+      else if (FAILING_AUDITS[issue.type])
+        fail(`audit:${issue.type}`, issue.label || issue.description, `${size}: ${issue.description}`);
+    }
+  }
+  const ax3 = log?.launches.ax3;
+  if (log && !ax3) errors.push(`${item.id}: ax3 launch missing`);
+  if (ax3 && Math.abs(ax3.rootHeight / item.chromeHeight235 - 1) > 0.1)
+    fail(
+      "height",
+      "rootHeight",
+      `accessibility3 root ${ax3.rootHeight} pt vs Chrome ×${R7_SCALE} ${item.chromeHeight235} px`,
+    );
+  const rtl = log?.launches.rtl;
+  if (log && !rtl) errors.push(`${item.id}: rtl launch missing`);
+  if (large && rtl) {
+    const keyed = (tree: El) => {
+      const seen: Record<string, number> = {};
+      const out: Record<string, El> = {};
+      for (const e of elements(tree)) {
+        if (!e.label || !e.frame[2] || !e.frame[3]) continue;
+        const key = `${e.type}:${e.label}`;
+        seen[key] = (seen[key] ?? -1) + 1;
+        out[`${key}#${seen[key]}`] = e;
+      }
+      return out;
+    };
+    const root = (tree: El) => elements(tree).find((e) => e.identifier === "markswift.root")?.frame;
+    const R = root(large.tree);
+    const RR = root(rtl.tree);
+    if (!R || !RR) errors.push(`${item.id}: markswift.root missing from the rtl comparison`);
+    else {
+      const ltr = keyed(large.tree);
+      for (const [key, r] of Object.entries(keyed(rtl.tree))) {
+        const l = ltr[key];
+        if (!l) continue;
+        const mirrored = R[0] + R[2] - (l.frame[0] + l.frame[2]);
+        if (Math.abs(r.frame[0] - RR[0] - mirrored) > 1 || Math.abs(r.frame[1] - l.frame[1]) > 1)
+          fail("rtl", key.replace(/#\d+$/, ""), `ltr ${l.frame.join(",")} → rtl ${r.frame.join(",")}`);
+      }
+    }
+  }
+  return { failures, hitRegion, errors };
+}
+
+async function main() {
+  const { values } = parseArgs({ options: { out: { type: "string" }, "build-only": { type: "boolean" } } });
+  if (!values.out) throw new Error("usage: bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>");
+  const out = resolve(values.out);
+  if ((await readdir(out).catch(() => [])).length) throw new Error(`--out ${out} is not empty`);
+  await mkdir(out, { recursive: true });
+  const spec = (await Bun.file(join(ROOT, "tests/conformance/ios-behaviour.json")).json()) as {
+    cases: string[];
+    known: Known[];
+  };
+
+  await rm(GENERATED, { recursive: true, force: true });
+  await mkdir(GENERATED, { recursive: true });
+  const written: Record<string, Uint8Array> = {};
+  const prepared: Prepared[] = [];
+  for (const id of spec.cases) {
+    const { prepared: item, files } = await prepareCase(id);
+    for (const [name, bytes] of Object.entries(files)) {
+      const prior = written[name];
+      if (prior && !Buffer.from(prior).equals(Buffer.from(bytes)))
+        throw new Error(`${id}: ${name} differs from the copy another case wrote`);
+      written[name] = bytes;
+      await Bun.write(join(GENERATED, name), bytes);
+    }
+    prepared.push(item);
+    console.log(`converted ${id}`);
+  }
+  await Bun.write(join(GENERATED, "Registry.swift"), registrySwift(prepared));
+  await Bun.write(
+    join(out, "cases.json"),
+    JSON.stringify(
+      prepared.map(({ view, pickers, actions }) => ({ view, pickers, actions: actions.map((a) => a.name) })),
+    ),
+  );
+
+  const dd = join(out, "_dd");
+  const xcode = ["xcodebuild", "-project", PROJECT, "-scheme", "Behaviour", "-derivedDataPath", dd];
+  await command(
+    [...xcode, "build-for-testing", "-destination", "generic/platform=iOS Simulator", "-quiet"],
+    ROOT,
+    1_800_000,
+  );
+  if (values["build-only"]) {
+    console.log("built");
+    return;
+  }
+
+  const sim = await ensureSimulator();
+  process.env.TEST_RUNNER_MARKSWIFT_BEHAVIOUR_DIR = out;
+  const runErrors: string[] = [];
+  try {
+    await command(
+      [
+        ...xcode,
+        "test-without-building",
+        "-destination",
+        `id=${sim.udid}`,
+        "-resultBundlePath",
+        join(out, "_result.xcresult"),
+      ],
+      ROOT,
+      3_600_000,
+    );
+  } catch (error) {
+    runErrors.push(`xcodebuild test-without-building: ${String(error).slice(-4000)}`);
+  }
+
+  const cases: Record<string, { failures: Failure[] }> = {};
+  const all: Failure[] = [];
+  const hitRegion: Array<AuditIssue & { case: string }> = [];
+  const errors = [...runErrors];
+  for (const item of prepared) {
+    const file = Bun.file(join(out, `${item.view}.json`));
+    const log = (await file.exists()) ? ((await file.json()) as CaseLog) : undefined;
+    const judged = judge(item, log);
+    cases[item.id] = { failures: judged.failures };
+    all.push(...judged.failures);
+    hitRegion.push(...judged.hitRegion.map((h) => ({ ...h, case: item.id })));
+    errors.push(...judged.errors);
+  }
+  const used = new Set<Known>();
+  const unknownFailures = all.filter((f) => {
+    const known = spec.known.find((k) => k.case === f.case && k.check === f.check && k.match === f.match);
+    if (known) used.add(known);
+    return !known;
+  });
+  const staleKnown = spec.known.filter((k) => !used.has(k));
+  const ok = !unknownFailures.length && !staleKnown.length && !errors.length;
+  const report = { ok, simulator: sim, cases, unknownFailures, staleKnown, hitRegion, errors };
+  await Bun.write(join(out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+  console.log(
+    `${ok ? "ok" : "FAILED"}: ${unknownFailures.length} unknown failures, ${staleKnown.length} stale known, ${errors.length} errors, ${hitRegion.length} hit-region findings → ${join(out, "report.json")}`,
+  );
+  if (!ok) process.exit(1);
+}
+
+await main();

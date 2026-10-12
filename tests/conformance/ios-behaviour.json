@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "cases": [
+    "shadcn-button",
+    "shadcn-checkbox",
+    "shadcn-switch",
+    "shadcn-radio-group",
+    "shadcn-input",
+    "shadcn-textarea",
+    "shadcn-native-select",
+    "shadcn-slider",
+    "shadcn-field",
+    "shadcn-tabs",
+    "shadcn-card",
+    "shadcn-alert",
+    "shadcn-progress",
+    "shadcn-accordion",
+    "shadcn-breadcrumb",
+    "tw-form",
+    "tw-settings"
+  ],
+  "known": []
+}
