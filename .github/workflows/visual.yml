@@ -49,7 +49,7 @@ jobs:
           xcrun simctl list runtimes available
           xcrun simctl list devices available | grep -E "iPhone 17( |$)" || echo "no iPhone 17 device (plan 020 creates it)"
       - name: Render
-        run: bun run pilot --renderer "$RENDERER" $([ "$SCOPE" = all ] && echo --all) --out "$RUNNER_TEMP/visual"
+        run: bun run pilot --renderer "$RENDERER" $([ "$SCOPE" = all ] && echo --all) $([ "$RENDERER" = mac ] && echo --reflow) --out "$RUNNER_TEMP/visual"
       - name: Gate
         if: ${{ !inputs.rebaseline }}
         run: |
