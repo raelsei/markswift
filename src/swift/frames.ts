@@ -13,6 +13,8 @@ const TEXT_CONTROLS: Record<string, true> = {
   textEditor: true,
   datePicker: true,
 };
+/** Controls showing one line of their own text, which Chrome centres in the box. */
+const LINE_CONTROLS: Record<string, true> = { textField: true, secureField: true, picker: true, datePicker: true };
 /**
  * App: the line-box surplus the analysis moved into one edge's padding (text off its box's centre,
  * `lineBoxGrowth.padded`). Emitted as a `minHeight` floor of the measured box aligned away from
@@ -182,5 +184,7 @@ function fillAlignment(n: SemNode, mode: EmitMode): string {
     ].map(([before, after]) => (Math.abs(before! - after!) <= 1 ? "center" : before! < after! ? "start" : "end"));
     return alignment(h!, v!);
   }
+  // A single-line field, select or date input: Chrome centres its text in the box (an editor's starts at the top).
+  if (n.kind === "control" && LINE_CONTROLS[n.control]) return ".leading";
   return ".topLeading";
 }

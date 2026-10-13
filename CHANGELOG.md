@@ -61,6 +61,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode: text fields and editors in a bundled webfont honour CSS `line-height` too, spaced from that face's own natural line (they kept the face's natural line before), so a `<textarea>`'s lines sit as far apart as in the browser.
 - A control's content stays where the browser laid it out inside a fixed-size control on both axes (a Radix switch's thumb at the track's start, moved only by its transform) instead of being centred.
 - App mode: a `<textarea>`'s `TextEditor` no longer fades its first line under iOS 26's scroll edge effect.
+- App mode: a `<select>`'s, text input's or date input's single line stays vertically centred in its box when the box's height becomes a Dynamic Type floor, as Chrome centres it.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

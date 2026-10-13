@@ -296,3 +296,14 @@ test("042: editor-edge-effect — an app-mode editor draws no scroll edge effect
   const { view } = swift([field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)])]);
   expect(view).toMatch(/\.scrollContentBackground\(\.hidden\)\n\s*\.markswiftScrollEdgeEffectHidden\(\)\n/);
 });
+
+test("042: field-text-centre — a select's or field's single line stays centred in its app-mode height floor", () => {
+  // Chrome centres a select's and an input's text in the box; an editor's text starts at the top.
+  const { view } = swift([
+    field("select", { id: "region" }, 0, 32, [option("Frankfurt", { selected: "" })]),
+    field("input", { id: "name", type: "text", value: "Ada" }, 40, 32),
+    field("textarea", { id: "bio" }, 80, 64, [text("Designer.", 0, 0, 0, 0)]),
+  ]);
+  expect(view.match(/minHeight: 32\.0, alignment: \.leading\)/g)).toHaveLength(2);
+  expect(view).toContain("minHeight: 64.0, alignment: .topLeading)");
+});
