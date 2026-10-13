@@ -306,7 +306,8 @@ function captionOutside(n: LayoutNode): LayoutNode {
   const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
   if (!paint.length) return n;
   const rest = n.children.filter((c) => c !== caption);
-  const top = caption === first;
+  // The side it is painted on (`caption-side`), not its place in the markup.
+  const top = caption.bounds.y < Math.min(...rest.map((c) => c.bounds.y));
   const bounds = {
     x: n.bounds.x,
     y: top ? caption.bounds.y + caption.bounds.h : n.bounds.y,

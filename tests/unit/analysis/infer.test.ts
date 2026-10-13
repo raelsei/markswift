@@ -145,6 +145,24 @@ describe("tables", () => {
     expect(filled[0]!.frame).toEqual({ x: 0, y: 26, w: 200, h: 40 });
     expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
   });
+
+  test("042: caption-bottom — a caption first in the markup but painted below stays below the rows", () => {
+    const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", "border-collapse": "collapse" }, [
+      el("caption", { x: 0, y: 40, w: 200, h: 26 }, { display: "table-caption", "caption-side": "bottom" }, [
+        textNode("Quarterly sales", { x: 0, y: 43, w: 100, h: 20 }),
+      ]),
+      el("tbody", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row-group" }, [
+        el("tr", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row" }, [
+          el("td", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-cell" }, [
+            textNode("Q1", { x: 0, y: 10, w: 20, h: 20 }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 66 }, { display: "block" }, [table])), "s");
+    const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
+    expect(texts.map((t) => t.runs[0]!.text)).toEqual(["Q1", "Quarterly sales"]);
+  });
 });
 
 describe("paint invisible at rest", () => {
