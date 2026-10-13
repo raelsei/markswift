@@ -272,3 +272,21 @@ test("042: field-face-leading — an editor in a bundled face spaces its lines f
   const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
   expect(view).toContain(".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3)");
 });
+
+test("042: control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {
+  // Radix switch: a 32×18.4 track (1 px border) with a 16 px thumb at the start; a fixed frame centres by default.
+  const track = el(
+    "button",
+    { role: "switch", "aria-checked": "false", id: "sw" },
+    { x: 0, y: 0, w: 32, h: 18.4 },
+    [
+      el("span", { id: "thumb" }, { x: 1, y: 1.2, w: 16, h: 16 }, [], {
+        display: "block",
+        "background-color": "rgb(255, 255, 255)",
+      }),
+    ],
+    { display: "inline-flex", "align-items": "center", ...BOX },
+  );
+  const { view } = swift([track]);
+  expect(view).toContain(".frame(width: 32.0, alignment: .leading)");
+});

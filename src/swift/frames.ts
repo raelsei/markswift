@@ -102,11 +102,12 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       ? alignment(n.align === "trailing" ? "end" : n.align, surplus.edge === "top" ? "end" : "start")
       : fillAlignment(n, ctx.mode);
   // A fixed frame centres its content by default; the browser packs a container's content per
-  // its own alignment (block flow / flex start), and text per its text-align.
+  // its own alignment (block flow / flex start), text per its text-align, and a control's content
+  // where it measured it (a switch thumb at the track's start).
+  const aligned =
+    n.kind === "text" || n.kind === "stack" || n.kind === "grid" || (n.kind === "control" && n.content.length);
   if (fixedW || fixedH)
-    parts.push(
-      `.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`,
-    );
+    parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${aligned ? `, alignment: ${align}` : ""})`);
   // Limits apply to the painted box. A later infinity frame would expand that paint beyond
   // a finite cap. Margin placement, when needed, is applied after paint by modifiers.ts.
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap
@@ -164,12 +165,22 @@ function fillAlignment(n: SemNode, mode: EmitMode): string {
     const v = n.axis === "v" ? n.distribution : mode === "app" ? n.align : "start";
     return alignment(h, v);
   }
-  // A control's content where the browser put it in its content box: a button centres its label
-  // (a single label carries the whole content box, so it reads as centred too).
+  // A control's content where the browser put it in its content box (layout position, before any
+  // transform): a button centres its label — a single label carries the whole content box, so it
+  // reads as centred too — and a switch keeps its thumb at the start.
   if (n.kind === "control" && n.content.length) {
-    const top = Math.min(...n.content.map((c) => c.frame.y)) - n.frame.y - n.padding[0];
-    const bottom = n.frame.y + n.frame.h - n.padding[2] - Math.max(...n.content.map((c) => c.frame.y + c.frame.h));
-    return alignment("start", Math.abs(top - bottom) <= 1 ? "center" : top < bottom ? "start" : "end");
+    const fs = n.content.map((c) => c.frame);
+    const [h, v] = [
+      [
+        Math.min(...fs.map((f) => f.x)) - n.frame.x - n.padding[3],
+        n.frame.x + n.frame.w - n.padding[1] - Math.max(...fs.map((f) => f.x + f.w)),
+      ],
+      [
+        Math.min(...fs.map((f) => f.y)) - n.frame.y - n.padding[0],
+        n.frame.y + n.frame.h - n.padding[2] - Math.max(...fs.map((f) => f.y + f.h)),
+      ],
+    ].map(([before, after]) => (Math.abs(before! - after!) <= 1 ? "center" : before! < after! ? "start" : "end"));
+    return alignment(h!, v!);
   }
   return ".topLeading";
 }

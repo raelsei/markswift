@@ -355,5 +355,6 @@ test("042: control-floor-centre — a button's label stays centred in its app-mo
   if (control?.kind !== "control") throw new Error("expected a control");
   control.height = { kind: "fixed", px: 32 };
   const app = emitSwift(screen, "F", { mode: "app" }).view;
-  expect(app).toContain("minHeight: 32.0, alignment: .leading)");
+  // Centred on both axes: the single label carries the whole content box (042: control-content-place).
+  expect(app).toContain("minHeight: 32.0, alignment: .center)");
 });
