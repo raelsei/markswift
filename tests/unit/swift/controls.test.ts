@@ -239,3 +239,14 @@ test("details draw the captured summary and marker, no system chevron, no pinned
   const group = view.slice(view.indexOf("DisclosureGroup("));
   expect(group.slice(0, group.indexOf(".disclosureGroupStyle(") + 200)).not.toContain(".frame(height:");
 });
+
+test("042: disabled-field-dim — a disabled text field or editor keeps the design's opacity in app mode", () => {
+  // SwiftUI dims a disabled Button itself, but not a TextField/TextEditor whose text has its own colour.
+  const dim = { display: "inline-block", ...BOX, opacity: "0.5" };
+  const { view } = swift([
+    el("input", { type: "text", value: "Read only", disabled: "" }, { x: 0, y: 0, w: 320, h: 38 }, [], dim),
+    el("textarea", { disabled: "" }, { x: 0, y: 50, w: 320, h: 64 }, [text("Locked", 10, 58, 50, 20)], dim),
+  ]);
+  expect(view.match(/\.disabled\(true\)/g)).toHaveLength(2);
+  expect(view.match(/\.opacity\(0\.5\)/g)).toHaveLength(2);
+});

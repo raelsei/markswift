@@ -57,6 +57,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode: a hugging box with a `max-width` (an empty state's `max-w-sm` column) fits the width its container offers instead of growing to its content's one-line width past it.
 - App mode: a button or link taller than its label (`h-8`, `size-8`) keeps the label where the browser put it — centred — when its height becomes a Dynamic Type floor, instead of pinning it to the top.
 - App mode: `text-wrap: balance` text that wraps keeps native line breaking at the narrowest width that holds its line count (`markswiftBalance`), so its lines come out about equally long as in the browser instead of greedy.
+- App mode: a disabled text field or editor keeps the design's `:disabled` opacity; SwiftUI does not dim a field whose text has its own colour, so its text stayed at full strength.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

@@ -70,7 +70,7 @@ const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: stri
   },
 };
 /** Editable text controls: their own text is laid out in the CSS line box. */
-const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
+export const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
