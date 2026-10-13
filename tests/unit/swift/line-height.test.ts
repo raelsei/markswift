@@ -110,3 +110,32 @@ test("small line-box growth (a kbd border) is app-only padding", () => {
   expect(app).toContain(".padding(.bottom, 2.0)");
   expect(emit(doc, "fidelity").view).not.toContain(".padding(.bottom, 2.0)");
 });
+
+test("042: anon-flex-line-box — text beside an icon in a flex box keeps its half-leading", () => {
+  // An accordion trigger: `flex py-2.5`, 20 px line, a 16 px icon. The #text bounds are the glyph
+  // area (18 px); the anonymous flex item around it is the 20 px line box, so the text keeps it.
+  const doc = paragraph(
+    { display: "flex", "padding-top": "10px", "padding-bottom": "10px" },
+    40,
+    "How is usage billed?",
+  );
+  const row = doc.root.children[0]!;
+  row.children = [
+    {
+      tag: "#text",
+      attrs: {},
+      styles: {},
+      bounds: { x: 20, y: 31, w: 134, h: 18 },
+      text: "How is usage billed?",
+      children: [],
+    },
+    {
+      tag: "div",
+      attrs: {},
+      styles: { display: "block", "background-color": "rgb(200, 0, 0)", "margin-left": "auto" },
+      bounds: { x: 284, y: 30, w: 16, h: 16 },
+      children: [],
+    },
+  ];
+  expect(emit(doc, "app").view).not.toContain("halfLeading: false");
+});
