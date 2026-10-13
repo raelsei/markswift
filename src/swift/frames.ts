@@ -164,5 +164,12 @@ function fillAlignment(n: SemNode, mode: EmitMode): string {
     const v = n.axis === "v" ? n.distribution : mode === "app" ? n.align : "start";
     return alignment(h, v);
   }
+  // A control's content where the browser put it in its content box: a button centres its label
+  // (a single label carries the whole content box, so it reads as centred too).
+  if (n.kind === "control" && n.content.length) {
+    const top = Math.min(...n.content.map((c) => c.frame.y)) - n.frame.y - n.padding[0];
+    const bottom = n.frame.y + n.frame.h - n.padding[2] - Math.max(...n.content.map((c) => c.frame.y + c.frame.h));
+    return alignment("start", Math.abs(top - bottom) <= 1 ? "center" : top < bottom ? "start" : "end");
+  }
   return ".topLeading";
 }

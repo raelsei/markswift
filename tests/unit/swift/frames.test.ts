@@ -291,3 +291,69 @@ test("app-mode text controls treat a measured height as a floor", () => {
   expect(app).not.toContain("height: 38.0");
   expect(fidelity).toContain("height: 38.0");
 });
+
+test("042: control-floor-centre — a button's label stays centred in its app-mode height floor", () => {
+  // shadcn `h-8` button: 32 px border box, 1 px border, a 20 px line Chrome centres in the 30 px content box.
+  const input: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "button.html",
+    combo: { screen: "button", theme: "light" },
+    size: { w: 200, h: 40 },
+    dpr: 1,
+    canvas: "white",
+    fonts: [],
+    root: {
+      id: "root",
+      tag: "main",
+      attrs: {},
+      styles: { display: "block" },
+      bounds: { x: 0, y: 0, w: 200, h: 40 },
+      children: [
+        {
+          id: "save",
+          tag: "button",
+          attrs: { type: "button", class: "inline-flex h-8 items-center justify-center px-2.5" },
+          styles: {
+            display: "inline-flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "font-family": "system-ui",
+            "font-size": "14px",
+            "line-height": "20px",
+            "padding-left": "10px",
+            "padding-right": "10px",
+            ...Object.fromEntries(
+              ["top", "bottom", "left", "right"].flatMap((e) => [
+                [`border-${e}-width`, "1px"],
+                [`border-${e}-style`, "solid"],
+              ]),
+            ),
+            "box-sizing": "border-box",
+            height: "32px",
+            "white-space": "nowrap",
+            "background-color": "rgb(23, 23, 23)",
+            color: "rgb(250, 250, 250)",
+          },
+          bounds: { x: 0, y: 0, w: 113, h: 32 },
+          children: [
+            {
+              tag: "#text",
+              attrs: {},
+              styles: {},
+              bounds: { x: 11, y: 7, w: 91, h: 18 },
+              text: "Save changes",
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  };
+  // The class hint (`h-8`) pins the height in a real capture; pin it on the IR here.
+  const screen = inferScreen(input, "button");
+  const control = screen.root.kind === "stack" ? screen.root.children[0] : screen.root;
+  if (control?.kind !== "control") throw new Error("expected a control");
+  control.height = { kind: "fixed", px: 32 };
+  const app = emitSwift(screen, "F", { mode: "app" }).view;
+  expect(app).toContain("minHeight: 32.0, alignment: .leading)");
+});
