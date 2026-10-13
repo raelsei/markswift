@@ -290,3 +290,9 @@ test("042: control-content-place — a switch thumb stays at the track's start i
   const { view } = swift([track]);
   expect(view).toContain(".frame(width: 32.0, alignment: .leading)");
 });
+
+test("042: editor-edge-effect — an app-mode editor draws no scroll edge effect over its first line", () => {
+  // iOS 26 softens the top edge of a scroll view whose content reaches it; a `<textarea>` paints no such fade.
+  const { view } = swift([field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)])]);
+  expect(view).toMatch(/\.scrollContentBackground\(\.hidden\)\n\s*\.markswiftScrollEdgeEffectHidden\(\)\n/);
+});

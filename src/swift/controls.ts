@@ -176,7 +176,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
-      // The node paints its own background; the editor's would sit on top of it. The editor insets
+      // The node paints its own background; the editor's would sit on top of it, and so would iOS 26's
+      // scroll edge effect over the first line. The editor insets
       // its text inside its frame, which the CSS padding already does. It has no prompt: the
       // placeholder is drawn while the text is empty, where the first line starts. It is as tall as
       // its text (or the placeholder) at the native font, so Dynamic Type grows it; the captured
@@ -184,6 +185,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return [
         `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
+        ".markswiftScrollEdgeEffectHidden()",
         ".markswiftTextEditorInsets()",
         ...(state
           ? [`.markswiftFitsText(${n.placeholder ? `${state}.isEmpty ? ${str(n.placeholder)} : ${state}` : state})`]
