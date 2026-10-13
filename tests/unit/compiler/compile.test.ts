@@ -175,8 +175,9 @@ test("raster images ship once as Images/ files", () => {
     img("logo", "logo.png", 100, { alt: "Logo" }),
   ];
   for (const mode of ["app", "fidelity"] as const) {
-    const result = compileLayout(input, { mode });
-    expect(compileLayout(input, { mode })).toEqual(result);
+    // One asset call per image: the three equal images would otherwise be one extracted subview.
+    const result = compileLayout(input, { mode, extract: false });
+    expect(compileLayout(input, { mode, extract: false })).toEqual(result);
     const files = Object.keys(result.assets).sort();
     expect(files).toHaveLength(2);
     for (const file of files) expect(file).toMatch(/^Images\/[0-9a-f]{12}\.(png|jpg)$/);

@@ -74,7 +74,10 @@ TeamCard()                                                        // the design 
 TeamCard(members: team, title: "Crew", onMessage: { router.chat($0.id) })
 ```
 
-- Per-row buttons collapse into one `on<Name>: (<Type>) -> Void` that receives the tapped row; other actions are `() -> Void`.
+- A run can be single elements too (a text, an image, a button): adjacent equal leaves become a `ForEach` when their
+  colours agree and the stack spaces them evenly; otherwise they stay unrolled.
+- Per-row buttons collapse into one `on<Name>: (<Type>) -> Void` that receives the tapped row (`on<Type>` when the
+  buttons were named after their own captions); other actions are `() -> Void`.
 - State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
   Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
 - Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first

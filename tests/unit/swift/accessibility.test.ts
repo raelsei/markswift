@@ -35,7 +35,8 @@ function swift(children: LayoutNode[], mode: EmitMode): string {
       children,
     },
   };
-  return emitSwift(inferScreen(doc, "A11y"), "A11yView", { mode }).view;
+  // The nodes' own Swift; repeated-sibling extraction has its own tests (components.test.ts).
+  return emitSwift(inferScreen(doc, "A11y"), "A11yView", { mode, extract: false }).view;
 }
 
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;

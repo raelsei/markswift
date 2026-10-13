@@ -205,6 +205,96 @@ test("lists sharing a row type keep each list's own constants", () => {
   expect(swift).toContain("Text(verbatim: row.text2)");
 });
 
+/** Padded, tinted text boxes in a flex column (the issue's repro), `gaps[i]` above box `i + 1`. */
+function leafDoc(words: string[], weight = (_i: number) => "400", gaps = words.map(() => 8)): LayoutDoc {
+  let y = 16;
+  const boxes = words.map((w, i) => {
+    const t: LayoutNode = {
+      tag: "#text",
+      attrs: {},
+      styles: {},
+      bounds: { x: 24, y: y + 8, w: 50, h: 20 },
+      text: w,
+      children: [],
+    };
+    const box = element(
+      "div",
+      16,
+      y,
+      360,
+      36,
+      {
+        display: "block",
+        "padding-top": "8px",
+        "padding-right": "8px",
+        "padding-bottom": "8px",
+        "padding-left": "8px",
+        "background-color": "rgb(238, 238, 255)",
+        "font-size": "14px",
+        "line-height": "20px",
+        color: "rgb(17, 17, 17)",
+        "font-weight": weight(i),
+      },
+      [t],
+    );
+    y += 36 + gaps[i]!;
+    return box;
+  });
+  const column = element(
+    "div",
+    16,
+    16,
+    360,
+    y - 16 - gaps.at(-1)!,
+    { display: "flex", "flex-direction": "column", gap: "8px" },
+    boxes,
+  );
+  return doc(element("main", 0, 0, 393, 200, ROOT, [column]));
+}
+
+test("a run of equal leaf boxes becomes one ForEach over its data", () => {
+  const swift = emit(leafDoc(["Apples", "Pears", "Plums", "Figs"]));
+  expect(count(swift, /ForEach\(/g)).toBe(1);
+  expect(count(swift, /Item\(id: /g)).toBe(4);
+  expect(swift).toContain('text: "Figs"');
+  expect(swift).toContain("Text(verbatim: item.text)");
+  expect(swift).not.toContain('Text(verbatim: "Pears")');
+});
+
+test("a mixed leaf run, or one without a ForEach shape, stays unrolled", () => {
+  const mixed = emit(leafDoc(["Apples", "Pears", "Plums"], (i) => (i === 1 ? "700" : "400")));
+  expect(mixed).not.toContain("ForEach(");
+  expect(mixed).toContain('Text(verbatim: "Pears")');
+  // Uneven gaps: a container run would become per-member subview calls; a leaf run saves nothing that way.
+  const uneven = emit(leafDoc(["Apples", "Pears", "Plums"], undefined, [8, 20, 8]));
+  expect(uneven).not.toContain("struct Item");
+  expect(uneven).toContain('Text(verbatim: "Plums")');
+});
+
+test("a run of buttons is one ForEach with one per-row action", () => {
+  // Distinct node ids, as the snapshot assigns them: handlerless buttons are one action each.
+  const column = (onclick?: (i: number) => string) => {
+    const buttons = ["Apples", "Pears", "Plums"].map((w, i) => ({
+      ...button(w, 16, 16 + i * 28, onclick ? { onclick: onclick(i) } : {}),
+      id: `0/0/${i}`,
+    }));
+    const style = { display: "flex", "flex-direction": "column", gap: "8px", "align-items": "flex-start" };
+    return emit(doc(element("main", 0, 0, 393, 200, ROOT, [element("div", 16, 16, 48, 76, style, buttons)])));
+  };
+  const swift = column();
+  expect(count(swift, /ForEach\(/g)).toBe(1);
+  const actions = [...swift.matchAll(/var (on\w+): \((\w+)\) -> Void = \{ _ in \}/g)];
+  expect(actions.length).toBe(1);
+  const [, action, type] = actions[0]!;
+  // Named for the row, not for the first row's caption.
+  expect(action).toBe(`on${type}`);
+  expect(swift).toContain(`{ ${action}(${type![0]!.toLowerCase()}${type!.slice(1)}) }`);
+  expect(swift).not.toMatch(/onApples|onPears|onPlums/);
+  // One handler with per-row arguments keeps its name; different handlers are different actions, so no run.
+  expect(column((i) => `pick(${i})`)).toContain("var onPick: (ButtonItem) -> Void = { _ in }");
+  expect(column((i) => ["save()", "cancel()", "share()"][i]!)).not.toContain("ForEach(");
+});
+
 test("fidelity mode never extracts", () => {
   expect(emit(listDoc(ROWS), { mode: "fidelity" })).not.toContain("ForEach(");
 });
