@@ -139,3 +139,11 @@ test("042: anon-flex-line-box — text beside an icon in a flex box keeps its ha
   ];
   expect(emit(doc, "app").view).not.toContain("halfLeading: false");
 });
+
+test("042: text-balance — balanced multi-line text balances its native lines in app mode", () => {
+  const doc = paragraph({ "text-wrap-style": "balance", "text-align": "center" }, 40);
+  expect(emit(doc, "app").view).toMatch(/\.markswiftLineHeight\([^\n]*\)\n\s*\.markswiftBalance\(\)\n/);
+  expect(emit(doc, "fidelity").view).not.toContain("markswiftBalance");
+  // One line has nothing to balance.
+  expect(emit(paragraph({ "text-wrap-style": "balance" }, 20), "app").view).not.toContain("markswiftBalance");
+});

@@ -56,6 +56,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - A table caption painted below its rows (`caption-side: bottom`) stays below them even when the markup puts it first; the table's paint no longer lands on the caption's side.
 - App mode: a hugging box with a `max-width` (an empty state's `max-w-sm` column) fits the width its container offers instead of growing to its content's one-line width past it.
 - App mode: a button or link taller than its label (`h-8`, `size-8`) keeps the label where the browser put it — centred — when its height becomes a Dynamic Type floor, instead of pinning it to the top.
+- App mode: `text-wrap: balance` text that wraps keeps native line breaking at the narrowest width that holds its line count (`markswiftBalance`), so its lines come out about equally long as in the browser instead of greedy.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

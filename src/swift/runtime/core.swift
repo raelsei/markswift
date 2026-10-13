@@ -164,6 +164,36 @@ struct MarkswiftLineHeight: ViewModifier {
     }
 }
 
+/// CSS `text-wrap: balance`: the text at the narrowest width that keeps the line count the offered width gives, so its
+/// native lines come out about equally long; the frame around it aligns the narrower box as CSS aligns the lines.
+struct MarkswiftBalance: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        return text.sizeThatFits(ProposedViewSize(width: Self.width(text, offered: proposal.width), height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
+
+    /// Bisects to half a point: the text's height (its line count) at `offered` is the one to keep.
+    static func width(_ text: LayoutSubview, offered: CGFloat?) -> CGFloat? {
+        guard let offered, offered.isFinite else { return offered }
+        let height = text.sizeThatFits(ProposedViewSize(width: offered, height: nil)).height
+        var lo: CGFloat = 0
+        var hi = offered
+        while hi - lo > 0.5 {
+            let mid = (lo + hi) / 2
+            if text.sizeThatFits(ProposedViewSize(width: mid, height: nil)).height > height + 0.5 { lo = mid } else { hi = mid }
+        }
+        return hi
+    }
+}
+
+extension View {
+    func markswiftBalance() -> some View { MarkswiftBalance { self } }
+}
+
 /// Bundle holding the generated `Images/` resources. `.main` for an app target; set it to `Bundle.module`
 /// (or a framework bundle) when the generated views live in a package.
 enum MarkswiftAssets {

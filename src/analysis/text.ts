@@ -376,6 +376,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     lines,
   };
   if (growth) node.lineBoxGrowth = growth;
+  if (host.styles["text-wrap-style"] === "balance") node.balance = true;
   addStateRunColors(node, built);
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
@@ -454,7 +455,13 @@ function reportTextLosses(
       `overflow-wrap: ${ow} → native breaking decides where an overlong word splits`,
     );
   const tws = s["text-wrap-style"];
-  if (tws === "balance" || tws === "pretty" || tws === "stable")
+  if (tws === "balance")
+    note(
+      "approximated",
+      "text-wrap-style",
+      "text-wrap-style: balance → native line breaking at the narrowest width that keeps the line count (app mode)",
+    );
+  else if (tws === "pretty" || tws === "stable")
     note("approximated", "text-wrap-style", `text-wrap-style: ${tws} → native line breaking`);
   const ws = s["word-spacing"];
   if (ws && ws !== "normal" && px(ws) !== 0) note("approximated", "word-spacing", `word-spacing ${ws} dropped`);
