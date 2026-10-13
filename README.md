@@ -151,7 +151,8 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 - `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
   System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`) and boxes grow
   with their text: a measured or authored height on anything that lays out text (text, stacks,
-  grids, text-bearing controls) is a floor, measured layouts move what lies below a grown child,
+  grids, text-bearing controls) is a floor (content CSS lets overflow the box does not grow it),
+  measured layouts move what lies below a grown child,
   hugging label columns fit their text instead of a pinned width, and text editors size to their
   text. Pages taller than the viewport scroll.
   CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
