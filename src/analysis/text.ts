@@ -31,6 +31,57 @@ import { isActivatableRole } from "../model/interactive.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
+/**
+ * Roles, explicit or implied by the tag, whose ARIA name labels a region rather than standing for its
+ * content (Chrome: a `tabpanel` named "All" holding its StaticText).
+ */
+const CONTAINER_ROLES: Record<string, true> = {
+  tabpanel: true,
+  region: true,
+  group: true,
+  dialog: true,
+  alertdialog: true,
+  form: true,
+  navigation: true,
+  complementary: true,
+  main: true,
+  search: true,
+  article: true,
+  document: true,
+  figure: true,
+  list: true,
+  note: true,
+  log: true,
+  status: true,
+  alert: true,
+  toolbar: true,
+  tablist: true,
+  radiogroup: true,
+  menu: true,
+  menubar: true,
+  listbox: true,
+  table: true,
+  grid: true,
+  tree: true,
+  treegrid: true,
+  feed: true,
+  application: true,
+};
+const CONTAINER_TAGS: Record<string, true> = {
+  section: true,
+  nav: true,
+  aside: true,
+  main: true,
+  form: true,
+  article: true,
+  figure: true,
+  dialog: true,
+  fieldset: true,
+  ul: true,
+  ol: true,
+  table: true,
+  search: true,
+};
 
 /**
  * @param leaf  the host holds nothing but this text → its box is the CSS line box (text-node
@@ -54,6 +105,10 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       };
   const note = (level: DiagnosticLevel, feature: string, message: string) =>
     addDiagnostic(base.diagnostics, level, feature, message);
+  // A container holding only text becomes that Text, whose accessibility label would replace its
+  // words: its name labels a group around the Text instead (Chrome: tabpanel "All" › StaticText).
+  const role = host.attrs["role"]?.trim().toLowerCase();
+  if (leaf && base.a11y?.label && (role ? CONTAINER_ROLES[role] : CONTAINER_TAGS[host.tag])) base.a11y.container = true;
   const out: TextRun[] = [];
   const built: MeasuredTextRun[] = [];
   const painted: LayoutNode[] = [];

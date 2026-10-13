@@ -10,15 +10,7 @@ import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
-
-/** Roles whose element AT announces as a toggle. */
-const TOGGLE_ROLES: Readonly<Record<string, true>> = {
-  checkbox: true,
-  switch: true,
-  radio: true,
-  menuitemcheckbox: true,
-  menuitemradio: true,
-};
+import { isToggleRole } from "../model/interactive.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -111,7 +103,9 @@ function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
     (a["aria-current"] !== undefined && a["aria-current"] !== "false")
   )
     out.selected = true;
-  if (role && Object.hasOwn(TOGGLE_ROLES, role)) out.toggle = true;
+  if (isToggleRole(role)) out.toggle = true;
+  const group = role === "radio" ? ctx.labels?.radioGroups.get(n) : undefined;
+  if (group !== undefined) out.group = group;
   if (a["aria-disabled"] === "true") out.disabled = true;
   if (a["aria-hidden"] === "true") out.hidden = true;
   const tag = /^h([1-6])$/.exec(n.tag);

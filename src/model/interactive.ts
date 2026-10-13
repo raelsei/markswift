@@ -16,6 +16,19 @@ export const ACTIVATABLE_ROLES: Readonly<Record<string, true>> = {
 export const isActivatableRole = (role: string | undefined): boolean =>
   Object.hasOwn(ACTIVATABLE_ROLES, role?.trim().toLowerCase() ?? "");
 
+/** Roles whose element AT announces as a toggle; as a Button, the screen owns its checked state. */
+const TOGGLE_ROLES: Readonly<Record<string, true>> = {
+  checkbox: true,
+  switch: true,
+  radio: true,
+  menuitemcheckbox: true,
+  menuitemradio: true,
+};
+
+/** `role` (as authored) names one of `TOGGLE_ROLES`. */
+export const isToggleRole = (role: string | undefined): boolean =>
+  Object.hasOwn(TOGGLE_ROLES, role?.trim().toLowerCase() ?? "");
+
 /** Elements whose `:hover`+`:active` paint is captured as the pressed look: what the emitter makes a Button. */
 export const PRESSABLE_SELECTOR = [
   "button",

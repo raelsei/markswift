@@ -376,7 +376,71 @@ test("028: selected tabs, current links and checked checkboxes add .isSelected",
     "app",
   );
   expect(box).toContain(".accessibilityAddTraits(.isToggle)");
-  expect(box).toContain(".accessibilityAddTraits(.isSelected)");
+  expect(box).toContain(".accessibilityAddTraits(s_box ? .isSelected : [])");
+});
+
+test("a text-only tabpanel's name labels a group around the Text, which keeps its words", () => {
+  const app = swift(
+    [
+      el("button", { id: "t", role: "tab" }, { x: 0, y: 0, w: 60, h: 30 }, [text("All", 8, 4, 40, 22)]),
+      el("div", { id: "panel", role: "tabpanel", "aria-labelledby": "t" }, { x: 0, y: 40, w: 320, h: 22 }, [
+        text("Body copy", 0, 40, 80, 22),
+      ]),
+    ],
+    "app",
+  );
+  const body = viewOf(app, 'Text(verbatim: "Body copy")');
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeGreaterThan(-1);
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeLessThan(
+    body.indexOf('.accessibilityLabel("All")'),
+  );
+});
+
+test("ARIA toggle Buttons own their checked state: a tap flips it, then runs the action", () => {
+  const toggle = (id: string, attrs: Record<string, string>, y: number) =>
+    el("button", { id, type: "button", ...attrs }, { x: 0, y, w: 16, h: 16 }, [], { display: "inline-block" });
+  const label = (id: string, target: string, y: number) =>
+    el("label", { id, for: target }, { x: 30, y, w: 200, h: 22 }, [text(id, 30, y, 60, 22)]);
+  const app = swift(
+    [
+      toggle("on", { role: "checkbox", "aria-checked": "true" }, 0),
+      label("On", "on", 0),
+      toggle("mix", { role: "checkbox", "aria-checked": "mixed" }, 30),
+      toggle("sw", { role: "switch", "aria-checked": "false" }, 60),
+      toggle("off", { role: "switch", "aria-checked": "false", disabled: "" }, 90),
+      label("Off", "off", 90),
+    ],
+    "app",
+  );
+  expect(app).toContain("@State private var s_on: Bool = true");
+  expect(app).toContain("Button {\n                s_on.toggle()\n                onOn()\n            } label: {");
+  expect(app).toContain(".accessibilityAddTraits(s_on ? .isSelected : [])");
+  expect(app).not.toContain(".accessibilityAddTraits(.isSelected)");
+  // HTML: a tap on the `<label for>` clicks the button.
+  expect(app).toContain(".onTapGesture { s_on.toggle(); onOn() }");
+  // `mixed` is the third state: `nil` until the first tap checks it. The explicit value replaces the
+  // "1"/"0" iOS derives from `.isSelected` on a toggle, so it spells them out.
+  expect(app).toContain("@State private var s_mix: Bool? = nil");
+  expect(app).toContain("s_mix = !(s_mix ?? false)");
+  expect(app).toContain('.accessibilityValue(s_mix == nil ? "mixed" : s_mix == true ? "1" : "0")');
+  expect(app).toContain(".accessibilityAddTraits(s_mix == true ? .isSelected : [])");
+  expect(app).toContain("@State private var s_sw: Bool = false");
+  expect(app).not.toContain(".onTapGesture { s_off");
+
+  // Radios of one radiogroup share a selection, tagged by position; the last checked one is selected.
+  const group = swift(
+    [
+      el("div", { id: "plan", role: "radiogroup" }, { x: 0, y: 0, w: 320, h: 40 }, [
+        toggle("m", { role: "radio", "aria-checked": "false" }, 0),
+        toggle("y", { role: "radio", "aria-checked": "true" }, 20),
+      ]),
+    ],
+    "app",
+  );
+  expect(count(group, "@State private var s_plan: String")).toBe(1);
+  expect(group).toContain('@State private var s_plan: String = "1"');
+  expect(group).toContain('s_plan = "0"\n');
+  expect(group).toContain('.accessibilityAddTraits(s_plan == "1" ? .isSelected : [])');
 });
 
 test("028: aria-disabled disables a button in app mode only", () => {

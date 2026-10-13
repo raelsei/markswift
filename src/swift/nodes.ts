@@ -37,6 +37,7 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
         scaledFonts: ctx.scaledFonts,
         statePaint: ctx.control.statePaint,
         pressOf: ctx.control.pressOf,
+        toggleOf: ctx.control.toggleOf,
         focusOf: ctx.control.focusOf,
         id: n.id,
         ...(pressable ? { box: boxModifiers(n, ctx) } : {}),

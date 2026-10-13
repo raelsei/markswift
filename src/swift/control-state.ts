@@ -46,18 +46,30 @@ export function controlMembers(root: SemNode): ControlMembers {
   const members: ControlMembers["members"] = [];
   const activate = new Map<string, string>();
   const radioTag = new Map<SemNode, string>();
+  const toggleOf: ControlMembers["toggleOf"] = new Map();
   const seen: Record<string, number> = {};
   // Radios sharing a `name` hold one `String` selection: each radio's tag is its `value` when the
   // group's values are unique, else its position. HTML: the last `checked` radio wins.
   // ponytail: groups are keyed by `name` across the whole screen, not by form owner; split by `<form>` if a design has two forms reusing a name.
   const groups = new Map<string, ControlNode[]>();
+  // ARIA toggle roles on an element emitted as a Button or tap gesture (a native checkbox owns its
+  // value), and the radios of each `role=radiogroup`, tagged by position (a `<button>`'s `value` is
+  // not in the IR).
+  const ariaToggles = new Set<SemNode>();
+  const ariaGroups = new Map<string, SemNode[]>();
   walk(root, (n) => {
+    if (n.a11y?.toggle && n.action && (n.kind !== "control" || (n.control === "button" && !n.files))) {
+      ariaToggles.add(n);
+      const g = n.a11y.group;
+      if (g !== undefined) ariaGroups.set(g, [...(ariaGroups.get(g) ?? []), n]);
+    }
     if (n.kind !== "control" || n.control !== "radio" || n.group === undefined) return;
     const list = groups.get(n.group);
     if (list) list.push(n);
     else groups.set(n.group, [n]);
   });
   const groupState = new Map<string, string>();
+  const ariaGroupState = new Map<string, string>();
   walk(root, (n) => {
     // A handler used by several elements is one callback: the design calls the same function, or
     // links to the same place. Different keys that name alike are deduplicated `onEdit`, `onEdit2`.
@@ -72,6 +84,49 @@ export function controlMembers(root: SemNode): ControlMembers {
         type: "() -> Void",
         decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
       });
+    }
+    const ax = n.a11y;
+    if (ax && ariaToggles.has(n)) {
+      // An ARIA toggle drawn as a Button: the screen owns the state the design shows. A tap changes
+      // it — a radio selects itself in its radiogroup — and then runs the element's action.
+      // ponytail: a radio outside a radiogroup (`menuitemradio` too) flips like a checkbox; group them if a design needs it.
+      const action = `${actionOf.get(n.action!.key)}()`;
+      const group = ax.group !== undefined ? ariaGroups.get(ax.group) : undefined;
+      let toggle: { tap: string[]; on: string; mixed?: string };
+      if (ax.group !== undefined && group) {
+        let name = ariaGroupState.get(ax.group);
+        if (name === undefined) {
+          name = uniqueName(`s_${identifier(ax.group) || "group"}`, seen);
+          ariaGroupState.set(ax.group, name);
+          const checked = group.findLastIndex((r) => r.a11y?.selected);
+          members.push({
+            name,
+            kind: "value",
+            type: "String",
+            decl: [`@State private var ${name}: String = ${str(checked >= 0 ? String(checked) : "")}`],
+          });
+        }
+        const tag = str(String(group.indexOf(n)));
+        stateOf.set(n, name);
+        toggle = { tap: [`${name} = ${tag}`, action], on: `${name} == ${tag}` };
+      } else {
+        const name = uniqueName(`s_${identifier(n.id) || "toggle"}`, seen);
+        const mixed = ax.value === "mixed";
+        const type = mixed ? "Bool?" : "Bool";
+        stateOf.set(n, name);
+        members.push({
+          name,
+          kind: "value",
+          type,
+          decl: [`@State private var ${name}: ${type} = ${mixed ? "nil" : ax.selected ? "true" : "false"}`],
+        });
+        toggle = mixed
+          ? { tap: [`${name} = !(${name} ?? false)`, action], on: `${name} == true`, mixed: `${name} == nil` }
+          : { tap: [`${name}.toggle()`, action], on: name };
+      }
+      toggleOf.set(n, toggle);
+      if (!ax.disabled && !(n.kind === "control" && n.disabled)) activate.set(n.id, toggle.tap.join("; "));
+      return;
     }
     if (n.kind !== "control") return;
     const key = n.control === "radio" ? n.group : undefined;
@@ -163,6 +218,7 @@ export function controlMembers(root: SemNode): ControlMembers {
     actionOf,
     activate,
     radioTag,
+    toggleOf,
     statePaint,
     pressOf,
     focusOf,

@@ -35,6 +35,9 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - Action members are renamed `on_x` → `onX`; `<div role=button>` is a `Button` instead of a view with an `.isButton` trait.
 
 ### Fixed
+- ARIA toggles drawn as Buttons (`role=checkbox|switch|radio…`, Radix/shadcn) own `@State` seeded from `aria-checked` (`Bool`, `Bool?` for `mixed`; the radios of one `role=radiogroup` share a `String` selection): a tap, or a tap on their `<label>`, changes it and then calls `on<Name>`, and VoiceOver's checked state follows it. The drawn look stays the captured state.
+- An `opacity: 0` `aria-hidden` element (Radix's form-value `<input aria-hidden>` beside each toggle) is dropped instead of emitted as a hidden `Toggle` iOS still exposed.
+- `aria-labelledby`/`aria-label` on a text-only container role (`role=tabpanel`, region, group, …) names a group around the Text (`.accessibilityElement(children: .contain)`) instead of replacing the Text's words.
 - An unstyled `<button>`, input button or text field paints Chrome's control theme (1px grey edge, 2px corners) instead of its computed UA `2px outset`/`2px inset` border; an author background, border, radius or `appearance: none` keeps the CSS paint.
 - Generated code also compiles in targets without MainActor default isolation (`MarkswiftMarkToggleStyle` and `MarkswiftDisclosureStyle` used the main-actor `.plain` button style from a `nonisolated` style).
 - The visual comparison decodes Display-P3 renders to sRGB: the 16-bit P3 PNGs of filtered macOS captures were scored on raw bytes (filter fidelity mean 0.751 instead of 0.925).
