@@ -209,11 +209,12 @@ export function stackOf(
 
   // A hugging child that still holds a filling descendant stays greedy in SwiftUI (an
   // unconstrained container passes `maxWidth: .infinity` up), so a row would share its width
-  // out instead of packing the measured ones. The browser already shrank it to fit: pin that.
+  // out instead of packing the measured ones. The browser already shrank it to fit: pin that (app mode
+  // fits it to its native content instead, `MarkswiftFitWidth`).
   if (axis === "h")
     for (const it of items)
       if (it.sem.width.kind === "hug" && fillsWidthInside(it.sem))
-        it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w) };
+        it.sem.width = { kind: "fixed", px: round2(it.sem.frame.w), hug: true };
 
   let leadInset = 0;
   if (items[0]) {

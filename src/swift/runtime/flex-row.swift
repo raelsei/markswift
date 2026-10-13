@@ -50,3 +50,22 @@ struct MarkswiftFlexRow: Layout {
         }
     }
 }
+
+/// CSS `fit-content` width: the content's ideal width, never wider than offered. App mode gives it to a box that hugs
+/// its content in CSS but holds filling children, which would otherwise take every point a stack offers; unlike the
+/// captured width it widens and narrows with native (Dynamic Type) text.
+struct MarkswiftFitWidth: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let ideal = child.sizeThatFits(.unspecified).width
+        return child.sizeThatFits(ProposedViewSize(width: min(ideal, proposal.width ?? ideal), height: proposal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
+extension View {
+    func markswiftFitWidth() -> some View { MarkswiftFitWidth { self } }
+}

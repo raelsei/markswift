@@ -78,7 +78,7 @@ test("tight multi-line leading is reported as compressing on iOS 26+ only", () =
   expect(msg).toContain("iOS 26");
 });
 
-test("app subtracts the native sub/sup line-box growth the padding already carries", () => {
+test("app floors a padded sub/sup line-box growth instead of padding it", () => {
   const subSup = (mode: "app" | "fidelity") => {
     const screen = inferScreen(paragraph({}, 20, "Water H"), "Paragraph");
     const root = screen.root as SemNode & { children?: SemNode[] };
@@ -92,12 +92,16 @@ test("app subtracts the native sub/sup line-box growth the padding already carri
       { ...host, text: "2", font: small, baselineOffset: 5.4 },
     ];
     text.padding = [text.padding[0], text.padding[1], text.padding[2] + 10, text.padding[3]];
+    text.frame = { ...text.frame, h: text.frame.h + 10 };
     text.lineBoxGrowth = { edge: "bottom", px: 10, padded: true };
     return emitSwift(screen, "P", { mode }).view;
   };
-  // 20/15 × (max(15, 12.5 + 5.4) + 4.6 − 15) = 10
-  expect(subSup("app")).toContain(".padding(.bottom, -10.0)");
-  expect(subSup("fidelity")).not.toContain("-10.0");
+  // The 10 px surplus is a top-aligned floor of the measured box, which absorbs the native
+  // sub/sup growth (20/15 × (max(15, 12.5 + 5.4) + 4.6 − 15) = 10) and Dynamic Type alike.
+  const app = subSup("app");
+  expect(app).toContain(".frame(minHeight: 30.0, alignment: .topLeading)");
+  expect(app).not.toContain(".padding(.bottom");
+  expect(subSup("fidelity")).not.toContain("minHeight");
 });
 
 test("small line-box growth (a kbd border) is app-only padding", () => {

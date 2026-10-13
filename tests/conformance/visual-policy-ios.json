@@ -11,7 +11,7 @@
       "minSsim": 0.83
     },
     "components@app": {
-      "minSsim": 0.48
+      "minSsim": 0.69
     },
     "components@fidelity": {
       "minSsim": 0.48

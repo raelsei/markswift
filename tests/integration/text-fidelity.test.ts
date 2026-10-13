@@ -37,7 +37,9 @@ browserTest("sub/sup line-box growth is not counted twice in app mode", async ()
       css: "body{margin:0}main{width:320px}p{margin:0;font:15px/20px system-ui}",
     },
   );
-  const x = Number(result.code.match(/\.padding\(\.bottom, -([\d.]+)\)/)?.[1]);
-  expect(x).toBeGreaterThanOrEqual(8);
-  expect(x).toBeLessThanOrEqual(10.5);
+  // The surplus is a floor of the measured box (it absorbs the native growth), not extra padding.
+  expect(result.code).not.toContain(".padding(.bottom");
+  const h = Number(result.code.match(/minHeight: ([\d.]+), alignment: \.topLeading\)/)?.[1]);
+  expect(h).toBeGreaterThanOrEqual(28);
+  expect(h).toBeLessThanOrEqual(30.5);
 });
