@@ -224,6 +224,20 @@ test("a box pinned only against its filling children fits its content in app mod
   expect(fidelity).not.toContain("markswiftFitWidth");
 });
 
+test("an app-mode floor does not grow by the overflow CSS paints past a fixed box", () => {
+  // A 20px line box in a 16px box with 3px padding (badge-like): Chrome overflows it by 10px and keeps 16.
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  const text = screen.root.children[0]!;
+  if (text.kind !== "text") throw new Error("expected text");
+  Object.assign(text, { height: { kind: "fixed", px: 16 }, frame: { ...text.frame, h: 16 }, padding: [3, 0, 3, 0] });
+  text.lineBoxGrowth = undefined;
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  expect(app).toContain(".padding(EdgeInsets(top: -2.0, leading: 0.0, bottom: -2.0, trailing: 0.0))");
+  expect(app).toContain("minHeight: 16.0");
+  expect(emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view).not.toContain("-2.0");
+});
+
 test("app-mode text controls treat a measured height as a floor", () => {
   const input: LayoutDoc = {
     version: LAYOUT_DOC_VERSION,
