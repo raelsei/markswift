@@ -174,8 +174,11 @@ test("finite caps preserve intrinsic dimensions before background paint", () => 
   for (const mode of ["app", "fidelity"] as const) {
     const code = emitSwift(screen, "ConstraintView", { mode }).view;
     const capped = code.slice(code.indexOf("maxWidth: 200.0, maxHeight: 100.0"));
-    expect(capped).toContain(".fixedSize(horizontal: true, vertical: true)");
-    expect(capped.indexOf(".fixedSize(")).toBeLessThan(capped.indexOf(".background("));
+    // App fits the width to the offered one (`markswiftFitWidth`, 042: hug-cap-fit), still before paint.
+    const hug = mode === "app" ? ".markswiftFitWidth()" : ".fixedSize(horizontal: true, vertical: true)";
+    if (mode === "app") expect(capped).toContain(".fixedSize(horizontal: false, vertical: true)");
+    expect(capped).toContain(hug);
+    expect(capped.indexOf(hug)).toBeLessThan(capped.indexOf(".background("));
   }
 });
 
@@ -222,6 +225,21 @@ test("a box pinned only against its filling children fits its content in app mod
   const fidelity = emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view;
   expect(fidelity).toContain("width: 123.0");
   expect(fidelity).not.toContain("markswiftFitWidth");
+});
+
+test("042: hug-cap-fit — a hugging box with a max-width never takes more than its container offers in app mode", () => {
+  // An empty state's `max-w-sm` column: CSS shrink-to-fit is min(content, 384, container); SwiftUI's
+  // `fixedSize` takes the content's ideal width, one 346 pt line, past a 308 pt card.
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  screen.root.width = { kind: "hug" };
+  screen.root.maxWidth = 384;
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  expect(app).not.toContain(".fixedSize(horizontal: true, vertical: false)");
+  expect(app).toMatch(/maxWidth: 384\.0, [^\n]*\n\s*\.markswiftFitWidth\(\)/);
+  expect(emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view).toContain(
+    ".fixedSize(horizontal: true, vertical: false)",
+  );
 });
 
 test("an app-mode floor does not grow by the overflow CSS paints past a fixed box", () => {

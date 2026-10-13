@@ -133,10 +133,12 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   if (flex.length) parts.push(`.frame(${flex.join(", ")}, alignment: ${align})`);
   // A finite SwiftUI frame accepts its parent's proposal even for intrinsic content. Ask
   // for the capped frame's ideal size on hugging axes before any background is painted.
+  // App: CSS shrink-to-fit never exceeds the container, so the width fits (`markswiftFitWidth`)
+  // instead of taking the content's ideal — one unwrapped line — past the offered width.
   const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
   const hugH = !fixedH && n.height.kind === "hug" && n.maxHeight !== undefined;
-  if (hugW || hugH) parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
-  if (fit) parts.push(".markswiftFitWidth()");
+  if ((hugW && !app) || hugH) parts.push(`.fixedSize(horizontal: ${hugW && !app}, vertical: ${hugH})`);
+  if (fit || (hugW && app)) parts.push(".markswiftFitWidth()");
   return parts;
 }
 

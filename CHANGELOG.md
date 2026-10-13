@@ -54,6 +54,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode grows with Dynamic Type: fixed heights on boxes that lay out text are floors (content Chrome lets overflow the box, such as an icon taller than its badge, does not grow it), `MarkswiftMeasuredLayout` moves frames below a grown child, hugging label columns fit their text (`markswiftFitWidth`), `TextEditor` sizes to its text, fields honour CSS `line-height` growth, an off-centre text's line-box surplus is a floor instead of padding, and a control's chevron stays beside its label. The R7 behaviour check scales the Chrome reference to true AX3 (measured per-text-style factors; it launched at AX2 before) and treats authored heights as floors.
 - Text straight inside a flex or grid box beside other items (an accordion trigger's title beside its chevron) keeps its CSS line box instead of its glyph area, so the row is as tall as in the browser.
 - A table caption painted below its rows (`caption-side: bottom`) stays below them even when the markup puts it first; the table's paint no longer lands on the caption's side.
+- App mode: a hugging box with a `max-width` (an empty state's `max-w-sm` column) fits the width its container offers instead of growing to its content's one-line width past it.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 
