@@ -15,7 +15,7 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
-import type { ColorCtx, EmitMode, ScreenTokens } from "./context.ts";
+import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
@@ -40,6 +40,8 @@ export interface ControlDeps extends ColorCtx {
   box?: string[];
   /** Pressable owner → its `@MarkswiftPressed` member; built by `controlMembers`. */
   pressOf?: Map<SemNode, string>;
+  /** ARIA toggle Button → what its tap runs; built by `controlMembers`. */
+  toggleOf?: ControlMembers["toggleOf"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
 }
@@ -124,6 +126,10 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
+      // An ARIA toggle (`role=checkbox|switch|radio`): the tap changes the screen's state, then acts.
+      const toggle = deps.toggleOf?.get(n);
+      if (toggle)
+        return ["Button {", ...indent(toggle.tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
       return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
     }
     case "link": {

@@ -4,20 +4,24 @@ import { type SemNode, walk } from "../model/semantic.ts";
 /**
  * Fully transparent, not animated, never revealed by a pressed/focused state, and silent: Chrome
  * keeps `opacity: 0` content in the accessibility tree (a visually hidden native `<input>` behind
- * a custom checkbox), so only pure paint qualifies.
+ * a custom checkbox) unless `aria-hidden` removes it. So an `aria-hidden` box goes whatever it
+ * holds — Radix's form-value `<input aria-hidden>` beside its toggle is neither seen nor announced.
+ * ponytail: `pointer-events` is not captured; an invisible aria-hidden control the design still lets
+ * the pointer hit would lose that tap. Capture `pointer-events` if a design relies on it.
  */
 function invisible(n: SemNode): boolean {
   if (n.style.opacity !== 0 || n.diagnostics.some((d) => d.feature === "animation-name")) return false;
+  const muted = !!n.a11y?.hidden;
   let silent = true;
   walk(n, (d) => {
-    if (
-      d.states?.pressed ||
-      d.states?.focused ||
-      d.kind === "text" ||
-      d.kind === "control" ||
-      (d.kind === "image" && d.alt) ||
-      (d.kind === "svg" && d.label) ||
-      d.a11y?.label
+    if (d.states?.pressed || d.states?.focused) silent = false;
+    else if (
+      !muted &&
+      (d.kind === "text" ||
+        d.kind === "control" ||
+        (d.kind === "image" && d.alt) ||
+        (d.kind === "svg" && d.label) ||
+        d.a11y?.label)
     )
       silent = false;
   });

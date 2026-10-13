@@ -320,8 +320,11 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         fail("snapshot", `${role}:${chromeName}`, `no ${types?.join("/") ?? "text"} element exposes "${chromeName}"`);
     }
     const ix = large.interactions;
+    // A tap on the selected radio keeps it selected (HTML and ARIA): only an unselected one must flip.
+    const radios = new Set(item.ax.filter((a) => a.role === "radio").map((a) => flat(a.name)));
     for (const s of ix.switches)
-      if (s.before === s.after) fail("interaction", `switch:${s.label}`, `value stayed ${s.before}`);
+      if (s.before === s.after && !(s.before === "1" && radios.has(flat(s.label))))
+        fail("interaction", `switch:${s.label}`, `value stayed ${s.before}`);
     for (const f of ix.fields)
       if (!(f.type === "secureTextField" ? /•{2}/.test(f.value) : f.value.includes("mk")))
         fail("interaction", `field:${f.label}`, `value after typing: "${f.value}"`);

@@ -260,7 +260,7 @@ per-fixture table, e.g. for the per-PR macOS numbers in
 | domain | mode | n | mean ssim | min ssim | mean mismatch | anchors ok |
 |---|---|---|---|---|---|---|
 | attribute | app | 14 | 0.9534 | 0.8576 (attr-alt-320-light-app) | 0.0188 | 0/0 |
-| components | app | 100 | 0.9151 | 0.4877 (shadcn-accordion-320-dark-app) | 0.0215 | 0/0 |
+| components | app | 100 | 0.9156 | 0.4877 (shadcn-accordion-320-dark-app) | 0.0213 | 0/0 |
 | css-layout | app | 64 | 0.9828 | 0.8424 (display--contents-320-light-app) | 0.0111 | 16/16 |
 | css-misc | app | 12 | 0.9687 | 0.9352 (animation-name-390-dark-app) | 0.0189 | 0/0 |
 | css-paint | app | 80 | 0.9541 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
