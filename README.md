@@ -152,8 +152,12 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 ## Modes
 
 - `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
-  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`); text-bearing
-  controls treat their measured height as a floor; pages taller than the viewport scroll.
+  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`) and boxes grow
+  with their text: a measured or authored height on anything that lays out text (text, stacks,
+  grids, text-bearing controls) is a floor (content CSS lets overflow the box does not grow it),
+  measured layouts move what lies below a grown child,
+  hugging label columns fit their text instead of a pinned width, and text editors size to their
+  text. Pages taller than the viewport scroll.
   CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
   compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
   ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
@@ -260,12 +264,12 @@ per-fixture table, e.g. for the per-PR macOS numbers in
 | domain | mode | n | mean ssim | min ssim | mean mismatch | anchors ok |
 |---|---|---|---|---|---|---|
 | attribute | app | 14 | 0.9534 | 0.8576 (attr-alt-320-light-app) | 0.0188 | 0/0 |
-| components | app | 100 | 0.9156 | 0.4877 (shadcn-accordion-320-dark-app) | 0.0213 | 0/0 |
+| components | app | 100 | 0.9290 | 0.7031 (shadcn-accordion-320-dark-app) | 0.0193 | 0/0 |
 | css-layout | app | 64 | 0.9828 | 0.8424 (display--contents-320-light-app) | 0.0111 | 16/16 |
 | css-misc | app | 12 | 0.9687 | 0.9352 (animation-name-390-dark-app) | 0.0189 | 0/0 |
 | css-paint | app | 80 | 0.9541 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
 | css-typography | app | 100 | 0.9305 | 0.5713 (word-break-320-dark-app) | 0.0289 | 0/0 |
-| html | app | 60 | 0.9273 | 0.7571 (input-320-dark-app) | 0.0273 | 4/4 |
+| html | app | 60 | 0.9291 | 0.7571 (input-320-dark-app) | 0.0271 | 4/4 |
 | svg | app | 40 | 0.9761 | 0.9326 (svg-lineargradient-320-dark-app) | 0.0164 | 0/0 |
 | tailwind-v4 | app | 8 | 0.9491 | 0.8750 (gradients-390-dark-app) | 0.0269 | 0/0 |
 | attribute | fidelity | 14 | 0.9361 | 0.8417 (attr-alt-320-light-fidelity) | 0.0243 | 0/0 |

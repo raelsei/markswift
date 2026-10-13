@@ -17,7 +17,7 @@ import type { Theme } from "../model/layout.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
-import { colorArgs, colorExpr, fontExpr, indent, num, str } from "./format.ts";
+import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
@@ -69,6 +69,8 @@ const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: stri
     edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
   },
 };
+/** Editable text controls: their own text is laid out in the CSS line box. */
+const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
@@ -79,6 +81,14 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
     if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
+    // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it — scaling
+    // with Dynamic Type like the font. ponytail: system faces only (the runtime's SF natural line); bundled faces keep
+    // their natural line until controls carry the face metrics.
+    const lh = n.font.lineHeight;
+    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && n.font.family.kind === "system")
+      out.push(
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)})`,
+      );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
   // the design's `:disabled` opacity there so the two do not compound). Fidelity renders a still
@@ -165,11 +175,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it. The editor insets
       // its text inside its frame, which the CSS padding already does. It has no prompt: the
-      // placeholder is drawn while the text is empty, where the first line starts.
+      // placeholder is drawn while the text is empty, where the first line starts. It is as tall as
+      // its text (or the placeholder) at the native font, so Dynamic Type grows it; the captured
+      // height stays the minimum (`frameModifier`).
       return [
         `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
         ".markswiftTextEditorInsets()",
+        ...(state
+          ? [`.markswiftFitsText(${n.placeholder ? `${state}.isEmpty ? ${str(n.placeholder)} : ${state}` : state})`]
+          : []),
         ...focused,
         ...(n.placeholder && state
           ? [
@@ -309,7 +324,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       );
       return [
         `DisclosureGroup(isExpanded: ${binding}) {`,
-        ...indent(n.content.length ? stackOfNodes(n.content, deps) : ["EmptyView()"], 1),
+        ...indent(n.content.length ? stackOfNodes(n, n.content, deps) : ["EmptyView()"], 1),
         "} label: {",
         ...indent(label, 1),
         "}",
@@ -376,7 +391,7 @@ function barHeight(n: ControlNode): number {
 /** The control's label/content view: its laid-out children, or nothing. */
 function body(n: ControlNode, deps: ControlDeps): string[] {
   const nodes = n.label ? [n.label, ...n.content] : n.content;
-  return nodes.length ? stackOfNodes(nodes, deps) : ["EmptyView()"];
+  return nodes.length ? stackOfNodes(n, nodes, deps) : ["EmptyView()"];
 }
 
 /**
@@ -409,25 +424,41 @@ function wrap(open: string, inner: string[], close: string[]): string[] {
  * when their boxes do not overlap horizontally, otherwise one under the other, with the measured
  * gap between the first pair.
  */
-function stackOfNodes(nodes: SemNode[], deps: ControlDeps): string[] {
-  if (nodes.length === 1) return deps.child(nodes[0]!);
+function stackOfNodes(n: ControlNode, content: SemNode[], deps: ControlDeps): string[] {
+  if (content.length === 1) return deps.child(content[0]!);
+  const app = deps.mode === "app";
+  // App mode: content is in reading order (top first), so a trailing icon nudged a pixel above its label comes first;
+  // side by side is judged left to right. Fidelity keeps the reading-order test.
+  const nodes = app ? [...content].sort((a, b) => a.frame.x - b.frame.x) : content;
   let horizontal = true;
   for (let i = 1; i < nodes.length; i++) {
     const a = nodes[i - 1]!.frame,
       b = nodes[i]!.frame;
     if (b.x < a.x + a.w - 0.5) horizontal = false;
   }
-  const [a, b] = [nodes[0]!.frame, nodes[1]!.frame];
+  const ordered = horizontal ? nodes : content;
+  const [a, b] = [ordered[0]!.frame, ordered[1]!.frame];
   const gap = Math.max(0, Math.round((horizontal ? b.x - (a.x + a.w) : b.y - (a.y + a.h)) * 100) / 100);
+  // App mode: a pair pushed to both content edges of a box wider than it (`justify-content: space-between`) keeps the
+  // edges when native text grows or shrinks, instead of a fixed spacing that squeezes the label.
+  // ponytail: Spacer minimum 0 — the CSS column-gap is not in the IR; add it to ControlNode if a wrapped label must keep
+  // its distance from the trailing icon.
+  const spread =
+    app &&
+    horizontal &&
+    ordered.length === 2 &&
+    n.width.kind !== "hug" &&
+    Math.abs(a.x - (n.frame.x + n.padding[3])) <= 1 &&
+    Math.abs(b.x + b.w - (n.frame.x + n.frame.w - n.padding[1])) <= 1;
+  const children = ordered.map((c) => deps.child(c));
+  if (spread)
+    return [
+      "HStack(alignment: .center, spacing: 0.0) {",
+      ...indent([...children[0]!, "Spacer(minLength: 0.0)", ...children[1]!], 1),
+      "}",
+    ];
   const open = horizontal
     ? `HStack(alignment: .center, spacing: ${num(gap)}) {`
     : `VStack(alignment: .leading, spacing: ${num(gap)}) {`;
-  return [
-    open,
-    ...indent(
-      nodes.flatMap((c) => deps.child(c)),
-      1,
-    ),
-    "}",
-  ];
+  return [open, ...indent(children.flat(), 1), "}"];
 }

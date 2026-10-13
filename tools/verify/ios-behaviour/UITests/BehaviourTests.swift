@@ -30,7 +30,8 @@ final class BehaviourTests: XCTestCase {
             run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", rtl: true).snapshot())] }
             run("xSmall") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryXS"))] }
             run("ax5") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryAccessibilityXXXL"))] }
-            run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityL"))] }
+            // `.accessibilityExtraLarge` = DynamicTypeSize.accessibility3 (`AccessibilityL` is accessibility2).
+            run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityXL"))] }
             let data = try JSONSerialization.data(withJSONObject: ["launches": launches, "errors": errors], options: [.sortedKeys])
             try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json"))
         }

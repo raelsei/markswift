@@ -5,6 +5,7 @@ import { colorExpr, fontExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine, SYSTEM_LINE_HEIGHT } from "./text-box.ts";
+import { surplusFloor } from "./frames.ts";
 
 /**
  * Ascent, descent and natural line height of a run's face, as multiples of its size. System faces
@@ -122,9 +123,10 @@ export function textExpr(
     // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
     // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up
     // that much shorter than the browser's. Pass both growths into the helper if that path matters.
-    // Growth already in the box padding loses what native text adds itself; unpadded growth is
-    // added for the part native text does not grow.
-    if (n.lineBoxGrowth) {
+    // Padded growth is a `minHeight` floor in app mode (`surplusFloor`), which absorbs what native
+    // text adds itself. Otherwise growth already in the box padding loses what native text adds
+    // itself; unpadded growth is added for the part native text does not grow.
+    if (n.lineBoxGrowth && !surplusFloor(n, ctx)) {
       const { edge, px, padded } = n.lineBoxGrowth;
       const g = (padded ? 0 : px) - Math.min(px, nativeInlineGrowth(glyphs, lh / first.font.size));
       if (Math.abs(g) >= 0.5) out.push(`.padding(.${edge}, ${num(g)})`);

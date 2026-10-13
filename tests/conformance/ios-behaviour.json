@@ -77,27 +77,6 @@
       "owner": "post-1.0"
     },
     {
-      "case": "shadcn-native-select",
-      "check": "audit:textClipped",
-      "match": "Small",
-      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-native-select",
-      "check": "audit:textClipped",
-      "match": "Default",
-      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-native-select",
-      "check": "audit:textClipped",
-      "match": "Disabled",
-      "reason": "size-variant menu pickers (h-7/h-8/h-9): the Picker label is clipped by the measured control height at every content size",
-      "owner": "post-1.0"
-    },
-    {
       "case": "tw-form",
       "check": "audit:textClipped",
       "match": "Preview deployments",

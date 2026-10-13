@@ -93,6 +93,37 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(view.split(".markswiftTextEditorInsets()").length - 1).toBe(2);
   expect(view).toContain("if s_note.isEmpty {");
   expect(view).toContain('Text(verbatim: "Add a note")');
+  // App mode: editors are as tall as their text (or prompt), the captured height a floor; fields keep the CSS line box.
+  expect(view).toContain(".markswiftFitsText(s_bio)");
+  expect(view).toContain('.markswiftFitsText(s_note.isEmpty ? "Add a note" : s_note)');
+  expect(view).toContain("minHeight: 72.0");
+  expect(view).not.toContain("height: 72.0,");
+  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(4);
+  const fidelity = swift(
+    [field("textarea", { id: "bio" }, 0, 72, [text("Designer and developer.", 0, 0, 0, 0)])],
+    "fidelity",
+  );
+  expect(fidelity.view).not.toContain("markswiftFitsText");
+  expect(fidelity.view).not.toContain("markswiftFieldLineHeight");
+});
+
+test("app mode keeps a label and trailing icon spread across a button when the icon sits a pixel higher", () => {
+  const button = el(
+    "button",
+    { id: "b" },
+    { x: 0, y: 0, w: 320, h: 40 },
+    [
+      text("Billing", 0, 10, 100, 20),
+      el("span", { id: "icon" }, { x: 304, y: 9, w: 16, h: 16 }, [], { "background-color": "rgb(0, 0, 0)" }),
+    ],
+    { display: "flex" },
+  );
+  const app = swift([button]).view;
+  expect(app).toContain("Spacer(minLength: 0.0)");
+  expect(app.indexOf('"Billing"')).toBeLessThan(app.indexOf("Spacer(minLength: 0.0)"));
+  const fidelity = swift([button], "fidelity").view;
+  expect(fidelity).not.toContain("Spacer(");
+  expect(fidelity).toContain("VStack(alignment: .leading");
 });
 
 test("appearance: none removes the select arrow; native checkboxes and ranges drop the author's box paint", () => {

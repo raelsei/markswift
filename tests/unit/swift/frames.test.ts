@@ -197,15 +197,46 @@ test("a height cap clipping the first line keeps its top rather than its center"
   }
 });
 
-test("a measured fallback keeps its captured height in app mode instead of accepting extra space", () => {
+test("a measured fallback grows with its text in app mode but is never stretched", () => {
   const screen = inferScreen(capturedText({}), "constraints");
   if (screen.root.kind !== "stack") throw new Error("expected stack");
   screen.root.height = { kind: "fixed", px: 100 };
   screen.root.padding = [0, 0, 0, 0];
   screen.root.measured = { width: 200, height: 100, frames: [{ x: 0, y: 0, w: 200, h: 30 }] };
-  expect(emitSwift(screen, "ConstraintView", { mode: "app" }).view).toContain(
-    ".frame(height: 100.0, alignment: .topLeading)",
-  );
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  // MarkswiftMeasuredLayout sizes itself (captured height plus its children's growth), so a floor takes no extra space.
+  expect(app).toContain("], grows: true) {");
+  expect(app).toContain("minHeight: 100.0");
+  expect(app).not.toContain("maxHeight: .infinity");
+  const fidelity = emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view;
+  expect(fidelity).toContain(".frame(height: 100.0, alignment: .topLeading)");
+  expect(fidelity).not.toContain("grows:");
+});
+
+test("a box pinned only against its filling children fits its content in app mode", () => {
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  screen.root.children[0]!.width = { kind: "fixed", px: 123, hug: true };
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  expect(app).toContain(".markswiftFitWidth()");
+  expect(app).not.toContain("width: 123.0");
+  const fidelity = emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view;
+  expect(fidelity).toContain("width: 123.0");
+  expect(fidelity).not.toContain("markswiftFitWidth");
+});
+
+test("an app-mode floor does not grow by the overflow CSS paints past a fixed box", () => {
+  // A 20px line box in a 16px box with 3px padding (badge-like): Chrome overflows it by 10px and keeps 16.
+  const screen = inferScreen(capturedText({}), "constraints");
+  if (screen.root.kind !== "stack") throw new Error("expected stack");
+  const text = screen.root.children[0]!;
+  if (text.kind !== "text") throw new Error("expected text");
+  Object.assign(text, { height: { kind: "fixed", px: 16 }, frame: { ...text.frame, h: 16 }, padding: [3, 0, 3, 0] });
+  text.lineBoxGrowth = undefined;
+  const app = emitSwift(screen, "ConstraintView", { mode: "app" }).view;
+  expect(app).toContain(".padding(EdgeInsets(top: -2.0, leading: 0.0, bottom: -2.0, trailing: 0.0))");
+  expect(app).toContain("minHeight: 16.0");
+  expect(emitSwift(screen, "ConstraintView", { mode: "fidelity" }).view).not.toContain("-2.0");
 });
 
 test("app-mode text controls treat a measured height as a floor", () => {
