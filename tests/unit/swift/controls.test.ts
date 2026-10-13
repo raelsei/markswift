@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { EmitMode } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
+import type { ControlNode } from "../../../src/model/semantic.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 
 const FONT = {
@@ -249,4 +250,25 @@ test("042: disabled-field-dim — a disabled text field or editor keeps the desi
   ]);
   expect(view.match(/\.disabled\(true\)/g)).toHaveLength(2);
   expect(view.match(/\.opacity\(0\.5\)/g)).toHaveLength(2);
+});
+
+test("042: field-face-leading — an editor in a bundled face spaces its lines from that face's natural line", () => {
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "controls.html",
+    combo: { screen: "controls", theme: "light" },
+    size: { w: 320, h: 100 },
+    dpr: 2,
+    canvas: "white",
+    fonts: [],
+    root: el("main", {}, { x: 0, y: 0, w: 320, h: 100 }, [
+      field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)]),
+    ]),
+  };
+  const screen = inferScreen(doc, "Controls");
+  const editor = (screen.root.kind === "stack" ? screen.root.children[0] : screen.root) as ControlNode;
+  editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
+  const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
+  const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
+  expect(view).toContain(".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3)");
 });

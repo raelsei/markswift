@@ -58,6 +58,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode: a button or link taller than its label (`h-8`, `size-8`) keeps the label where the browser put it — centred — when its height becomes a Dynamic Type floor, instead of pinning it to the top.
 - App mode: `text-wrap: balance` text that wraps keeps native line breaking at the narrowest width that holds its line count (`markswiftBalance`), so its lines come out about equally long as in the browser instead of greedy.
 - App mode: a disabled text field or editor keeps the design's `:disabled` opacity; SwiftUI does not dim a field whose text has its own colour, so its text stayed at full strength.
+- App mode: text fields and editors in a bundled webfont honour CSS `line-height` too, spaced from that face's own natural line (they kept the face's natural line before), so a `<textarea>`'s lines sit as far apart as in the browser.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

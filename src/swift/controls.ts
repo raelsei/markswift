@@ -14,6 +14,7 @@
  * is identical in both modes.
  */
 import type { Theme } from "../model/layout.ts";
+import type { FontMetrics } from "../model/fonts.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
@@ -44,6 +45,8 @@ export interface ControlDeps extends ColorCtx {
   toggleOf?: ControlMembers["toggleOf"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
+  /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
+  fontMetrics?: FontMetrics;
 }
 
 /**
@@ -82,12 +85,12 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
     // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it — scaling
-    // with Dynamic Type like the font. ponytail: system faces only (the runtime's SF natural line); bundled faces keep
-    // their natural line until controls carry the face metrics.
+    // with Dynamic Type like the font; leading over the face's natural line (a bundled face's own metrics, else SF's).
     const lh = n.font.lineHeight;
-    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && n.font.family.kind === "system")
+    const face = n.font.family.kind === "custom" ? deps.fontMetrics?.[n.font.family.name.toLowerCase()] : undefined;
+    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (n.font.family.kind === "system" || face))
       out.push(
-        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)})`,
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""})`,
       );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
