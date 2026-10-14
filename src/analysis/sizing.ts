@@ -8,6 +8,7 @@ import { type InferenceContext } from "./context.ts";
 import { crossAlign, alignSelfOf } from "./alignment.ts";
 import { constraintsOf } from "./size-constraints.ts";
 import { flexGrowthSize } from "./flex-sizing.ts";
+import { admitFlexRow } from "./flex-row.ts";
 
 /**
  * The box's bottom inset as the browser left it: its own padding, plus the last in-flow child's
@@ -141,12 +142,27 @@ export function sizeOf(
   }
   let fillsW = false,
     fillsH = false;
+  // A percentage width of a stretched block in a vertical flow keeps its fraction of the
+  // containing block (MarkswiftFraction), when the capture shows exactly that fraction.
+  let fraction: number | undefined;
   if (ctx.parent) {
     const [ppt, ppr, ppb, ppl] = insetsOf(ctx.parent.styles);
     const outerW = n.bounds.w + px(s["margin-left"]) + px(s["margin-right"]);
     const outerH = n.bounds.h + px(s["margin-top"]) + px(s["margin-bottom"]);
     fillsW = Math.abs(outerW - (ctx.parent.bounds.w - ppl - ppr)) <= 1;
     fillsH = Math.abs(outerH - (ctx.parent.bounds.h - ppt - ppb)) <= 1;
+    const pct = declW && declW !== "100%" && /^\d+(\.\d+)?%$/.test(declW) ? Number.parseFloat(declW) / 100 : undefined;
+    if (
+      pct !== undefined &&
+      ctx.parentAxis === "v" &&
+      align === "stretch" &&
+      !abs &&
+      !/inline/.test(s["display"] ?? "") &&
+      px(s["margin-left"]) === 0 &&
+      px(s["margin-right"]) === 0 &&
+      Math.abs(n.bounds.w - pct * (ctx.parent.bounds.w - ppl - ppr)) <= 1
+    )
+      fraction = pct;
   }
   const measuredW: Size = { kind: "fixed", px: round2(n.bounds.w) };
   const measuredH: Size = { kind: "fixed", px: round2(n.bounds.h) };
@@ -156,12 +172,36 @@ export function sizeOf(
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
+  else if (fraction !== undefined) width = { kind: "fraction", fraction, px: round2(n.bounds.w) };
   else if (growthW) width = growthW;
   else if (ctx.parentAxis === "v" && align === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;
   } else if (hugsW || !ctx.parent) width = { kind: "hug" };
   else if (fillsW && !abs) width = { kind: "fill" };
   else width = measuredW;
+  // A width the native stacks keep at the captured size is reported, not silent: a percentage
+  // resolves against this container only, and a px width the layout shrank or clamped is pinned
+  // at the laid-out size. The root always fills the screen (inferScreen), so it pins nothing.
+  if (declW && ctx.parent && width.kind === "fixed" && s["display"] !== "inline") {
+    if (declW.includes("%"))
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        "width",
+        `width ${declW} pinned at ${width.px}px; it does not follow the container at other widths`,
+      );
+    else if (/^[\d.]+px$/.test(declW) && !(ctx.parentAxis === "h" && admitFlexRow(ctx.parent))) {
+      const [, ir, , il] = insetsOf(s);
+      const authored = px(declW) + (s["box-sizing"] === "border-box" ? 0 : ir + il);
+      if (Math.abs(authored - width.px) > 0.5)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "width",
+          `width ${declW} laid out at ${width.px}px (flex shrink or a min/max limit); pinned at the laid-out width`,
+        );
+    }
+  }
 
   let height: Size;
   if (declH && /px$/.test(declH)) height = measuredH;
@@ -187,6 +227,11 @@ export function sizeOf(
       else if (ml > mr) selfAlign = "end";
     }
   }
+  // `margin: 0 auto` / `margin-left: auto` on a box that does not fill its parent: the authored
+  // `auto` (Typed OM, `preferredSize.autoMargins`) placed it. Equal px margins are no such intent.
+  const auto = n.preferredSize?.autoMargins;
+  if (selfAlign === undefined && width.kind !== "fill" && ctx.parentAxis === "v" && !abs && auto?.includes("left"))
+    selfAlign = auto.includes("right") ? "center" : "end";
   if (selfAlign === undefined && placed && ctx.parentAxis === "v" && !abs) selfAlign = placed;
   const selfAlignV = placed && ctx.parentAxis === "h" && !abs ? placed : undefined;
   return {

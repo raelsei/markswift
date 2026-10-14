@@ -34,24 +34,25 @@ function pushGradient(out: Slot[], g: SvgGradient, key: string): void {
   });
 }
 
-function pushStyle(out: Slot[], st: Style): void {
-  st.fills.forEach((p, i) => {
-    pushPaint(out, p, `fill${i}`, "fill");
+function pushStyle(out: Slot[], st: Partial<Style>, prefix = ""): void {
+  st.fills?.forEach((p, i) => {
+    pushPaint(out, p, `${prefix}fill${i}`, "fill");
   });
   if (st.border && st.border.width > 0) {
-    if (visible(st.border.color)) out.push({ key: "border", role: "border", color: st.border.color });
+    if (visible(st.border.color)) out.push({ key: `${prefix}border`, role: "border", color: st.border.color });
   }
   for (const edge of ["top", "right", "bottom", "left"] as const) {
     const e = st.borderSides?.[edge];
-    if (e && e.width > 0 && visible(e.color)) out.push({ key: `border.${edge}`, role: "border", color: e.color });
+    if (e && e.width > 0 && visible(e.color))
+      out.push({ key: `${prefix}border.${edge}`, role: "border", color: e.color });
   }
   if (st.outline && st.outline.width > 0 && visible(st.outline.color))
-    out.push({ key: "outline", role: "border", color: st.outline.color });
-  st.shadows.forEach((s, i) => {
-    pushShadow(out, s, `shadow${i}`);
+    out.push({ key: `${prefix}outline`, role: "border", color: st.outline.color });
+  st.shadows?.forEach((s, i) => {
+    pushShadow(out, s, `${prefix}shadow${i}`);
   });
   st.filters?.forEach((f, i) => {
-    if (f.kind === "drop-shadow") pushShadow(out, f.shadow, `filter${i}`);
+    if (f.kind === "drop-shadow") pushShadow(out, f.shadow, `${prefix}filter${i}`);
   });
 }
 
@@ -70,6 +71,15 @@ function pushRun(out: Slot[], r: TextRun, i: number): void {
 function colorSlots(n: SemNode): Slot[] {
   const out: Slot[] = [];
   pushStyle(out, n.style);
+  // Pressed/focused colours are design colours too: they become tokens the ternaries name.
+  for (const key of ["pressed", "focused"] as const) {
+    const s = n.states?.[key];
+    if (!s) continue;
+    pushStyle(out, s, `${key}.`);
+    s.runColors?.forEach((c, i) => {
+      if (visible(c)) out.push({ key: `${key}.run${i}`, role: "text", color: c });
+    });
+  }
   if (n.kind === "text")
     n.runs.forEach((r, i) => {
       pushRun(out, r, i);
@@ -89,6 +99,7 @@ function colorSlots(n: SemNode): Slot[] {
   // alt text of a broken image. Both land in the view as a `.foregroundStyle`, so both are
   // literals a token can replace.
   if (n.kind === "control" && visible(n.color)) out.push({ key: "control", role: "text", color: n.color });
+  if (n.kind === "control" && visible(n.accent)) out.push({ key: "accent", role: "fill", color: n.accent });
   if (n.kind === "image" && visible(n.color)) out.push({ key: "alt", role: "text", color: n.color });
   return out;
 }

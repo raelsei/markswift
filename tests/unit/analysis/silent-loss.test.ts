@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
  * Inference losses that used to happen without a diagnostic (audit 2026-10-10). Each block is a
  * characterization of one bug: it failed before the fix and pins the fixed behaviour.
@@ -28,7 +29,7 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 
 function doc(root: LayoutNode): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },

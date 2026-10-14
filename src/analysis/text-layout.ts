@@ -131,13 +131,10 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
  * A measured box is an inline *fragment*, not a line: Blink splits one at every collapsed
  * whitespace run that came from a source newline, so several boxes routinely share a line.
  * Fragments are grouped by their top edge; the first fragment of each line after the first is
- * a break, and the first output character at or after its raw index is where it goes.
+ * a break, and the first output character at or after its raw index is where it goes. Only
+ * fidelity bakes the breaks into the output; its emitter reports that.
  */
-export function markLineBreaks(
-  built: MeasuredTextRun[],
-  note: (level: DiagnosticLevel, feature: string, message: string) => void,
-): void {
-  let forced = false;
+export function markLineBreaks(built: MeasuredTextRun[]): void {
   for (const b of built) {
     const boxes = b.node.lines;
     if (!boxes || boxes.length < 2) continue;
@@ -159,10 +156,7 @@ export function markLineBreaks(
     }
     if (!breaks.length) continue;
     b.run.breaks = breaks;
-    forced = true;
   }
-  if (forced)
-    note("approximated", "text-wrap-mode", "line division forced from the browser (native wraps differently)");
 }
 
 /**

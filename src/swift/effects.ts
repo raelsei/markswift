@@ -55,8 +55,9 @@ export function filterModifier(f: Filter, n: SemNode, ctx: ColorCtx): string[] {
     case "grayscale":
       return [`.grayscale(${num(f.amount)})`];
     case "brightness":
-      // CSS multiplies the channels, SwiftUI adds: neutral is 1 there and 0 here.
-      return [`.brightness(${num(f.amount - 1)})`];
+      // CSS multiplies the channels (c·x); SwiftUI's brightness adds. Contrast scales about ½,
+      // so (c − ½)·x + ½ + (x − 1)/2 = c·x exactly.
+      return [`.contrast(${num(f.amount)})`, `.brightness(${num((f.amount - 1) / 2)})`];
     case "contrast":
       return [`.contrast(${num(f.amount)})`];
     case "saturate":

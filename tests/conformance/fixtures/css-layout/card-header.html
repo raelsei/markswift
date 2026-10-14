@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="display: grid; grid-template-columns">
+<meta name="markswift-reflow" content="native">
+<title>card-header</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 0; }
+.head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 4px; padding: 0 16px; }
+.title { font-weight: 600; margin: 0; }
+.desc { color: var(--muted); font-size: 14px; margin: 0; }
+.action { background: var(--fg); color: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; line-height: 16px; }
+.body { padding: 12px 16px 0; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<div class="card">
+  <div class="head"><div><p class="title">Notifications</p><p class="desc">You have three unread messages from your team this week.</p></div><span class="action">View all</span></div>
+  <div class="body">Choose what you want to be notified about and how often.</div>
+</div>
+</main>
+</body>
+</html>

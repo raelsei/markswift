@@ -73,8 +73,13 @@ export function edgeWidth(s: Record<string, string>, edge: EdgeName): number {
   return st && st !== "none" && st !== "hidden" ? px(s[`border-${edge}-width`]) : 0;
 }
 
-/** Padding + border per edge (top, right, bottom, left): the distance from the box edge to its content. */
+/**
+ * Padding + border per edge (top, right, bottom, left): the distance from the box edge to its content.
+ * Rows and row groups have none: CSS ignores their padding, a collapsed border lies inside the cells' boxes
+ * and a separated one is not drawn.
+ */
 export function insetsOf(s: Record<string, string>): [number, number, number, number] {
+  if (/^table-(row|row-group|header-group|footer-group)$/.test(s["display"] ?? "")) return [0, 0, 0, 0];
   return EDGES.map((e) => px(s[`padding-${e}`]) + edgeWidth(s, e)) as [number, number, number, number];
 }
 

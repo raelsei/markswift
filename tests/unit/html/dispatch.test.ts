@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { compileLayout, type LayoutDoc } from "../../../src/compiler/index.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
@@ -21,7 +22,7 @@ function element(
 
 function document(root: LayoutNode): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "elements.html",
     combo: { screen: "elements", theme: "light" },
     size: { w: 120, h: 40 },
@@ -55,7 +56,7 @@ test("block anchors retain their native link semantics", () => {
   expect(compileLayout(input).code).toContain("Link(destination:");
 });
 
-test("wrapped prose links preserve DOM reading order and report their lost destination", () => {
+test("wrapped prose links preserve DOM reading order and stay links", () => {
   const before = { ...element("#text"), text: "Before ", bounds: { x: 0, y: 0, w: 40, h: 20 } };
   const linked = { ...element("#text"), text: "long link wrapping", bounds: { x: 0, y: 0, w: 100, h: 40 } };
   const after = { ...element("#text"), text: " After", bounds: { x: 60, y: 20, w: 40, h: 20 } };
@@ -66,12 +67,10 @@ test("wrapped prose links preserve DOM reading order and report their lost desti
   expect(screen.root.kind).toBe("text");
   if (screen.root.kind !== "text") throw new Error("Prose was split into flow controls");
   expect(screen.root.runs.map((run) => run.text).join("")).toBe("Before long link wrapping After");
-  expect(
-    compileLayout(input)
-      .diagnostics.flatMap((item) => item.diagnostics)
-      .map((d) => d.message)
-      .join("\n"),
-  ).toContain("destination dropped");
+  const result = compileLayout(input);
+  expect(result.code).toContain('Text.markswiftLink("long link wrapping", "https://example.com"');
+  // An inline link loses nothing any more: no `a` diagnostic at all.
+  expect(result.diagnostics.flatMap((item) => item.diagnostics).filter((d) => d.feature === "a")).toEqual([]);
 });
 
 test("custom elements preserve children while making missing behavior explicit", () => {

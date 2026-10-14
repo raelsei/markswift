@@ -184,6 +184,16 @@ test("the compiler cannot load browser capture or filesystem font packaging", ()
   expect(violations).toEqual([]);
 });
 
+test("shipped source runs on Node: no Bun globals or bun modules", async () => {
+  const violations: string[] = [];
+  for (const file of files)
+    if (/\bBun\./.test(await readFile(file, "utf8"))) violations.push(`${display(file)}: Bun.*`);
+  for (const [file, dependencies] of graph)
+    for (const edge of dependencies)
+      if (/^bun(:|$)/.test(edge.specifier)) violations.push(`${display(file)} -> ${edge.specifier}`);
+  expect(violations).toEqual([]);
+});
+
 test("dependency scanning distinguishes erased types from runtime imports and re-exports", () => {
   const edges = importsOf(
     `

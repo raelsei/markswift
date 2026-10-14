@@ -1,9 +1,10 @@
 import type { Page } from "playwright-core";
 import type { CompileOptions, CompileResult } from "../compiler/index.ts";
 import type { LayoutDoc, Theme } from "../model/layout.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
 export type { HtmlSource } from "../input/types.ts";
 
-export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
+export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "palette"> {
   /** Already compiled CSS. Utility and CSS Modules selectors work exactly like normal CSS. */
   css?: string;
   root?: string;
@@ -15,6 +16,11 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
   /** Class added to `<html>` for the dark capture, for class-based themes such as `.dark`. */
   darkClass?: string;
   viewport?: { width: number; height: number };
+  /**
+   * Default true: when the capture contains a grid or flex row that a runtime Layout would reflow, a second capture
+   * at 320px (390px when the viewport is ≤ 320px) must agree, or the layout stays pinned.
+   */
+  probe?: boolean;
   dpr?: number;
   /** Installed Playwright browser channel; defaults to chrome. */
   browserChannel?: string;
@@ -29,8 +35,8 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode"> {
 }
 
 export interface ConversionResult extends CompileResult {
-  /** Font packaging limitations, browser resource/page errors and light/dark pairing limitations. */
-  warnings: string[];
+  /** Font packaging limitations, browser resource/page errors, viewport-dependent CSS and light/dark pairing limitations. */
+  warnings: ConversionWarning[];
   /** The emitted capture: the light one for `adaptive`. */
   layout: LayoutDoc;
   /** The dark capture of an `adaptive` conversion. */

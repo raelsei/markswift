@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
@@ -44,7 +45,7 @@ function measuredRow(intrinsic: boolean) {
     ),
   ]);
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "layout-test",
     combo: { screen: "row", theme: "light" },
     size: { w: 393, h: 90 },
@@ -96,7 +97,7 @@ test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecat
     element("div", 0, 0, 100, 200, { display: "block", "background-color": "rgb(255, 0, 0)" }),
   ]);
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "layout-test",
     combo: { screen: "s", theme: "light" },
     size: { w: 100, h: 50 },
@@ -108,4 +109,5 @@ test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecat
   const view = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view;
   expect(view).toContain("ScrollView(.vertical) {");
   expect(view).not.toContain("showsIndicators");
+  expect(view).toContain(".markswiftScrollEdgeEffectHidden()");
 });

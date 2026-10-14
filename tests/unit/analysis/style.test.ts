@@ -94,3 +94,58 @@ test("mix-blend-mode is parsed once, in analysis; the emitter only names it", ()
   expect(swiftBlend("color-dodge")).toBe(".colorDodge");
   expect(swiftBlend("normal")).toBeUndefined();
 });
+
+// Computed UA defaults of an unstyled control, as Chrome 155 reports them per colour scheme.
+function uaControl(tag: string, edge: string, background: string, extra: Record<string, string> = {}): LayoutNode {
+  const [style, color] = [edge.split(" ")[0]!, edge.slice(edge.indexOf(" ") + 1)];
+  const styles: Record<string, string> = {
+    appearance: "auto",
+    "background-color": background,
+    "background-image": "none",
+    "box-shadow": "none",
+    ...Object.fromEntries(corners.map((c) => [`border-${c}-radius`, "0px"])),
+  };
+  for (const e of ["top", "right", "bottom", "left"]) {
+    styles[`border-${e}-style`] = style;
+    styles[`border-${e}-width`] = "2px";
+    styles[`border-${e}-color`] = color;
+  }
+  return { tag, attrs: {}, bounds: { x: 0, y: 0, w: 78, h: 27 }, children: [], styles: { ...styles, ...extra } };
+}
+const grey = (v: number) => ({ r: v / 255, g: v / 255, b: v / 255, a: 1 });
+
+test("an unstyled button or text field paints Chrome's control theme, not its computed 3D border", () => {
+  const cases: Array<[LayoutNode, number]> = [
+    [uaControl("button", "outset rgb(0, 0, 0)", "rgb(239, 239, 239)"), 118],
+    [uaControl("input", "outset rgb(0, 0, 0)", "rgb(239, 239, 239)"), 118],
+    [uaControl("button", "outset rgb(255, 255, 255)", "rgb(107, 107, 107)"), 107],
+    [uaControl("input", "inset rgb(118, 118, 118)", "rgb(255, 255, 255)"), 118],
+    [uaControl("input", "inset rgb(133, 133, 133)", "rgb(59, 59, 59)"), 133],
+  ];
+  for (const [n, edge] of cases) {
+    const style = styleOf(n, []);
+    expect(style.border).toEqual({ width: 1, color: grey(edge) });
+    expect(style.borderSides).toBeUndefined();
+    expect(style.radius).toEqual([2, 2, 2, 2]);
+  }
+});
+
+test("an author's background, border, radius or appearance: none hands the control back to CSS", () => {
+  const light = ["outset rgb(0, 0, 0)", "rgb(239, 239, 239)"] as const;
+  const styled = [
+    uaControl("button", ...light, { "border-top-left-radius": "6px" }),
+    uaControl("button", ...light, { "background-color": "rgb(204, 204, 204)" }),
+    uaControl("button", ...light, { "border-left-color": "rgb(255, 0, 0)" }),
+    uaControl("button", ...light, { "border-bottom-width": "3px" }),
+    uaControl("button", ...light, { appearance: "none" }),
+    uaControl("div", ...light),
+    uaControl("input", "inset rgb(118, 118, 118)", "rgb(255, 255, 255)", {
+      "box-shadow": "rgb(0, 0, 0) 0px 0px 0px 0px",
+    }),
+  ];
+  for (const n of styled) {
+    const style = styleOf(n, []);
+    expect(style.border).toBeUndefined();
+    expect(style.borderSides).toBeDefined();
+  }
+});

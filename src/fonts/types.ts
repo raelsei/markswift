@@ -1,4 +1,5 @@
 import type { FaceMetrics } from "../model/fonts.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
 
 /** A face bundled with the generated Swift; its bytes are `FontPackage.assets["Fonts/<file>"]`. */
 export interface PackagedFace {
@@ -24,6 +25,6 @@ export interface FontPackage {
   assets: Record<string, Uint8Array>;
   /** `Info.plist` `UIAppFonts` fragment; empty when nothing was packaged. */
   plist: string;
-  /** What the design asked for and did not get, one line each. */
-  notes: string[];
+  /** What the design asked for and did not get. */
+  notes: ConversionWarning[];
 }

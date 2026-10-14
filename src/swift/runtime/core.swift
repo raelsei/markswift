@@ -100,6 +100,98 @@ extension Text {
     nonisolated static func markswiftRuns(_ runs: [Text]) -> Text {
         runs.dropFirst().reduce(runs.first ?? Text(verbatim: "")) { $0 + $1 }
     }
+
+    /// An inline `<a href>` run: a tappable `Text` in the design's colour. A link run ignores
+    /// `.foregroundStyle` and draws in the accent colour unless the attributed string carries its own
+    /// colour, so the colour rides on the attribute. The paragraph's `openURL` handler routes in-app hrefs.
+    nonisolated static func markswiftLink(_ text: String, _ href: String, _ color: Color) -> Text {
+        var run = AttributedString(text)
+        run.link = markswiftURL(href)
+        run.swiftUI.foregroundColor = color
+        return Text(run)
+    }
+}
+
+extension View {
+    /// CSS `line-height` on a `Text` whose first run is `size` points, scaling like a font
+    /// `relativeTo: style`. `ascent` and `descent` place the browser's baseline (the face's
+    /// ascent and descent as the browser rounded them, multiples of the size); `natural` is the
+    /// face's native line height (default: SF Pro, 2444 per 2048).
+    ///
+    /// iOS/macOS 26+: `.lineHeight(.multiple(factor:))` makes every line exactly `lineHeight`
+    /// (tight values compress) and puts the first baseline at y = size; the padding pair moves it
+    /// to the CSS half-leading baseline without changing the height. iOS 18–25: `.lineSpacing`
+    /// plus half-leading padding, which cannot compress tight leading.
+    /// `halfLeading: false` (a measured box that is not the line box) leaves out the half-leading
+    /// above the first and below the last line.
+    func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
+                             ascent: CGFloat, descent: CGFloat,
+                             natural: CGFloat = 2444.0 / 2048, halfLeading: Bool = true) -> some View {
+        modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
+                                     halfLeading: halfLeading, size: size, relativeTo: style))
+    }
+}
+
+struct MarkswiftLineHeight: ViewModifier {
+    let factor: CGFloat
+    let ascent: CGFloat
+    let descent: CGFloat
+    let natural: CGFloat
+    let halfLeading: Bool
+    @ScaledMetric private var size: CGFloat
+
+    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, size: CGFloat, relativeTo style: Font.TextStyle) {
+        self.factor = factor
+        self.ascent = ascent
+        self.descent = descent
+        self.natural = natural
+        self.halfLeading = halfLeading
+        _size = ScaledMetric(wrappedValue: size, relativeTo: style)
+    }
+
+    func body(content: Content) -> some View {
+        let leading = (factor - natural) * size
+        let trim = halfLeading ? 0 : leading / 2
+        if #available(iOS 26.0, macOS 26.0, *) {
+            // CSS puts the baseline half the leading plus the ascent below the line top; SwiftUI at y = size.
+            let shift = (factor / 2 + (ascent - descent) / 2 - 1) * size
+            content.lineHeight(.multiple(factor: factor))
+                .padding(.top, shift - trim)
+                .padding(.bottom, -shift - trim)
+        } else {
+            content.lineSpacing(max(0, leading)).padding(.vertical, leading / 2 - trim)
+        }
+    }
+}
+
+/// CSS `text-wrap: balance`: the text at the narrowest width that keeps the line count the offered width gives, so its
+/// native lines come out about equally long; the frame around it aligns the narrower box as CSS aligns the lines.
+struct MarkswiftBalance: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        return text.sizeThatFits(ProposedViewSize(width: Self.width(text, offered: proposal.width), height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
+
+    /// Bisects to half a point: the text's height (its line count) at `offered` is the one to keep.
+    static func width(_ text: LayoutSubview, offered: CGFloat?) -> CGFloat? {
+        guard let offered, offered.isFinite else { return offered }
+        let height = text.sizeThatFits(ProposedViewSize(width: offered, height: nil)).height
+        var lo: CGFloat = 0
+        var hi = offered
+        while hi - lo > 0.5 {
+            let mid = (lo + hi) / 2
+            if text.sizeThatFits(ProposedViewSize(width: mid, height: nil)).height > height + 0.5 { lo = mid } else { hi = mid }
+        }
+        return hi
+    }
+}
+
+extension View {
+    func markswiftBalance() -> some View { MarkswiftBalance { self } }
 }
 
 /// Bundle holding the generated `Images/` resources. `.main` for an app target; set it to `Bundle.module`
@@ -340,6 +432,22 @@ struct MarkswiftTile<Content: View>: View {
         } symbols: {
             content().frame(width: tile.width, height: tile.height).tag(0)
         }
+    }
+}
+
+extension View {
+    /// A CSS scroll box has no edge effect; iOS 26 blurs the content under a ScrollView's edges
+    /// and paints it outside the box's rounded clip. Earlier systems and SDKs draw none.
+    @ViewBuilder func markswiftScrollEdgeEffectHidden() -> some View {
+        #if os(iOS) && compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            scrollEdgeEffectHidden(true, for: .all)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 

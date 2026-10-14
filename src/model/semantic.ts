@@ -34,13 +34,66 @@ export function confidenceOf(list: readonly Diagnostic[]): Confidence {
   return list.some((d) => d.level === "unmapped") ? "unmapped" : list.length ? "approximated" : "mapped";
 }
 
-export type Size = { kind: "fixed"; px: number } | { kind: "fill" } | { kind: "hug" };
+/**
+ * One per-conversion message, not tied to a node. `capture`: page errors, unreadable resources
+ * and viewport-dependent CSS the view does not follow; `fonts`: font packaging; `adaptive`:
+ * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034).
+ * `level` and `feature` are set together when the message is a design loss, with the same
+ * meaning as on `Diagnostic` (`feature` is an inventory row id). `component` names the
+ * component a package build was converting when the message arose.
+ */
+export interface ConversionWarning {
+  source: "capture" | "fonts" | "adaptive" | "build" | "palette";
+  level?: DiagnosticLevel;
+  feature?: string;
+  component?: string;
+  message: string;
+}
+
+export type Size =
+  /**
+   * `hug`: CSS sizes the box to its content; the captured px only keeps a filling descendant from making it greedy
+   * (fidelity pins it, app mode fits it to its native content).
+   */
+  | { kind: "fixed"; px: number; hug?: true }
+  | { kind: "fill" }
+  | { kind: "hug" }
+  /** CSS percentage width of the containing block; `px` is the captured width (fidelity keeps it). */
+  | { kind: "fraction"; fraction: number; px: number };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
 export interface MeasuredLayout {
   width: number;
   height: number;
   frames: Rect[];
+}
+
+/** One authored grid column track the runtime can size: px, fr, or content (`auto`). */
+export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number } | { kind: "auto" };
+/**
+ * An authored `grid-template-columns` that `MarkswiftTracks` reproduces. Either explicit `tracks`, or
+ * `autoRepeat` (`repeat(auto-fill|auto-fit, minmax(<min>px, 1fr))`, equal columns, count from the width).
+ */
+export interface GridTemplate {
+  tracks: GridTrack[];
+  autoRepeat?: { mode: "fill" | "fit"; min: number };
+}
+
+/**
+ * One CSS flex item MarkswiftFlexRow sizes: `basis` the border-box px of a px/0/0% basis (CSS adds padding and
+ * border to the flex base size), or null = content (measured natively).
+ */
+export interface FlexItem {
+  grow: number;
+  shrink: number;
+  basis: number | null;
+}
+/** An admitted nowrap flex row; app mode emits MarkswiftFlexRow, fidelity keeps the children's captured widths. */
+export interface FlexRow {
+  items: FlexItem[];
+  align: "start" | "center" | "end" | "stretch";
+  /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink"; message: string };
 }
 
 export type Axis = "v" | "h";
@@ -110,6 +163,14 @@ export interface Style {
   tokens?: string[];
 }
 
+/**
+ * Paint deltas of an interaction state on top of `style`; only changed fields are present; a field the state
+ * removes is present in its transparent/identity form. `runColors` is index-aligned with a text node's runs.
+ */
+export type StateStyle = Partial<
+  Pick<Style, "fills" | "border" | "borderSides" | "outline" | "shadows" | "opacity" | "transform" | "filters">
+> & { runColors?: Array<Color | undefined> };
+
 export interface FontSpec {
   /** `system` families map to platform fonts by design; `custom` is a bundled family name. */
   family: { kind: "system"; design: "default" | "rounded" | "monospaced" | "serif" } | { kind: "custom"; name: string };
@@ -164,6 +225,8 @@ export interface TextRun {
    * carry as a box.
    */
   gap?: number;
+  /** Inline `<a href>`: the run is a link. `action` is set for an href the app must resolve (fragment, relative path). */
+  link?: { href: string; action?: Action };
 }
 
 /**
@@ -257,6 +320,18 @@ export interface SizeConstraints {
   maxHeight?: number;
 }
 
+/** A callback the generated view exposes for something the design lets the user activate. */
+export interface Action {
+  /** One member per key: the handler source (`save()`), `#<target>` for an in-app link, else `node:<id>`. */
+  key: string;
+  /** Words the member is named from: handler name, `id`, `aria-label`, caption or link target — the first non-empty. */
+  words: string;
+  /** One line quoting the design, the member's doc comment. */
+  origin: string;
+  /** The element contains another control: a tap gesture on its box, not a Button (SwiftUI must not nest Buttons). */
+  gesture?: true;
+}
+
 export interface SemBase extends SizeConstraints {
   /** Template path id; stable across regenerations. */
   id: string;
@@ -284,17 +359,42 @@ export interface SemBase extends SizeConstraints {
   overlays: Overlay[];
   /** What assistive technology is told about this node, beyond what the element itself implies. */
   a11y?: {
-    /** `aria-label`, else the text of the `<label>` that names this control. */
+    /** `aria-labelledby` text, else `aria-label`, else the text of the `<label>` that names this control. */
     label?: string;
+    /** A text-only element of a container role (tabpanel, region, …): `label` names a group around the Text, not its words. */
+    container?: true;
     /** `aria-hidden="true"`. */
     hidden?: true;
     /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
     heading?: 1 | 2 | 3 | 4 | 5 | 6;
     /** `role` = button | link | img on an element that is not already that control. */
     trait?: "isButton" | "isLink" | "isImage";
+    /** `aria-valuetext`, else `aria-valuenow`; `aria-expanded` → `expanded`/`collapsed`, `aria-checked=mixed` → `mixed` when there is no value. */
+    value?: string;
+    /** Text of the `aria-describedby` elements, else `aria-description`. */
+    hint?: string;
+    /** `aria-selected`/`aria-checked`/`aria-pressed` = `true`, or an `aria-current` other than `false`. */
+    selected?: true;
+    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio. */
+    toggle?: true;
+    /** `role=radio` inside a `role=radiogroup`: the group element's id. Its radios share one selection. */
+    group?: string;
+    /** `aria-disabled="true"`. */
+    disabled?: true;
   };
   /** `<label>`: id of the toggle/radio its tap changes. */
   labelFor?: string;
+  /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
+  nameHint?: { words: string; source: "component" | "id" | "slot" | "aria" | "class" | "tag" };
+  /** `data-markswift-field`: the design names the data field this node's content becomes. */
+  field?: string;
+  /**
+   * What activating this element does; set on Buttons, in-app links, text fields inside a
+   * `<form onsubmit>` (Return), and activatable non-controls.
+   */
+  action?: Action;
+  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
+  states?: { pressed?: StateStyle; focused?: StateStyle };
 }
 
 export interface StackNode extends SemBase {
@@ -315,6 +415,8 @@ export interface StackNode extends SemBase {
   wrap?: { columnGap: number; rowGap: number };
   /** Captured positions for wrapping combinations without a native layout mapping. */
   measured?: MeasuredLayout;
+  /** Admitted CSS flex allocation (row, nowrap); see analysis/flex-row.ts. */
+  flex?: FlexRow;
   children: SemNode[];
 }
 
@@ -324,6 +426,19 @@ export interface GridNode extends SemBase {
   hSpacing: number;
   vSpacing: number;
   measured?: MeasuredLayout;
+  /**
+   * Admitted authored template: app mode emits MarkswiftTracks; fidelity keeps the captured geometry and reports
+   * `fidelityNote`. `cells`: the `children` index of each grid item in DOM (row-major) order; `margins`: each item's
+   * [top, bottom] margin, same order. `fixed`: positions in `cells` of items sized in px on both axes, which keep
+   * their frames (CSS does not stretch them).
+   */
+  template?: GridTemplate & {
+    stretch: boolean;
+    fidelityNote: string;
+    cells: number[];
+    margins: Array<[number, number]>;
+    fixed: number[];
+  };
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];
@@ -345,8 +460,17 @@ export interface TextNode extends SemBase {
   noWrap?: true;
   /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
   unbreakable?: true;
+  /** CSS `text-wrap: balance`: app mode narrows the native lines to equal lengths (`markswiftBalance`). */
+  balance?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
+  /**
+   * Line-box growth the browser measured beyond `lines × line-height` (sub/sup, larger inline
+   * runs, `kbd` borders) on `edge`. `padded`: over 2 px, already included in `padding` (both
+   * modes); smaller growth is app-only. App mode subtracts the growth native text adds on its own,
+   * so it is not counted twice.
+   */
+  lineBoxGrowth?: { edge: "top" | "bottom"; px: number; padded: boolean };
 }
 
 export interface SvgNode extends SemBase {
@@ -427,6 +551,12 @@ export interface ControlNode extends SemBase {
   placeholder?: string;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
   inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
+  /** WHATWG autofill field name from `autocomplete`, e.g. `one-time-code`. */
+  autofill?: string;
+  /** `@inputmode`: the virtual keyboard the design asks for. */
+  inputMode?: string;
+  /** `@enterkeyhint`: the Return key's label. */
+  enterKey?: string;
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
   /** Radio `@name`; radios with the same group share one selection. */
@@ -444,12 +574,6 @@ export interface ControlNode extends SemBase {
   options?: string[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
-  /**
-   * The callback the generated view should run: an `@onclick` handler's source, or — for an
-   * `<a href>` the app cannot resolve (an in-page fragment, a relative path) — the target the
-   * design named, so the placeholder the developer fills in says which link it was.
-   */
-  action?: string;
   /** `<details open>`: initial disclosure state. */
   expanded?: boolean;
   /**
@@ -463,6 +587,12 @@ export interface ControlNode extends SemBase {
   font?: FontSpec;
   /** Colour of that text (the element's computed `color`). */
   color?: Color;
+  /** `datePicker` only: the `<input type>` it came from, which decides the components it shows. */
+  dateKind?: "date" | "time" | "datetime-local" | "month" | "week";
+  /** CSS `accent-color` (absent for `auto`): the tint Chrome gives checkboxes, radios, ranges and progress bars. */
+  accent?: Color;
+  /** Computed `appearance: none`: the author removed the native widget chrome (no select arrow). */
+  appearance?: "none";
 }
 
 export type SemNode = StackNode | GridNode | TextNode | SvgNode | ImageNode | BoxNode | ControlNode;

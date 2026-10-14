@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; background: #fff; }
+      main { width: 393px; box-sizing: border-box; padding: 20px; font: 16px/20px system-ui; background: #fff; color: #111827; }
+      .btn, .ghost { display: block; width: 120px; height: 40px; margin: 0 0 16px; border: 0; border-radius: 8px; font: 600 16px/20px system-ui; padding: 0; }
+      .btn { background: #2563eb; color: #fff; }
+      .btn:hover { background: #1d4ed8; }
+      .btn:active { transform: scale(0.96); }
+      .ghost { background: transparent; color: #111827; }
+      .ghost:hover { background: #e5e7eb; }
+      .lnk { display: inline-block; width: 80px; height: 24px; margin: 0 0 16px; color: #2563eb; text-decoration: none; }
+      .lnk:hover { color: #1e3a8a; }
+      .card { width: 200px; height: 48px; margin: 0 0 20px; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; padding: 13px 12px; background: #fff; }
+      .card:hover { border-color: #2563eb; background: #f8fafc; }
+      .field { display: block; width: 240px; height: 40px; margin: 0 0 24px; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 10px; font: 16px/20px system-ui; color: #111827; background: #fff; outline: none; resize: none; }
+      textarea.field { height: 64px; }
+      .field:focus-visible { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35); }
+    </style>
+  </head>
+  <body>
+    <main data-markswift-root>
+      <button class="btn">Save</button>
+      <button class="ghost">Cancel</button>
+      <a class="lnk" href="#more">More</a>
+      <div role="button" onclick="open()" class="card">Card</div>
+      <input class="field" placeholder="Email" />
+      <textarea class="field" placeholder="Notes"></textarea>
+    </main>
+  </body>
+</html>

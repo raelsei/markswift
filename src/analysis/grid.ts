@@ -1,10 +1,11 @@
 /** Native-grid admission is proven from resolved tracks and captured cell geometry. */
 import type { LayoutNode } from "../model/layout.ts";
-import { type GridNode, type SemBase, addDiagnostic } from "../model/semantic.ts";
+import { type GridNode, type SemBase, type SemNode, addDiagnostic } from "../model/semantic.ts";
 import type { AnalyzedChild } from "./context.ts";
-import { px, round2, resolvedGridTracks } from "../css/index.ts";
-import { renders, insetsOf } from "./geometry.ts";
+import { parseTrackTemplate, px, round2, resolvedGridTracks } from "../css/index.ts";
+import { renders, insetsOf, outOfFlow } from "./geometry.ts";
 import { measuredLayoutOf, paintOrder } from "./measured-layout.ts";
+import { admitTracks } from "./grid-tracks.ts";
 
 function starts(tracks: number[], gap: number, origin: number): number[] {
   let at = origin;
@@ -28,6 +29,19 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   const xs = starts(widths ?? [], hSpacing, base.frame.x + base.padding[3]);
   const ys = starts(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
   const ordered = [...items].sort((a, b) => a.sem.frame.y - b.sem.frame.y || a.sem.frame.x - b.sem.frame.x);
+  // `admitTracks` proves the DOM's in-flow element children against the capture; MarkswiftTracks
+  // lays them out row-major in that order (`cells`), whatever order `children` keeps for paint.
+  const inFlow = n.children.filter((c) => c.tag !== "#text" && renders(c) && !outOfFlow(c));
+  const admit = (children: SemNode[], fidelityNote: string): GridNode["template"] => {
+    const cells = inFlow.map((node) => children.findIndex((c) => items.some((it) => it.node === node && it.sem === c)));
+    if (cells.length !== children.length || cells.includes(-1)) return undefined;
+    const admitted = admitTracks(n);
+    if (!admitted) return undefined;
+    // Vertical margins are not in the IR (stacks turn them into spacing); the runtime needs them as padding.
+    const margins = inFlow.map((c): [number, number] => [px(c.styles["margin-top"]), px(c.styles["margin-bottom"])]);
+    const { template, stretch, fixed } = admitted;
+    return { ...template, stretch, fixed, cells, margins, fidelityNote };
+  };
   // Native Grid can omit only the final row's trailing cells after all columns are established.
   const regular =
     widths &&
@@ -48,13 +62,24 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
       child.width = { kind: "fixed", px: round2(child.frame.w) };
       child.height = { kind: "fixed", px: round2(child.frame.h) };
     }
-    addDiagnostic(
-      base.diagnostics,
-      "approximated",
-      "display: grid",
-      "captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed",
-    );
-    return { ...base, kind: "grid", columns, hSpacing, vSpacing, children, measured: measuredLayoutOf(base, children) };
+    const message =
+      "captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed";
+    const measured: GridNode = {
+      ...base,
+      kind: "grid",
+      columns,
+      hSpacing,
+      vSpacing,
+      children,
+      measured: measuredLayoutOf(base, children),
+    };
+    // Cells shorter than their row (`align-items: start`) are not "regular", yet an authored
+    // template may still place them: app lays them out with MarkswiftTracks, fidelity keeps the
+    // measured placement and reports the note at emission (`containerExpr`).
+    const template = admit(children, message);
+    if (template) return { ...measured, template };
+    addDiagnostic(base.diagnostics, "approximated", "display: grid", message);
+    return measured;
   }
   const contentW = base.frame.w - base.padding[1] - base.padding[3];
   const equalFill =
@@ -65,14 +90,28 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     if (item.sem.height.kind === "fill") item.sem.height = { kind: "fixed", px: round2(item.sem.frame.h) };
     return item.sem;
   });
-  // ponytail: an equal-fill grid is reported exact; repeat(auto-fill|auto-fit, …) changes its column
-  // count at other widths, which the computed px tracks cannot reveal. Capture the authored template to report it.
-  if (!equalFill)
-    addDiagnostic(
-      base.diagnostics,
-      "approximated",
-      "grid-template-columns",
-      "regular captured tracks mapped to native Grid with fixed column widths; columns do not resize at another width",
-    );
-  return { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
+  const authored = parseTrackTemplate(n.preferredSize?.gridTemplateColumns);
+  // Authored px tracks the capture reproduces are CSS at every width: nothing to report.
+  const pxExact =
+    authored !== undefined &&
+    !authored.autoRepeat &&
+    authored.tracks.length === columns &&
+    authored.tracks.every((t, c) => t.kind === "px" && Math.abs(t.px - widths[c]!) <= 1);
+  // An equal-fill auto-fill/auto-fit template changes its column count at other widths; the
+  // captured px tracks cannot, so the count is pinned and reported.
+  const template = n.preferredSize?.gridTemplateColumns ?? "";
+  const note = pxExact
+    ? undefined
+    : equalFill && /repeat\(\s*auto-(fill|fit)/.test(template)
+      ? `${template} pinned at ${columns} columns; the column count does not change at other widths`
+      : !equalFill
+        ? "regular captured tracks mapped to native Grid with fixed column widths; columns do not resize at another width"
+        : undefined;
+  // App mode lays an admitted template out with MarkswiftTracks; fidelity keeps the captured
+  // widths and reports the note at emission (`containerExpr`).
+  const grid: GridNode = { ...base, kind: "grid", columns, hSpacing, vSpacing, children };
+  const admitted = note ? admit(children, note) : undefined;
+  if (admitted) return { ...grid, template: admitted };
+  if (note) addDiagnostic(base.diagnostics, "approximated", "grid-template-columns", note);
+  return grid;
 }

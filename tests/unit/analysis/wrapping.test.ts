@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";
@@ -65,7 +66,7 @@ function root(
       }
     : element;
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "wrap-test",
     combo: { screen: "s", theme: "light" },
     size: { w: bounds.w, h: screenHeight },
@@ -383,7 +384,7 @@ function chipDoc(children: LayoutNode[], styles: Record<string, string> = {}): L
     },
   };
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "wrap-test",
     combo: { screen: "s", theme: "light" },
     size: { w: 180, h: 66 },

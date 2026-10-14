@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { sizeOf } from "../../../src/analysis/sizing.ts";
 import { parseDeclared } from "../../../src/css/index.ts";
-import type { LayoutNode } from "../../../src/model/layout.ts";
+import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 import type { InferenceContext } from "../../../src/analysis/context.ts";
 import type { Diagnostic } from "../../../src/model/semantic.ts";
 
@@ -162,4 +163,122 @@ test("ordinary inline text does not acquire CSS constraints that the browser ign
     sizing(element(30, 20, { display: "inline", "min-width": "120px", "min-height": "80px", "max-width": "200px" })),
   ).toMatchObject({ width: { kind: "fixed", px: 30 } });
   expect(sizing(element(30, 20, { display: "inline", "min-width": "120px" })).minWidth).toBeUndefined();
+});
+
+const row: InferenceContext = { ...ctx, parentAxis: "h", parentDisplay: "flex" };
+const widthNotes = (n: LayoutNode, context = ctx) =>
+  sizing(n, context)
+    .diagnostics.filter((d) => d.feature === "width")
+    .map((d) => d.message);
+
+test("a percentage width kept as measured px is reported", () => {
+  const n = { ...element(180, 40, { display: "block" }), preferredSize: { width: "50%", height: "auto" } };
+  expect(widthNotes(n, row).join("\n")).toContain("width 50% pinned at 180px");
+});
+
+test("a px width laid out at another size is reported", () => {
+  const n = {
+    ...element(108, 40, { display: "block", "box-sizing": "border-box" }),
+    preferredSize: { width: "150px", height: "auto" },
+  };
+  expect(widthNotes(n, row).join("\n")).toContain("width 150px laid out at 108px");
+});
+
+test("a content-box px width plus its padding is not a pin", () => {
+  const styles = { display: "block", "box-sizing": "content-box", "padding-left": "10px", "padding-right": "10px" };
+  const n = { ...element(140, 40, styles), preferredSize: { width: "120px", height: "auto" } };
+  expect(widthNotes(n, row)).toEqual([]);
+});
+
+test("a px width laid out at its own size is not reported", () => {
+  const n = {
+    ...element(120, 40, { display: "block", "box-sizing": "border-box" }),
+    preferredSize: { width: "120px", height: "auto" },
+  };
+  expect(widthNotes(n, row)).toEqual([]);
+});
+
+test("the root's width is not reported: the screen sizes it", () => {
+  const n = { ...element(390, 40, { display: "block" }), preferredSize: { width: "100%", height: "auto" } };
+  expect(widthNotes(n, { root: n, bundledFamilies: {}, fixed: [] })).toEqual([]);
+});
+
+test.each([
+  [["right", "left"], "center"],
+  [["left"], "end"],
+  [["right"], undefined],
+  [undefined, undefined],
+] as const)("a fixed-width block with auto margins %p is placed %p", (autoMargins, expected) => {
+  // Parent content box is 350 px wide; 95 px used margins on each side make the margin box fill it.
+  const box: LayoutNode = {
+    ...element(160, 40, { display: "block", "margin-left": "95px", "margin-right": "95px" }),
+    preferredSize: { width: "160px", height: "auto", ...(autoMargins ? { autoMargins: [...autoMargins] } : {}) },
+  };
+  const s = sizing(box);
+  expect(s.width).toEqual({ kind: "fixed", px: 160 });
+  expect(s.selfAlign).toBe(expected);
+});
+
+const block300 = element(300, 200, { display: "block" });
+const half = (w: number, styles: Record<string, string> = {}, width = "50%"): LayoutNode => ({
+  ...element(w, 40, { display: "block", ...styles }),
+  preferredSize: { width, height: "auto" },
+});
+
+test("a percentage width that is exactly its fraction of the containing block keeps the fraction", () => {
+  const s = sizing(half(150), { ...ctx, parent: block300 });
+  expect(s.width).toEqual({ kind: "fraction", fraction: 0.5, px: 150 });
+  expect(s.diagnostics.filter((d) => d.feature === "width")).toEqual([]);
+});
+
+test.each<[string, LayoutNode, InferenceContext]>([
+  ["a calc() percentage", half(142, {}, "calc(50% - 8px)"), { ...ctx, parent: block300 }],
+  ["a side margin", half(150, { "margin-left": "8px" }), { ...ctx, parent: block300 }],
+  ["a box-sizing mismatch (140px measured)", half(140), { ...ctx, parent: block300 }],
+  ["absolute position", half(150, { position: "absolute" }), { ...ctx, parent: block300 }],
+  ["a flex-row parent", half(150), { ...row, parent: block300 }],
+  ["a centring column", half(150), { ...ctx, parent: block300, parentAlign: "center" }],
+])("no fraction: %s", (_label, n, context) => {
+  expect(sizing(n, context).width.kind).not.toBe("fraction");
+});
+
+test("app wraps a fraction box in markswiftFraction after its paint; fidelity pins the captured px", () => {
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "fraction.html",
+    combo: { screen: "fraction", theme: "light" },
+    size: { w: 300, h: 100 },
+    dpr: 1,
+    canvas: "white",
+    fonts: [],
+    root: {
+      id: "root",
+      tag: "main",
+      attrs: {},
+      styles: { display: "block" },
+      bounds: { x: 0, y: 0, w: 300, h: 100 },
+      preferredSize: { width: "300px", height: "100px" },
+      children: [
+        {
+          id: "half",
+          tag: "div",
+          attrs: {},
+          styles: { display: "block", "background-color": "rgb(220, 80, 60)" },
+          bounds: { x: 0, y: 0, w: 150, h: 40 },
+          preferredSize: { width: "50%", height: "40px" },
+          children: [],
+        },
+      ],
+    },
+  };
+  const app = compileLayout(doc, { name: "FractionView", mode: "app" }).code;
+  expect(app).toContain(".markswiftFraction(0.5)");
+  expect(app.indexOf(".background(")).toBeGreaterThan(-1);
+  expect(app.indexOf(".background(")).toBeLessThan(app.indexOf(".markswiftFraction(0.5)"));
+  const fidelity = compileLayout(doc, { name: "FractionView", mode: "fidelity" });
+  expect(fidelity.code).toContain(".frame(width: 150.0");
+  expect(fidelity.code).not.toContain("markswiftFraction");
+  expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message)).toContain(
+    "width 50% pinned at 150px; it does not follow the container at other widths",
+  );
 });

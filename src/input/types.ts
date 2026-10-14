@@ -16,6 +16,8 @@ export interface CaptureRequest {
   waitFor?: string;
   /** Also take a device-scale screenshot clipped to the capture root (`Capture.png`). */
   screenshot?: boolean;
+  /** Capture at this viewport instead of the browser context's (probe captures). */
+  viewport?: { width: number; height: number };
   /** Hook after load, before settle (class toggles etc.). */
   prepare?(page: Page): Promise<void>;
 }

@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { assessQuality, loadComparisons } from "../../../tools/quality.ts";
+import {
+  assessQuality,
+  driftHint,
+  loadComparisons,
+  ratchetFamilies,
+  readmeSummary,
+  summarize,
+} from "../../../tools/quality.ts";
 
 const baseline = { "card-light": { ssim: 0.95 }, "card-dark": { ssim: 0.94 } };
 test("allows the boundary drop per capture, never hiding a regression with an improved average", () => {
@@ -199,6 +206,23 @@ test("strict gate rejects missing provenance, stale revision and changed capture
   ).toBe(true);
 });
 
+test("toolchain-only drift prints a rebaseline hint naming the changed values", () => {
+  const r = assessQuality({ a: evidence() }, { a: evidence({ xcode: "Xcode 27.1" }) }, { requireEvidence: true });
+  expect(r.ok).toBe(false);
+  expect(driftHint(r)).toContain('xcode ("Xcode 26" → "Xcode 27.1")');
+  expect(driftHint(r)).toContain("rebaseline=true");
+});
+
+test("drift with a score regression asks for review, and no drift gives no hint", () => {
+  const policy = { requireEvidence: true };
+  const before = { a: evidence() };
+  expect(driftHint(assessQuality(before, { a: evidence({ renderer: "iPhone iOS-27", ssim: 0.9 }) }, policy))).toContain(
+    "review the diffs",
+  );
+  expect(driftHint(assessQuality(before, { a: evidence({ ssim: 0.9 }) }, policy))).toBeUndefined();
+  expect(driftHint(assessQuality(before, { a: evidence({ fixtureHash: "e".repeat(64) }) }, policy))).toBeUndefined();
+});
+
 test("strict gate binds comparison scores to exact artifact contents", () => {
   const before = { a: evidence() };
   const altered = evidence({ _hashes: { ...artifactHashes, "native.png": "b".repeat(64) } });
@@ -280,7 +304,7 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
       { stdout: "pipe", stderr: "pipe" },
     );
     const output = JSON.parse(await new Response(run.stdout).text());
-    return { exit: await run.exited, output };
+    return { exit: await run.exited, output, stderr: await new Response(run.stderr).text() };
   };
   try {
     await create(before, evidence());
@@ -309,7 +333,9 @@ test("CLI strict gate catches deleted native render, below-floor score and chang
       join(after, "a", "compare.json"),
       JSON.stringify(evidence({ sourceRevision: revision, chrome: "Chrome 141", artifactHashes: afterHashes })),
     );
-    expect((await invoke()).output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
+    const drifted = await invoke();
+    expect(drifted.output.issues.some((issue: { code: string }) => issue.code === "provenance")).toBe(true);
+    expect(drifted.stderr).toContain("Toolchain drift: chrome");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -347,6 +373,66 @@ test("maxMismatch caps pixel mismatch as a floor", () => {
     assessQuality(a, a, { features: { "display-flex@app": { maxMismatch: 0.05 } } }).issues.map((i) => i.code),
   ).toEqual(["floor"]);
   expect(assessQuality(a, a, { cases: { a: { maxMismatch: 0.06 } } }).ok).toBe(true);
+});
+
+const reflowHashes = { ...artifactHashes, "reflow.png": "a".repeat(64), "reflow-diff.png": "a".repeat(64) };
+/** A 768 capture with self SSIM 0.8 and the 390-compiled code at `reflowSsim`. */
+const reflowed = (reflowSsim: number, overrides: Record<string, unknown> = {}) =>
+  evidence({
+    ssim: 0.8,
+    viewportWidth: 768,
+    reflowTag: "native",
+    reflowSource: "display-flex-390-light-app",
+    reflowSsim,
+    reflowMismatch: 0.1,
+    reflowDelta: reflowSsim - 0.8,
+    artifactHashes: { ...reflowHashes },
+    _hashes: { ...reflowHashes },
+    _files: { ...files, "reflow.png": true, "reflow-diff.png": true },
+    _images: Object.fromEntries(
+      ["browser.png", "native.png", "diff.png", "reflow.png", "reflow-diff.png"].map((f) => [
+        f,
+        { width: 640, height: 200 },
+      ]),
+    ),
+    ...overrides,
+  });
+const reflowCodes = (after: object, policy: object = { reflowMaxLoss: 0.03 }) =>
+  codes(assessQuality({ a: reflowed(0.8) }, { a: after }, policy));
+
+test("reflowMaxLoss fails a native app capture whose 390 code loses more than the allowance", () => {
+  expect(reflowCodes(reflowed(0.76))).toEqual(["reflow"]);
+  expect(reflowCodes(reflowed(0.78))).toEqual([]);
+  expect(reflowCodes(reflowed(0.77))).toEqual([]);
+});
+
+test("reflowMaxLoss never gates pinned or fidelity captures", () => {
+  expect(reflowCodes(reflowed(0.5, { reflowTag: "pinned" }))).toEqual([]);
+  expect(reflowCodes(reflowed(0.5, { mode: "fidelity" }))).toEqual([]);
+});
+
+test("reflowMaxLoss outside [0,1] is a policy error", () => {
+  expect(reflowCodes(reflowed(0.8), { reflowMaxLoss: 1.5 })).toEqual(["policy"]);
+});
+
+test("reflow fields are all or none, with reflowDelta = reflowSsim − ssim", () => {
+  expect(reflowCodes(reflowed(0.78, { reflowTag: undefined }))).toEqual(["invalid"]);
+  expect(reflowCodes(reflowed(0.78, { reflowDelta: 0 }))).toEqual(["invalid"]);
+});
+
+test("strict evidence requires the reflow render with reflowSsim", () => {
+  const missing = reflowed(0.8, { _files: { ...files, "reflow.png": false, "reflow-diff.png": true } });
+  expect(reflowCodes(missing, { requireEvidence: true })).toEqual(["artifact"]);
+  expect(reflowCodes(reflowed(0.8), { requireEvidence: true })).toEqual([]);
+});
+
+test("summary adds a reflow table only for captures with reflowSsim", () => {
+  const fixture = "css-layout/grid-templates.html";
+  const pinned = reflowed(0.4, { caseId: "grid-templates", fixture, reflowTag: "pinned" });
+  expect(summarize({ a: pinned }).split("\n")).toContain(
+    "| grid-templates | 768 | app | pinned | 0.8000 | 0.4000 | -0.4000 |",
+  );
+  expect(summarize({ a: evidence({ fixture }) })).not.toContain("| tag |");
 });
 
 test("anchor regions catch regressions, changed anchor lists and failing approved features", () => {
@@ -401,4 +487,87 @@ test("CLI --write-baseline refuses an incomplete run and --summary prints domain
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+const flex = (ssim: number) => ({ a: evidence({ fixture: "css-layout/display--flex.html", ssim }) });
+const codes = (r: { issues: Array<{ code: string }> }) => r.issues.map((i) => i.code);
+
+test("family floors apply to every capture of <domain>@<mode> only", () => {
+  const low = flex(0.9);
+  expect(codes(assessQuality(low, low, { families: { "css-layout@app": { minSsim: 0.95 } } }))).toEqual(["floor"]);
+  expect(assessQuality(low, low, { families: { "css-paint@app": { minSsim: 0.95 } } }).ok).toBe(true);
+  expect(assessQuality(low, low, { families: { "css-layout@fidelity": { minSsim: 0.95 } } }).ok).toBe(true);
+});
+
+test("family keys must be <domain>@<mode>; a family absent from the baseline is accepted", () => {
+  const a = flex(0.98);
+  for (const key of ["css layout@app", "css-layout"])
+    expect(codes(assessQuality(a, a, { families: { [key]: { minSsim: 0.5 } } }))).toEqual(["policy"]);
+  expect(assessQuality(a, a, { families: { "svg@fidelity": { minSsim: 0.5 } } }).ok).toBe(true);
+  expect(codes(assessQuality(a, a, { families: { "svg@app": { minSsim: 2 } } }))).toEqual(["policy"]);
+});
+
+test("a case floor overrides the family floor", () => {
+  const low = flex(0.9);
+  const policy = { families: { "css-layout@app": { minSsim: 0.95 } }, cases: { a: { minSsim: 0.85 } } };
+  expect(assessQuality(low, low, policy).ok).toBe(true);
+});
+
+test("exceptions skip the family floor by capture key or <caseId>@<mode>", () => {
+  const low = flex(0.9);
+  const families = { "css-layout@app": { minSsim: 0.95 } };
+  expect(assessQuality(low, low, { families, exceptions: { a: "r" } }).ok).toBe(true);
+  expect(assessQuality(low, low, { families, exceptions: { "display-flex@app": "r" } }).ok).toBe(true);
+  expect(codes(assessQuality(low, low, { families, exceptions: { "display-flex@fidelity": "r" } }))).toEqual(["floor"]);
+});
+
+test("exceptions never relax the drop rule, and an empty reason is a policy error", () => {
+  const low = flex(0.9);
+  const families = { "css-layout@app": { minSsim: 0.95 } };
+  expect(codes(assessQuality(low, flex(0.89), { families, exceptions: { a: "r" } }))).toEqual(["regression"]);
+  expect(codes(assessQuality(low, low, { exceptions: { a: "" } }))).toEqual(["policy"]);
+});
+
+test("ratchetFamilies floors at min − 0.005 rounded down to 0.01, never lowers, sorted, ignores exceptions", () => {
+  const m = (ssim: number, fixture = "css-layout/x.html", caseId = "x") => evidence({ ssim, fixture, caseId });
+  expect(ratchetFamilies({}, { a: m(0.5437) }).families).toEqual({ "css-layout@app": { minSsim: 0.53 } });
+  expect(ratchetFamilies({ families: { "css-layout@app": { minSsim: 0.6 } } }, { a: m(0.5437) }).families).toEqual({
+    "css-layout@app": { minSsim: 0.6 },
+  });
+  expect(ratchetFamilies({ families: { "css-layout@app": { minSsim: 0.95 } } }, { a: m(0.9871) }).families).toEqual({
+    "css-layout@app": { minSsim: 0.98 },
+  });
+  const next = ratchetFamilies(
+    { maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } },
+    { b: m(0.9, "svg/a.html"), a: m(0.7, "html/a.html"), c: m(0.4, "svg/b.html", "low") },
+  );
+  expect(Object.keys(next.families)).toEqual(["html@app", "svg@app"]);
+  expect(next.families["svg@app"]).toEqual({ minSsim: 0.89 });
+  expect(next).toMatchObject({ maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } });
+});
+
+test("readmeSummary lists exceptions sorted after the domain table, and nothing without them", () => {
+  const manifest = flex(0.9);
+  expect(readmeSummary(manifest)).not.toContain("Exceptions");
+  const lines = readmeSummary(manifest, { exceptions: { z: "zed", "display-flex@app": "owner: plan 042" } }).split(
+    "\n",
+  );
+  expect(lines.slice(-2)).toEqual(["- `display-flex@app`: owner: plan 042", "- `z`: zed"]);
+  expect(lines).toContain(
+    "Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):",
+  );
+});
+
+test("README evidence table is the generated iOS summary", async () => {
+  const root = join(import.meta.dir, "../../..");
+  const readme = await Bun.file(join(root, "README.md")).text();
+  const open = "<!-- quality-summary tests/conformance/baselines/visual-all-ios.json -->";
+  const block = readme.slice(readme.indexOf(open) + open.length, readme.indexOf("<!-- /quality-summary -->"));
+  expect(readme).toContain(open);
+  expect(block.trim()).toBe(
+    readmeSummary(
+      await Bun.file(join(root, "tests/conformance/baselines/visual-all-ios.json")).json(),
+      await Bun.file(join(root, "tests/conformance/visual-policy-ios.json")).json(),
+    ),
+  );
 });

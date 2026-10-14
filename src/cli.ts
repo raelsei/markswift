@@ -1,6 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
-import { runConversion } from "./cli/run.ts";
+import { EditedFilesError } from "./cli/manifest.ts";
+import { runBuild, runConversion } from "./cli/run.ts";
+import { VERSION } from "./model/version.ts";
 
 async function main(): Promise<number> {
   try {
@@ -10,15 +12,20 @@ async function main(): Promise<number> {
       return 0;
     }
     if (command.kind === "version") {
-      const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
-      process.stdout.write(`${manifest.version}\n`);
+      process.stdout.write(`${VERSION}\n`);
       return 0;
     }
-    await runConversion(command);
+    if (command.kind === "build") await runBuild(command);
+    else await runConversion(command);
     return 0;
   } catch (error) {
     if (error instanceof UsageError) {
-      process.stderr.write(`${error.message}\nRun markswift convert --help for usage.\n`);
+      const help = process.argv[2] === "build" ? "build" : "convert";
+      process.stderr.write(`${error.message}\nRun markswift ${help} --help for usage.\n`);
+      return 2;
+    }
+    if (error instanceof EditedFilesError) {
+      process.stderr.write(`${error.message}\n`);
       return 2;
     }
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

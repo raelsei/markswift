@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";
@@ -19,7 +20,7 @@ function capture(
     children: [],
   }));
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "grid.html",
     combo: { screen: "grid", theme: "light" },
     size: { w: 360, h: 200 },
@@ -248,4 +249,302 @@ test("a grid keeps its absolutely positioned decoration", () => {
   });
   expect(grid(input).overlays).toHaveLength(1);
   expect(grid(input).overlays[0]!.offset).toEqual([32, 12]);
+});
+
+test("an equal-fill auto-fit grid carries its pinned column count to fidelity, or reports it when not admitted", () => {
+  const plain = capture("109.333px 109.333px 109.333px", "20px", [
+    [0, 0, 109.333, 20],
+    [119.333, 0, 109.333, 20],
+    [238.667, 0, 109.333, 20],
+  ]);
+  const input = structuredClone(plain);
+  input.root.preferredSize = {
+    width: "360px",
+    height: "200px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+  };
+  const message = "repeat(auto-fit, minmax(100px, 1fr)) pinned at 3 columns";
+  expect(grid(input).template?.fidelityNote).toContain(message);
+  const rows = structuredClone(input);
+  rows.root.preferredSize!.gridTemplateRows = "20px";
+  const pins = grid(rows).diagnostics.filter((d) => d.feature === "grid-template-columns");
+  expect(pins.map((d) => d.message).join("\n")).toContain(message);
+  expect(grid(plain).diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
+});
+
+/** A one-row grid whose root records the authored template (Typed OM); `edit` adjusts the capture. */
+function authored(
+  template: string,
+  boxes: Array<[number, number, number, number]>,
+  edit: (doc: LayoutDoc) => void = () => {},
+): LayoutDoc {
+  const doc = capture(boxes.map((b) => `${b[2]}px`).join(" "), "20px", boxes);
+  doc.root.preferredSize = { width: "360px", height: "200px", gridTemplateColumns: template };
+  edit(doc);
+  return doc;
+}
+/** Gives cell `i` a text child laid out on `lines` line boxes. */
+function text(doc: LayoutDoc, i: number, lines: number) {
+  const cell = doc.root.children[i]!;
+  cell.children.push({
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    text: "Label",
+    bounds: { ...cell.bounds },
+    lines: Array.from({ length: lines }, (_, l) => ({
+      bounds: { ...cell.bounds, y: cell.bounds.y + l * 10, h: 10 },
+      start: 0,
+      length: 5,
+    })),
+    children: [],
+  });
+}
+const FR_1_2: Array<[number, number, number, number]> = [
+  [0, 0, 112.67, 20],
+  [122.67, 0, 225.33, 20],
+];
+const pinned = (n: GridNode) =>
+  n.diagnostics.some((d) => d.feature === "grid-template-columns" || d.feature === "display: grid");
+
+test("an fr template the solver reproduces is admitted; children keep their captured widths", () => {
+  const n = grid(authored("1fr 2fr", FR_1_2));
+  expect(n.template).toEqual({
+    tracks: [
+      { kind: "fr", fr: 1 },
+      { kind: "fr", fr: 2 },
+    ],
+    stretch: true,
+    cells: [0, 1],
+    margins: [
+      [0, 0],
+      [0, 0],
+    ],
+    fixed: [],
+    fidelityNote: expect.stringContaining("fixed column widths") as unknown as string,
+  });
+  expect(n.diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
+  expect(n.children.map((c) => c.width)).toEqual([
+    { kind: "fixed", px: 112.67 },
+    { kind: "fixed", px: 225.33 },
+  ]);
+});
+
+test("px + fr and auto + fr templates are admitted", () => {
+  const pxFr = grid(
+    authored("100px 1fr", [
+      [0, 0, 100, 20],
+      [110, 0, 238, 20],
+    ]),
+  );
+  expect(pxFr.template?.tracks).toEqual([
+    { kind: "px", px: 100 },
+    { kind: "fr", fr: 1 },
+  ]);
+  const autos: Array<[number, number, number, number]> = [
+    [0, 0, 40, 20],
+    [50, 0, 252, 20],
+    [312, 0, 36, 20],
+  ];
+  const withText = (lines: number[]) => (d: LayoutDoc) => {
+    for (const [i, n] of lines.entries()) text(d, i, n);
+  };
+  const single = grid(authored("auto 1fr auto", autos, withText([1, 1, 1])));
+  expect(single.template?.tracks.map((t) => t.kind)).toEqual(["auto", "fr", "auto"]);
+  const wrapped = grid(authored("auto 1fr auto", autos, withText([2, 1, 1])));
+  expect(wrapped.template).toBeUndefined();
+  expect(pinned(wrapped)).toBe(true);
+});
+
+test("auto-fill and auto-fit templates are admitted with their minimum", () => {
+  const cells: Array<[number, number, number, number]> = [
+    [0, 0, 109.333, 20],
+    [119.333, 0, 109.333, 20],
+    [238.667, 0, 109.333, 20],
+  ];
+  expect(grid(authored("repeat(auto-fill, minmax(100px, 1fr))", cells)).template?.autoRepeat).toEqual({
+    mode: "fill",
+    min: 100,
+  });
+  expect(grid(authored("repeat(auto-fit, minmax(100px, 1fr))", cells)).template?.autoRepeat).toEqual({
+    mode: "fit",
+    min: 100,
+  });
+});
+
+test("authored px tracks the capture reproduces are exact: no template, no diagnostic", () => {
+  const n = grid(
+    authored("120px 120px", [
+      [0, 0, 120, 20],
+      [130, 0, 120, 20],
+    ]),
+  );
+  expect(n.template).toBeUndefined();
+  expect(n.diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
+});
+
+// A false admission silently mis-sizes the grid at every other width.
+test.each<[string, LayoutDoc]>([
+  [
+    "captured tracks 2px off the solver",
+    authored("1fr 2fr", [
+      [0, 0, 114.67, 20],
+      [124.67, 0, 223.33, 20],
+    ]),
+  ],
+  [
+    "explicit grid-template-rows",
+    authored("1fr 2fr", FR_1_2, (d) => {
+      d.root.preferredSize!.gridTemplateRows = "40px";
+    }),
+  ],
+  ["direction: rtl", authored("1fr 2fr", FR_1_2, (d) => void (d.root.styles.direction = "rtl"))],
+  ["grid-auto-flow: column", authored("1fr 2fr", FR_1_2, (d) => void (d.root.styles["grid-auto-flow"] = "column"))],
+  [
+    "an item with a side margin",
+    authored("1fr 2fr", FR_1_2, (d) => void (d.root.children[1]!.styles["margin-left"] = "4px")),
+  ],
+  [
+    "an item with a px height",
+    authored("1fr 2fr", FR_1_2, (d) => void (d.root.children[0]!.preferredSize = { width: "auto", height: "40px" })),
+  ],
+  [
+    "an item with a px width but a content height",
+    authored(
+      "1fr 2fr",
+      FR_1_2,
+      (d) => void (d.root.children[0]!.preferredSize = { width: "112.67px", height: "auto" }),
+    ),
+  ],
+  ["align-items: center", authored("1fr 2fr", FR_1_2, (d) => void (d.root.styles["align-items"] = "center"))],
+  ["a percentage track", authored("50% 1fr", FR_1_2)],
+  [
+    "a column-spanning first item",
+    (() => {
+      const doc = capture("100px 100px", "20px 20px", [
+        [0, 0, 210, 20],
+        [0, 30, 100, 20],
+        [110, 30, 100, 20],
+      ]);
+      doc.root.preferredSize = { width: "360px", height: "200px", gridTemplateColumns: "1fr 1fr" };
+      return doc;
+    })(),
+  ],
+  [
+    "an item placed in a later row, leaving an empty row",
+    (() => {
+      const doc = capture("169px 169px", "20px 20px 20px", [
+        [0, 0, 169, 20],
+        [179, 60, 169, 20],
+      ]);
+      doc.root.preferredSize = { width: "360px", height: "200px", gridTemplateColumns: "1fr 1fr" };
+      return doc;
+    })(),
+  ],
+  [
+    "rows offset from the content box (align-content)",
+    authored(
+      "1fr 2fr",
+      FR_1_2.map(([x, y, w, h]) => [x, y + 20, w, h]),
+      (d) => void (d.root.styles["grid-template-rows"] = "20px"),
+    ),
+  ],
+])("no admission: %s", (_label, doc) => {
+  const n = grid(doc);
+  expect(n.template).toBeUndefined();
+  expect(pinned(n)).toBe(true);
+});
+
+test("align-items: start cells shorter than their row are admitted; fidelity keeps the measured layout", () => {
+  const input = authored(
+    "1fr auto",
+    [
+      [0, 0, 300, 40],
+      [310, 0, 38, 20],
+    ],
+    (d) => {
+      d.root.styles["grid-template-rows"] = "40px";
+      d.root.styles["align-items"] = "start";
+      text(d, 1, 1);
+    },
+  );
+  const n = grid(input);
+  expect(n.measured).toBeDefined();
+  expect(n.template).toMatchObject({ tracks: [{ kind: "fr", fr: 1 }, { kind: "auto" }], stretch: false });
+  expect(n.diagnostics.filter((d) => d.feature === "display: grid")).toEqual([]);
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  expect(app).toContain("MarkswiftTracks(tracks: [.fr(1.0), .auto], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {");
+  expect(app).not.toContain("MarkswiftMeasuredLayout(");
+  const plain = structuredClone(input);
+  delete plain.root.preferredSize!.gridTemplateColumns;
+  const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
+  const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
+  expect(fidelity.code).toBe(reference.code);
+  expect(fidelity.diagnostics).toEqual(reference.diagnostics);
+});
+
+test("a px-sized icon painted last keeps its frame and its DOM cell in an auto column", () => {
+  const input = authored(
+    "auto 1fr",
+    [
+      [0, 2, 16, 16],
+      [26, 0, 322, 40],
+    ],
+    (d) => {
+      d.root.styles["grid-template-rows"] = "40px";
+      d.root.styles["align-items"] = "start";
+      d.root.children[0]!.styles["margin-top"] = "2px";
+      d.root.children[0]!.preferredSize = { width: "16px", height: "16px" };
+      d.root.children[0]!.paint = 9;
+      d.root.children[1]!.paint = 3;
+    },
+  );
+  const n = grid(input);
+  expect(n.children.map((c) => c.id)).toEqual(["cell1", "cell0"]);
+  expect(n.template).toMatchObject({
+    tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }],
+    cells: [1, 0],
+    margins: [
+      [2, 0],
+      [0, 0],
+    ],
+    fixed: [0],
+  });
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  const head = "MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {";
+  expect(app).toContain(head);
+  const tracks = app.slice(app.indexOf(head));
+  // The icon (DOM cell 0) comes first, keeps its frame and its 2px top margin.
+  expect(tracks).toMatch(/\.frame\(width: 16\.0, height: 16\.0[^\n]*\n(?:[^\n]*\n)*?\s*\.padding\(\.top, 2\.0\)/);
+  expect(tracks.indexOf(".frame(width: 16.0, height: 16.0")).toBeLessThan(tracks.indexOf(".frame(maxWidth: .infinity"));
+});
+
+test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical to the unadmitted grid", () => {
+  const input = authored("1fr 2fr", FR_1_2);
+  const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
+  expect(app).toContain("MarkswiftTracks(tracks: [.fr(1.0), .fr(2.0)], hSpacing: 10.0, vSpacing: 10.0) {");
+  expect(app).toContain(".frame(maxWidth: .infinity");
+  expect(app).not.toContain(".frame(width: 112.67");
+  const plain = structuredClone(input);
+  delete plain.root.preferredSize!.gridTemplateColumns;
+  const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
+  const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
+  expect(fidelity.code).toBe(reference.code);
+  expect(fidelity.diagnostics).toEqual(reference.diagnostics);
+  expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.feature)).toContain("grid-template-columns");
+});
+
+test("auto-repeat without stretch emits its minimum and stretch: false", () => {
+  const input = authored(
+    "repeat(auto-fill, minmax(100px, 1fr))",
+    [
+      [0, 0, 109.333, 20],
+      [119.333, 0, 109.333, 20],
+      [238.667, 0, 109.333, 20],
+    ],
+    (d) => void (d.root.styles["align-items"] = "start"),
+  );
+  expect(compileLayout(input, { name: "GridView", mode: "app" }).code).toContain(
+    "MarkswiftTracks(autoRepeat: .fill(min: 100.0), hSpacing: 10.0, vSpacing: 10.0, stretch: false) {",
+  );
 });

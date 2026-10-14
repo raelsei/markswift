@@ -11,18 +11,21 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { renderMac, renderNative, selectSimulator, type SimulatorInventory } from "../../tools/verify/native.ts";
+import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
-import type { LayoutNode } from "../../src/model/layout.ts";
-import { buildMatrix, loadFixtureSet, loadPilot, type PilotEntry, type RunCase } from "./pilot.ts";
+import type { ConversionResult } from "../../src/index.ts";
+import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
+import { buildMatrix, loadFixtureSet, loadPilot, type PilotEntry, type RunCase, widthsFor } from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
-const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--renderer none|mac|ios] [--out <dir>]
+const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--renderer none|mac|ios] [--reflow] [--out <dir>]
   --all       every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
   --only      one case id
   --group     text: only cases with expected text
-  --renderer  mac (default): macOS ImageRenderer, the per-PR gate; ios: iOS Simulator, the release gate;
+  --renderer  mac (default): macOS ImageRenderer, the per-PR gate;
+              ios: iOS Simulator (UIHostingController + drawHierarchy, batched builds), the release gate;
               none: capture, compile and typecheck only, no render or comparison
+  --reflow    reflow-tagged fixtures also capture 768; their 320/768 captures also render the 390-compiled code (reflow.png, reflowSsim, reflowDelta in compare.json)
   --out       fresh output directory (default tests/conformance/out/<timestamp>)
 Captures use Playwright's pinned Chromium: ./node_modules/.bin/playwright-core install --no-shell chromium`;
 type Renderer = "none" | "mac" | "ios";
@@ -39,6 +42,8 @@ type RunEntry = {
   typecheck?: boolean;
   ssim?: number;
   mismatch?: number;
+  /** Wall time of `BrowserCapture.capture` for this capture, ms; both modes of one capture share it. */
+  captureMs?: number;
 };
 /** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid` stays in `run.json` only. */
 interface RunEnvironment {
@@ -61,6 +66,17 @@ interface RunReport {
   environment: RunEnvironment;
   entries: RunEntry[];
 }
+/** One typechecked capture waiting for its native render and score. */
+interface Job {
+  entry: PilotEntry;
+  item: RunCase;
+  dir: string;
+  layout: LayoutDoc;
+  textMetrics: ReturnType<typeof browserTextMetrics> | undefined;
+  result: RunEntry;
+}
+// ponytail: fixed batch of 48 captures per app build (6 cases × 8 captures); tune if one batch build exceeds ~3 min.
+const IOS_BATCH = 48;
 const artifactFiles = [
   "browser.png",
   "native.png",
@@ -107,13 +123,7 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
     outputOf(["xcodebuild", "-version"]),
   ]);
   assertCleanSource(sourceStatus);
-  const selected =
-    renderer === "ios"
-      ? selectSimulator(
-          JSON.parse(await outputOf(["xcrun", "simctl", "list", "devices", "available", "-j"])) as SimulatorInventory,
-          process.env.MARKSWIFT_SIMULATOR,
-        )
-      : null;
+  const selected = renderer === "ios" ? await ensureSimulator() : null;
   const fixtureHashes = Object.fromEntries(
     await Promise.all(
       cases.map(async (item) => [item.id, await hashFile(join(import.meta.dir, "fixtures", item.fixture))]),
@@ -177,6 +187,7 @@ async function run() {
       only: { type: "string" },
       group: { type: "string" },
       renderer: { type: "string" },
+      reflow: { type: "boolean" },
       out: { type: "string" },
     },
   }).values;
@@ -184,6 +195,7 @@ async function run() {
   const { only, group } = flags;
   const out = resolve(flags.out ?? join(import.meta.dir, "out", new Date().toISOString().replace(/[:.]/g, "-")));
   const renderer = (flags.renderer ?? "mac") as Renderer;
+  const reflow = flags.reflow === true;
   if (!["none", "mac", "ios"].includes(renderer)) throw new Error(`unknown renderer: ${renderer}\n${USAGE}`);
   const pilot = await loadPilot();
   const cases = flags.all ? await loadFixtureSet(pilot) : pilot;
@@ -194,7 +206,7 @@ async function run() {
     : group === "text"
       ? cases.filter((item) => item.expectedText !== undefined)
       : cases;
-  const matrix = buildMatrix(selected);
+  const matrix = buildMatrix(selected, reflow);
   await mkdir(dirname(out), { recursive: true });
   try {
     await mkdir(out);
@@ -203,29 +215,135 @@ async function run() {
       throw new Error(`output already exists: ${out}; choose a fresh --out directory`);
     throw error;
   }
-  const server = serveDir(join(import.meta.dir, "fixtures"));
+  const server = await serveDir(join(import.meta.dir, "fixtures"));
   const browsers = new Map<number, BrowserCapture>();
   let report: RunReport | undefined;
   try {
-    for (const width of [320, 390]) {
+    for (const width of new Set(selected.flatMap((item) => widthsFor(item, reflow)))) {
       // Lockfile-pinned Chromium, never the auto-updating Chrome channel, so references reproduce on any machine.
       const browser = new BrowserCapture({ dpr: 2, viewport: { width, height: 2000 }, channel: "chromium" });
       await browser.start();
       browsers.set(width, browser);
     }
-    const env = await environment(cases, renderer, `Chromium ${browsers.get(320)!.version}`);
+    const env = await environment(cases, renderer, `Chromium ${browsers.values().next().value!.version}`);
     report = { expected: matrix.length, completed: 0, errors: [], environment: env, entries: [] };
     console.log(
       `expected ${matrix.length} ${renderer === "none" ? "capture/typecheck" : `${env.renderer} comparison`} outputs`,
     );
+    /** 390 conversions of reflow-tagged cases by `<id>/<theme>/<mode>`; their 320/768 captures re-render them. */
+    const reflowSources = new Map<string, ConversionResult>();
+    const render = (conversion: ConversionResult, png: string) =>
+      renderer === "mac"
+        ? renderMac(conversion, join(out, "_mac-work"), png)
+        : renderNative(conversion, join(out, "_native-work"), png, () => {}, env.simulatorUdid ?? undefined);
+    /** Score a rendered capture: text ink, compare, anchors, artifact hashes, `compare.json`, status line. */
+    const finish = async ({ entry, item, dir, layout, textMetrics, result }: Job) => {
+      try {
+        const browserPng = join(dir, "browser.png"),
+          nativePng = join(dir, "native.png");
+        if (textMetrics) {
+          textMetrics.nativeInk = await imageInkMetrics(nativePng, layout.dpr);
+          await Bun.write(join(dir, "text.json"), JSON.stringify(textMetrics, null, 2));
+        }
+        const score = await compare(browserPng, nativePng, join(dir, "diff.png"), layout.dpr);
+        result.ssim = score.ssim;
+        result.mismatch = score.mismatch;
+        const anchors: Array<{ id: string; mismatch: number }> = [];
+        for (const id of item.anchors ?? []) {
+          const node = findNode(layout.root, id);
+          if (!node) throw new Error(`anchor ${id} not found`);
+          anchors.push({
+            id,
+            mismatch: await regionMismatch(browserPng, nativePng, node.bounds, layout.dpr),
+          });
+        }
+        let reflowFields:
+          | { reflowTag: string; reflowSource: string; reflowSsim: number; reflowMismatch: number; reflowDelta: number }
+          | undefined;
+        if (reflow && item.reflow && entry.width !== 390) {
+          const source = reflowSources.get(`${item.id}/${entry.theme}/${entry.mode}`);
+          const reflowSource = `${item.id}-390-${entry.theme}-${entry.mode}`;
+          if (!source) throw new Error(`reflow source ${reflowSource} missing`);
+          const reflowPng = join(dir, "reflow.png");
+          // Same 390-compiled Swift, framed at this capture's size: only the proposal width changes.
+          await render({ ...source, layout: { ...source.layout, size: layout.size } }, reflowPng);
+          const r = await compare(browserPng, reflowPng, join(dir, "reflow-diff.png"), layout.dpr);
+          reflowFields = {
+            reflowTag: item.reflow,
+            reflowSource,
+            reflowSsim: r.ssim,
+            reflowMismatch: r.mismatch,
+            reflowDelta: r.ssim - score.ssim,
+          };
+        }
+        const artifactHashes = Object.fromEntries(
+          await Promise.all(artifactFiles.map(async (file) => [file, await hashFile(join(dir, file))])),
+        );
+        if (textMetrics) artifactHashes["text.json"] = await hashFile(join(dir, "text.json"));
+        if (reflowFields)
+          for (const file of ["reflow.png", "reflow-diff.png"]) artifactHashes[file] = await hashFile(join(dir, file));
+        await Bun.write(
+          join(dir, "compare.json"),
+          JSON.stringify(
+            {
+              ...score,
+              ...result,
+              ...reflowFields,
+              fixture: item.fixture,
+              anchors,
+              sourceRevision: env.sourceRevision,
+              fixtureHash: env.fixtureHashes[item.id],
+              harnessHash: env.harnessHash,
+              artifactHashes,
+              capturedAt: env.capturedAt,
+              chrome: env.chrome,
+              xcode: env.xcode,
+              renderer: env.renderer,
+              dpr: env.dpr,
+              viewportHeight: env.viewportHeight,
+              rootWidthOverride: env.rootWidthOverride,
+            },
+            null,
+            2,
+          ),
+        );
+        // Anchor values for review; the gate's threshold (`anchorMaxMismatch`) lives in the policy.
+        const status = `SSIM ${score.ssim.toFixed(4)} mismatch ${score.mismatch.toFixed(4)}${anchors.map((a) => ` ${a.id} ${a.mismatch.toFixed(3)}`).join("")}${reflowFields ? ` reflow Δ ${reflowFields.reflowDelta.toFixed(4)}` : ""}`;
+        report!.completed++;
+        console.log(`${entry.key}: ${status} (${report!.completed}/${report!.expected})`);
+      } catch (error) {
+        report!.errors.push(`${entry.key}: ${String(error)}`);
+        console.error(`${entry.key}: ${String(error)}`);
+      }
+    };
+    const pending: Array<Job & { conversion: ConversionResult }> = [];
+    /** Render every pending iOS capture in one app build and launch, then score each. */
+    const flush = async () => {
+      const jobs = pending.splice(0);
+      if (!jobs.length) return;
+      const errors = await renderIos(
+        jobs.map((j) => ({ result: j.conversion, output: join(j.dir, "native.png") })),
+        join(out, "_ios-work"),
+        env.simulatorUdid!,
+      ).catch((error) => new Map(jobs.map((j) => [join(j.dir, "native.png"), String(error)])));
+      for (const j of jobs) {
+        const failed = errors.get(join(j.dir, "native.png"));
+        if (failed) {
+          report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
+          console.error(`${j.entry.key}: iOS render failed: ${failed}`);
+        } else await finish(j);
+      }
+    };
     for (const item of selected) {
-      for (const width of [320, 390]) {
+      for (const width of widthsFor(item, reflow)) {
         for (const theme of item.themes) {
           const pair = matrix.filter(
             (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme,
           );
           let captured: Awaited<ReturnType<BrowserCapture["capture"]>>;
+          let captureMs = 0;
           try {
+            const t0 = performance.now();
             captured = await browsers.get(width)!.capture(
               {
                 screen: item.id,
@@ -243,6 +361,7 @@ async function run() {
               htmlIdentity,
               `pilot:${item.fixture}`,
             );
+            captureMs = performance.now() - t0;
           } catch (error) {
             for (const entry of pair) report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
             continue;
@@ -257,13 +376,14 @@ async function run() {
               size: captured.layout.size,
               loadedFonts: captured.layout.fonts.filter((face) => face.loaded).length,
               warnings: captured.warnings.length,
+              captureMs,
             };
             report.entries.push(result);
             try {
               const dir = await saveSource(entry, captured, out);
               const name =
                 "Pilot" +
-                item.id
+                entry.key
                   .split("-")
                   .filter(Boolean)
                   .map((part) => part[0]!.toUpperCase() + part.slice(1))
@@ -326,74 +446,27 @@ async function run() {
               result.typecheck = check.ok;
               await Bun.write(join(dir, "typecheck.json"), JSON.stringify(check, null, 2));
               if (!check.ok) throw new Error(`Swift typecheck failed: ${check.output.slice(0, 500)}`);
-              let status = "typed";
-              if (renderer !== "none") {
-                const browserPng = join(dir, "browser.png"),
-                  nativePng = join(dir, "native.png");
+              const job: Job = { entry, item, dir, layout: captured.layout, textMetrics, result };
+              if (renderer === "none") {
+                report.completed++;
+                console.log(`${entry.key}: typed (${report.completed}/${report.expected})`);
+              } else {
                 const conversion = {
                   ...compiled,
                   layout: captured.layout,
                   assets,
                   warnings: [...captured.warnings, ...fonts.notes],
                 };
-                if (renderer === "mac") await renderMac(conversion, join(out, "_mac-work"), nativePng);
-                else
-                  await renderNative(
-                    conversion,
-                    join(out, "_native-work"),
-                    nativePng,
-                    () => {},
-                    env.simulatorUdid ?? undefined,
-                  );
-                if (textMetrics) {
-                  textMetrics.nativeInk = await imageInkMetrics(nativePng, captured.layout.dpr);
-                  await Bun.write(join(dir, "text.json"), JSON.stringify(textMetrics, null, 2));
+                if (reflow && item.reflow && width === 390)
+                  reflowSources.set(`${item.id}/${theme}/${entry.mode}`, conversion);
+                if (renderer === "mac") {
+                  await renderMac(conversion, join(out, "_mac-work"), join(dir, "native.png"));
+                  await finish(job);
+                } else {
+                  pending.push({ ...job, conversion });
+                  if (pending.length === IOS_BATCH) await flush();
                 }
-                const score = await compare(browserPng, nativePng, join(dir, "diff.png"), captured.layout.dpr);
-                result.ssim = score.ssim;
-                result.mismatch = score.mismatch;
-                const anchors: Array<{ id: string; mismatch: number }> = [];
-                for (const id of item.anchors ?? []) {
-                  const node = findNode(captured.layout.root, id);
-                  if (!node) throw new Error(`anchor ${id} not found`);
-                  anchors.push({
-                    id,
-                    mismatch: await regionMismatch(browserPng, nativePng, node.bounds, captured.layout.dpr),
-                  });
-                }
-                const artifactHashes = Object.fromEntries(
-                  await Promise.all(artifactFiles.map(async (file) => [file, await hashFile(join(dir, file))])),
-                );
-                if (textMetrics) artifactHashes["text.json"] = await hashFile(join(dir, "text.json"));
-                await Bun.write(
-                  join(dir, "compare.json"),
-                  JSON.stringify(
-                    {
-                      ...score,
-                      ...result,
-                      fixture: item.fixture,
-                      anchors,
-                      sourceRevision: env.sourceRevision,
-                      fixtureHash: env.fixtureHashes[item.id],
-                      harnessHash: env.harnessHash,
-                      artifactHashes,
-                      capturedAt: env.capturedAt,
-                      chrome: env.chrome,
-                      xcode: env.xcode,
-                      renderer: env.renderer,
-                      dpr: env.dpr,
-                      viewportHeight: env.viewportHeight,
-                      rootWidthOverride: env.rootWidthOverride,
-                    },
-                    null,
-                    2,
-                  ),
-                );
-                // Anchor values for review; the gate's threshold (`anchorMaxMismatch`) lives in the policy.
-                status = `SSIM ${score.ssim.toFixed(4)} mismatch ${score.mismatch.toFixed(4)}${anchors.map((a) => ` ${a.id} ${a.mismatch.toFixed(3)}`).join("")}`;
               }
-              report.completed++;
-              console.log(`${entry.key}: ${status} (${report.completed}/${report.expected})`);
             } catch (error) {
               report.errors.push(`${entry.key}: ${String(error)}`);
               console.error(`${entry.key}: ${String(error)}`);
@@ -402,6 +475,7 @@ async function run() {
         }
       }
     }
+    await flush();
   } finally {
     await Promise.all([...browsers.values()].map((browser) => browser.stop()));
     server.stop();

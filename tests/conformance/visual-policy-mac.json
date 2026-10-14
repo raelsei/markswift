@@ -1,1 +1,63 @@
-{ "requireEvidence": true, "maxDrop": 0.005, "anchorMaxMismatch": 0.1, "features": {} }
+{
+  "requireEvidence": true,
+  "maxDrop": 0.005,
+  "anchorMaxMismatch": 0.1,
+  "reflowMaxLoss": 0.03,
+  "features": {},
+  "families": {
+    "attribute@app": {
+      "minSsim": 0.85
+    },
+    "attribute@fidelity": {
+      "minSsim": 0.84
+    },
+    "components@app": {
+      "minSsim": 0.53
+    },
+    "components@fidelity": {
+      "minSsim": 0.86
+    },
+    "css-layout@app": {
+      "minSsim": 0.78
+    },
+    "css-layout@fidelity": {
+      "minSsim": 0.82
+    },
+    "css-misc@app": {
+      "minSsim": 0.93
+    },
+    "css-misc@fidelity": {
+      "minSsim": 0.92
+    },
+    "css-paint@app": {
+      "minSsim": 0.7
+    },
+    "css-paint@fidelity": {
+      "minSsim": 0.89
+    },
+    "css-typography@app": {
+      "minSsim": 0.57
+    },
+    "css-typography@fidelity": {
+      "minSsim": 0.62
+    },
+    "html@app": {
+      "minSsim": 0.64
+    },
+    "html@fidelity": {
+      "minSsim": 0.73
+    },
+    "svg@app": {
+      "minSsim": 0.93
+    },
+    "svg@fidelity": {
+      "minSsim": 0.9
+    },
+    "tailwind-v4@app": {
+      "minSsim": 0.86
+    },
+    "tailwind-v4@fidelity": {
+      "minSsim": 0.86
+    }
+  }
+}

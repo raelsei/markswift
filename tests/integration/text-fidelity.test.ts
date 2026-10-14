@@ -26,3 +26,20 @@ browserTest("pre preserves whitespace and reports monospace font substitution", 
       .join("\n"),
   ).toContain("font-family ui-monospace");
 });
+
+browserTest("sub/sup line-box growth is not counted twice in app mode", async () => {
+  const result = await convertHtml(
+    '<main data-markswift-root><p id="h2o">Water H<sub>2</sub>O mc<sup>2</sup></p></main>',
+    {
+      name: "SubSupGrowth",
+      mode: "app",
+      viewport: { width: 320, height: 180 },
+      css: "body{margin:0}main{width:320px}p{margin:0;font:15px/20px system-ui}",
+    },
+  );
+  // The surplus is a floor of the measured box (it absorbs the native growth), not extra padding.
+  expect(result.code).not.toContain(".padding(.bottom");
+  const h = Number(result.code.match(/minHeight: ([\d.]+), alignment: \.topLeading\)/)?.[1]);
+  expect(h).toBeGreaterThanOrEqual(28);
+  expect(h).toBeLessThanOrEqual(30.5);
+});

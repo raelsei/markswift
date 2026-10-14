@@ -120,7 +120,7 @@ browserTest(
     const result = await convertHtml(
       '<main data-markswift-root style="width:100px;height:50px"><img src="/missing.png" width="20" height="20" alt="Missing"></main>',
     );
-    expect(result.warnings.some((message) => message.includes("missing.png"))).toBe(true);
+    expect(result.warnings.some((w) => w.message.includes("missing.png"))).toBe(true);
   },
   30000,
 );
@@ -139,7 +139,7 @@ browserTest(
       const result = await convert({ file });
       expect(result.layout.fonts).toHaveLength(2);
       expect(result.layout.fonts.every((f) => f.loaded)).toBe(true);
-      expect(result.warnings.filter((w) => w.includes("never loaded"))).toEqual([]);
+      expect(result.warnings.filter((w) => w.message.includes("never loaded"))).toEqual([]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -197,7 +197,7 @@ browserTest(
     });
     try {
       const result = await convert({ url: `http://127.0.0.1:${page.port}/` });
-      expect(result.warnings.filter((w) => w.includes("could not be read"))).toEqual([]);
+      expect(result.warnings.filter((w) => w.message.includes("could not be read"))).toEqual([]);
       expect(result.layout.fonts.find((f) => f.family === "Remote")?.loaded).toBe(true);
     } finally {
       page.stop(true);
@@ -213,7 +213,7 @@ browserTest(
     const result = await convertHtml('<main data-markswift-root style="width:10px;height:10px"></main>', {
       css: "@tailwind base;\n@tailwind utilities;",
     });
-    expect(result.warnings.filter((w) => w.includes("uncompiled Tailwind"))).toHaveLength(1);
+    expect(result.warnings.filter((w) => w.message.includes("uncompiled Tailwind"))).toHaveLength(1);
   },
   30000,
 );
@@ -247,7 +247,7 @@ browserTest(
     });
     try {
       const result = await convert({ url: `http://127.0.0.1:${server.port}/` });
-      expect(result.warnings.filter((w) => w.includes("Image could not be embedded"))).toEqual([]);
+      expect(result.warnings.filter((w) => w.message.includes("Image could not be embedded"))).toEqual([]);
       expect(JSON.stringify(result.layout).match(/data:image\/png/g)).toHaveLength(3);
     } finally {
       server.stop(true);
@@ -345,6 +345,7 @@ browserTest(
       const started = performance.now();
       // ponytail: plain await, not `expect(p).rejects` — Bun 1.4.3 never fires the test timeout while
       // `.rejects` awaits a promise that never settles, so a regression here would hang the suite, not fail it.
+      // (upstream: https://github.com/oven-sh/bun/issues/19130)
       const error = await convert({ url: `http://127.0.0.1:${server.port}/` }, { timeoutMs: 2000 }).catch((e) => e);
       expect(String(error)).toMatch(/timed out after 2000 ms/);
       expect(performance.now() - started).toBeLessThan(10_000);

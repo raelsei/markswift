@@ -1,8 +1,9 @@
+import type { Page } from "playwright-core";
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
-import { BrowserCapture } from "../browser/capture.ts";
+import { BrowserCapture, type Capture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
-import { compileLayout } from "../compiler/index.ts";
+import { compileLayout, needsProbe } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
@@ -46,6 +47,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   });
   // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
   // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.
+  // Not yet reported upstream; repro: research/audit-2026-10-10/upstream-repros/pw.mjs.
   const stopOnTimeout = () => void renderer.stop().catch(() => {});
   deadline.addEventListener("abort", stopOnTimeout, { once: true });
   const timedOut = new Promise<never>((_, reject) =>
@@ -59,35 +61,38 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     deadline.throwIfAborted(); // the deadline fired mid-launch, before there was a browser to close
     const name = options.name ?? "ConvertedView";
     // :has is resolved by Chromium. A fragment and a full document use identical root rules.
-    const root = options.root ?? DEFAULT_ROOT;
-    const shot = (scheme: Theme) =>
-      Promise.race([
-        renderer.capture(
-          {
-            screen: name,
-            theme: scheme,
-            url,
-            html,
-            root,
-            waitFor: options.waitFor,
-            async prepare(page) {
-              if (options.css) await page.addStyleTag({ content: options.css });
-              if (scheme === "dark" && options.darkClass)
-                await page.evaluate((c) => document.documentElement.classList.add(c), options.darkClass);
-              await options.prepare?.(page);
-            },
-          },
-          htmlIdentity,
-          label,
-        ),
-        timedOut,
-      ]);
-    // Adaptive: two captures in one browser session; the light one is emitted, the dark one pairs its colours.
-    const capture = await shot(theme === "dark" ? "dark" : "light");
-    const dark = theme === "adaptive" ? await shot("dark") : undefined;
+    const req = {
+      name,
+      url,
+      html,
+      label,
+      root: options.root ?? DEFAULT_ROOT,
+      theme,
+      css: options.css,
+      darkClass: options.darkClass,
+      waitFor: options.waitFor,
+      prepare: options.prepare,
+    };
+    const { primary: capture, dark } = await captureThemes(renderer, req, timedOut);
+    // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
+    // show another allocation, so its probe proves nothing and is not compiled.
+    const probe =
+      options.probe !== false && needsProbe(capture.layout)
+        ? (
+            await captureThemes(
+              renderer,
+              {
+                ...req,
+                theme: capture.layout.combo.theme,
+                viewport: { width: viewport.width > 320 ? 320 : 390, height: viewport.height },
+              },
+              timedOut,
+            )
+          ).primary.layout
+        : undefined;
     const sources = new Map([...capture.fontFiles, ...(dark?.fontFiles ?? [])].map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
-      dark ? unionFaces(capture.layout.fonts, dark.layout.fonts) : capture.layout.fonts,
+      dark ? unionFaces([capture.layout.fonts, dark.layout.fonts]) : capture.layout.fonts,
       sources,
       undefined,
       deadline,
@@ -99,13 +104,17 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       bundledFamilies: bundledFamilies(fonts),
       fontMetrics: metricsForFonts(fonts),
       dark: dark?.layout,
+      probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
+      palette: options.palette,
     });
     const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
     if (fonts.faces.length) {
       compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
       compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
     }
-    const pageWarnings = dark ? [...new Set([...capture.warnings, ...dark.warnings])] : capture.warnings;
+    const pageWarnings = dark
+      ? [...new Map([...capture.warnings, ...dark.warnings].map((w) => [w.message, w])).values()]
+      : capture.warnings;
     return {
       ...compiled,
       assets,
@@ -127,17 +136,66 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
 }
 
 /**
- * Faces of both captures: the light list, plus faces only the dark page declared. A face both
- * declared is one face, loaded if either capture loaded it. Identical lists come back as `light`.
+ * Capture one page in its theme(s), each raced against `timedOut`. Adaptive: two captures in one browser session;
+ * the light one is emitted, the dark one pairs its colours.
  */
-function unionFaces(light: FontFace[], dark: FontFace[]): FontFace[] {
+export async function captureThemes(
+  renderer: BrowserCapture,
+  req: {
+    name: string;
+    url: string;
+    html?: string;
+    label: string;
+    root: string;
+    theme: Theme | "adaptive";
+    css?: string;
+    darkClass?: string;
+    waitFor?: string;
+    prepare?: (page: Page) => Promise<void>;
+    viewport?: { width: number; height: number };
+  },
+  timedOut: Promise<never>,
+): Promise<{ primary: Capture; dark?: Capture }> {
+  const shot = (scheme: Theme) =>
+    Promise.race([
+      renderer.capture(
+        {
+          screen: req.name,
+          theme: scheme,
+          url: req.url,
+          html: req.html,
+          root: req.root,
+          waitFor: req.waitFor,
+          viewport: req.viewport,
+          async prepare(page) {
+            if (req.css) await page.addStyleTag({ content: req.css });
+            if (scheme === "dark" && req.darkClass)
+              await page.evaluate((c) => document.documentElement.classList.add(c), req.darkClass);
+            await req.prepare?.(page);
+          },
+        },
+        htmlIdentity,
+        req.label,
+      ),
+      timedOut,
+    ]);
+  const primary = await shot(req.theme === "dark" ? "dark" : "light");
+  return req.theme === "adaptive" ? { primary, dark: await shot("dark") } : { primary };
+}
+
+/**
+ * Faces of several captures: the first list, plus faces only a later one declared. A face several
+ * declared is one face, loaded if any capture loaded it. Identical lists come back as the first.
+ */
+export function unionFaces(lists: FontFace[][]): FontFace[] {
   const key = ({ loaded: _, ...face }: FontFace) => JSON.stringify(face);
-  const faces = new Map(light.map((f) => [key(f), f]));
-  for (const f of dark) {
-    const cur = faces.get(key(f));
-    if (!cur) faces.set(key(f), f);
-    else if (f.loaded && !cur.loaded) faces.set(key(f), { ...cur, loaded: true });
-  }
+  const faces = new Map<string, FontFace>();
+  for (const list of lists)
+    for (const f of list) {
+      const cur = faces.get(key(f));
+      if (!cur) faces.set(key(f), f);
+      else if (f.loaded && !cur.loaded) faces.set(key(f), { ...cur, loaded: true });
+    }
   return [...faces.values()];
 }
 

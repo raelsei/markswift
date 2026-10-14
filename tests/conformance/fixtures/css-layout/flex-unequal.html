@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="flex-grow; flex-shrink; flex-basis">
+<meta name="markswift-reflow" content="native">
+<title>flex-unequal</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; --b2:#16a34a; --b3:#db2777; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.b2 { background: var(--b2); } .b3 { background: var(--b3); }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+
+.row { display: flex; gap: 8px; }
+.g1 { flex: 1 0 0px; min-width: 0; } .g2 { flex: 2 0 0px; min-width: 0; }
+.side { flex: 0 0 120px; } .main { flex: 1; min-width: 0; }
+.auto { flex: 1 1 auto; }
+.w150 { width: 150px; flex-shrink: 1; }
+.h40 { height: 40px; }
+
+</style></head><body><main data-markswift-root>
+
+<section class="v"><p class="cap">flex 1 : 2 (basis 0)</p><div class="frame row"><div class="b g1 h40">one</div><div class="b b2 g2 h40">two</div></div></section>
+<section class="v"><p class="cap">sidebar 0 0 120px + flex 1</p><div class="frame row"><div class="b side h40">side</div><div class="b b2 main h40">main content</div></div></section>
+<section class="v"><p class="cap">flex 1 1 auto, unequal content</p><div class="frame row"><div class="b auto">Short</div><div class="b b2 auto">A much longer label</div></div></section>
+<section class="v"><p class="cap">three 150px items shrink</p><div class="frame row"><div class="b w150 h40">A</div><div class="b b2 w150 h40">B</div><div class="b b3 w150 h40">C</div></div></section>
+
+</main></body></html>

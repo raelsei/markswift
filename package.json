@@ -1,13 +1,18 @@
 {
   "name": "markswift",
-  "version": "0.1.0-alpha.1",
-  "private": true,
+  "version": "1.0.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raelsei/markswift.git"
+  },
   "type": "module",
   "bin": {
-    "markswift": "./src/cli.ts"
+    "markswift": "./dist/cli.js"
   },
   "scripts": {
+    "build": "rm -rf dist && bun build src/cli.ts src/index.ts src/compiler/index.ts --target=node --packages=external --splitting --outdir dist && tsc -p tsconfig.build.json",
+    "prepack": "bun run build",
     "typecheck": "tsc --noEmit -p .",
     "lint": "biome ci .",
     "format": "biome format --write .",
@@ -15,10 +20,11 @@
     "quality": "bun run tools/quality.ts",
     "pilot": "bun run tests/conformance/pilot-run.ts",
     "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration tests/conformance",
-    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/conformance/pilot-run.test.ts",
+    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/unit/swift/tracks.test.ts tests/unit/swift/flex-row.test.ts tests/unit/swift/measured-layout.test.ts tests/conformance/pilot-run.test.ts tests/integration/perf.test.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture",
-    "test:conformance": "bun test tests/conformance"
+    "test:conformance": "bun test tests/conformance",
+    "test:ios-behaviour": "bun run tools/verify/ios-behaviour.ts"
   },
   "dependencies": {
     "domhandler": "^5.0.3",
@@ -38,15 +44,24 @@
     "typescript": "^5.9.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./compiler": "./src/compiler/index.ts"
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./compiler": {
+      "types": "./dist/types/compiler/index.d.ts",
+      "default": "./dist/compiler/index.js"
+    },
+    "./package.json": "./package.json"
   },
+  "types": "./dist/types/index.d.ts",
   "files": [
-    "src",
+    "dist",
     "README.md",
     "CHANGELOG.md"
   ],
   "engines": {
+    "node": ">=20",
     "bun": ">=1.4.2"
   },
   "description": "Measured HTML and CSS to native SwiftUI components"

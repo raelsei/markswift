@@ -1,5 +1,5 @@
 import type { Color } from "../model/values.ts";
-import type { Confidence, Diagnostic, Screen, SemNode } from "../model/semantic.ts";
+import type { Confidence, Diagnostic, Screen, SemNode, Style } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
@@ -27,6 +27,14 @@ export interface EmitOptions {
   tokens?: ScreenTokens;
   /** The light screen of a light/dark pair: the view must look right in both colour schemes. */
   adaptive?: boolean;
+  /** Repeated-sibling extraction (app mode). `false` only for the pixel-identity check; default on. */
+  extract?: boolean;
+  /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
+  visibility?: "internal" | "public";
+  /** Previews call `BundledFonts.register()` first: the library package bundles fonts (plan 033's `build`). */
+  registerFonts?: boolean;
+  /** Command the view header names for regeneration. Default `convert`. */
+  regenerate?: "convert" | "build";
 }
 
 /** Everything the recursive emitters need; built once per screen. */
@@ -42,6 +50,11 @@ export interface EmitContext extends ColorCtx {
    * may grow to it. Every other fill-width box takes its container's width; see `frameModifier`.
    */
   contentMinWidth: Set<SemNode>;
+  /**
+   * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells, MarkswiftFlexRow items).
+   * "width": accept the proposed width; "both": also the proposed height (grid stretch).
+   */
+  allocated: Map<SemNode, "width" | "both">;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */
@@ -63,6 +76,20 @@ export interface EmitContext extends ColorCtx {
 export interface ScreenTokens {
   /** Token for the colour `id` paints (at `slot`, when the call site knows it), or undefined when the colour must stay a literal. */
   name(c: Color, id: string | undefined, slot?: string): string | undefined;
+  /** True when the colour `id` paints is opaque in every theme this view renders (a semantic token checks its dark value too). */
+  opaque(c: Color, id: string | undefined): boolean;
+}
+
+/** How one node paints in an interaction state, on top of its resting look (`states.ts` `pairStyle`). */
+export interface StatePaint {
+  /** The owner's member name (`isSavePressed`, `isEmailFocused`): the ternaries' condition. */
+  cond: string;
+  /** The style the box is emitted with: rest geometry plus anything only the state paints. */
+  style: Style;
+  /** Keyed by `colorArgs(c)` of the colour the emitter will be asked for, or by a run slot `run<i>`. */
+  colors: Map<string, { rest: Color; state: Color }>;
+  opacity?: { rest: number; state: number };
+  scale?: { rest: [number, number]; state: [number, number] };
 }
 
 /**
@@ -76,16 +103,37 @@ export interface ColorCtx {
   mode: EmitMode;
   /** App mode: `@ScaledMetric` font sizes used so far, property name → declaration; emitted once per view. */
   scaledFonts?: Map<string, string>;
+  /** Node id → its interaction-state paint; `colorExpr` turns a paired colour into a ternary. */
+  statePaint?: Map<string, StatePaint>;
 }
 
 /** The view-level members a screen's controls need, in emission order. */
 export interface ControlMembers {
   /** `@State` / callback declarations to put before `var body`. Empty when the screen has none. */
   decls: string[];
+  /**
+   * Every member in emission order; `value` = design state (`@State private`), `action` =
+   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029). `decls` is
+   * `members.flatMap(m => m.decl)`.
+   */
+  members: Array<{ name: string; kind: "value" | "action" | "ephemeral"; type: string; decl: string[] }>;
   stateOf: Map<SemNode, string>;
+  /** `Action.key` → callback member. */
   actionOf: Map<string, string>;
-  /** Toggle/radio id → the Swift statement a tap on its `<label>` runs. */
+  /** Toggle/radio id (native or ARIA toggle) → the Swift statement a tap on its `<label>` runs. */
   activate: Map<string, string>;
   /** Grouped radio → its tag in the group's `String` selection (its `stateOf` name). */
   radioTag: Map<SemNode, string>;
+  /**
+   * ARIA toggle drawn as a Button (`role=checkbox|switch|radio…`) → the statements its tap runs
+   * (change the state, then the action), the condition `.isSelected` follows, and the one
+   * `aria-checked="mixed"` follows (`Bool?` state, `nil` = mixed).
+   */
+  toggleOf: Map<SemNode, { tap: string[]; on: string; mixed?: string }>;
+  /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
+  statePaint: Map<string, StatePaint>;
+  /** Pressable owner → its `@MarkswiftPressed` member. */
+  pressOf: Map<SemNode, string>;
+  /** Text field → its `@MarkswiftFocused` member. */
+  focusOf: Map<SemNode, string>;
 }

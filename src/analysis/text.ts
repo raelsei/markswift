@@ -26,9 +26,62 @@ import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex, mainAxis } from "./geometry.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
+import { linkAction } from "./controls.ts";
+import { isActivatableRole } from "../model/interactive.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
+/**
+ * Roles, explicit or implied by the tag, whose ARIA name labels a region rather than standing for its
+ * content (Chrome: a `tabpanel` named "All" holding its StaticText).
+ */
+const CONTAINER_ROLES: Record<string, true> = {
+  tabpanel: true,
+  region: true,
+  group: true,
+  dialog: true,
+  alertdialog: true,
+  form: true,
+  navigation: true,
+  complementary: true,
+  main: true,
+  search: true,
+  article: true,
+  document: true,
+  figure: true,
+  list: true,
+  note: true,
+  log: true,
+  status: true,
+  alert: true,
+  toolbar: true,
+  tablist: true,
+  radiogroup: true,
+  menu: true,
+  menubar: true,
+  listbox: true,
+  table: true,
+  grid: true,
+  tree: true,
+  treegrid: true,
+  feed: true,
+  application: true,
+};
+const CONTAINER_TAGS: Record<string, true> = {
+  section: true,
+  nav: true,
+  aside: true,
+  main: true,
+  form: true,
+  article: true,
+  figure: true,
+  dialog: true,
+  fieldset: true,
+  ul: true,
+  ol: true,
+  table: true,
+  search: true,
+};
 
 /**
  * @param leaf  the host holds nothing but this text → its box is the CSS line box (text-node
@@ -52,6 +105,10 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       };
   const note = (level: DiagnosticLevel, feature: string, message: string) =>
     addDiagnostic(base.diagnostics, level, feature, message);
+  // A container holding only text becomes that Text, whose accessibility label would replace its
+  // words: its name labels a group around the Text instead (Chrome: tabpanel "All" › StaticText).
+  const role = host.attrs["role"]?.trim().toLowerCase();
+  if (leaf && base.a11y?.label && (role ? CONTAINER_ROLES[role] : CONTAINER_TAGS[host.tag])) base.a11y.container = true;
   const out: TextRun[] = [];
   const built: MeasuredTextRun[] = [];
   const painted: LayoutNode[] = [];
@@ -166,6 +223,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     for (const v of numeric.split(/\s+/))
       if (v && !NUMERIC_FEATURES[v])
         note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
+    reportTextLosses(s, deco, note);
     const clipEl =
       [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
     const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
@@ -184,16 +242,24 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
     }
     // A link inside a sentence never reaches `controlOf` — it is an inline element, so it arrives
-    // here as a run and leaves as decoration. SwiftUI's `Text` has no per-run destination (an
-    // `AttributedString` link would, but then the whole paragraph stops being a run chain), so
-    // the navigation is genuinely lost; what must not be lost is the record of losing it. This is
-    // the most common link form in prose, and it used to report nothing at all.
-    const link = inlineChain(host, el).find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
-    if (link)
+    // here as a run. It stays a run: `Text(AttributedString)` with `.link` concatenates like any
+    // other run (`Text.markswiftLink`). An absolute URL opens; an in-app href carries the same
+    // action a block link would get and the paragraph's `openURL` handler calls it.
+    const chain = inlineChain(host, el);
+    const link = chain.find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
+    if (link && !hidden) {
+      const action = linkAction(link);
+      run.link = action ? { href: link.attrs["href"]!, action } : { href: link.attrs["href"]! };
+    }
+    // An inline handler that is not a link has no per-run tap target.
+    const handler = link
+      ? undefined
+      : chain.find((e) => e.attrs["onclick"]?.trim() || isActivatableRole(e.attrs["role"]));
+    if (handler)
       note(
         "approximated",
-        "a",
-        `inline <a href="${link.attrs["href"]}"> → styled text run, destination dropped (Text has no per-run link)`,
+        handler.attrs["onclick"] ? "@onclick" : "@role",
+        `inline <${handler.tag}> handler inside running text → styled text run, not tappable`,
       );
     out.push(run);
     built.push({ run, node: r.node, styleOf: r.styleOf, src });
@@ -202,7 +268,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
   if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse")
     trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
-  const frame = leaf ? host.bounds : (union ?? host.bounds);
+  const measured = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
   // `<center>`, `align=center` and friends compute to `-webkit-center/-left/-right`; the side is the same.
@@ -212,8 +278,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
-  let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
-  if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
+  let lines = Math.max(1, Math.round((union?.h ?? measured.h) / lh));
+  if (leaf) lines = Math.min(lines, Math.max(1, Math.round((measured.h - base.padding[0] - base.padding[2]) / lh)));
+  // Runs straight inside a flex/grid box are an anonymous item whose box is its line boxes, not the
+  // glyph union (an accordion trigger's title beside its icon); Blink floors the half-leading above.
+  const frame =
+    !leaf && measured.h < lines * lh - 0.5 && /flex|grid/.test(host.styles["display"] ?? "")
+      ? { ...measured, y: round2(measured.y - Math.floor((lines * lh - measured.h) / 2)), h: round2(lines * lh) }
+      : measured;
+  let growth: TextNode["lineBoxGrowth"];
   if (leaf) {
     // A box taller than its line boxes. The surplus becomes padding so the text lands where the
     // browser put it in both modes; a centred text stays as is (the emitter centres text in its box).
@@ -227,12 +300,17 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // ponytail: block hosts keep the keyword rule; a line box grown by sub/sup or a fallback font
     // (emoji) reads as off-centre glyphs. Measure block hosts too (sub/sup paragraphs look better
     // centred) once the visual gate can tell which is right.
-    if (surplus > 2) {
+    // Fidelity pins the text frame, so only growth over 2 px becomes padding (both modes). Smaller
+    // growth (a `kbd` box's border) is recorded unpadded for app mode alone.
+    if (surplus > 0.5) {
       const glyphs = /flex|grid|table-cell|-webkit-box/.test(host.styles["display"] ?? "") ? union : undefined;
       const above = glyphs ? glyphs.y - (frame.y + pt) : 0;
       const below = glyphs ? frame.y + frame.h - pb - (glyphs.y + glyphs.h) : surplus;
-      if (Math.abs(above - below) > 2)
-        base.padding = above > below ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+      const edge = above > below ? "top" : "bottom";
+      if (surplus > 2 && Math.abs(above - below) > 2) {
+        base.padding = edge === "top" ? [pt + surplus, pr, pb, pl] : [pt, pr, pb + surplus, pl];
+        growth = { edge, px: surplus, padded: true };
+      } else if (surplus <= 2 && Math.abs(above - below) > 0.5) growth = { edge, px: surplus, padded: false };
     }
   }
   // A fixed height that is exactly the text's own line boxes plus the padding it already carries
@@ -249,7 +327,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   ) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built, note);
+  markLineBreaks(built);
   markBaselineShifts(built, host, note);
   // An inline element with its own background or border cannot be expressed as a run — SwiftUI
   // has no per-run box. Its measured inline box becomes a background layer instead, so the
@@ -297,6 +375,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
           : "leading",
     lines,
   };
+  if (growth) node.lineBoxGrowth = growth;
+  if (host.styles["text-wrap-style"] === "balance") node.balance = true;
+  addStateRunColors(node, built);
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
@@ -312,10 +393,32 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (dir === "rtl") node.layoutDirection = "rtl";
   if (ta === "justify")
     note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  const indent = host.styles["text-indent"];
+  if (indent && px(indent) !== 0) note("approximated", "text-indent", `text-indent ${indent} dropped`);
   const wm = host.styles["writing-mode"];
   if (wm && wm !== "horizontal-tb")
     note("unmapped", "writing-mode", `writing-mode ${wm} → vertical text has no SwiftUI layout`);
   return finish(node);
+}
+
+/**
+ * Runs drawn in another colour while their element is pressed/focused → `node.states[key].runColors`,
+ * index-aligned with `node.runs` (gap runs paint nothing and stay empty).
+ */
+function addStateRunColors(node: TextNode, built: MeasuredTextRun[]): void {
+  node.runs.forEach((run, i) => {
+    const el = built.find((b) => b.run === run)?.styleOf;
+    const vis = el?.styles["visibility"];
+    if (!el || vis === "hidden" || vis === "collapse") return;
+    for (const key of ["pressed", "focused"] as const) {
+      const d = el.states?.[key];
+      if (!d || !("color" in d || "-webkit-text-fill-color" in d)) continue;
+      const c = textColorOf({ ...el.styles, ...d });
+      if (JSON.stringify(c) === JSON.stringify(run.color)) continue;
+      const st = ((node.states ??= {})[key] ??= {});
+      (st.runColors ??= [])[i] = c;
+    }
+  });
 }
 
 // ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.
@@ -331,4 +434,47 @@ function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
     .map((r) => r.text)
     .join("");
   return ONE_WORD.test(text) && !SPACE_FREE.test(text);
+}
+
+/** Text properties SwiftUI `Text` cannot express; reported per value, never silently dropped. */
+function reportTextLosses(
+  s: Record<string, string>,
+  deco: TextRun["decoration"],
+  note: (level: DiagnosticLevel, feature: string, message: string) => void,
+): void {
+  if (s["hyphens"] === "auto")
+    note("approximated", "hyphens", "hyphens: auto → no automatic hyphenation (SwiftUI Text does not hyphenate)");
+  const wb = s["word-break"];
+  if (wb === "break-all" || wb === "keep-all" || wb === "break-word")
+    note("approximated", "word-break", `word-break: ${wb} → native word breaking`);
+  const ow = s["overflow-wrap"];
+  if (ow === "anywhere" || ow === "break-word")
+    note(
+      "approximated",
+      "overflow-wrap",
+      `overflow-wrap: ${ow} → native breaking decides where an overlong word splits`,
+    );
+  const tws = s["text-wrap-style"];
+  if (tws === "balance")
+    note(
+      "approximated",
+      "text-wrap-style",
+      "text-wrap-style: balance → native line breaking at the narrowest width that keeps the line count (app mode)",
+    );
+  else if (tws === "pretty" || tws === "stable")
+    note("approximated", "text-wrap-style", `text-wrap-style: ${tws} → native line breaking`);
+  const ws = s["word-spacing"];
+  if (ws && ws !== "normal" && px(ws) !== 0) note("approximated", "word-spacing", `word-spacing ${ws} dropped`);
+  const ffs = s["font-feature-settings"];
+  if (ffs && ffs !== "normal") note("approximated", "font-feature-settings", `font-feature-settings ${ffs} dropped`);
+  const caps = s["font-variant-caps"];
+  if (caps && caps !== "normal") note("approximated", "font-variant-caps", `font-variant-caps ${caps} dropped`);
+  if (deco) {
+    const t = s["text-decoration-thickness"];
+    if (t && t !== "auto" && t !== "from-font")
+      note("approximated", "text-decoration-thickness", `text-decoration-thickness ${t} → system line thickness`);
+    const o = s["text-underline-offset"];
+    if (deco.lines.includes("underline") && o && o !== "auto")
+      note("approximated", "text-underline-offset", `text-underline-offset ${o} → system underline position`);
+  }
 }

@@ -1,13 +1,65 @@
 import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
+import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
-import { modifiers, overlayModifier } from "./modifiers.ts";
+import { decorate, overlayModifier } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
+
+/** App mode: an admitted authored template (`GridNode.template`) laid out by the runtime `MarkswiftTracks`. */
+function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: EmitContext): string[] {
+  const layout = t.autoRepeat
+    ? `autoRepeat: .${t.autoRepeat.mode}(min: ${num(t.autoRepeat.min)})`
+    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)})`)).join(", ")}]`;
+  const stretch = t.stretch ? "" : ", stretch: false";
+  return [
+    `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
+    ...t.cells.flatMap((c, i) => {
+      const [top, bottom] = t.margins[i]!;
+      const margin = [top ? `.padding(.top, ${num(top)})` : "", bottom ? `.padding(.bottom, ${num(bottom)})` : ""];
+      return indent([...ctx.renderNode(n.children[c]!), ...margin.filter(Boolean)], 1);
+    }),
+    "}",
+  ];
+}
+
+/**
+ * Content-height rows need an intrinsic height proposal, or stretch children (and app `align-self` children with
+ * `maxHeight: .infinity`) take all the height offered. Fixed/fill rows already get one; discarding it collapses
+ * overlay-only Color children to their 10pt ideal height.
+ */
+function hugsRowHeight(n: StackNode, ctx: EmitContext): boolean {
+  return (
+    n.axis === "h" &&
+    n.height.kind === "hug" &&
+    n.children.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))
+  );
+}
+
+/** App mode: an admitted flex row (`StackNode.flex`) laid out by the runtime `MarkswiftFlexRow`. */
+function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: EmitContext): string[] {
+  const items = flex.items.map(
+    (i) => `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)})`,
+  );
+  const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
+  const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
+  return [
+    `MarkswiftFlexRow(items: [${items.join(", ")}], spacing: ${num(spacing)}${align}) {`,
+    ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
+    "}",
+    ...(hugsRowHeight(n, ctx) ? [".fixedSize(horizontal: false, vertical: true)"] : []),
+  ];
+}
+
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
-  if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
+  // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
+  if (n.kind === "grid" && n.template && ctx.mode === "fidelity")
+    note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", n.template.fidelityNote);
+  if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
+  else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
+  else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
   else if (n.kind === "grid") {
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
@@ -19,6 +71,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     }
     out.push("}");
   } else {
+    // Fidelity keeps an admitted flex row's captured widths and reports what app mode reconstructs.
+    if (n.flex?.fidelityNote) note(n, "approximated", n.flex.fidelityNote.feature, n.flex.fidelityNote.message);
     const kids = n.children;
     const uniform = typeof n.spacing === "number";
     const spacers = n.distribution === "between" || n.distribution === "around" || n.distribution === "evenly";
@@ -72,25 +126,16 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
     });
     out.push("}");
-    // Only content-height rows need an intrinsic proposal to keep stretch children from
-    // consuming all available height (and `align-self` children their `maxHeight: .infinity`).
-    // Fixed/fill rows already receive a height proposal; discarding it collapses overlay-only
-    // Color children to their 10pt ideal height.
-    if (
-      n.axis === "h" &&
-      n.height.kind === "hug" &&
-      kids.some((k) => k.height.kind === "fill" || (ctx.mode === "app" && k.selfAlignV !== undefined))
-    )
-      out.push(".fixedSize(horizontal: false, vertical: true)");
+    if (hugsRowHeight(n, ctx)) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
-  out.push(...modifiers(n, ctx));
+  const body = decorate(n, out, ctx);
   if (n.scroll) {
     // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
     // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis,
     // with `position: fixed` overlays attached outside it so they stay put while content scrolls.
     if (ctx.mode === "fidelity")
       return [
-        ...out,
+        ...body,
         `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`,
         ".clipped()",
       ];
@@ -99,7 +144,13 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       ...n.overlays.filter((o) => o.fixed && o.layer === "background").reverse(),
       ...n.overlays.filter((o) => o.fixed && o.layer === "overlay"),
     ].flatMap((o) => overlayModifier(o, o.layer, ctx));
-    return [`ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`, ...indent(out, 1), `}`, ...fixed];
+    return [
+      `ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`,
+      ...indent(body, 1),
+      `}`,
+      ".markswiftScrollEdgeEffectHidden()",
+      ...fixed,
+    ];
   }
-  return out;
+  return body;
 }

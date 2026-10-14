@@ -1,25 +1,33 @@
 # Markswift
 
-Convert rendered HTML and CSS into SwiftUI source.
+Convert rendered HTML and CSS into reusable SwiftUI components.
 
-**Alpha (0.1.0-alpha.1).** One component per conversion. The output is
-**visually faithful starting code, not a reusable component**: it reproduces one captured state of one component, with no
-parameters, no `ForEach` over repeated content and generated (not meaningful) names. Expect to
-refactor it. Generated code targets iOS 18+ and Swift 6. Unsupported or approximated features are
-always reported (see [Diagnostics](#diagnostics)).
+Markswift captures a page or component in Chrome and writes SwiftUI for iOS 18+ and Swift 6 that looks like the
+browser's rendering and can be reused: repeated siblings become a `ForEach` over a data array with an extracted row
+view, every button and link is an `on<Name>` closure parameter, and the screen has an explicit `init` whose parameters
+default to the design. Names come from the markup (`id`, `data-slot`, `aria-label`, class, nearest heading) and can be
+set with `data-markswift-component` / `data-markswift-field` ([Components](#components)). The output is tool-owned:
+regenerate it with `--update` and customise through the initializer and your own files
+([Regenerating](#regenerating)); `markswift build` puts many components into one Swift package. `app` mode is the
+product, `fidelity` exists for verification ([Modes](#modes)). What is measured on iOS is listed under
+[Supported subset](#supported-subset-evidence); everything else the capture loses is reported (see
+[Diagnostics](#diagnostics)).
 
 ## Requirements
 
-- Bun ≥ 1.4.2 (tested with 1.4.3) and an installed Google Chrome. Node.js cannot run the CLI.
+- Node.js ≥ 20 or Bun ≥ 1.4.2 (tested with 1.4.3), and an installed Google Chrome.
 - `python3` with `fontTools` and `brotli` to bundle webfonts. Without them the conversion still
   completes and reports each font it could not bundle.
 - Xcode, only to compile the generated Swift.
 
 ## Install
 
-The repository is private for now; both channels need read access.
+```sh
+npm install --save-dev markswift
+npx markswift --version    # or: bunx markswift --version
+```
 
-From a checkout:
+From a checkout (contributors):
 
 ```sh
 git clone git@github.com:raelsei/markswift.git && cd markswift
@@ -27,49 +35,98 @@ bun install --frozen-lockfile
 bun src/cli.ts --version
 ```
 
-As a Bun git dependency pinned to the release tag:
-
-```sh
-bun add github:raelsei/markswift#v0.1.0-alpha.1
-bunx markswift --version   # 0.1.0-alpha.1
-```
-
-The package is not published to npm. The examples below use the checkout; in a dependent project
-write `bunx markswift` for `bun src/cli.ts` and `from "markswift"` for `from "./src/index.ts"`.
+In a checkout write `bun src/cli.ts` for `npx markswift` and `from "./src/index.ts"` for `from "markswift"`.
 
 ## Quick start (CLI)
 
 ```sh
 printf '%s\n' '<main data-markswift-root style="width:240px;height:80px;font:18px system-ui">Hello Markswift</main>' \
-  | bun src/cli.ts convert - --name HelloCard --out ./generated-hello
+  | npx markswift convert - --name HelloCard --out ./generated-hello
 ```
 
-prints `Wrote 3 files for HelloCard to ./generated-hello`. `--out` must not exist yet; one
-conversion writes several files. Other inputs: `bun src/cli.ts convert ./page.html --out ./out`
+prints `Wrote 3 files for HelloCard to ./generated-hello`. `--out` must not exist yet; regenerate later with `--update`; one
+conversion writes several files. Other inputs: `npx markswift convert ./page.html --out ./out`
 (relative assets resolve beside the file), `--css ./compiled.css` for a separate **compiled**
 stylesheet, and `--url http://localhost:5173/card --root '#preview'` for a running page.
 
-Options (`bun src/cli.ts convert --help`): `--out <dir>` (required), `--name <Name>` (default
+Options (`npx markswift convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
 `ConvertedView`), `--root <selector>`, `--width`/`--height` (default 390 × 844),
 `--theme adaptive|light|dark` (default `adaptive`), `--dark-class <name>`, `--mode app|fidelity`
-(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options, 1
-conversion or file error. Warnings and diagnostics go to stderr.
+(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options or hand-edited files
+refused by `--update`, 1 conversion or file error. Warnings and diagnostics go to stderr.
 
 ## What you get
 
 | File | When |
 | --- | --- |
-| `<Name>.swift` | Always: the view, with a light and a dark `#Preview` |
+| `<Name>.swift` | Always: the view with an explicit `init`, a light and a dark `#Preview`, plus `extension <Name> { struct <Type>; static let <types>; struct <Type>View }` with extracted row types, data, subviews and one `#Preview` per subview when the design repeats sibling elements |
 | `<Name>+Tokens.swift` | Always: colours in `<Name>.Palette` |
-| `MarkswiftRuntime.swift` | Always: shared helpers, identical for every conversion by the same version |
+| `MarkswiftRuntime.swift` | Always: shared helpers; its header names the Markswift version, and every conversion by that version produces the identical file |
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |
 | `<Name>+Fonts.swift`, `<Name>+UIAppFonts.plist.fragment`, `Fonts/*.ttf` | When webfonts were bundled |
 | `Images/<hash>.<ext>` | When the component shows raster images (one file per distinct image) |
+| `.markswift.json` | Always: the manifest `--update` reads (`tool`, `version`, and the SHA-256 of every file this run wrote) |
+
+Every generated `.swift` file starts with `// Generated by Markswift <version> — …`; `npx markswift --version` prints
+the same version.
+
+## Components
+
+Repeated sibling elements (app mode) become a row type `<Type>`, a subview `<Type>View` and a data array `<types>`
+(`static let`, the design's rows) iterated with `ForEach`. The screen always has an explicit `init` whose parameters
+all default to the design, in this order: data arrays, annotated fields, actions:
+
+```swift
+// TeamCards.swift, generated from tests/conformance/fixtures/components/tw-cards.html with --name TeamCards:
+init(inviteATeammateCards: [InviteATeammateCard] = Self.inviteATeammateCards, onMessage: @escaping (InviteATeammateCard) -> Void = { _ in }, onManage: @escaping (InviteATeammateCard) -> Void = { _ in })
+
+// Your code:
+TeamCards()                                                    // the design as captured
+TeamCards(onMessage: { card in print("message", card.title) }) // card: TeamCards.InviteATeammateCard
+```
+
+- A run can be single elements too (a text, an image, a button): adjacent equal leaves become a `ForEach` when their
+  colours agree and the stack spaces them evenly; otherwise they stay unrolled.
+- Per-row buttons collapse into one `on<Name>: (<Type>) -> Void` that receives the tapped row (`on<Type>` when the
+  buttons were named after their own captions); other actions are `() -> Void`.
+- State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
+  Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
+- Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first
+  non-utility class, else the nearest heading plus a tag noun (`li` → `Row`, `article` → `Card`, else `Item`). Fields use
+  `data-markswift-field`, then `data-slot`/class, then their kind (`title`, `text`, `foregroundColor`, `isOn`, …).
+  Override poor names with the two attributes:
+
+```html
+<h2 data-markswift-field="title">Team members</h2>
+<ul>
+  <li data-markswift-component="Member">
+    <span data-markswift-field="name">Ada</span> <span data-markswift-field="role">Owner</span>
+  </li>
+</ul>
+```
+
+  `data-markswift-field` outside a repeated row turns a single-run text into `var <field>: String` or seeds a form
+  control's state through `init`. Names are API: a rule change renames them on regeneration (noted in the changelog).
+- `convert` emits internal types; the `visibility: "public"` compile option (for a generated library) makes the
+  view, its `init`, row structs (with an explicit `public init`), data arrays and subviews `public`.
+
+## Regenerating
+
+Generated files are tool-owned. Every output directory carries `.markswift.json` (`tool`, `version`, and `files`:
+each written path → its SHA-256). When the design changes, rerun the same command with `--update`: it rewrites the
+listed files, deletes listed files the new output no longer produces, and never touches a file it did not write. If a
+listed file was edited by hand it refuses with exit 2 and names the file (`--update --force` discards those edits;
+`--force` alone is a usage error); an unlisted file in the way of a new generated file is always refused, and so is a
+directory without `.markswift.json` (exit 1, even with `--force`). Customise through the component's initializer,
+[`--palette`](#using-your-apps-colours---palette), `extension`s and wrappers in your own files, and commit the output
+directory including `.markswift.json`.
 
 ## Library API
 
 ```ts
-import { convertHtml } from "./src/index.ts";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { convertHtml } from "markswift";
 
 const result = await convertHtml(
   '<article data-markswift-root class="card"><h2>Hello SwiftUI</h2><p>Made from HTML.</p></article>',
@@ -84,25 +141,40 @@ const result = await convertHtml(
 );
 
 console.log(Object.keys(result.files), result.diagnostics.length, result.warnings);
-for (const [path, content] of Object.entries(result.files)) await Bun.write(`generated-welcome/${path}`, content);
-for (const [path, bytes] of Object.entries(result.assets)) await Bun.write(`generated-welcome/${path}`, bytes);
+for (const [path, data] of Object.entries({ ...result.files, ...result.assets })) {
+  const file = `generated-welcome/${path}`;
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, data);
+}
 ```
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
   `convertHtml(html, options)` is the string shorthand. `compileLayout(layout, { name, mode, dark })`
-  recompiles a saved `LayoutDoc` (version 2) without Chrome; it does not package fonts.
+  recompiles a saved `LayoutDoc` (version 3) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
+  cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
+  and rejects any other with an error naming both versions — recapture the source. A change to the captured style
+  list or the schema bumps the LayoutDoc version and is a breaking release.
 - Options: `name`, `mode` (`app` | `fidelity`), `theme` (`adaptive` | `light` | `dark`),
   `darkClass`, `css` (compiled CSS), `root` (default `[data-markswift-root]`, otherwise `body`),
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion).
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
-  `warnings`, `layout` and, for adaptive conversions, `darkLayout`.
+  `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
+  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`.
 
 ## Modes
 
 - `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
-  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`); text-bearing
-  controls treat their measured height as a floor; pages taller than the viewport scroll.
+  System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`) and boxes grow
+  with their text: a measured or authored height on anything that lays out text (text, stacks,
+  grids, text-bearing controls) is a floor (content CSS lets overflow the box does not grow it),
+  measured layouts move what lies below a grown child,
+  hugging label columns fit their text instead of a pinned width, and text editors size to their
+  text. Pages taller than the viewport scroll.
+  CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
+  compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
+  ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
+  `enterkeyhint` choose a text field's iOS keyboard, autofill type and Return key.
 - `fidelity` keeps the captured geometry and line division at fixed sizes. It exists for visual
   verification.
 
@@ -116,6 +188,26 @@ colour slots present in one theme only, or whose geometry differs by more than 0
 light values and are reported in one `warnings` entry. `light` or `dark` captures one theme.
 `compileLayout(light, { dark })` pairs saved captures without a browser.
 
+### Using your app's colours (--palette)
+
+`--palette map.json` (`palette` in `ConvertOptions`, `BuildOptions` and `markswift.json`) points generated `Palette`
+tokens at colours your app already has:
+
+```json
+{
+  "--primary": "Color.accentColor",
+  "#e2e8f0": "Color(\"Border\")",
+  "#ffffff/#0a0a0a": "Color(\"Card\")"
+}
+```
+
+A key is the design's CSS variable (`--primary`), a static token's hex colour (`#rrggbb` or `#rrggbbaa`), or an
+adaptive token's `#light/#dark` pair; the CSS variable wins over the hex. Values are one-line Swift `Color`
+expressions emitted verbatim (your app's typecheck validates them). Views keep referencing `Palette.x`; only the
+token's value changes, and its doc comment keeps the captured colour. Tokens without an entry and entries that matched
+no token are listed as `palette` warnings. Single-use colours stay inline and are not mapped. Mapped colours are not
+part of the visual verification.
+
 ## Adding the output to Xcode
 
 Add **all** generated `.swift` files to one target. For webfonts add `Fonts/` as resources and
@@ -126,53 +218,130 @@ resources; inside a Swift package set `MarkswiftAssets.bundle = .module` once at
 Several conversions can share one target: every per-view declaration (palette, shapes, bundled
 fonts) is nested in the view's type and its files are prefixed with the view name. Add
 `MarkswiftRuntime.swift`, each `Fonts/` file and each `Images/` file once. When you upgrade
-Markswift, replace the runtime and re-convert older screens. A shared runtime package is post-alpha.
+Markswift, replace the runtime and re-convert older screens. For many components with one shared runtime, palette and
+font set, use [`markswift build`](#building-a-component-library-markswift-build).
+
+## Building a component library (markswift build)
+
+`markswift build [markswift.json] [--force]` captures every component of a config in one browser session and writes
+ONE local Swift package. Paths are relative to the config file; `serve` (default: the config's directory) is served
+over `http://127.0.0.1` so relative URLs such as `../assets/geist.woff2` resolve inside it. `root`, `viewport`,
+`theme`, `darkClass`, `mode`, `css` and `waitFor` apply to every component; a component may override any of them.
+`source` is a file inside `serve` or an `http(s)` URL. Names must be Swift type names that SwiftUI does not already
+use (`ButtonView`, not `Button`).
+
+```json
+{
+  "library": "ShadcnKit",
+  "out": "ShadcnKit",
+  "serve": "fixtures",
+  "root": "[data-markswift-root]",
+  "theme": "adaptive",
+  "components": [
+    { "name": "AccordionView", "source": "fixtures/components/shadcn-accordion.html" },
+    { "name": "CardView", "source": "fixtures/components/shadcn-card.html", "theme": "light" }
+  ]
+}
+```
+
+The package (`Package.swift`, swift-tools 6.2, iOS 18 / macOS 15, Xcode 26) holds `Sources/<Library>/` with one
+public `<Component>.swift` per component, `MarkswiftPalette.swift` (one module-level `public enum Palette`: one name
+per light/dark colour pair across all components), `MarkswiftShapes.swift`, `MarkswiftFonts.swift` and `Fonts/`
+(each webfont once), `Images/`, and one `MarkswiftRuntime.swift` (reading resources from `Bundle.module`). Add it once
+with **File ▸ Add Package Dependencies ▸ Add Local…**, call `BundledFonts.register()` once at app launch (previews
+call it themselves), then `import ShadcnKit` and use `AccordionView()`. Libraries generated separately coexist in one
+app: each keeps its runtime internal.
+
+Regeneration works like `convert --update`: rerunning `markswift build` replaces only the files listed in
+`.markswift.json` and deletes listed files it no longer produces (a component removed from the config loses its
+view); a hand-edited generated file stops the build with exit 2 unless `--force`; your own files in the directory are
+never touched; an existing `out` without the manifest is refused. Customise through parameters and your own files,
+not by editing generated files. From code: `buildLibrary({ library, components, serveRoot })`, or
+`compileLayouts(components, { library })` for saved `LayoutDoc`s without Chrome.
 
 ## Supported subset (evidence)
 
-Numbers come from the tracked macOS baseline `tests/conformance/baselines/visual-all-mac.json`:
-724 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
-both, in both modes), captured 2026-10-10 from source revision `afec5b1` with Playwright's pinned
-Chromium 153 and rendered by macOS 27.0.1 `ImageRenderer`. The metric is colour SSIM (minimum
-over R, G and B, at 1×) plus pixel mismatch and element-region anchors. Regenerate the table with
-`bun run quality --summary tests/conformance/baselines/visual-all-mac.json` (which also prints the
-per-fixture table):
+Numbers come from the tracked iOS baseline `tests/conformance/baselines/visual-all-ios.json`:
+956 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
+both, in both modes), captured 2026-10-14 from source revision `e906d8e` with Playwright's pinned
+Chromium 153.0.8010.12 and rendered on the iOS runtime (`iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0`,
+`UIHostingController` + `drawHierarchy`, so text fields, editors and scroll views are drawn natively). The
+`components` family is 25 shadcn/ui and Tailwind components (`tests/conformance/fixtures/components/`) compiled
+offline with Tailwind 4.1. The metric is colour SSIM (minimum over R, G and B, at 1×, both images decoded to sRGB)
+plus pixel mismatch and element-region anchors. `components@app` is held at SSIM ≥ 0.95 per capture except the
+exceptions listed below (at most 20 % of its captures, each with a reason and an owner); every other family has a
+ratcheted regression floor that never goes down. The block below is generated by
+`bun run quality --readme tests/conformance/baselines/visual-all-ios.json tests/conformance/visual-policy-ios.json`
+(a test fails when it is stale); `bun run quality --summary <manifest.json>` also prints the per-fixture table.
 
+<!-- quality-summary tests/conformance/baselines/visual-all-ios.json -->
 | domain | mode | n | mean ssim | min ssim | mean mismatch | anchors ok |
 |---|---|---|---|---|---|---|
-| attribute | app | 14 | 0.7226 | 0.5420 (attr-dir-320-light-app) | 0.0394 | 0/0 |
-| css-layout | app | 52 | 0.7698 | 0.5072 (float--left-320-light-app) | 0.0407 | 16/16 |
-| css-misc | app | 8 | 0.7970 | 0.7351 (cursor-390-light-app) | 0.0225 | 0/0 |
-| css-paint | app | 80 | 0.7562 | 0.4790 (border-top-width-390-light-app) | 0.0582 | 12/12 |
-| css-typography | app | 100 | 0.7583 | 0.4234 (text-align--justify-320-dark-app) | 0.0301 | 0/0 |
-| html | app | 60 | 0.7119 | 0.4054 (input-390-dark-app) | 0.0641 | 4/4 |
-| svg | app | 40 | 0.8387 | 0.7633 (svg-use-320-dark-app) | 0.0253 | 0/0 |
-| tailwind-v4 | app | 8 | 0.9472 | 0.8733 (gradients-390-dark-app) | 0.0256 | 0/0 |
-| attribute | fidelity | 14 | 0.9409 | 0.8480 (attr-alt-320-light-fidelity) | 0.0091 | 0/0 |
-| css-layout | fidelity | 52 | 0.9752 | 0.8285 (float--left-320-light-fidelity) | 0.0044 | 16/16 |
-| css-misc | fidelity | 8 | 0.9617 | 0.9322 (pointer-events--none-390-light-fidelity) | 0.0047 | 0/0 |
-| css-paint | fidelity | 80 | 0.9455 | 0.6927 (filter-390-dark-fidelity) | 0.0199 | 12/12 |
-| css-typography | fidelity | 100 | 0.9143 | 0.6334 (font-family-320-dark-fidelity) | 0.0107 | 0/0 |
-| html | fidelity | 60 | 0.9205 | 0.7351 (text-level-320-light-fidelity) | 0.0111 | 4/4 |
-| svg | fidelity | 40 | 0.9698 | 0.9116 (svg-lineargradient-320-dark-fidelity) | 0.0045 | 0/0 |
-| tailwind-v4 | fidelity | 8 | 0.9472 | 0.8733 (gradients-390-dark-fidelity) | 0.0256 | 0/0 |
+| attribute | app | 14 | 0.9562 | 0.8576 (attr-alt-320-light-app) | 0.0184 | 0/0 |
+| components | app | 100 | 0.9680 | 0.8681 (shadcn-table-320-light-app) | 0.0134 | 0/0 |
+| css-layout | app | 64 | 0.9828 | 0.8424 (display--contents-320-light-app) | 0.0111 | 16/16 |
+| css-misc | app | 12 | 0.9687 | 0.9352 (animation-name-390-dark-app) | 0.0189 | 0/0 |
+| css-paint | app | 80 | 0.9541 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
+| css-typography | app | 100 | 0.9305 | 0.5713 (word-break-320-dark-app) | 0.0289 | 0/0 |
+| html | app | 60 | 0.9393 | 0.8182 (pre-320-dark-app) | 0.0255 | 4/4 |
+| svg | app | 40 | 0.9761 | 0.9326 (svg-lineargradient-320-dark-app) | 0.0164 | 0/0 |
+| tailwind-v4 | app | 8 | 0.9491 | 0.8750 (gradients-390-dark-app) | 0.0269 | 0/0 |
+| attribute | fidelity | 14 | 0.9361 | 0.8417 (attr-alt-320-light-fidelity) | 0.0243 | 0/0 |
+| components | fidelity | 100 | 0.9655 | 0.8753 (shadcn-table-320-light-fidelity) | 0.0139 | 0/0 |
+| css-layout | fidelity | 64 | 0.9777 | 0.9290 (visibility-320-light-fidelity) | 0.0135 | 16/16 |
+| css-misc | fidelity | 12 | 0.9545 | 0.9312 (pointer-events--none-390-light-fidelity) | 0.0237 | 0/0 |
+| css-paint | fidelity | 80 | 0.9521 | 0.8923 (list-style-type-320-dark-fidelity) | 0.0236 | 12/12 |
+| css-typography | fidelity | 100 | 0.9201 | 0.6544 (font-family-320-dark-fidelity) | 0.0336 | 0/0 |
+| html | fidelity | 60 | 0.9250 | 0.7662 (text-level-320-light-fidelity) | 0.0297 | 4/4 |
+| svg | fidelity | 40 | 0.9627 | 0.9112 (svg-lineargradient-320-dark-fidelity) | 0.0204 | 0/0 |
+| tailwind-v4 | fidelity | 8 | 0.9484 | 0.8748 (gradients-390-dark-fidelity) | 0.0272 | 0/0 |
 
-Of 362 captures per mode, 37 `app` and 209 `fidelity` captures reach SSIM ≥ 0.95; 60 and 311
+Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):
+
+- `shadcn-field@app`: items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei
+- `shadcn-item-320-dark-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei
+- `shadcn-item-320-light-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei
+- `shadcn-table@app`: body text and row rules sit 0.5–1 pt off and the footer rule draws twice — Chrome paints a collapsed row border centred on the grid line, splitting its width into the cells on both sides, while the emitter draws it inside the row's bottom edge (collapsed-border model not mapped); Chrome also draws the cell text heavier — owner: @raelsei
+- `shadcn-textarea-320-dark-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `shadcn-textarea-320-light-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `shadcn-textarea-390-dark-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `tw-cards-320-dark-app`: card descriptions wrap one word earlier ("members / and deploys.", "open / pull requests.") and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
+- `tw-cards-390-dark-app`: card descriptions wrap one word earlier and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
+- `tw-form-390-dark-app`: the intro and checkbox descriptions wrap one word earlier ("deployments and / environment variables."), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei
+- `tw-form-390-light-app`: the intro and checkbox descriptions wrap one word earlier ("deployments and / environment variables."), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei
+<!-- /quality-summary -->
+
+Of 478 captures per mode, 350 `app` and 300 `fidelity` captures reach SSIM ≥ 0.95; 436 and 433
 reach ≥ 0.90 (`jq '[.[] | select(.mode == "app" and .ssim >= 0.95)] | length'` over the baseline).
 Read the table with these limits:
 
-- **No feature is approved at an absolute floor yet.** `tests/conformance/visual-policy-mac.json`
-  has `"features": {}`; the gate fails a capture that drops more than 0.005 below its baseline or
-  misses an anchor. Box-shadow, approved in an earlier greyscale pilot, is not re-approved: its
-  `app` captures sit below 0.95 (see the per-fixture table).
-- macOS rounds line heights to whole points, which depresses `app`-mode text scores; the iOS
-  runtime is authoritative for text. No iOS baseline exists yet: it is produced by the Visual
-  workflow (`workflow_dispatch`, renderer `ios`) on a machine with an iOS Simulator runtime.
-- `ImageRenderer` cannot rasterise UIKit/AppKit controls, so the control fixtures (`input`,
-  `select`, `progress`, …) are not visually meaningful in these numbers.
+- Every `<family>@<mode>` has a regression floor in
+  `tests/conformance/visual-policy-{ios,mac}.json` (`families`), raised by `bun run quality --ratchet`
+  on each reviewed rebaseline and never lowered. The gate also fails a capture that drops more than
+  0.005 below its baseline or misses an anchor.
+- Chrome renders `ui-monospace`, `ui-serif` and `ui-rounded` with other faces than iOS (SF Mono,
+  New York, SF Rounded), which depresses the `font-family` scores.
+
+Every pull request also runs the macOS gate (`tests/conformance/baselines/visual-{pilot,all}-mac.json`, rendered
+with `ImageRenderer` on macOS): the same per-capture 0.005 drop rule, anchors and family floors, plus the same-code
+resize check (390-compiled code rendered at 320 and 768 px against fresh Chrome captures, `reflowMaxLoss`). macOS
+draws text at different heights than iOS, so its absolute numbers are a regression signal, not the support claim.
 
 Features outside this table may work but are not claimed; every captured feature is reported as
 mapped, approximated or unmapped in `diagnostics`.
+
+## Verified behaviour
+
+- Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
+  fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
+- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures in the iOS simulator, on `v*` tags,
+  weekly and on dispatch): the accessibility tree, Apple's accessibility audit (Dynamic Type, clipped text, element
+  descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
+  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
+  and every action closure is called).
+- 10 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`: five
+  10 px uppercase captions with fixed letter-spacing that the Dynamic Type audit flags, four labels or fields whose
+  measured frame the audit reports as clipping text, and one e-mail address whose label is the address itself.
 
 ## Pinned geometry
 
@@ -180,8 +349,10 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
 `diagnostics` (one quoted note each):
 
 - Flex-wrap outside the native-wrap subset: `approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size`.
-- Unequal flex growth: `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
-- Non-trivial grids (spans, holes, unequal or intrinsic tracks, overlap, RTL): `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
+- Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/content bases and shrink, admitted
+  when its solver reproduces Chrome; a second capture at 320 px confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
+- Grids outside the `MarkswiftTracks` subset (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) whose
+  items span, leave holes, overlap or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
 - Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
 
@@ -191,14 +362,32 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- More than one viewport or state per capture: media queries are not reconstructed.
-- Animations and transitions (captured at their end state, reported).
-- Interactive links inside prose: they stay styled text runs and report the dropped destination.
+- Breakpoint branching: one viewport and one layout per capture, media and container queries are not reconstructed
+  (iPad and landscape layouts included). Paint-only pressed and focused deltas *are* captured; other states (hover
+  only, disabled, validation, open/checked, `data-state` variants) are not.
+- Dialogs and popovers.
+- CSS animations and transitions (captured at their end state, reported).
+- `<select multiple>` and `<datalist>`.
+- Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
 - `ui-monospace` maps to a different native face (an explicit support boundary).
+
+## Known gaps
+
+- 17 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
+  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, collapsed table borders,
+  `::placeholder` colour and `TextEditor` first-line placement.
+- A CSS scroll box (`overflow: auto`) paints its background, border, radius and min-height on the content inside
+  the `ScrollView`, not on the scroll view, so rounded bottom corners are cut while it scrolls.
+- `<ul>` item spacing: list rows sit a little apart from Chrome's (`html` `ul` app SSIM 0.85–0.86 on iOS).
+- `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); UA-bordered
+  buttons use Chromium 152's outset/inset shading; unstyled theme-painted buttons have no pressed look.
+- Tapping a `<label>` does not focus its text field; `<bdo>`/`<bdi>` are not mapped.
+- Accessibility: the 10 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
 
-The CLI prints `Warning: …` lines (resources, fonts, light/dark pairing) and one `Note <level>
+The CLI prints one `Warning: [<component>] <level> <feature>: <message>` line per warning (resources, fonts,
+viewport-dependent CSS, light/dark pairing, palette; each bracketed or leading part only when set) and one `Note <level>
 <feature>: <message> [<nodes>]` line per distinct loss, unmapped first. In the library each
 `diagnostics` entry is a node (`id`, `kind`, `confidence`) with its losses
 `{ level: "approximated" | "unmapped", feature, message }`, where `feature` is a row id of the
@@ -231,13 +420,23 @@ bun run lint && bun run typecheck && bun run test
 bun run test:browser     # Chrome integration and conformance tests
 bun run test:native      # Xcode: compile and macOS-render generated Swift
 bun test playground/tests
-bun run pilot --renderer mac --out tests/conformance/out/<dir>   # add --all for every fixture
+bun run test:ios-behaviour   # iOS simulator: accessibility audit, Dynamic Type, RTL, interaction
+bun run pilot --renderer mac --out tests/conformance/out/<dir>   # add --all for every fixture, --reflow for 320/768
 bun run quality tests/conformance/baselines/visual-pilot-mac.json tests/conformance/out/<dir> tests/conformance/visual-policy-mac.json
+MARKSWIFT_SIMULATOR='iPhone 17' bun run pilot --renderer ios --all --out tests/conformance/out/<dir>   # iOS renderer
 ```
 
 Baselines change only through `bun run quality --write-baseline <run-dir> <manifest.json>`,
-reviewed and committed by hand. `.github/workflows/ci.yml` (every suite) and `visual.yml` (the
-visual gate) are validated locally but have not run on GitHub yet.
+reviewed and committed by hand. GitHub Actions workflows:
+
+- `ci.yml` (pull requests, pushes to `main`, nightly): lint, typecheck, `test`, `test:browser`, `test:native`, the
+  package build with the npm smoke test, and the conformance pilot (capture, both modes, iOS typecheck).
+- `visual.yml`: the macOS gate on pull requests and pushes to `main` (pilot scope, with the 320/768 resize check)
+  and nightly (all fixtures); the iOS renderer over all fixtures on `v*` tags and manual dispatch only. Dispatch it
+  with `renderer`, `scope` and `rebaseline` to produce a candidate baseline.
+- `behaviour.yml` (`v*` tags, weekly, dispatch): `bun run test:ios-behaviour`.
+- `release.yml` (`v*` tags): after approval in the `npm` environment, checks that the tag equals
+  `v<package version>`, runs lint, typecheck, `test`, the build and the npm smoke test, and publishes with provenance.
 
 | Path | Responsibility |
 | --- | --- |
@@ -256,17 +455,19 @@ visual gate) are validated locally but have not run on GitHub yet.
 | `tools/verify/`, `tools/quality.ts` | Swift typecheck, native rendering, image comparison and the visual gate |
 | `playground/` | Local workbench and the separately deployable conversion service |
 
-## Roadmap after alpha
+## Roadmap after 1.0
 
-- Component extraction: parameters, `ForEach` over repeated siblings, meaningful names.
-- Multi-component linker: one runtime and token set shared across conversions.
-- Interactive inline links via `AttributedString`.
-- Responsive flex/grid reflow, including unequal growth and grid tracks.
-- Box-shadow rendering cost (one offscreen pass per shadow).
-- No paint for content invisible at rest (for example `opacity: 0` overlays).
-- Variable-font named/static instances beyond `wght`/`opsz`.
+- Looser extraction: optional children, variants, `ForEach` over grid cells.
+- Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
+- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; label-tap
+  focus; CSS animations; iPad hover and keyboard.
+- The full flex algorithm (wrap with grow, min/max freeze loop).
+- `<select multiple>`, `<datalist>`, `<bdo>`/`<bdi>`.
+- Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
+  for single conversions; browser-response font bytes; variable-font instances.
+- Remote image download, @2x images and asset catalogs.
+- Sharded iOS visual runs; body re-evaluation and scroll-hitch benchmarks.
 - A Compose target over the target-independent IR.
-- Release visual numbers from the iOS runtime.
 
 ## License
 

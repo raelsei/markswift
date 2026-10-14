@@ -226,7 +226,9 @@ function showDiagnostics(result) {
   const total = (level) => [...levels[level].values()].reduce((sum, lines) => sum + lines.length, 0);
   const unmapped = total("unmapped");
   const approximated = total("approximated");
-  const warnings = result.warnings || [];
+  const warnings = (result.warnings || []).map(
+    (w) => `${w.component ? `[${w.component}] ` : ""}${w.level ? `${w.level} ${w.feature}: ` : ""}${w.message}`,
+  );
   const groups = ["unmapped", "approximated"].flatMap((level) =>
     [...levels[level]].map(([feature, lines]) => diagnosticGroup(level, feature, lines, "element")),
   );

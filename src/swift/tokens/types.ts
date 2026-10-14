@@ -20,6 +20,13 @@ export interface ColorToken {
 }
 
 /**
+ * App colours for captured tokens. Keys: a CSS custom property (`--primary`), a hex colour for a
+ * static token (`#e2e8f0`, `#e2e8f080`), or `#light/#dark` for an adaptive one. Values: a Swift
+ * `Color` expression (`Color.accentColor`, `Color("Card")`), emitted verbatim.
+ */
+export type PaletteMap = Readonly<Record<string, string>>;
+
+/**
  * Where the view emitter resolves a literal: `base\0theme\0nodeId\0r,g,b,a` → token name, and
  * the same key plus `\0slot` for call sites that know the slot.
  *

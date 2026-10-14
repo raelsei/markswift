@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
@@ -18,7 +19,7 @@ function text(value: string, x: number, y: number, w: number, h: number): Layout
 
 function swift(children: LayoutNode[], mode: EmitMode): string {
   const doc: LayoutDoc = {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "a11y.html",
     combo: { screen: "a11y", theme: "light" },
     size: { w: 320, h: 400 },
@@ -34,7 +35,8 @@ function swift(children: LayoutNode[], mode: EmitMode): string {
       children,
     },
   };
-  return emitSwift(inferScreen(doc, "A11y"), "A11yView", { mode }).view;
+  // The nodes' own Swift; repeated-sibling extraction has its own tests (components.test.ts).
+  return emitSwift(inferScreen(doc, "A11y"), "A11yView", { mode, extract: false }).view;
 }
 
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
@@ -204,7 +206,8 @@ test("aria-label, aria-hidden, headings and roles reach VoiceOver", () => {
     [el("div", { role: "button", tabindex: "0" }, { x: 0, y: 0, w: 320, h: 22 }, [text("Confirm", 0, 0, 60, 22)])],
     "app",
   );
-  expect(role).toContain(".accessibilityAddTraits(.isButton)");
+  expect(role).toContain("Button(action: onConfirm)");
+  expect(role).not.toContain(".accessibilityAddTraits(.isButton)");
 
   const img = swift(
     [
@@ -302,4 +305,241 @@ test("input types choose the keyboard and content type in app mode", () => {
   const password = swift(field("password"), "app");
   expect(password.indexOf("SecureField(")).toBeGreaterThan(-1);
   expect(password.indexOf("SecureField(")).toBeLessThan(password.indexOf(".markswiftInputTraits(.password)"));
+});
+
+const field = (attrs: Record<string, string>, y = 0) =>
+  el("input", { id: "f", ...attrs }, { x: 0, y, w: 320, h: 30 }, [], { display: "inline-block" });
+const inline = { display: "inline" };
+
+test("028: aria-labelledby names a field and wins over aria-label", () => {
+  const app = swift(
+    [
+      el("span", { id: "t1" }, { x: 0, y: 0, w: 60, h: 22 }, [text("Billing", 0, 0, 60, 22)], inline),
+      el("span", { id: "t2" }, { x: 64, y: 0, w: 60, h: 22 }, [text("address", 64, 0, 60, 22)], inline),
+      field({ "aria-labelledby": "t1 t2", "aria-label": "X" }, 30),
+    ],
+    "app",
+  );
+  const view = viewOf(app, "TextField(");
+  expect(view).toContain('.accessibilityLabel("Billing address")');
+  expect(view).not.toContain('.accessibilityLabel("X")');
+});
+
+test("028: aria-describedby and aria-description become the hint", () => {
+  const app = swift(
+    [
+      el("p", { id: "h" }, { x: 0, y: 0, w: 320, h: 22 }, [text("We never share it", 0, 0, 140, 22)]),
+      field({ "aria-describedby": "h" }, 30),
+      el("div", { id: "sheet", "aria-description": "Opens in a sheet" }, { x: 0, y: 70, w: 320, h: 22 }, [
+        text("Details", 0, 70, 60, 22),
+      ]),
+    ],
+    "app",
+  );
+  expect(viewOf(app, "TextField(")).toContain('.accessibilityHint("We never share it")');
+  expect(app).toContain('.accessibilityHint("Opens in a sheet")');
+});
+
+test("028: aria-valuenow and aria-valuetext become the value", () => {
+  const bar = (attrs: Record<string, string>) =>
+    swift([el("div", { id: "bar", role: "progressbar", ...attrs }, { x: 0, y: 0, w: 320, h: 8 })], "app");
+  expect(bar({ "aria-valuenow": "40" })).toContain('.accessibilityValue("40")');
+  const valued = bar({ "aria-valuenow": "40", "aria-valuetext": "40 percent" });
+  expect(valued).toContain('.accessibilityValue("40 percent")');
+  expect(valued).not.toContain('.accessibilityValue("40")');
+});
+
+test("028: selected tabs, current links and checked checkboxes add .isSelected", () => {
+  const tab = swift(
+    [
+      el("button", { id: "tab", role: "tab", "aria-selected": "true" }, { x: 0, y: 0, w: 60, h: 30 }, [
+        text("Plans", 8, 4, 40, 22),
+      ]),
+    ],
+    "app",
+  );
+  expect(tab).toContain(".accessibilityAddTraits(.isSelected)");
+  const current = swift(
+    [
+      el("a", { id: "here", href: "/x", "aria-current": "page" }, { x: 0, y: 0, w: 60, h: 22 }, [
+        text("Home", 0, 0, 40, 22),
+      ]),
+    ],
+    "app",
+  );
+  expect(current).toContain(".accessibilityAddTraits(.isSelected)");
+  const box = swift(
+    [
+      el("div", { id: "box", role: "checkbox", "aria-checked": "true" }, { x: 0, y: 0, w: 320, h: 22 }, [
+        text("Agree", 0, 0, 40, 22),
+      ]),
+    ],
+    "app",
+  );
+  expect(box).toContain(".accessibilityAddTraits(.isToggle)");
+  expect(box).toContain(".accessibilityAddTraits(s_box ? .isSelected : [])");
+});
+
+test("a text-only tabpanel's name labels a group around the Text, which keeps its words", () => {
+  const app = swift(
+    [
+      el("button", { id: "t", role: "tab" }, { x: 0, y: 0, w: 60, h: 30 }, [text("All", 8, 4, 40, 22)]),
+      el("div", { id: "panel", role: "tabpanel", "aria-labelledby": "t" }, { x: 0, y: 40, w: 320, h: 22 }, [
+        text("Body copy", 0, 40, 80, 22),
+      ]),
+    ],
+    "app",
+  );
+  const body = viewOf(app, 'Text(verbatim: "Body copy")');
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeGreaterThan(-1);
+  expect(body.indexOf(".accessibilityElement(children: .contain)")).toBeLessThan(
+    body.indexOf('.accessibilityLabel("All")'),
+  );
+});
+
+test("ARIA toggle Buttons own their checked state: a tap flips it, then runs the action", () => {
+  const toggle = (id: string, attrs: Record<string, string>, y: number) =>
+    el("button", { id, type: "button", ...attrs }, { x: 0, y, w: 16, h: 16 }, [], { display: "inline-block" });
+  const label = (id: string, target: string, y: number) =>
+    el("label", { id, for: target }, { x: 30, y, w: 200, h: 22 }, [text(id, 30, y, 60, 22)]);
+  const app = swift(
+    [
+      toggle("on", { role: "checkbox", "aria-checked": "true" }, 0),
+      label("On", "on", 0),
+      toggle("mix", { role: "checkbox", "aria-checked": "mixed" }, 30),
+      toggle("sw", { role: "switch", "aria-checked": "false" }, 60),
+      toggle("off", { role: "switch", "aria-checked": "false", disabled: "" }, 90),
+      label("Off", "off", 90),
+    ],
+    "app",
+  );
+  expect(app).toContain("@State private var s_on: Bool = true");
+  expect(app).toContain("Button {\n                s_on.toggle()\n                onOn()\n            } label: {");
+  expect(app).toContain(".accessibilityAddTraits(s_on ? .isSelected : [])");
+  expect(app).not.toContain(".accessibilityAddTraits(.isSelected)");
+  // HTML: a tap on the `<label for>` clicks the button.
+  expect(app).toContain(".onTapGesture { s_on.toggle(); onOn() }");
+  // `mixed` is the third state: `nil` until the first tap checks it. The explicit value replaces the
+  // "1"/"0" iOS derives from `.isSelected` on a toggle, so it spells them out.
+  expect(app).toContain("@State private var s_mix: Bool? = nil");
+  expect(app).toContain("s_mix = !(s_mix ?? false)");
+  expect(app).toContain('.accessibilityValue(s_mix == nil ? "mixed" : s_mix == true ? "1" : "0")');
+  expect(app).toContain(".accessibilityAddTraits(s_mix == true ? .isSelected : [])");
+  expect(app).toContain("@State private var s_sw: Bool = false");
+  expect(app).not.toContain(".onTapGesture { s_off");
+
+  // Radios of one radiogroup share a selection, tagged by position; the last checked one is selected.
+  const group = swift(
+    [
+      el("div", { id: "plan", role: "radiogroup" }, { x: 0, y: 0, w: 320, h: 40 }, [
+        toggle("m", { role: "radio", "aria-checked": "false" }, 0),
+        toggle("y", { role: "radio", "aria-checked": "true" }, 20),
+      ]),
+    ],
+    "app",
+  );
+  expect(count(group, "@State private var s_plan: String")).toBe(1);
+  expect(group).toContain('@State private var s_plan: String = "1"');
+  expect(group).toContain('s_plan = "0"\n');
+  expect(group).toContain('.accessibilityAddTraits(s_plan == "1" ? .isSelected : [])');
+});
+
+test("028: aria-disabled disables a button in app mode only", () => {
+  const pay = (mode: EmitMode) =>
+    swift(
+      [
+        el(
+          "button",
+          { id: "pay", "aria-disabled": "true" },
+          { x: 0, y: 0, w: 60, h: 30 },
+          [text("Pay", 8, 4, 30, 22)],
+          {
+            display: "inline-block",
+          },
+        ),
+      ],
+      mode,
+    );
+  expect(pay("app")).toContain(".disabled(true)");
+  expect(pay("fidelity")).not.toContain(".disabled(");
+});
+
+test("028: aria-disabled disables an activatable div's Button", () => {
+  const app = swift(
+    [
+      el(
+        "div",
+        { id: "pay", role: "button", onclick: "pay()", "aria-disabled": "true" },
+        { x: 0, y: 0, w: 320, h: 22 },
+        [text("Pay", 0, 0, 30, 22)],
+      ),
+    ],
+    "app",
+  );
+  const lines = app.split("\n").map((l) => l.trim());
+  const style = lines.indexOf(".buttonStyle(.plain)");
+  expect(style).toBeGreaterThan(-1);
+  expect(lines[style + 1]).toBe(".disabled(true)");
+});
+
+test("028: aria-expanded becomes the value", () => {
+  const app = swift(
+    [
+      el(
+        "button",
+        { id: "more", "aria-expanded": "false" },
+        { x: 0, y: 0, w: 60, h: 30 },
+        [text("More", 8, 4, 40, 22)],
+        {
+          display: "inline-block",
+        },
+      ),
+    ],
+    "app",
+  );
+  expect(app).toContain('.accessibilityValue("collapsed")');
+});
+
+test("028: autocomplete names the field's autofill type", () => {
+  expect(swift([field({ autocomplete: "shipping given-name" })], "app")).toContain(
+    '.markswiftInputTraits(autofill: "given-name")',
+  );
+  expect(swift([field({ type: "email", autocomplete: "email" })], "app")).toContain(
+    '.markswiftInputTraits(.email, autofill: "email")',
+  );
+  expect(swift([field({ autocomplete: "off" })], "app")).not.toContain("autofill:");
+});
+
+test("028: inputmode chooses the keyboard; unknown keywords are ignored", () => {
+  expect(swift([field({ inputmode: "numeric" })], "app")).toContain('.markswiftInputTraits(inputMode: "numeric")');
+  expect(swift([field({ inputmode: "bogus" })], "app")).not.toContain("inputMode:");
+});
+
+test("028: enterkeyhint labels the Return key", () => {
+  expect(swift([field({ enterkeyhint: "send" })], "app")).toContain('.markswiftInputTraits(enterKey: "send")');
+});
+
+test("028: link-like Buttons announce a link, not a button", () => {
+  const span = swift(
+    [
+      el(
+        "span",
+        { id: "go", role: "link", onclick: "go()" },
+        { x: 0, y: 0, w: 60, h: 22 },
+        [text("Go", 0, 0, 20, 22)],
+        {
+          display: "inline-block",
+        },
+      ),
+    ],
+    "app",
+  );
+  expect(span).toContain(".accessibilityRemoveTraits(.isButton)");
+  expect(span).toContain(".accessibilityAddTraits(.isLink)");
+  const anchor = swift(
+    [el("a", { id: "faq", href: "#faq" }, { x: 0, y: 0, w: 60, h: 22 }, [text("FAQ", 0, 0, 30, 22)])],
+    "app",
+  );
+  expect(anchor).toContain(".accessibilityRemoveTraits(.isButton)");
+  expect(anchor).toContain(".accessibilityAddTraits(.isLink)");
 });

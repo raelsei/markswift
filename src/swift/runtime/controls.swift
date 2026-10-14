@@ -42,26 +42,80 @@ extension Binding where Value == String {
     }
 }
 
-/// The keyboard, autofill type and capitalisation iOS Safari gives the same `<input type>`.
+/// The keyboard, autofill type, capitalisation and Return key iOS Safari gives the same `<input>`.
 /// These modifiers exist only on iOS; on other platforms (the macOS render gate) the field is unchanged.
 nonisolated enum MarkswiftInputTraits: Sendable { case email, tel, url, number, search, password }
 
 extension View {
-    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits) -> some View {
+    @ViewBuilder func markswiftInputTraits(_ traits: MarkswiftInputTraits? = nil, autofill: String? = nil, inputMode: String? = nil, enterKey: String? = nil) -> some View {
         #if os(iOS)
-        switch traits {
-        case .email: keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-        case .tel: keyboardType(.phonePad).textContentType(.telephoneNumber)
-        case .url: keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-        case .number: keyboardType(.decimalPad)
-        case .search: keyboardType(.webSearch).submitLabel(.search)
-        case .password: textContentType(.password)
-        }
+        let t = MarkswiftKeyboard(traits, autofill: autofill, inputMode: inputMode, enterKey: enterKey)
+        keyboardType(t.keyboard).textContentType(t.content).textInputAutocapitalization(t.capitalization).autocorrectionDisabled(t.noAutocorrect).submitLabel(t.submit)
         #else
         self
         #endif
     }
 }
+
+#if os(iOS)
+/// The resolved keyboard of one field: the input type's defaults, then the design's explicit hints.
+nonisolated struct MarkswiftKeyboard {
+    var keyboard: UIKeyboardType = .default
+    var content: UITextContentType?
+    var capitalization: TextInputAutocapitalization?
+    var noAutocorrect = false
+    var submit: SubmitLabel = .return
+
+    init(_ traits: MarkswiftInputTraits?, autofill: String?, inputMode: String?, enterKey: String?) {
+        switch traits {
+        case .email: keyboard = .emailAddress; content = .emailAddress; capitalization = .never; noAutocorrect = true
+        case .tel: keyboard = .phonePad; content = .telephoneNumber
+        case .url: keyboard = .URL; content = .URL; capitalization = .never; noAutocorrect = true
+        case .number: keyboard = .decimalPad
+        case .search: keyboard = .webSearch; submit = .search
+        case .password: content = .password
+        case nil: break
+        }
+        switch inputMode {
+        case "text": keyboard = .default
+        case "decimal": keyboard = .decimalPad
+        case "numeric": keyboard = .numberPad
+        case "tel": keyboard = .phonePad
+        case "search": keyboard = .webSearch
+        case "email": keyboard = .emailAddress
+        case "url": keyboard = .URL
+        default: break
+        }
+        switch enterKey {
+        case "done": submit = .done
+        case "go": submit = .go
+        case "next": submit = .next
+        case "search": submit = .search
+        case "send": submit = .send
+        case "enter", "previous": submit = .return
+        default: break
+        }
+        if let autofill, let type = Self.autofill[autofill] { content = type }
+    }
+
+    /// WHATWG autofill field names → the system's content types; a name with no counterpart is left to the input type.
+    static let autofill: [String: UITextContentType] = [
+        "name": .name, "honorific-prefix": .namePrefix, "given-name": .givenName, "additional-name": .middleName,
+        "family-name": .familyName, "honorific-suffix": .nameSuffix, "nickname": .nickname,
+        "organization-title": .jobTitle, "organization": .organizationName,
+        "username": .username, "new-password": .newPassword, "current-password": .password, "one-time-code": .oneTimeCode,
+        "street-address": .fullStreetAddress, "address-line1": .streetAddressLine1, "address-line2": .streetAddressLine2,
+        "address-level1": .addressState, "address-level2": .addressCity, "address-level3": .sublocality,
+        "country-name": .countryName, "postal-code": .postalCode,
+        "cc-name": .creditCardName, "cc-given-name": .creditCardGivenName, "cc-additional-name": .creditCardMiddleName,
+        "cc-family-name": .creditCardFamilyName, "cc-number": .creditCardNumber, "cc-exp": .creditCardExpiration,
+        "cc-exp-month": .creditCardExpirationMonth, "cc-exp-year": .creditCardExpirationYear,
+        "cc-csc": .creditCardSecurityCode, "cc-type": .creditCardType,
+        "bday": .birthdate, "bday-day": .birthdateDay, "bday-month": .birthdateMonth, "bday-year": .birthdateYear,
+        "tel": .telephoneNumber, "tel-national": .telephoneNumber, "email": .emailAddress, "url": .URL,
+    ]
+}
+#endif
 
 /// The checkbox and radio HTML draws: a small square or circle that fills with the tint when on.
 /// iOS has no native checkbox, and a switch does not fit the box the design measured.
@@ -79,7 +133,7 @@ nonisolated struct MarkswiftMarkToggleStyle: ToggleStyle {
                 if configuration.isOn { fill }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlainButtonStyle())
     }
 
     @ViewBuilder private func box(on: Bool) -> some View {
@@ -180,5 +234,123 @@ nonisolated struct MarkswiftSliderTrack: View {
             }
             .frame(maxHeight: .infinity, alignment: .center)
         }
+    }
+}
+
+/// `<details>` as the browser draws it: the captured `<summary>` (its `::marker` included) is the
+/// whole tap target, the content follows at the measured gap, and there is no system chevron.
+nonisolated struct MarkswiftDisclosureStyle: DisclosureGroupStyle {
+    let spacing: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                configuration.label.contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityValue(configuration.isExpanded ? Text("Expanded") : Text("Collapsed"))
+            if configuration.isExpanded { configuration.content }
+        }
+    }
+}
+
+extension Date {
+    /// A date/time `<input>` value as the wall-clock time the design wrote, in the user's time zone.
+    nonisolated static func markswift(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second)) ?? .now
+    }
+}
+
+extension View {
+    /// `TextEditor` insets its text inside its frame (UITextView: 8 pt above and below, 5 pt line
+    /// fragment padding at the sides); the CSS padding already placed it, so the editor overhangs
+    /// its frame by exactly those insets.
+    // ponytail: UIKit default insets as constants; recalibrate from an iOS render (Step 10) if an SDK changes them.
+    @ViewBuilder func markswiftTextEditorInsets() -> some View {
+        #if os(iOS)
+        padding(EdgeInsets(top: -8, leading: -5, bottom: -8, trailing: -5))
+        #else
+        self
+        #endif
+    }
+
+    /// App mode: an editor as tall as `text` laid out at its width and font (CSS `field-sizing: content`), so it grows
+    /// with its text and with Dynamic Type; `TextEditor` alone takes whatever height it is offered. A trailing newline
+    /// still opens an empty line, as it does in the editor.
+    func markswiftFitsText(_ text: String) -> some View {
+        Text(verbatim: text.isEmpty || text.hasSuffix("\n") ? text + " " : text)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hidden()
+            .overlay { self }
+    }
+
+    /// App mode: CSS `line-height` on a text field or editor whose text is `size` points, scaling like a font
+    /// `relativeTo: style`. The leading over the face's natural line (default: SF Pro, 2444 per 2048) spaces an editor's
+    /// lines; what Dynamic Type adds to it pads the text above and below, so the field grows like the browser's line box.
+    /// At the default size the captured box already holds the line (Chrome centres it in a shorter input, too).
+    func markswiftFieldLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
+                                  natural: CGFloat = 2444.0 / 2048) -> some View {
+        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, relativeTo: style))
+    }
+}
+
+struct MarkswiftFieldLineHeight: ViewModifier {
+    let factor: CGFloat
+    let natural: CGFloat
+    let base: CGFloat
+    @ScaledMetric private var size: CGFloat
+
+    init(factor: CGFloat, natural: CGFloat, base: CGFloat, relativeTo style: Font.TextStyle) {
+        self.factor = factor
+        self.natural = natural
+        self.base = base
+        _size = ScaledMetric(wrappedValue: base, relativeTo: style)
+    }
+
+    func body(content: Content) -> some View {
+        let leading = max(0, factor - natural)
+        content.lineSpacing(leading * size).padding(.vertical, max(0, leading * (size - base)) / 2)
+    }
+}
+
+/// Interaction states a render harness forces on every element at once (the browser reference forces the same).
+nonisolated struct MarkswiftForcedStates: OptionSet, Sendable {
+    let rawValue: Int
+    static let pressed = MarkswiftForcedStates(rawValue: 1)
+    static let focused = MarkswiftForcedStates(rawValue: 2)
+}
+
+extension EnvironmentValues {
+    @Entry var markswiftForcedStates: MarkswiftForcedStates = []
+}
+
+/// Whether one design element is pressed: the live press (bound by `MarkswiftPressStyle`), or forced by a harness.
+@propertyWrapper struct MarkswiftPressed: DynamicProperty {
+    @State private var live = false
+    @Environment(\.markswiftForcedStates) private var forced
+    init() {}
+    var wrappedValue: Bool { live || forced.contains(.pressed) }
+    var projectedValue: Binding<Bool> { $live }
+}
+
+/// Whether one text field has focus: the live focus (bound with `.focused($…)`), or forced by a harness.
+@propertyWrapper struct MarkswiftFocused: DynamicProperty {
+    @FocusState private var live: Bool
+    @Environment(\.markswiftForcedStates) private var forced
+    init() {}
+    var wrappedValue: Bool { live || forced.contains(.focused) }
+    var projectedValue: FocusState<Bool>.Binding { $live }
+}
+
+/// A plain button that reports its press, so the label can draw the design's pressed look instead of system dimming.
+nonisolated struct MarkswiftPressStyle: ButtonStyle {
+    let isPressed: Binding<Bool>
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.onChange(of: configuration.isPressed) { _, pressed in isPressed.wrappedValue = pressed }
     }
 }

@@ -20,8 +20,18 @@ export function colorArgs(c: Color): string {
  * light colour is two tokens on the node. Omitting `id` — an SVG inlined through an `<img>`, a
  * control's own value — yields the literal: a colour the extractor never enumerated cannot
  * claim a token.
+ *
+ * A colour the node's pressed/focused look changes (`ctx.statePaint`, `states.ts`) becomes
+ * `(isSavePressed ? state : rest)`, each side resolved the same way.
  */
 export function colorExpr(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
+  const paint = id !== undefined ? ctx.statePaint?.get(id) : undefined;
+  const pair = paint && ((slot !== undefined ? paint.colors.get(slot) : undefined) ?? paint.colors.get(colorArgs(c)));
+  if (pair) return `(${paint.cond} ? ${restingColor(pair.state, ctx, id)} : ${restingColor(pair.rest, ctx, id, slot)})`;
+  return restingColor(c, ctx, id, slot);
+}
+
+function restingColor(c: Color, ctx: ColorCtx, id?: string, slot?: string): string {
   const token = ctx.tokens?.name(c, id, slot);
   return token ? `Palette.${token}` : `Color.markswift(${colorArgs(c)})`;
 }
@@ -103,6 +113,38 @@ export function identifier(s: string): string {
 export function uniqueName(base: string, seen: Record<string, number>): string {
   const k = (seen[base] = (seen[base] ?? 0) + 1);
   return k === 1 ? base : `${base}_r${k}`;
+}
+
+/** Design words → PascalCase ASCII (`openMenu` → `OpenMenu`, `save-btn` → `SaveBtn`, `Gönder` → `Gonder`); at most 4 words, "" when none survive. */
+export function pascalWords(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1).toLowerCase())
+    .join("");
+}
+
+/**
+ * K1 member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`.
+ * Without a prefix the name starts lower-case (`item title` → `itemTitle`). Registered in `seen`.
+ */
+export function memberName(
+  prefix: string,
+  words: string,
+  seen: Record<string, number>,
+  fallback: string,
+  suffix = "",
+): string {
+  const raw = prefix + (pascalWords(words) || fallback) + suffix;
+  const base = prefix ? raw : raw[0]!.toLowerCase() + raw.slice(1);
+  let name = base;
+  for (let k = 2; seen[name]; k++) name = `${base}${k}`;
+  seen[name] = 1;
+  return name;
 }
 
 /**

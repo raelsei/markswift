@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { mimeType } from "../input/mime.ts";
 
 /**
  * Inline `url()`s of a compiled CSS file that are relative to that file, as data URLs. Returns the CSS and the references it could not read.
@@ -16,18 +18,17 @@ export async function inlineRelativeUrls(css: string, cssPath: string): Promise<
       inlined.push(match[0]);
       continue;
     }
-    let file: Bun.BunFile | undefined;
+    const name = ref.replace(/[?#].*$/, "");
+    let bytes: Buffer;
     try {
-      file = Bun.file(resolve(dir, decodeURIComponent(ref.replace(/[?#].*$/, ""))));
+      bytes = await readFile(resolve(dir, decodeURIComponent(name)));
     } catch {
-      /* malformed escape */
-    }
-    if (!file || !(await file.exists())) {
+      /* malformed escape, missing file or a directory */
       missing.push(ref);
       inlined.push(match[0]);
       continue;
     }
-    inlined.push(`url("data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}")`);
+    inlined.push(`url("data:${mimeType(name)};base64,${bytes.toString("base64")}")`);
   }
   let i = 0;
   return { css: css.replace(pattern, () => inlined[i++]!), missing };

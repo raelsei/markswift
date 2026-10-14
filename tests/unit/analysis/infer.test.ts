@@ -1,3 +1,4 @@
+import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
  * Semantic inference over hand-built layout docs. One measured tree per case, so a regression
  * shows up in `bun test` seconds instead of a corpus run.
@@ -5,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
-import type { ControlNode, SemNode, TextNode } from "../../../src/model/semantic.ts";
+import type { ControlNode, SemNode, StackNode, TextNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
@@ -25,7 +26,7 @@ function textNode(text: string, bounds: Rect): LayoutNode {
 
 function doc(root: LayoutNode): LayoutDoc {
   return {
-    version: 2,
+    version: LAYOUT_DOC_VERSION,
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
@@ -121,4 +122,190 @@ test("a colour picker's swatch is resolved during analysis; a missing or invalid
   expect(orange.b).toBeCloseTo(0, 4);
   expect(orange.a).toBeCloseTo(1, 4);
   expect(swatch("nope")).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+});
+
+describe("tables", () => {
+  test("the table's paint covers its rows, not its caption", () => {
+    const paint = { "background-color": "rgb(255, 255, 255)", "border-top-left-radius": "10px" };
+    const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", ...paint }, [
+      el("caption", { x: 0, y: 0, w: 200, h: 26 }, { display: "table-caption" }, [
+        textNode("Quarterly sales", { x: 0, y: 0, w: 100, h: 20 }),
+      ]),
+      el("tbody", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-row-group" }, [
+        el("tr", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-row" }, [
+          el("td", { x: 0, y: 26, w: 200, h: 40 }, { display: "table-cell" }, [
+            textNode("Q1", { x: 0, y: 36, w: 20, h: 20 }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 66 }, { display: "block" }, [table])), "s");
+    const filled = flatten(screen.root).filter((n) => n.style.fills.length > 0);
+    expect(filled).toHaveLength(1);
+    expect(filled[0]!.frame).toEqual({ x: 0, y: 26, w: 200, h: 40 });
+    expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
+  });
+
+  test("042: caption-bottom — a caption first in the markup but painted below stays below the rows", () => {
+    const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", "border-collapse": "collapse" }, [
+      el("caption", { x: 0, y: 40, w: 200, h: 26 }, { display: "table-caption", "caption-side": "bottom" }, [
+        textNode("Quarterly sales", { x: 0, y: 43, w: 100, h: 20 }),
+      ]),
+      el("tbody", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row-group" }, [
+        el("tr", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row" }, [
+          el("td", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-cell" }, [
+            textNode("Q1", { x: 0, y: 10, w: 20, h: 20 }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 66 }, { display: "block" }, [table])), "s");
+    const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
+    expect(texts.map((t) => t.runs[0]!.text)).toEqual(["Q1", "Quarterly sales"]);
+  });
+
+  test("042: row-border-inset — a collapsed row border lies inside its cells, not inside the row", () => {
+    const line = {
+      "border-bottom-style": "solid",
+      "border-bottom-width": "1px",
+      "border-bottom-color": "rgb(0, 0, 0)",
+    };
+    const row = (y: number, text: string) =>
+      el("tr", { x: 0, y, w: 200, h: 38 }, { display: "table-row", ...line }, [
+        el("td", { x: 0, y, w: 200, h: 38 }, { display: "table-cell", "padding-top": "8px" }, [
+          textNode(text, { x: 0, y: y + 8, w: 20, h: 20 }),
+        ]),
+      ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 76 }, { display: "table", "border-collapse": "collapse" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 76 }, { display: "table-row-group", ...line }, [
+        row(0, "Q1"),
+        row(38, "Q2"),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 76 }, { display: "block" }, [table])), "s");
+    const ruled = flatten(screen.root).filter((n) => n.style.borderSides?.bottom);
+    expect(ruled.map((n) => n.frame.h)).toEqual([76, 38, 38]);
+    expect(ruled.map((n) => n.padding)).toEqual([
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+  });
+
+  test("042: cell-middle — hugging cells of a row sit where `vertical-align: middle` puts them", () => {
+    const cell = (x: number, kids: LayoutNode[]) =>
+      el("td", { x, y: 0, w: 100, h: 38 }, { display: "table-cell", "vertical-align": "middle", padding: "8px" }, kids);
+    const tr = el("tr", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row", "vertical-align": "middle" }, [
+      cell(0, [textNode("Q1", { x: 8, y: 10, w: 20, h: 18 })]),
+      cell(100, [el("span", { x: 108, y: 8, w: 40, h: 22 }, { display: "inline-flex", height: "22px" })]),
+    ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table", "border-collapse": "collapse" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row-group" }, [tr]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 38 }, { display: "block" }, [table])), "s");
+    const rows = flatten(screen.root).filter((n): n is StackNode => n.kind === "stack" && n.axis === "h");
+    expect(rows.map((r) => r.align)).toEqual(["center"]);
+  });
+});
+
+describe("paint invisible at rest", () => {
+  const box = { x: 0, y: 0, w: 100, h: 100 };
+  const clear = { opacity: "0", "background-color": "rgb(0, 0, 255)" };
+  const positioned = (child: LayoutNode) =>
+    inferScreen(doc(el("main", box, { display: "block", position: "relative" }, [child])), "s").root;
+
+  test("a transparent absolute overlay with nothing to read is dropped", () => {
+    expect(positioned(el("div", box, { position: "absolute", ...clear })).overlays).toHaveLength(0);
+  });
+
+  test("a transparent overlay with text stays: assistive technology still reads it", () => {
+    const root = positioned(el("div", box, { position: "absolute", ...clear }, [textNode("Hi", box)]));
+    expect(root.overlays).toHaveLength(1);
+    expect(root.overlays[0]!.node.style.opacity).toBe(0);
+  });
+
+  test("a transparent in-flow node keeps its space but draws nothing", () => {
+    const a = el("div", { x: 0, y: 0, w: 100, h: 50 }, { display: "block", ...clear });
+    const b = el("div", { x: 0, y: 50, w: 100, h: 50 }, { display: "block", "background-color": "rgb(255, 0, 0)" });
+    const root = inferScreen(doc(el("main", box, { display: "block" }, [a, b])), "s").root;
+    const hidden = flatten(root).find((n) => n.style.hidden);
+    expect(hidden?.style.opacity).toBeUndefined();
+    expect(hidden?.frame).toEqual({ x: 0, y: 0, w: 100, h: 50 });
+    expect(root.kind === "stack" && root.children.includes(hidden!)).toBe(true);
+  });
+
+  test("an animated transparent overlay stays: the animation may reveal it", () => {
+    const root = positioned(el("div", box, { position: "absolute", ...clear, "animation-name": "fade" }));
+    expect(root.overlays).toHaveLength(1);
+  });
+
+  test("a transparent overlay a pressed state reveals stays", () => {
+    const glow = { ...el("div", box, { position: "absolute", ...clear }), states: { pressed: { opacity: "1" } } };
+    expect(positioned(glow).overlays).toHaveLength(1);
+  });
+
+  test("an aria-hidden transparent control is dropped: neither seen nor announced (Radix's form-value input)", () => {
+    const input = (attrs: Record<string, string>) =>
+      positioned(el("input", { x: 0, y: 0, w: 13, h: 13 }, { position: "absolute", opacity: "0" }, [], attrs));
+    expect(input({ type: "checkbox", "aria-hidden": "true", checked: "" }).overlays).toHaveLength(0);
+    // Without aria-hidden Chrome still announces it (a visually hidden native input behind a drawn box).
+    expect(input({ type: "checkbox" }).overlays).toHaveLength(1);
+  });
+});
+
+describe("ARIA names", () => {
+  const tab = el(
+    "button",
+    { x: 0, y: 0, w: 40, h: 20 },
+    { display: "inline-block" },
+    [textNode("All", { x: 0, y: 0, w: 20, h: 20 })],
+    {
+      id: "t",
+      role: "tab",
+    },
+  );
+  const page = (panel: LayoutNode) =>
+    inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 60 }, { display: "block" }, [tab, panel])), "s").root;
+
+  test("a text-only tabpanel's name labels a group around its Text, never the Text's words", () => {
+    const panel = el(
+      "div",
+      { x: 0, y: 30, w: 200, h: 20 },
+      { display: "block" },
+      [textNode("Body copy", { x: 0, y: 30, w: 80, h: 20 })],
+      {
+        role: "tabpanel",
+        "aria-labelledby": "t",
+      },
+    );
+    const text = flatten(page(panel)).find((n): n is TextNode => n.kind === "text" && n.runs[0]?.text === "Body copy");
+    expect(text?.a11y).toEqual({ label: "All", container: true });
+    // A heading's name stands for its words (Chrome's name from author on a name-from-content role).
+    const heading = el(
+      "h2",
+      { x: 0, y: 30, w: 200, h: 20 },
+      { display: "block" },
+      [textNode("Body copy", { x: 0, y: 30, w: 80, h: 20 })],
+      {
+        "aria-label": "Summary",
+      },
+    );
+    const h2 = flatten(page(heading)).find((n) => n.kind === "text" && n.a11y?.heading);
+    expect(h2?.a11y?.container).toBeUndefined();
+  });
+
+  test("a tabpanel container keeps its name: it labels the group, not a child", () => {
+    const panel = el(
+      "div",
+      { x: 0, y: 30, w: 200, h: 30 },
+      { display: "block" },
+      [
+        el("p", { x: 0, y: 30, w: 200, h: 15 }, { display: "block" }, [textNode("One", { x: 0, y: 30, w: 30, h: 15 })]),
+        el("p", { x: 0, y: 45, w: 200, h: 15 }, { display: "block" }, [textNode("Two", { x: 0, y: 45, w: 30, h: 15 })]),
+      ],
+      { role: "tabpanel", "aria-labelledby": "t" },
+    );
+    const named = flatten(page(panel)).filter((n) => n.a11y?.label === "All");
+    expect(named.map((n) => n.kind)).toEqual(["stack"]);
+  });
 });

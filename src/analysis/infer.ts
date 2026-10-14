@@ -7,6 +7,7 @@ import {
   type SemBase,
   type Overlay,
   type Axis,
+  type CrossAlign,
   type Diagnostic,
   addDiagnostic,
 } from "../model/semantic.ts";
@@ -22,10 +23,15 @@ import { isInlineText, collectRuns, groupRuns } from "./text-runs.ts";
 import { linesOf, stackOf } from "./flow-layout.ts";
 import { buildGrid } from "./grid.ts";
 import { buildWrapping } from "./wrapping.ts";
+import { admitFlexRow } from "./flex-row.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 import { clipsText } from "./style-background.ts";
+import { dropInvisible } from "./invisible.ts";
+
+/** A table cell's `vertical-align` as the row's cross alignment (`top`/`baseline` stay at the start). */
+const CELL_ALIGN: Record<string, CrossAlign> = { middle: "center", bottom: "end" };
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = {
@@ -54,10 +60,12 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.viewport && doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll)
     root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
+  dropInvisible(root);
   return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
 }
 
-function build(n: LayoutNode, ctx: InferenceContext): SemNode {
+function build(input: LayoutNode, ctx: InferenceContext): SemNode {
+  const n = input.tag === "table" ? captionOutside(input) : input;
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
@@ -114,7 +122,7 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   // Controls come before the generic container path: same measured box, native control inside.
-  const spec = policy.route === "control" ? controlOf(n) : undefined;
+  const spec = policy.route === "control" ? controlOf(n, ctx.labels?.forms.get(n)) : undefined;
   if (spec) {
     const childAxis = mainAxis(n);
     const childCtx: InferenceContext = {
@@ -135,6 +143,8 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
         : [],
       font: fontOf(n.styles, ctx.bundledFamilies),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
+      ...(n.styles["appearance"] !== undefined ? { appearance: n.styles["appearance"] } : {}),
+      ...(parseColor(n.styles["accent-color"]) ? { accent: parseColor(n.styles["accent-color"]) } : {}),
     });
     node.overlays = buildOverlays(n, abs, flow[0], ctx);
     return finish(node);
@@ -240,7 +250,10 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     if (lines[0]!.some((i) => floating(i.node)))
       addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
     reportInlineRows(diagnostics, flow);
-    stack = stackOf(base, "h", lines[0]!, "start", "start");
+    // Cells are as tall as their row; a cell that hugs its content sits where `vertical-align` puts it.
+    const va = new Set(lines[0]!.map((i) => i.node.styles["vertical-align"] ?? ""));
+    const cells = display === "table-row" && va.size === 1 ? CELL_ALIGN[[...va][0]!] : undefined;
+    stack = stackOf(base, "h", lines[0]!, cells ?? "start", "start");
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
     if (floats.length)
@@ -266,6 +279,11 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
+    // Admission excludes reverse rows and `order`, so the x-sorted children are the items in order.
+    if (axis === "h") {
+      const flex = admitFlexRow(n);
+      if (flex && flex.items.length === stack.children.length) stack.flex = flex;
+    }
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
       if (g > 0) stack.minGap = round2(g);
@@ -279,6 +297,41 @@ function build(n: LayoutNode, ctx: InferenceContext): SemNode {
   if (scroll) stack.scroll = scroll;
   stack.overlays = buildOverlays(n, abs, flow[0], ctx);
   return finish(stack);
+}
+
+/**
+ * Chrome's table box includes its `<caption>`, but the table's own paint (background, border,
+ * radius, shadow) covers only the row groups. The rows move into an anonymous block that carries
+ * that paint; the table keeps its layout and loses its paint.
+ */
+// ponytail: caption margins are not subtracted from the rows box; measure them if a design spaces its caption.
+function captionOutside(n: LayoutNode): LayoutNode {
+  const first = n.children[0];
+  const last = n.children[n.children.length - 1];
+  const caption = first?.tag === "caption" ? first : last?.tag === "caption" ? last : undefined;
+  if (!caption || n.children.length < 2) return n;
+  const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
+  if (!paint.length) return n;
+  const rest = n.children.filter((c) => c !== caption);
+  // The side it is painted on (`caption-side`), not its place in the markup.
+  const top = caption.bounds.y < Math.min(...rest.map((c) => c.bounds.y));
+  const bounds = {
+    x: n.bounds.x,
+    y: top ? caption.bounds.y + caption.bounds.h : n.bounds.y,
+    w: n.bounds.w,
+    h: n.bounds.h - caption.bounds.h,
+  };
+  const rows: LayoutNode = {
+    tag: "div",
+    attrs: {},
+    styles: { display: "block", ...Object.fromEntries(paint.map((k) => [k, n.styles[k]!])) },
+    bounds,
+    children: rest,
+    ...(n.id !== undefined ? { id: `${n.id}/rows` } : {}),
+    ...(n.paint !== undefined ? { paint: n.paint } : {}),
+  };
+  const styles = Object.fromEntries(Object.entries(n.styles).filter(([k]) => !paint.includes(k)));
+  return { ...n, styles, children: top ? [caption, rows] : [rows, caption] };
 }
 
 /** Inline-level boxes laid out as captured rows never re-wrap natively, whether they filled one line or several. */

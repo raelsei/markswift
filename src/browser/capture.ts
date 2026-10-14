@@ -8,11 +8,14 @@
 import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
-import { STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
+import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
+import { readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
+import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
+import { captureStates } from "./states.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
@@ -42,8 +45,8 @@ function sniffImage(b: Buffer): string | undefined {
 }
 
 export interface Capture {
-  /** Resource failures and page errors observed while preparing this capture. */
-  warnings: string[];
+  /** Resource failures, page errors and viewport-dependent CSS observed while preparing this capture. */
+  warnings: ConversionWarning[];
   layout: LayoutDoc;
   /** Set only when `CaptureRequest.screenshot` is true. */
   png?: Uint8Array;
@@ -56,20 +59,23 @@ export interface Capture {
   fontFiles: Array<{ file: string; bytes: Uint8Array }>;
 }
 
+export interface CaptureOptions {
+  dpr: number;
+  viewport: { width: number; height: number };
+  channel?: string;
+  restricted?: boolean;
+  signal?: AbortSignal;
+}
+
 export class BrowserCapture {
   private browser!: Browser;
   private context!: BrowserContext;
   private stopping?: Promise<void>;
+  private readonly opts: CaptureOptions;
 
-  constructor(
-    private readonly opts: {
-      dpr: number;
-      viewport: { width: number; height: number };
-      channel?: string;
-      restricted?: boolean;
-      signal?: AbortSignal;
-    },
-  ) {}
+  constructor(opts: CaptureOptions) {
+    this.opts = opts;
+  }
 
   async start(): Promise<void> {
     // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
@@ -110,6 +116,7 @@ export class BrowserCapture {
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
     const page = await this.context.newPage();
+    const viewport = spec.viewport ?? this.opts.viewport;
     const errors: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
@@ -156,6 +163,7 @@ export class BrowserCapture {
       }
     });
     try {
+      if (spec.viewport) await page.setViewportSize(spec.viewport);
       await page.emulateMedia({ colorScheme: spec.theme });
       // Public pasted markup is captured as a document, but cannot reach the host's network.
       // The exact document route below is registered last and fulfills that one request.
@@ -239,10 +247,14 @@ export class BrowserCapture {
         { sel: spec.root, mark: ROOT_MARK },
       );
       const cdp = await this.context.newCDPSession(page);
+      const conditional = await readConditionalRules(page, spec.root, viewport.width);
       const preferredSizes = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
+      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs).
+      const states = await captureStates(cdp, `[${ROOT_MARK}="1"]`, snapA);
+      errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
       await page.evaluate((mark) => {
         for (const el of document.querySelectorAll("*")) {
@@ -265,7 +277,7 @@ export class BrowserCapture {
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       await cdp.detach();
-      const tree = snapshotToTree(snapA, snapB);
+      const tree = snapshotToTree(snapA, snapB, states);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, preferredSizes);
@@ -275,10 +287,12 @@ export class BrowserCapture {
       const box = rootRaw.bounds;
       const root = box && toLayout(rootRaw, { x: box.x, y: box.y }, identity);
       if (!box || !root) throw new Error(`capture root ${spec.root} has no layout`);
+      // One integer size for the screenshot clip and the native frame: Chrome floors a fractional clip.
+      const size = { w: Math.floor(box.w), h: Math.floor(box.h) };
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
         const { x, y, w, h } = box;
-        if (!(w > 0 && h > 0) || x + w <= 0 || y + h <= 0)
+        if (!(size.w > 0 && size.h > 0) || x + w <= 0 || y + h <= 0)
           throw new Error(
             `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
           );
@@ -290,7 +304,7 @@ export class BrowserCapture {
           document.body.appendChild(s);
         }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }`);
         png = await page.screenshot({
-          clip: { x, y, width: w, height: h },
+          clip: { x, y, width: size.w, height: size.h },
           scale: "device",
           animations: "disabled",
           caret: "hide",
@@ -300,14 +314,14 @@ export class BrowserCapture {
       await Promise.all(imageReads);
       errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
       return {
-        warnings: errors,
+        warnings: [...errors.map((message) => ({ source: "capture" as const, message })), ...conditional],
         layout: {
-          version: 2,
+          version: LAYOUT_DOC_VERSION,
           source,
           combo: { screen: spec.screen, theme: spec.theme },
-          size: { w: Math.round(box.w), h: Math.round(box.h) },
+          size,
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
-          viewport: { x: -box.x || 0, y: -box.y || 0, w: this.opts.viewport.width, h: this.opts.viewport.height },
+          viewport: { x: -box.x || 0, y: -box.y || 0, w: viewport.width, h: viewport.height },
           dpr: this.opts.dpr,
           canvas,
           fonts,
