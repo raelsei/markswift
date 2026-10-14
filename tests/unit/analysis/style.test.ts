@@ -149,3 +149,27 @@ test("an author's background, border, radius or appearance: none hands the contr
     expect(style.borderSides).toBeDefined();
   }
 });
+
+test("3D borders take Chromium 153+'s edge tones: very dark colours lighten twice, very light ones keep the lit edge", () => {
+  // [border-color, shadowed, lit] as Chrome 155 and Chromium 153 paint `outset` at DPR 2 (light and dark scheme alike).
+  const measured: Array<[string, string, string]> = [
+    ["rgb(0, 0, 0)", "rgb(84, 84, 84)", "rgb(168, 168, 168)"],
+    ["rgb(32, 32, 32)", "rgb(116, 116, 116)", "rgb(200, 200, 200)"],
+    ["rgb(64, 0, 0)", "rgb(148, 0, 0)", "rgb(233, 0, 0)"],
+    ["rgb(53, 53, 53)", "rgb(0, 0, 0)", "rgb(137, 137, 137)"],
+    ["rgb(128, 128, 128)", "rgb(44, 44, 44)", "rgb(212, 212, 212)"],
+    ["rgb(37, 99, 235)", "rgb(23, 63, 151)", "rgb(40, 107, 255)"],
+    ["rgb(235, 235, 235)", "rgb(151, 151, 151)", "rgb(255, 255, 255)"],
+    ["rgb(255, 255, 255)", "rgb(171, 171, 171)", "rgb(255, 255, 255)"],
+  ];
+  const rgb = (c: { r: number; g: number; b: number } | undefined) =>
+    c && `rgb(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)})`;
+  for (const [color, shadowed, lit] of measured) {
+    const n = uaControl("div", `outset ${color}`, "rgba(0, 0, 0, 0)");
+    const sides = styleOf(n, []).borderSides!;
+    expect([color, rgb(sides.top?.color), rgb(sides.bottom?.color)]).toEqual([color, lit, shadowed]);
+    n.styles = Object.fromEntries(Object.entries(n.styles).map(([k, v]) => [k, v.replace("outset", "inset")]));
+    const inset = styleOf(n, []).borderSides!;
+    expect([color, rgb(inset.top?.color), rgb(inset.bottom?.color)]).toEqual([color, shadowed, lit]);
+  }
+});

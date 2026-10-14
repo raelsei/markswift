@@ -11,7 +11,7 @@ const BLINK_SCALE = 255.99998474121094;
  * Blink's `Color::Dark()` / `Color::Light()`: every channel scaled so the brightest one loses
  * (dark) or gains (light) 0.33 of full scale, truncated to a byte. Black has no brightest
  * channel to scale up, so Blink lightens it to a fixed #545454. Verified against Chrome 152
- * over greys, hues and both clamping ends.
+ * and 155 over greys, hues and both clamping ends.
  */
 function shade(c: Color, dir: "dark" | "light"): Color {
   const v = Math.max(c.r, c.g, c.b);
@@ -28,14 +28,26 @@ function relLuminance(c: Color): number {
 }
 
 /**
- * The colour Chrome paints on the lit edges of a 3D border: the declared one, unless darkening
- * the shadowed edges left less than a 1.75 contrast ratio between the two — a dark colour
- * cannot get darker, so the lit edges lighten instead. Measured: the flip is at #373737.
+ * Luminance bounds of Blink's 3D edge shading (WebKit's algorithm, `CalculateInsetOutsetColor`):
+ * at or below rgb(32, 32, 32) a colour is "very dark", above rgb(235, 235, 235) "very light".
  */
-function litEdge(c: Color): Color {
+const BASE_DARK_LUMINANCE = relLuminance(parseColor("rgb(32, 32, 32)")!);
+const BASE_LIGHT_LUMINANCE = relLuminance(parseColor("rgb(235, 235, 235)")!);
+
+/**
+ * The colour Chrome paints on one edge of a 3D border: the shadowed edge darkens and the lit edge
+ * lightens, unless the colour is very light (the lit edge keeps it); a very dark colour cannot
+ * darken, so it lightens once for the shadowed edge and twice for the lit one (black: #545454
+ * shadowed, #a8a8a8 lit). ponytail: calibrated at DPR 2, light + dark scheme, over greys, hues and
+ * both thresholds on Chrome 155 and the corpus's Chromium 153 (same pixels); Chrome 152 kept the
+ * lit colour and lightened it only under a 1.75 contrast ratio (black #545454 / #000). Re-measure
+ * if Blink changes `CalculateInsetOutsetColor` again.
+ */
+function edgeShade(c: Color, shadowed: boolean): Color {
   const y = relLuminance(c);
-  const d = relLuminance(shade(c, "dark"));
-  return (Math.max(y, d) + 0.05) / (Math.min(y, d) + 0.05) < 1.75 ? shade(c, "light") : c;
+  if (y <= BASE_DARK_LUMINANCE) return shadowed ? shade(c, "light") : shade(shade(c, "light"), "light");
+  if (shadowed) return shade(c, "dark");
+  return y > BASE_LIGHT_LUMINANCE ? c : shade(c, "light");
 }
 
 /**
@@ -108,13 +120,12 @@ export function borderStyle(
     if (st === "solid" || st === "dashed" || st === "dotted" || st === "double") edges[e] = { width, color, style: st };
     else if (st === "inset" || st === "outset" || st === "groove" || st === "ridge") {
       // A 3D border is shaded by the painter, so `border-*-color` is not what Chrome draws: the
-      // shadowed pair of edges is darkened (top/left for inset and groove, bottom/right for
-      // outset and ridge) and the lit pair keeps the colour, or is lightened when darkening
-      // left too little contrast. Groove and ridge swap the two tones half-way through every
-      // edge; one `Edge` carries the outer half, which is the whole of a thin border.
+      // shadowed pair of edges (top/left for inset and groove, bottom/right for outset and ridge)
+      // and the lit pair take `edgeShade`'s two tones. Groove and ridge swap the two tones half-way
+      // through every edge; one `Edge` carries the outer half, which is the whole of a thin border.
       const shadowed =
         st === "inset" || st === "groove" ? e === "top" || e === "left" : e === "bottom" || e === "right";
-      edges[e] = { width, color: shadowed ? shade(color, "dark") : litEdge(color), style: "solid" };
+      edges[e] = { width, color: edgeShade(color, shadowed), style: "solid" };
       if (st === "groove" || st === "ridge")
         addDiagnostic(
           diagnostics,

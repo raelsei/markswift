@@ -56,20 +56,6 @@
       "owner": "post-1.0"
     },
     {
-      "case": "shadcn-checkbox",
-      "check": "audit:textClipped",
-      "match": "Email me about deploys",
-      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-radio-group",
-      "check": "audit:textClipped",
-      "match": "Custom (contact sales)",
-      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
-      "owner": "post-1.0"
-    },
-    {
       "case": "shadcn-input",
       "check": "audit:textClipped",
       "match": "Email",
