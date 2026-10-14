@@ -15,10 +15,10 @@
       "minSsim": 0.53
     },
     "components@fidelity": {
-      "minSsim": 0.86
+      "minSsim": 0.9
     },
     "css-layout@app": {
-      "minSsim": 0.78
+      "minSsim": 0.8
     },
     "css-layout@fidelity": {
       "minSsim": 0.82
