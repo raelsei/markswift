@@ -40,7 +40,7 @@ function fontPackage(ascent: number): FontPackage {
         file: "test.ttf",
         style: "normal",
         weight: [100, 900],
-        axes: {},
+        axes: { wght: [100, 900] },
         metrics: { upem: 1000, ascent, descent: 200, lineGap: 0, useTypoMetrics: false },
         converted: false,
         renamed: false,

@@ -172,8 +172,13 @@ export type StateStyle = Partial<
 > & { runColors?: Array<Color | undefined> };
 
 export interface FontSpec {
-  /** `system` families map to platform fonts by design; `custom` is a bundled family name. */
-  family: { kind: "system"; design: "default" | "rounded" | "monospaced" | "serif" } | { kind: "custom"; name: string };
+  /**
+   * `system` families map to platform fonts by design; `custom` is a bundled family name.
+   * `static`: the bundled files have no `wght` axis, so each weight is a separate face.
+   */
+  family:
+    | { kind: "system"; design: "default" | "rounded" | "monospaced" | "serif" }
+    | { kind: "custom"; name: string; static?: true };
   size: number;
   weight: number;
   /** Optical size axis value when the family has one (Chrome uses font-size). */

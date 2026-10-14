@@ -54,7 +54,7 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
   for (const family of fontFamilies(s["font-family"])) {
     const bundled = families[family];
     if (bundled) {
-      spec.family = { kind: "custom", name: family };
+      spec.family = bundled.wght ? { kind: "custom", name: family } : { kind: "custom", name: family, static: true };
       if (bundled.opsz) spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], size));
       break;
     }

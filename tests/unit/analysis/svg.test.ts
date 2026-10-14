@@ -49,7 +49,9 @@ test("SVG chart labels and nested tspans use the conversion's bundled fonts", ()
     fonts: [],
     root,
   };
-  const custom = inferScreen(doc, "chart", { bundledFamilies: { "Geist Variable": { weight: [100, 900] } } });
+  const custom = inferScreen(doc, "chart", {
+    bundledFamilies: { "Geist Variable": { weight: [100, 900], wght: [100, 900] } },
+  });
   const fallback = inferScreen(doc, "chart");
   expect(custom.root.kind).toBe("svg");
   if (custom.root.kind !== "svg" || fallback.root.kind !== "svg") throw new Error("Expected SVG roots");
