@@ -109,6 +109,52 @@ browserTest(
   60000,
 );
 
+const column = (items: string) =>
+  `<div data-markswift-root style="width:300px;padding:12px;display:flex;flex-direction:column;gap:8px;font:15px system-ui;background:#fff;color:#111">${items}</div>`;
+const fruit = (style: (i: number) => string) =>
+  column(
+    ["Apples", "Pears", "Plums", "Figs"]
+      .map((t, i) => `<div style="padding:8px;background:#eef${style(i)}">${t}</div>`)
+      .join(""),
+  );
+
+browserTest(
+  "equal leaf rows are one ForEach; a mixed leaf run stays unrolled",
+  async () => {
+    const { code } = await convertHtml(
+      fruit(() => ""),
+      { name: "Fruit" },
+    );
+    expect(count(code, /ForEach\(/g)).toBe(1);
+    expect(count(code, /^\s+Item\(id: /gm)).toBe(4);
+    expect(code).toContain("Text(verbatim: item.text)");
+    expect(code).not.toContain('Text(verbatim: "Pears")');
+    // Every other row bold: no two adjacent rows are equal.
+    const mixed = (
+      await convertHtml(
+        fruit((i) => (i % 2 ? ";font-weight:700" : "")),
+        { name: "Fruit" },
+      )
+    ).code;
+    expect(mixed).not.toContain("ForEach(");
+    expect(mixed).toContain('Text(verbatim: "Pears")');
+  },
+  60000,
+);
+
+browserTest(
+  "a run of buttons is one ForEach with one per-row action named for the row",
+  async () => {
+    const html = column(["Day", "Week", "Month"].map((t) => `<button type="button">${t}</button>`).join(""));
+    const { code } = await convertHtml(html, { name: "Range" });
+    expect(count(code, /ForEach\(/g)).toBe(1);
+    const actions = [...code.matchAll(/var (on\w+): \((\w+)\) -> Void = \{ _ in \}/g)];
+    expect(actions.map((m) => m[1])).toEqual([`on${actions[0]![2]}`]);
+    expect(code).not.toMatch(/onDay|onWeek|onMonth/);
+  },
+  60000,
+);
+
 const CORPUS = "tests/conformance/fixtures/components";
 const corpus = async () => (await readdir(CORPUS)).filter((f) => f.endsWith(".html")).sort();
 

@@ -155,7 +155,8 @@ test("flex-grow items of a row keep growing to their content, as CSS's automatic
   if (screen.root.kind !== "stack" || screen.root.children[0]?.kind !== "stack") throw new Error("expected stacks");
   expect(screen.root.children[0].children.map((c) => c.width.kind)).toEqual(["fill", "fill", "fill"]);
   for (const mode of ["app", "fidelity"] as const) {
-    const code = emitSwift(screen, "ConstraintView", { mode }).view;
+    // The three equal items would otherwise be one extracted subview.
+    const code = emitSwift(screen, "ConstraintView", { mode, extract: false }).view;
     const row = code.slice(code.indexOf("private var v_row"));
     const items = row.slice(row.indexOf("HStack"), row.indexOf("\n        }"));
     expect(items).toContain("maxWidth: .infinity");

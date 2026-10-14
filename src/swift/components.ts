@@ -79,6 +79,8 @@ export interface Extraction {
 
 const isContainer = (n: SemNode): n is StackNode | GridNode => n.kind === "stack" || n.kind === "grid";
 const strip = (v: string) => v.replace(/^\$/, "");
+/** A member name without its deduplication counter (`onEdit2` → `onEdit`): members named alike. */
+const stem = (v: string) => strip(v).replace(/\d+$/, "");
 const LITERAL: Record<string, true> = { S: true, C: true, I: true };
 /** A child's placeholder line: indent, NUL, the child's index in the template. */
 const PLACEHOLDER = new RegExp("^( *)\\u0000(\\d+)$");
@@ -152,7 +154,7 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
   return out;
 }
 
-/** Outermost runs of key-equal adjacent container siblings, in document order. */
+/** Outermost runs of key-equal adjacent siblings (containers, or leaves that can be a `ForEach`), in document order. */
 function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const tpl = (n: SemNode) => templates.get(n)!;
   // Member name → nodes whose own Swift references it.
@@ -196,6 +198,13 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       }
       // A member's own state, action or press must live only inside that member to move into its row.
       if (varying && col.values.some((v, i) => refs.get(strip(v))!.some((n) => !subtrees[i]!.has(n)))) return undefined;
+      // Different handlers in the design (`save()`, `cancel()`) are different actions, not one per row.
+      if (
+        kind === "action" &&
+        col.values.some((v) => stem(v) !== stem(col.values[0]!)) &&
+        col.nodes.every((x) => x.action && !/^(?:node:|#)/.test(x.action.key))
+      )
+        return undefined;
       if (kind === "action") roles.push(varying ? "collapse" : "pass");
       else if (kind.startsWith("value")) roles.push(varying ? "field" : "binding");
       else if (varying) roles.push("move");
@@ -220,14 +229,18 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const walk = (n: SemNode): void => {
     const first = new Map<SemNode, Run>();
     const inRun = new Set<SemNode>();
-    // ponytail: members must be containers; leaf runs read worse as data, revisit if users ask.
     if (isContainer(n))
       for (let i = 0; i < n.children.length; ) {
         const k = n.children[i]!;
         let j = i + 1;
-        if (isContainer(k)) while (j < n.children.length && tpl(n.children[j]!).key === tpl(k).key) j++;
+        while (j < n.children.length && tpl(n.children[j]!).key === tpl(k).key) j++;
         const run = j - i >= 2 ? makeRun(n, i, n.children.slice(i, j)) : undefined;
-        if (run) {
+        // ponytail: leaf runs only as a `ForEach` and only when their colours agree: per-member calls of a
+        // one-node subview save nothing, and differently coloured neighbours (a name and its role) are not a list.
+        const sameColours = run?.columns.every(
+          (col) => col.marker !== "C" || col.values.every((v) => v === col.values[0]),
+        );
+        if (run && (isContainer(k) || (run.forEach && sameColours))) {
           first.set(k, run);
           for (const m of run.members) inRun.add(m);
         }
@@ -318,7 +331,7 @@ export function componentNames(
   types: Array<{ run: Run; group: Run[]; fieldCols: number[] }>,
   runType: number[],
   screenFields: SemNode[],
-): { types: TypeNames[]; data: string[]; fields: Map<SemNode, string> } {
+): { types: TypeNames[]; data: string[]; fields: Map<SemNode, string>; actions: Map<Run, Map<number, string>> } {
   const seen: Record<string, number> = { body: 1 };
   for (const m of ctx.control.members) seen[m.name] = 1;
   for (const name of ctx.nameOf.values()) seen[name] = 1;
@@ -381,6 +394,8 @@ export function componentNames(
 
   const out: TypeNames[] = [];
   const bases: string[] = [];
+  /** Per run, each collapsed action class's screen member name. */
+  const actions = new Map<Run, Map<number, string>>();
   for (const t of types) {
     const m = t.run.members[0]!;
     const hint = m.nameHint;
@@ -405,11 +420,23 @@ export function componentNames(
       fields.set(c, fieldName(named.has(nodes[0]) ? [] : nodes, kindName(t.run, c), own, base));
       named.add(nodes[0]);
     }
+    // A per-row action keeps its members' shared name (`onEdit`, `onEdit2` → `onEdit`); members named
+    // after their own captions (`onApples`, `onPears`) name it after the row (`onItem`).
+    for (const run of t.group) {
+      const named = new Map<number, string>();
+      run.roles.forEach((r, c) => {
+        if (r !== "collapse" || run.cls[c] !== c) return;
+        const values = run.columns[c]!.values;
+        named.set(c, values.every((v) => stem(v) === stem(values[0]!)) ? strip(values[0]!) : unique(`on${type}`));
+      });
+      actions.set(run, named);
+    }
     // Subview parameters: the row, actions and moved members keep their names; screen bindings handed through get field-like ones.
     const row = unique(lowerFirst(type));
     const params: Record<string, number> = { [row]: 1, body: 1 };
     t.run.roles.forEach((r, c) => {
-      if (r === "pass" || r === "collapse" || r === "move") params[strip(t.run.columns[c]!.values[0]!)] = 1;
+      if (r === "pass" || r === "move") params[strip(t.run.columns[c]!.values[0]!)] = 1;
+      if (r === "collapse") params[actions.get(t.run)!.get(t.run.cls[c]!)!] = 1;
     });
     const pass = new Map<number, string>();
     t.run.roles.forEach((r, c) => {
@@ -423,7 +450,7 @@ export function componentNames(
     return unique(/[^aeiou]y$/i.test(b) ? `${b.slice(0, -1)}ies` : /(s|x|z|ch|sh)$/.test(b) ? `${b}es` : `${b}s`);
   });
   const fields = new Map(screenFields.map((n) => [n, fieldName([n], "value", seen)]));
-  return { types: out, data, fields };
+  return { types: out, data, fields, actions };
 }
 
 /** The type's naming heading: nearest preceding, then following, siblings of the run, then one level up at a time. */
@@ -487,7 +514,7 @@ export function asMember(m: ControlMembers["members"][number]): ScreenMember {
 }
 
 /**
- * Repeated sibling containers of an app-mode screen as nested row types, data arrays and subviews,
+ * Repeated sibling elements of an app-mode screen as nested row types, data arrays and subviews,
  * plus the screen's `data-markswift-field` texts and controls as `init` parameters; undefined when
  * the screen has neither. Strict equality: optional children, variants and `:last-child` edges
  * break a run (post-1.0 "loose extraction"); grids and measured, wrapping or distributed stacks get
@@ -586,6 +613,8 @@ export function extractComponents(
     runType.map((t) => t.index),
     screenFields,
   );
+  /** Screen member name of a run's collapsed action class `c`. */
+  const actionAt = (run: Run, c: number) => names.actions.get(run)!.get(c)!;
 
   /** `n`'s template with each slot from `slot` and each child placeholder from `child`. */
   const fill = (n: SemNode, slot: (s: Slot, i: number) => string, child: (c: SemNode) => string[]): string[] => {
@@ -619,7 +648,7 @@ export function extractComponents(
         `${row}: ${value}`,
         ...classes(run, "binding").map((c) => `${pass.get(c)}: $${nameAt(run, c)}`),
         ...classes(run, "pass").map((c) => `${nameAt(t.run, c)}: ${nameAt(run, c)}`),
-        ...classes(run, "collapse").map((c) => `${nameAt(t.run, c)}: { ${nameAt(run, c)}(${item}) }`),
+        ...classes(run, "collapse").map((c) => `${actionAt(t.run, c)}: { ${actionAt(run, c)}(${item}) }`),
       ].join(", ");
     if (run.forEach) {
       calls.set(
@@ -681,7 +710,7 @@ export function extractComponents(
       for (const c of classes(run, "collapse"))
         members.push({
           decl: memberOf.get(nameAt(run, c))!.decl.slice(0, -1),
-          param: { name: nameAt(run, c), type: `(${type}) -> Void`, value: "{ _ in }" },
+          param: { name: actionAt(run, c), type: `(${type}) -> Void`, value: "{ _ in }" },
         });
     }
   }
@@ -784,7 +813,9 @@ export function extractComponents(
           const dollar = s.value[0] === "$" ? "$" : "";
           const field = n.fields.get(cls);
           if (field) return `${dollar}${n.row}.${field}`;
-          const pass = run.roles[base + i] === "binding" ? n.pass.get(cls) : undefined;
+          const role = run.roles[base + i];
+          if (role === "collapse") return actionAt(run, cls);
+          const pass = role === "binding" ? n.pass.get(cls) : undefined;
           return pass ? dollar + pass : s.value;
         },
         (c) => (isContainer(c) ? [ctx.nameOf.get(c)!] : expand(c)),
@@ -810,7 +841,10 @@ export function extractComponents(
       name: n.pass.get(c)!,
       type: memberOf.get(nameAt(run, c))!.type,
     }));
-    const actions = [...classes(run, "pass"), ...classes(run, "collapse")].map((c) => nameAt(run, c));
+    const actions = [
+      ...classes(run, "pass").map((c) => nameAt(run, c)),
+      ...classes(run, "collapse").map((c) => actionAt(run, c)),
+    ];
     const init = acc
       ? [
           `${acc}init(${[

@@ -39,7 +39,8 @@ function compile(children: LayoutNode[]) {
     fonts: [],
     root: el("main", {}, children, {}, { x: 0, y: 0, w: 320, h: 400 }),
   };
-  const result = compileLayout(doc, { mode: "app" });
+  // Per-node members; repeated-sibling extraction (per-row actions) has its own tests (components.test.ts).
+  const result = compileLayout(doc, { mode: "app", extract: false });
   outputs.push(result.code);
   const diagnostics = result.diagnostics.flatMap((d) => d.diagnostics);
   return { code: result.code, diagnostics };

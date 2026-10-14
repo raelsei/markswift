@@ -64,7 +64,8 @@ function swift(children: LayoutNode[], mode: EmitMode = "app"): { view: string; 
     for (const c of [...((n["children"] as never[]) ?? []), ...((n["content"] as never[]) ?? [])]) visit(c);
   };
   visit(screen.root as never);
-  return { view: emitSwift(screen, "ControlsView", { mode }).view, diagnostics };
+  // The controls' own Swift; repeated-sibling extraction has its own tests (components.test.ts).
+  return { view: emitSwift(screen, "ControlsView", { mode, extract: false }).view, diagnostics };
 }
 const field = (tag: string, attrs: Record<string, string>, y: number, h = 38, children: LayoutNode[] = []) =>
   el(tag, attrs, { x: 0, y, w: 320, h }, children, { display: "inline-block", ...BOX });
