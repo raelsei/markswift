@@ -4,7 +4,7 @@ import { splitTop } from "./syntax.ts";
 const NUM = String.raw`(?:\d+(?:\.\d*)?|\.\d+)`;
 const PX = new RegExp(`^(${NUM})px$`);
 const FR = new RegExp(`^(${NUM})fr$`);
-const MINMAX_FR = new RegExp(`^minmax\\(0(?:px)?,\\s*(${NUM})fr\\)$`);
+const MINMAX_FR = new RegExp(`^minmax\\((?:(${NUM})px|0),\\s*(${NUM})fr\\)$`);
 const AUTO_REPEAT = new RegExp(`^repeat\\(auto-(fill|fit),\\s*minmax\\((${NUM})px,\\s*1fr\\)\\)$`);
 const REPEAT = /^repeat\((\d+),(.*)\)$/s;
 
@@ -29,8 +29,12 @@ function track(token: string): GridTrack | undefined {
   if (token === "auto") return { kind: "auto" };
   const px = PX.exec(token);
   if (px) return { kind: "px", px: Number(px[1]) };
-  const fr = FR.exec(token) ?? MINMAX_FR.exec(token);
-  return fr ? { kind: "fr", fr: Number(fr[1]) } : undefined;
+  const fr = FR.exec(token);
+  if (fr) return { kind: "fr", fr: Number(fr[1]) };
+  const mm = MINMAX_FR.exec(token);
+  if (!mm) return undefined;
+  const min = Number(mm[1] ?? 0);
+  return min > 0 ? { kind: "fr", fr: Number(mm[2]), min } : { kind: "fr", fr: Number(mm[2]) };
 }
 
 /** Authored Typed-OM template → tracks; undefined for anything MarkswiftTracks cannot reproduce. */

@@ -1,4 +1,5 @@
-enum MarkswiftTrack: Sendable { case px(CGFloat), fr(CGFloat), auto }
+/// `fr(f, min:)`: `minmax(<min>px, <f>fr)`; a bare fr track has no floor.
+enum MarkswiftTrack: Sendable { case px(CGFloat), fr(CGFloat, min: CGFloat = 0), auto }
 enum MarkswiftAutoRepeat: Sendable { case fill(min: CGFloat), fit(min: CGFloat) }
 
 /// CSS grid column tracks (px / fr / auto, or repeat(auto-fill|auto-fit, minmax(min, 1fr))), row-major cells.
@@ -23,16 +24,31 @@ struct MarkswiftTracks: Layout {
             return Array(repeating: max(0, (width - CGFloat(n - 1) * spacing) / CGFloat(n)), count: n)
         }
         var sizes = [CGFloat](repeating: 0, count: tracks.count)
-        var frs: CGFloat = 0
+        var open = [Bool](repeating: false, count: tracks.count)
         for (c, t) in tracks.enumerated() {
             switch t {
             case .px(let v): sizes[c] = v
-            case .fr(let f): frs += f
+            case .fr(_, let floor): sizes[c] = floor; open[c] = true
             case .auto: sizes[c] = c < autoWidths.count ? autoWidths[c] : 0
             }
         }
-        let free = max(0, width - sizes.reduce(0, +) - CGFloat(tracks.count - 1) * spacing)
-        for (c, t) in tracks.enumerated() { if case .fr(let f) = t { sizes[c] = frs > 0 ? free * f / frs : 0 } }
+        // CSS "find the size of an fr": a floor above its share freezes the track; the rest share again.
+        var changed = true
+        while changed {
+            changed = false
+            let free = width - CGFloat(tracks.count - 1) * spacing - tracks.indices.map { open[$0] ? 0 : sizes[$0] }.reduce(0, +)
+            var frs: CGFloat = 0
+            for (c, t) in tracks.enumerated() where open[c] { if case .fr(let f, _) = t { frs += f } }
+            let unit = max(0, free) / max(1, frs)
+            for (c, t) in tracks.enumerated() where open[c] {
+                guard case .fr(let f, let floor) = t else { continue }
+                if unit * f < floor {
+                    open[c] = false
+                    sizes[c] = floor
+                    changed = true
+                } else { sizes[c] = unit * f }
+            }
+        }
         return sizes
     }
 

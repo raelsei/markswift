@@ -10,7 +10,7 @@ import { wrappingExpr } from "./wrapping.ts";
 function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: EmitContext): string[] {
   const layout = t.autoRepeat
     ? `autoRepeat: .${t.autoRepeat.mode}(min: ${num(t.autoRepeat.min)})`
-    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)})`)).join(", ")}]`;
+    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)}${k.min === undefined ? "" : `, min: ${num(k.min)}`})`)).join(", ")}]`;
   const stretch = t.stretch ? "" : ", stretch: false";
   return [
     `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
@@ -38,9 +38,13 @@ function hugsRowHeight(n: StackNode, ctx: EmitContext): boolean {
 
 /** App mode: an admitted flex row (`StackNode.flex`) laid out by the runtime `MarkswiftFlexRow`. */
 function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: EmitContext): string[] {
-  const items = flex.items.map(
-    (i) => `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)})`,
-  );
+  const items = flex.items.map((i) => {
+    const extra = (["min", "max", "inset", "fraction"] as const).map((k) => {
+      const v = i[k];
+      return v === undefined ? "" : `, ${k}: ${num(v)}`;
+    });
+    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")})`;
+  });
   const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
   return [

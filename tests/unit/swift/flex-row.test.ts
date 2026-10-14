@@ -37,6 +37,10 @@ struct FlexRowFixture: View {
                 Text("c")
                 Text("d")
             }
+            MarkswiftFlexRow(items: [.init(grow: 0.0, shrink: 2.0, basis: 160.0, min: 88.0, max: 200.0, inset: 10.0), .init(grow: 0.0, shrink: 1.0, basis: 0.0, fraction: 0.25)], spacing: 12.0) {
+                Text("e")
+                Text("f")
+            }
         }
         .frame(width: 390)
     }
@@ -54,6 +58,23 @@ struct FlexRowFixture: View {
 );
 
 const items = (...g: Array<[number, number]>): FlexItem[] => g.map(([grow, shrink]) => ({ grow, shrink, basis: null }));
+// core-alpha's browser-proven CSS cases (#grow, #shrink, #partial; tests/integration/allocated-layout.test.ts) at
+// the row widths of 390 / 320 / 500 viewports, plus a percentage basis.
+const grow: FlexItem[] = [
+  { grow: 1, shrink: 1, basis: 0 },
+  { grow: 2, shrink: 1, basis: 0, max: 130 },
+  { grow: 1, shrink: 1, basis: 0 },
+];
+const shrink: FlexItem[] = [
+  { grow: 0, shrink: 1, basis: 160, inset: 10 },
+  { grow: 0, shrink: 2, basis: 160, inset: 10, min: 88 },
+  { grow: 0, shrink: 1, basis: 160, inset: 10 },
+];
+const partial: FlexItem[] = Array(3).fill({ grow: 0.25, shrink: 1, basis: 40 });
+const percent: FlexItem[] = [
+  { grow: 0, shrink: 1, basis: 0, fraction: 0.25 },
+  { grow: 1, shrink: 1, basis: 10, fraction: 0.5 },
+];
 const CASES: Array<{ items: FlexItem[]; bases: number[]; width: number; gap: number }> = [
   { items: items([1, 0], [2, 0]), bases: [0, 0], width: 340, gap: 8 }, // P1
   { items: items([1, 1], [1, 1]), bases: [59, 144], width: 340, gap: 8 }, // P3
@@ -62,9 +83,18 @@ const CASES: Array<{ items: FlexItem[]; bases: number[]; width: number; gap: num
   { items: items([0, 1], [0, 1]), bases: [100, 50], width: 300, gap: 8 }, // no growth, free > 0
   { items: items([0, 1], [0, 0]), bases: [200, 200], width: 300, gap: 10 }, // one px item does not shrink
   { items: items([1, 1], [1, 1]), bases: [150, 150], width: 310, gap: 10 }, // free exactly 0
-  { items: items([0, 100], [0, 1]), bases: [10, 300], width: 100, gap: 0 }, // clamped at 0
+  { items: items([0, 100], [0, 1]), bases: [10, 300], width: 100, gap: 0 }, // frozen at 0
   { items: items([0, 1], [0, 1], [0, 1]), bases: [200, 40, 50], width: 270, gap: 8 }, // P5 at 320
+  { items: items([0, 0.25], [0, 0.25], [0, 0]), bases: [150, 150, 150], width: 340, gap: 8 }, // Σshrink 0.5
+  ...[358, 288, 468].flatMap((width) => [
+    { items: grow, bases: [0, 0, 0], width, gap: 12 },
+    { items: shrink, bases: [160, 160, 160], width, gap: 12 },
+    { items: partial, bases: [40, 40, 40], width, gap: 12 },
+    { items: percent, bases: [0, 10], width, gap: 12 },
+  ]),
 ];
+const swiftItem = (i: FlexItem) =>
+  `.init(grow: ${i.grow}, shrink: ${i.shrink}, basis: nil${(["min", "max", "inset", "fraction"] as const).map((k) => (i[k] === undefined ? "" : `, ${k}: ${i[k]}`)).join("")})`;
 
 nativeTest(
   "MarkswiftFlexRow.widths agrees with solveFlexRow",
@@ -74,7 +104,7 @@ nativeTest(
       await Bun.write(join(directory, "flex-row.swift"), `import SwiftUI\n\n${flexRowRuntime}`);
       const calls = CASES.map(
         (c) =>
-          `    MarkswiftFlexRow.widths(width: ${c.width}, items: [${c.items.map((i) => `.init(grow: ${i.grow}, shrink: ${i.shrink}, basis: nil)`).join(", ")}], bases: [${c.bases.join(", ")}], spacing: ${c.gap}),`,
+          `    MarkswiftFlexRow.widths(width: ${c.width}, items: [${c.items.map(swiftItem).join(", ")}], bases: [${c.bases.join(", ")}], spacing: ${c.gap}),`,
       );
       await Bun.write(
         join(directory, "main.swift"),

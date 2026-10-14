@@ -181,8 +181,15 @@ export function sizeOf(
   else width = measuredW;
   // A width the native stacks keep at the captured size is reported, not silent: a percentage
   // resolves against this container only, and a px width the layout shrank or clamped is pinned
-  // at the laid-out size. The root always fills the screen (inferScreen), so it pins nothing.
-  if (declW && ctx.parent && width.kind === "fixed" && s["display"] !== "inline") {
+  // at the laid-out size. The root always fills the screen (inferScreen), so it pins nothing. An
+  // admitted flex row reports its allocation itself (FlexRow.fidelityNote).
+  if (
+    declW &&
+    ctx.parent &&
+    width.kind === "fixed" &&
+    s["display"] !== "inline" &&
+    !(ctx.parentAxis === "h" && admitFlexRow(ctx.parent))
+  ) {
     if (declW.includes("%"))
       addDiagnostic(
         diagnostics,
@@ -190,7 +197,7 @@ export function sizeOf(
         "width",
         `width ${declW} pinned at ${width.px}px; it does not follow the container at other widths`,
       );
-    else if (/^[\d.]+px$/.test(declW) && !(ctx.parentAxis === "h" && admitFlexRow(ctx.parent))) {
+    else if (/^[\d.]+px$/.test(declW)) {
       const [, ir, , il] = insetsOf(s);
       const authored = px(declW) + (s["box-sizing"] === "border-box" ? 0 : ir + il);
       if (Math.abs(authored - width.px) > 0.5)

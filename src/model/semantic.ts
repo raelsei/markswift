@@ -68,8 +68,8 @@ export interface MeasuredLayout {
   frames: Rect[];
 }
 
-/** One authored grid column track the runtime can size: px, fr, or content (`auto`). */
-export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number } | { kind: "auto" };
+/** One authored grid column track the runtime can size: px, fr (`min`: the px floor of `minmax(<min>px, fr)`), or content (`auto`). */
+export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number; min?: number } | { kind: "auto" };
 /**
  * An authored `grid-template-columns` that `MarkswiftTracks` reproduces. Either explicit `tracks`, or
  * `autoRepeat` (`repeat(auto-fill|auto-fit, minmax(<min>px, 1fr))`, equal columns, count from the width).
@@ -81,19 +81,26 @@ export interface GridTemplate {
 
 /**
  * One CSS flex item MarkswiftFlexRow sizes: `basis` the border-box px of a px/0/0% basis (CSS adds padding and
- * border to the flex base size), or null = content (measured natively).
+ * border to the flex base size), or null = content (measured natively). `fraction`: a percentage basis, resolved as
+ * `basis + fraction × row width`. `min`/`max`: border-box min-width/max-width. `inset`: horizontal padding and
+ * border, the floor of the box and excluded from the shrink weight (CSS scales shrink by the inner basis). Optional
+ * fields are omitted when 0 / absent.
  */
 export interface FlexItem {
   grow: number;
   shrink: number;
   basis: number | null;
+  min?: number;
+  max?: number;
+  inset?: number;
+  fraction?: number;
 }
 /** An admitted nowrap flex row; app mode emits MarkswiftFlexRow, fidelity keeps the children's captured widths. */
 export interface FlexRow {
   items: FlexItem[];
   align: "start" | "center" | "end" | "stretch";
   /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
-  fidelityNote?: { feature: "flex-grow" | "flex-shrink"; message: string };
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis"; message: string };
 }
 
 export type Axis = "v" | "h";

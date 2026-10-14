@@ -356,6 +356,23 @@ test("px + fr and auto + fr templates are admitted", () => {
   expect(pinned(wrapped)).toBe(true);
 });
 
+// core-alpha's #minimum (tests/integration/allocated-layout.test.ts) in a 348px content box: 1fr would be 88px.
+test("a minmax(px, fr) floor freezes its track and the other fr tracks share the rest", () => {
+  const doc = authored("64px minmax(100px, 1fr) minmax(0px, 2fr)", [
+    [0, 0, 64, 20],
+    [74, 0, 100, 20],
+    [184, 0, 164, 20],
+  ]);
+  expect(grid(doc).template?.tracks).toEqual([
+    { kind: "px", px: 64 },
+    { kind: "fr", fr: 1, min: 100 },
+    { kind: "fr", fr: 2 },
+  ]);
+  expect(compileLayout(doc, { name: "GridView", mode: "app" }).code).toContain(
+    "MarkswiftTracks(tracks: [.px(64.0), .fr(1.0, min: 100.0), .fr(2.0)]",
+  );
+});
+
 test("auto-fill and auto-fit templates are admitted with their minimum", () => {
   const cells: Array<[number, number, number, number]> = [
     [0, 0, 109.333, 20],

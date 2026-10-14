@@ -14,6 +14,8 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - Embedded raster backgrounds and masks (PNG, GIF, JPEG with Exif orientation, WebP) use their natural size from the image header: `background-position` is exact (e.g. `right bottom`) and repeats tile through `MarkswiftTile` with their phase and axis instead of `.tile` from the corner.
 - `<img>` `object-position` percentages other than 0/50/100% are exact (the picture moves by `(box − picture) × f` through alignment guides) instead of snapping to the nearest edge or centre.
 - A `data:` SVG background or mask with only a viewBox (no px `width`/`height`) has a ratio but no size, as in CSS: at `background-size: auto` it fits the positioning area instead of drawing at its viewBox size; a single px `width` or `height` takes the other axis from the viewBox ratio.
+- `MarkswiftFlexRow` runs CSS's flex freeze loop: px `min-width`/`max-width` clamp items with a definite basis, shrink is weighted by the inner (content-box) basis, grow and shrink factor sums below 1 leave the unused share, and a percentage `flex-basis` or `width` (item without horizontal padding) follows the row; such rows are now admitted.
+- `MarkswiftTracks` sizes `minmax(<px>, fr)` columns like CSS: a floor above its share freezes the track and the other fr tracks share the rest; an fr sum below 1 leaves space unused. Such templates are now admitted.
 
 ## [1.0.0] — 2026-10-14
 

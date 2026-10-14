@@ -4,7 +4,11 @@ import type { GridTemplate } from "../model/semantic.ts";
 import { parseTrackTemplate, px } from "../css/index.ts";
 import { insetsOf, outOfFlow } from "./geometry.ts";
 
-/** Column widths for a content width, mirroring MarkswiftTracks.columns (runtime/tracks.swift). */
+/**
+ * Column widths for a content width, mirroring MarkswiftTracks.columns (runtime/tracks.swift). fr tracks follow CSS's
+ * "find the size of an fr": an fr sum below 1 leaves space unused, and a track whose `minmax(<px>, fr)` floor exceeds
+ * its share freezes at the floor while the rest share again.
+ */
 export function solveTracks(
   t: GridTemplate,
   width: number,
@@ -17,12 +21,27 @@ export function solveTracks(
     if (t.autoRepeat.mode === "fit") n = Math.min(n, Math.max(1, count)); // auto-fit collapses empty tracks
     return Array(n).fill(Math.max(0, (width - (n - 1) * gap) / n));
   }
-  const sizes = t.tracks.map((k, c) => (k.kind === "px" ? k.px : k.kind === "auto" ? (autoWidths[c] ?? 0) : 0));
-  const frs = t.tracks.reduce((s, k) => s + (k.kind === "fr" ? k.fr : 0), 0);
-  const free = Math.max(0, width - sizes.reduce((a, b) => a + b, 0) - (t.tracks.length - 1) * gap);
-  return t.tracks.map((k, c) => (k.kind === "fr" ? (frs > 0 ? (free * k.fr) / frs : 0) : sizes[c]!));
+  const sizes = t.tracks.map((k, c) =>
+    k.kind === "px" ? k.px : k.kind === "auto" ? (autoWidths[c] ?? 0) : (k.min ?? 0),
+  );
+  const open = t.tracks.map((k) => k.kind === "fr");
+  for (let changed = true; changed; ) {
+    changed = false;
+    const free = width - (t.tracks.length - 1) * gap - sizes.reduce((sum, s, c) => sum + (open[c] ? 0 : s), 0);
+    const frs = t.tracks.reduce((sum, k, c) => sum + (open[c] && k.kind === "fr" ? k.fr : 0), 0);
+    const unit = Math.max(0, free) / Math.max(1, frs);
+    for (const [c, k] of t.tracks.entries()) {
+      if (!open[c] || k.kind !== "fr") continue;
+      if (unit * k.fr < (k.min ?? 0)) {
+        open[c] = false;
+        sizes[c] = k.min!;
+        changed = true;
+      } else sizes[c] = unit * k.fr;
+    }
+  }
+  return sizes;
 }
-// ponytail: fr tracks are minmax(0, fr); CSS 1fr is minmax(auto, 1fr) and never shrinks below min-content.
+// ponytail: a bare fr track is minmax(0, fr); CSS 1fr is minmax(auto, 1fr) and never shrinks below min-content.
 // Admission proves the captured width only; measure min-content in the runtime if narrow widths diverge.
 
 const near = (a: number, b: number) => Math.abs(a - b) <= 1;
