@@ -111,3 +111,72 @@ test("an app-mode scroll container uses ScrollView(_:) without the soft-deprecat
   expect(view).not.toContain("showsIndicators");
   expect(view).toContain(".markswiftScrollEdgeEffectHidden()");
 });
+
+test("an app-mode scroll box paints, frames and clips the ScrollView; its padding scrolls with the content", () => {
+  const text: LayoutNode = {
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x: 9, y: 9, w: 182, h: 300 },
+    text: "Row",
+    children: [],
+  };
+  const box = element(
+    "div",
+    0,
+    0,
+    200,
+    100,
+    {
+      display: "block",
+      "overflow-y": "auto",
+      "padding-top": "8px",
+      "padding-right": "8px",
+      "padding-bottom": "8px",
+      "padding-left": "8px",
+      "background-color": "rgb(255, 255, 255)",
+      "border-top-width": "1px",
+      "border-right-width": "1px",
+      "border-bottom-width": "1px",
+      "border-left-width": "1px",
+      "border-top-style": "solid",
+      "border-right-style": "solid",
+      "border-bottom-style": "solid",
+      "border-left-style": "solid",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "12px",
+      "border-top-right-radius": "12px",
+      "border-bottom-right-radius": "12px",
+      "border-bottom-left-radius": "12px",
+    },
+    [element("p", 9, 9, 182, 300, { display: "block", "font-size": "15px", "line-height": "300px" }, [text])],
+  );
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "layout-test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: 200, h: 100 },
+    dpr: 3,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root: element("main", 0, 0, 200, 100, { display: "block" }, [box]),
+  };
+  const lines = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view.split("\n");
+  const open = lines.findIndex((l) => l.includes("ScrollView(.vertical) {"));
+  const k = lines[open]!.length - lines[open]!.trimStart().length;
+  const close = lines.findIndex((l, j) => j > open && l === `${" ".repeat(k)}}`);
+  const inside = lines.slice(open + 1, close).join("\n");
+  const outside = lines.slice(close + 1, close + 7).join("\n");
+  // The IR's padding includes the 1px border; the stroke overlay on the ScrollView covers that band.
+  expect(inside).toContain(".padding(9.0)");
+  expect(inside).toContain(".frame(minWidth: 0.0, maxWidth: .infinity, alignment: .topLeading)");
+  for (const paint of ["minHeight", ".background(", "strokeBorder"]) expect(inside).not.toContain(paint);
+  // A CSS height on the scroll axis is the scroll box's height: content past it scrolls, it never grows the box.
+  expect(outside).toContain(".frame(height: 100.0, alignment: .topLeading)");
+  expect(outside).toContain(".background(Color.markswift(1.0, 1.0, 1.0), in: RoundedRectangle(cornerRadius: 12.0");
+  expect(outside).toContain(".clipShape(RoundedRectangle(cornerRadius: 12.0");
+  expect(outside).toContain("strokeBorder(");
+});

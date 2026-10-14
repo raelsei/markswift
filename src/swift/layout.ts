@@ -2,7 +2,8 @@ import type { StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
-import { decorate, overlayModifier } from "./modifiers.ts";
+import { fillAlignment } from "./frames.ts";
+import { decorate, overlayModifier, paddingModifiers } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
 
@@ -132,29 +133,41 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     out.push("}");
     if (hugsRowHeight(n, ctx)) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
-  const body = decorate(n, out, ctx);
-  if (n.scroll) {
-    // Mode difference — scrolling stacks. Fidelity: the first viewport as a fixed, clipped
-    // stack (ImageRenderer cannot render ScrollView). App: a real ScrollView on the IR axis,
-    // with `position: fixed` overlays attached outside it so they stay put while content scrolls.
-    if (ctx.mode === "fidelity")
-      return [
-        ...body,
-        `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`,
-        ".clipped()",
-      ];
-    // Same chain order as `modifiers`: front-most background first.
-    const fixed = [
-      ...n.overlays.filter((o) => o.fixed && o.layer === "background").reverse(),
-      ...n.overlays.filter((o) => o.fixed && o.layer === "overlay"),
-    ].flatMap((o) => overlayModifier(o, o.layer, ctx));
-    return [
-      `ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`,
-      ...indent(body, 1),
-      `}`,
-      ".markswiftScrollEdgeEffectHidden()",
-      ...fixed,
+  // Mode difference — scrolling stacks. App: a real ScrollView on the IR axis carries the box's frame, paint,
+  // border, rounded clip and `position: fixed` overlays (`boxModifiers`), so they stay put while the content
+  // scrolls; the padding and other overlays scroll with the content, which fills a vertical ScrollView's width.
+  if (n.scroll && ctx.mode === "app") {
+    const scrolling = n.overlays.filter((o) => !o.fixed);
+    const content = [
+      ...out,
+      ...paddingModifiers(n, ctx),
+      ...(n.scroll === "v"
+        ? [`.frame(minWidth: ${num(0)}, maxWidth: .infinity, alignment: ${fillAlignment(n, ctx.mode)})`]
+        : []),
+      ...scrolling
+        .filter((o) => o.layer === "background")
+        .reverse()
+        .flatMap((o) => overlayModifier(o, "background", ctx)),
+      ...scrolling.filter((o) => o.layer === "overlay").flatMap((o) => overlayModifier(o, "overlay", ctx)),
     ];
+    return decorate(
+      n,
+      [
+        `ScrollView(.${n.scroll === "h" ? "horizontal" : "vertical"}) {`,
+        ...indent(content, 1),
+        "}",
+        ".markswiftScrollEdgeEffectHidden()",
+      ],
+      ctx,
+    );
   }
+  const body = decorate(n, out, ctx);
+  // Fidelity: the first viewport as a fixed, clipped stack (ImageRenderer cannot render ScrollView).
+  if (n.scroll)
+    return [
+      ...body,
+      `.frame(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, alignment: .topLeading)`,
+      ".clipped()",
+    ];
   return body;
 }

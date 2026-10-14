@@ -34,10 +34,14 @@ function fixedHeight(n: SemNode, ctx: EmitContext): number | undefined {
     ? n.height.px
     : undefined;
 }
-/** App: a fixed height on a box that lays out text is a `minHeight` floor (`frameModifier`). */
+/** App: a fixed height on a box that lays out text is a `minHeight` floor (`frameModifier`) — except a vertical
+ * scroll box's: text past it scrolls instead of growing the box. */
 function heightFloor(n: SemNode, ctx: EmitContext): number | undefined {
   const h = fixedHeight(n, ctx);
-  return ctx.mode === "app" && h !== undefined && n.maxHeight === undefined && laysOutText(n) ? h : undefined;
+  const scrollsV = (n.kind === "stack" || n.kind === "grid") && n.scroll === "v";
+  return ctx.mode === "app" && h !== undefined && n.maxHeight === undefined && laysOutText(n) && !scrollsV
+    ? h
+    : undefined;
 }
 /**
  * App: how far a floored box's captured content overflows its content box, [top, bottom] — an icon taller than
@@ -139,7 +143,13 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // App: CSS shrink-to-fit never exceeds the container, so the width fits (`markswiftFitWidth`)
   // instead of taking the content's ideal — one unwrapped line — past the offered width.
   const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
-  const hugH = !fixedH && n.height.kind === "hug" && n.maxHeight !== undefined;
+  // A vertical ScrollView sized to its ideal height is as tall as its content and would not scroll: an app scroll
+  // box capped by `max-height` takes the height offered up to the cap instead.
+  const hugH =
+    !fixedH &&
+    n.height.kind === "hug" &&
+    n.maxHeight !== undefined &&
+    !(app && (n.kind === "stack" || n.kind === "grid") && n.scroll === "v");
   if ((hugW && !app) || hugH) parts.push(`.fixedSize(horizontal: ${hugW && !app}, vertical: ${hugH})`);
   if (fit || (hugW && app)) parts.push(".markswiftFitWidth()");
   return parts;
@@ -154,7 +164,7 @@ function laysOutText(n: SemNode): boolean {
 }
 
 /** Where a node sits inside its fill frame: follows its own alignment semantics. */
-function fillAlignment(n: SemNode, mode: EmitMode): string {
+export function fillAlignment(n: SemNode, mode: EmitMode): string {
   // A capped, clipping text box shows its first lines (CSS), however native metrics grow the text.
   if (n.kind === "text")
     return textBoxAlignment(n, clipsFirstLine(n) || (n.maxHeight !== undefined && n.style.clip === true));
