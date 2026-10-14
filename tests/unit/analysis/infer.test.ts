@@ -163,6 +163,34 @@ describe("tables", () => {
     const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
     expect(texts.map((t) => t.runs[0]!.text)).toEqual(["Q1", "Quarterly sales"]);
   });
+
+  test("042: row-border-inset — a collapsed row border lies inside its cells, not inside the row", () => {
+    const line = {
+      "border-bottom-style": "solid",
+      "border-bottom-width": "1px",
+      "border-bottom-color": "rgb(0, 0, 0)",
+    };
+    const row = (y: number, text: string) =>
+      el("tr", { x: 0, y, w: 200, h: 38 }, { display: "table-row", ...line }, [
+        el("td", { x: 0, y, w: 200, h: 38 }, { display: "table-cell", "padding-top": "8px" }, [
+          textNode(text, { x: 0, y: y + 8, w: 20, h: 20 }),
+        ]),
+      ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 76 }, { display: "table", "border-collapse": "collapse" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 76 }, { display: "table-row-group", ...line }, [
+        row(0, "Q1"),
+        row(38, "Q2"),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 76 }, { display: "block" }, [table])), "s");
+    const ruled = flatten(screen.root).filter((n) => n.style.borderSides?.bottom);
+    expect(ruled.map((n) => n.frame.h)).toEqual([76, 38, 38]);
+    expect(ruled.map((n) => n.padding)).toEqual([
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+  });
 });
 
 describe("paint invisible at rest", () => {
