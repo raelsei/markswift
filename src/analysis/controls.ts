@@ -184,7 +184,8 @@ export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undef
     }
     case "textarea": {
       const spec: ControlSpec = { control: "textEditor", diagnostics };
-      const text = textContent(n).trim();
+      // `@value`: the live text when the page's script changed it (`browser/snapshot.ts`).
+      const text = (a["value"] ?? textContent(n)).trim();
       if (text) spec.value = text;
       if (a["placeholder"]) spec.placeholder = a["placeholder"];
       if (disabled) spec.disabled = true;

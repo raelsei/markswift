@@ -16,6 +16,10 @@ interface RareStringData {
   index: number[];
   value: number[];
 }
+/** CDP `RareBooleanData`: the nodes for which the flag is true. */
+interface RareBooleanData {
+  index: number[];
+}
 
 /** Subset of the CDP response we read. */
 export interface DomSnapshot {
@@ -33,6 +37,12 @@ export interface DomSnapshot {
       currentSourceURL?: RareStringData;
       /** Stable per-node backend id (CDP always sends it); joins the rest and state snapshots. */
       backendNodeId?: number[];
+      /** Live `value` of `<input>` / `<textarea>` (the attributes keep the markup's initial value). */
+      inputValue?: RareStringData;
+      textValue?: RareStringData;
+      /** Live `checked` / `selected` (the attributes keep the markup's defaults). */
+      inputChecked?: RareBooleanData;
+      optionSelected?: RareBooleanData;
     };
     layout: {
       nodeIndex: number[];
@@ -154,6 +164,7 @@ export function snapshotToTree(
       raws[i]!.parent = raws[p];
     }
   }
+  liveFormState(doc.nodes, raws, str);
   if (states)
     for (const key of ["pressed", "focused"] as const)
       for (const [idx, delta] of states[key]) {
@@ -202,6 +213,47 @@ export function snapshotToTree(
   const html = raws.find((r) => r.type === 1 && r.name === "html");
   if (!html) throw new Error("no <html> in snapshot");
   return html;
+}
+
+/**
+ * The page's script — or a `prepare` hook — may have changed a control after load; the
+ * attributes keep the markup's defaults, CDP's live columns hold what the browser paints. The
+ * live state is written back as attributes, so everything downstream reads one place.
+ *
+ * - `<input>`: `value` (an empty value is no value: the placeholder shows). Checkbox and radio
+ *   values are their attribute (HTML "default/on" mode), never edited, so they stay as authored.
+ * - `<textarea>`: `value` when the live text differs from the markup's text.
+ * - `checked` / `selected`: exactly the live set.
+ */
+function liveFormState(nodes: DomSnapshot["documents"][number]["nodes"], raws: Raw[], str: (i: number) => string) {
+  const input = nodes.inputValue;
+  if (input)
+    for (let k = 0; k < input.index.length; k++) {
+      const r = raws[input.index[k]!];
+      const type = r?.attrs["type"]?.toLowerCase();
+      if (r?.name !== "input" || type === "checkbox" || type === "radio") continue;
+      const live = str(input.value[k]!);
+      if (live === (r.attrs["value"] ?? "")) continue;
+      if (live) r.attrs["value"] = live;
+      else delete r.attrs["value"];
+    }
+  const text = nodes.textValue;
+  if (text)
+    for (let k = 0; k < text.index.length; k++) {
+      const r = raws[text.index[k]!];
+      if (r?.name !== "textarea") continue;
+      const live = str(text.value[k]!);
+      const markup = r.children.map((c) => (c.type === 3 ? c.value : "")).join("");
+      if (live !== markup) r.attrs["value"] = live;
+    }
+  for (const [column, tag, attr] of [
+    [nodes.inputChecked, "input", "checked"],
+    [nodes.optionSelected, "option", "selected"],
+  ] as const) {
+    if (!column) continue;
+    for (const r of raws) if (r.name === tag) delete r.attrs[attr];
+    for (const i of column.index) if (raws[i]?.name === tag) raws[i]!.attrs[attr] = "";
+  }
 }
 
 /**

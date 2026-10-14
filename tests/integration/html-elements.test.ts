@@ -177,3 +177,28 @@ browserTest("textarea text, appearance and accent-color reach the generated cont
   expect(result.code).not.toContain("tint: Color.markswift(0.0, 0.459, 1.0)");
   expect(result.code).toContain('Text(verbatim: "Submit")');
 });
+
+browserTest("script-set value, checked and selected win over the markup attributes", async () => {
+  const result = await convertHtml(
+    `<main data-markswift-root>
+      <input id="name" value="Markup"><input id="go" type="submit">
+      <textarea id="bio">Markup text</textarea>
+      <input id="news" type="checkbox" checked><input id="terms" type="checkbox">
+      <select id="size"><option selected>Small</option><option>Large</option></select>
+    </main>
+    <script>
+      document.getElementById("name").value = "Typed";
+      document.getElementById("bio").value = "Edited text";
+      document.getElementById("news").checked = false;
+      document.getElementById("terms").checked = true;
+      document.getElementById("size").value = "Large";
+    </script>`,
+    { name: "LiveState", mode: "app", theme: "light", css: "body{margin:0} main{width:320px;font:15px system-ui}" },
+  );
+  expect(result.code).toContain('@State private var s_name: String = "Typed"');
+  expect(result.code).toContain('Text(verbatim: "Submit")');
+  expect(result.code).toContain('@State private var s_bio: String = "Edited text"');
+  expect(result.code).toContain("@State private var s_news: Bool = false");
+  expect(result.code).toContain("@State private var s_terms: Bool = true");
+  expect(result.code).toContain('@State private var s_size: String = "Large"');
+});
