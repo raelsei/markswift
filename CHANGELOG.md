@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Changed
+- Embedded raster backgrounds and masks (PNG, GIF, JPEG with Exif orientation, WebP) use their natural size from the image header: `background-position` is exact (e.g. `right bottom`) and repeats tile through `MarkswiftTile` with their phase and axis instead of `.tile` from the corner.
+
 ## [1.0.0] — 2026-10-14
 
 Reusable SwiftUI components from HTML and CSS: data parameters, `ForEach` over repeated content, `on<Name>` actions, names from the markup, tool-owned output with `--update`, one Swift package for many components (`markswift build`), an npm package that runs on Node.js, and visual and behaviour gates measured on the iOS runtime.

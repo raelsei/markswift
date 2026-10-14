@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="background-position; background-repeat; background-repeat: repeat; background-repeat: no-repeat; background-size; object-position; object-fit">
+<title>background-raster</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.t { height: 84px; border-radius: 12px; background-color: var(--soft); border: 1px solid var(--line); }
+.rb { background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAAYElEQVR4nGMQlFD/P5Qxw0A7YNQDwy4GJhu/oip+4zGTqnjUA6MxMJqERjPxaCk0WoyOVmSjNfFoU2K0MTfaGh1tTo92aEZ7ZKNdytFO/eioBG2GVYYaHvXAaAxIUJaEAGYNOSTigqlkAAAAAElFTkSuQmCC"); background-repeat: no-repeat; background-position: right bottom; }
+.rep { background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAKklEQVR4nGN4FcHznxTMQCoYtWA0iIZAKhoFqsmv/yNjqofIqAUMgx4AANAYBBC5+rp5AAAAAElFTkSuQmCC"); background-position: 10px 6px; }
+.rx { background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAAKklEQVR4nGN4FcHznxTMQCoYtWA0iIZAKhoFqsmv/yNjqofIqAUMgx4AANAYBBC5+rp5AAAAAElFTkSuQmCC"); background-repeat: repeat-x; background-position: center; }
+.row { display: flex; gap: 12px; }
+.slot { width: 110px; height: 110px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+.slot img { width: 100%; height: 100%; display: block; }
+.cover { object-fit: cover; object-position: 25% 75%; }
+.contain { object-fit: contain; object-position: 75% 25%; }
+.none { object-fit: none; object-position: 30% 70%; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="bg">
+  <p class="cap">PNG at right bottom / repeat from 10px 6px / repeat-x centred</p>
+  <div class="tiles"><div class="t rb"></div><div class="t rep"></div><div class="t rx"></div></div>
+</section>
+<section class="v" id="img">
+  <p class="cap">PNG img: cover 25% 75% / contain 75% 25% / none 30% 70%</p>
+  <div class="row">
+    <div class="slot"><img class="cover" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAYAAACiu5n/AAAAeElEQVR4nO3YSxHAIAwEUI4oqAMQUxuVhgTsoABEpDIyzLzDCsgk2V9ZvUcG2ndSUAxsw07aDyMtLE2W6DDjwWmxlry08CAtiYcKAI3H9RXPM97IwJ41BQa2YSfth5EWliZLdJjx4LRYS15aeJCWxEMFgMYjbq94foKorORA94lzAAAAAElFTkSuQmCC" alt="Quadrants, cover"></div>
+    <div class="slot"><img class="contain" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAYAAACiu5n/AAAAeElEQVR4nO3YSxHAIAwEUI4oqAMQUxuVhgTsoABEpDIyzLzDCsgk2V9ZvUcG2ndSUAxsw07aDyMtLE2W6DDjwWmxlry08CAtiYcKAI3H9RXPM97IwJ41BQa2YSfth5EWliZLdJjx4LRYS15aeJCWxEMFgMYjbq94foKorORA94lzAAAAAElFTkSuQmCC" alt="Quadrants, contain"></div>
+    <div class="slot"><img class="none" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAYAAACiu5n/AAAAeElEQVR4nO3YSxHAIAwEUI4oqAMQUxuVhgTsoABEpDIyzLzDCsgk2V9ZvUcG2ndSUAxsw07aDyMtLE2W6DDjwWmxlry08CAtiYcKAI3H9RXPM97IwJ41BQa2YSfth5EWliZLdJjx4LRYS15aeJCWxEMFgMYjbq94foKorORA94lzAAAAAElFTkSuQmCC" alt="Quadrants, natural size"></div>
+  </div>
+</section>
+</main>
+</body>
+</html>

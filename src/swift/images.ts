@@ -14,7 +14,8 @@ const LOOPBACK = /^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:\d+)?(\/|$
  * the image as an overlay so cover/contain overflow is aligned to the box and clipped by the
  * caller. Vector sources are scaled here (cover/contain/explicit size against the viewBox);
  * raster ones let SwiftUI scale. Repeats tile through `MarkswiftTile` whenever the tile size is
- * known (vector viewBox or explicit size); a raster at its intrinsic size uses `.tile`.
+ * known (vector viewBox, explicit size, or an embedded raster's header size resolved by the
+ * analysis); a remote raster at its unknown intrinsic size uses `.tile`.
  * `undefined` when the source cannot be shown (noted on the node).
  */
 export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitContext): string[] | undefined {
@@ -22,7 +23,7 @@ export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitCon
   if (!src) return undefined;
   const box = n.frame;
   const repeat = p.repeat !== undefined && p.repeat !== "no-repeat";
-  // Tile size: explicit, or the vector's viewBox; a raster's intrinsic size is unknown here.
+  // Tile size: explicit (embedded rasters arrive with their natural size), or the vector's viewBox.
   const tile: [number, number] | undefined = repeat
     ? typeof p.size === "object"
       ? [p.size.w, p.size.h]

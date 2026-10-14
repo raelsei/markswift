@@ -7,6 +7,7 @@ export { parseShadows } from "./shadows.ts";
 export { type TransformLoss, parseTransform, parseOrigin, cssTransform } from "./transforms.ts";
 export { parseFilters, parseClipPath } from "./effects.ts";
 export { parseBackgroundRepeat, parseBackgroundSize, parseBackgroundPosition } from "./background.ts";
+export { rasterSize } from "./raster.ts";
 export { fontWeight, fontFamilies } from "./typography.ts";
 export { parseRadiusXY } from "./radius.ts";
 export { parseTrackTemplate, resolvedGridTracks } from "./grid.ts";
