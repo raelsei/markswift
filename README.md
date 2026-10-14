@@ -376,11 +376,9 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 ## Known gaps
 
 - 17 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
-  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, collapsed table borders,
-  `::placeholder` colour and `TextEditor` first-line placement.
-- `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); unstyled
-  theme-painted buttons have no pressed look.
-- Tapping a `<label>` does not focus its text field; `<bdo>`/`<bdi>` are not mapped.
+  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `::placeholder` colour.
+- Unstyled theme-painted buttons have no pressed look.
+- `<bdo>`/`<bdi>` are not mapped.
 - Accessibility: the 8 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
@@ -458,8 +456,8 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; label-tap
-  focus; CSS animations; iPad hover and keyboard.
+- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
+  iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`, `<bdo>`/`<bdi>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser

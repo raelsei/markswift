@@ -1323,7 +1323,7 @@ export default {
       ir: "TextNode | StackNode + SemBase.labelFor; control SemBase.a11y.label",
       via: "structure",
       impl: "yes",
-      note: "→ styled text; tapping it toggles its checkbox/radio; focusing a text field from its label is not translated. The label text also becomes the control's accessibility label (`for` or wrapping).",
+      note: "→ styled text; tapping it toggles its checkbox/radio or (app mode) focuses its text field. The label text also becomes the control's accessibility label (`for` or wrapping).",
       spec: `${MDN}label`,
     },
     {
@@ -1400,7 +1400,7 @@ export default {
       ir: "FieldNode (new) { control: picker, options }",
       via: "structure",
       impl: "yes",
-      note: "Arrow drawn unless `appearance: none`; `multiple`/`size>1` still a menu (approximated).",
+      note: "Chrome's menulist arrow (at the inner border edge) and internal text padding unless `appearance: none`; `multiple`/`size>1` still a menu (approximated).",
       spec: `${MDN}select`,
     },
     {

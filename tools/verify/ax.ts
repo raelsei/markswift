@@ -93,8 +93,9 @@ export async function browserAxNodes(page: Page, rootSelector: string): Promise<
 }
 
 /**
- * Every text and SVG text run of `n`'s subtree, single-space joined in `walk` order. `named`: a descendant's
- * own name (`a11y.label`, `alt`, `<title>`) replaces its content, as in Chrome's name-from-content.
+ * Every text and SVG text run of `n`'s subtree, and every input button's caption (its `value`, painted by the control),
+ * single-space joined in `walk` order. `named`: a descendant's own name (`a11y.label`, `alt`, `<title>`) replaces its
+ * content, as in Chrome's name-from-content.
  */
 function subtreeText(n: SemNode, named = false): string {
   const parts: string[] = [];
@@ -108,6 +109,8 @@ function subtreeText(n: SemNode, named = false): string {
       skipBelow = depth;
     } else if (m.kind === "text") parts.push(m.runs.map((r) => r.text).join(""));
     else if (m.kind === "svg") for (const t of m.texts ?? []) parts.push(t.text);
+    else if (m.kind === "control" && m.control === "button" && !m.files && m.value !== undefined && !m.content.length)
+      parts.push(m.value);
   });
   return normalizeName(parts.join(" "));
 }

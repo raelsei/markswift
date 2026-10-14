@@ -99,7 +99,11 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(view).toContain('.markswiftFitsText(s_note.isEmpty ? "Add a note" : s_note)');
   expect(view).toContain("minHeight: 72.0");
   expect(view).not.toContain("height: 72.0,");
-  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(4);
+  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(2);
+  // 044 item 4: an editor's text starts at its top, so its half-leading pads above the first line, as Chrome's line box.
+  expect(
+    view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline, editor: true)").length - 1,
+  ).toBe(2);
   const fidelity = swift(
     [field("textarea", { id: "bio" }, 0, 72, [text("Designer and developer.", 0, 0, 0, 0)])],
     "fidelity",
@@ -159,6 +163,61 @@ test("appearance: none removes the select arrow; native checkboxes and ranges dr
   ]).view;
   expect(drawn).toContain("strokeBorder(");
   expect(drawn).toContain(".background(Color.markswift(1.0, 1.0, 1.0)");
+});
+
+test("044: a native select pads its label like Chrome's menulist and puts the arrow at the inner border edge", () => {
+  // BOX: 1 px border; 12 px author padding → the 15 px arrow box overhangs the content edge by 12 px.
+  const select = (styles: Record<string, string>) =>
+    el("select", { id: "s" }, { x: 0, y: 0, w: 320, h: 38 }, [option("One")], {
+      display: "inline-block",
+      ...BOX,
+      "padding-left": "12px",
+      "padding-right": "12px",
+      ...styles,
+    });
+  for (const mode of ["app", "fidelity"] as const) {
+    const ua = swift([select({})], mode).view;
+    expect(ua).toContain(".padding(EdgeInsets(top: 0.0, leading: 4.0, bottom: 0.0, trailing: 16.0))");
+    expect(ua).toContain(".overlay(alignment: .trailing) {");
+    expect(ua).toContain(".frame(width: 15.0)");
+    expect(ua).toContain(".padding(.trailing, -12.0)");
+    const none = swift([select({ appearance: "none" })], mode).view;
+    expect(none).not.toContain("leading: 4.0, bottom: 0.0, trailing: 16.0");
+    expect(none).not.toContain(".frame(width: 15.0)");
+  }
+});
+
+test("044: an input button's caption stays one line and shrinks into its measured width", () => {
+  const submit = el("input", { id: "go", type: "submit" }, { x: 0, y: 0, w: 58, h: 21 }, [], {
+    display: "inline-block",
+    ...BOX,
+  });
+  for (const mode of ["app", "fidelity"] as const) {
+    const view = swift([submit], mode).view;
+    expect(view).toContain('Text(verbatim: "Submit")\n');
+    expect(view).toMatch(/Text\(verbatim: "Submit"\)\n\s*\.lineLimit\(1\)\n\s*\.minimumScaleFactor\(0\.8\)/);
+  }
+});
+
+test("044: tapping a text field's <label> focuses it (app mode)", () => {
+  const children = [
+    el("label", { for: "email" }, { x: 0, y: 0, w: 320, h: 20 }, [text("Email", 0, 0, 40, 20)]),
+    field("input", { id: "email", type: "email" }, 24),
+    el("label", { for: "bio" }, { x: 0, y: 70, w: 320, h: 20 }, [text("Bio", 0, 70, 30, 20)]),
+    field("textarea", { id: "bio" }, 94, 72),
+    el("label", { for: "off" }, { x: 0, y: 170, w: 320, h: 20 }, [text("Off", 0, 170, 30, 20)]),
+    field("input", { id: "off", type: "text", disabled: "" }, 194),
+  ];
+  const app = swift(children).view;
+  expect(app).toContain("@MarkswiftFocused private var isEmailFocused");
+  expect(app).toContain(".focused($isEmailFocused)");
+  expect(app).toContain(".onTapGesture { isEmailFocused = true }");
+  expect(app).toContain(".onTapGesture { isBioFocused = true }");
+  expect(app.match(/@MarkswiftFocused/g)).toHaveLength(2);
+  // Fidelity paints the fields' text: nothing takes focus.
+  const fidelity = swift(children, "fidelity").view;
+  expect(fidelity).not.toContain("MarkswiftFocused private");
+  expect(fidelity).not.toContain(".onTapGesture");
 });
 
 test("accent-color tints checkboxes, ranges and progress bars", () => {
@@ -271,7 +330,10 @@ test("042: field-face-leading — an editor in a bundled face spaces its lines f
   editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
   const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
   const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
-  expect(view).toContain(".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3)");
+  // The face name lets the runtime find how far the editor's tall glyphs lower its first line (044 item 4).
+  expect(view).toContain(
+    '.markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3, editor: true, face: "Geist Variable")',
+  );
 });
 
 test("042: control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {

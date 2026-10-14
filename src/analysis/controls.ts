@@ -420,7 +420,7 @@ export function buildControl(spec: ControlSpec, parts: ControlParts): ControlNod
 export interface LabelIndex {
   /** Control element → its label's text (the label's text content without the control's own). */
   text: Map<LayoutNode, string>;
-  /** Label element → the enabled toggle/radio element (native, or an ARIA toggle role) a tap on the label changes. */
+  /** Label element → the enabled toggle/radio (native, or an ARIA toggle role) a tap on the label changes, or text field it focuses. */
   activates: Map<LayoutNode, LayoutNode>;
   /** `<input>`/`<button>` → its form owner (HTML: the `<form>` its `@form` names, else its nearest ancestor `<form>`). */
   forms: Map<LayoutNode, LayoutNode>;
@@ -480,10 +480,13 @@ export function labelIndex(root: LayoutNode): LabelIndex {
     const text = textOf(label, target).replace(/\s+/g, " ").trim();
     if (text && !out.text.has(target)) out.text.set(target, text);
     const spec = controlOf(target, out);
-    // An ARIA toggle is a `<button>` or an activatable box; HTML: a label's tap clicks its button too.
+    // An ARIA toggle is a `<button>` or an activatable box; HTML: a label's tap clicks its button too, and focuses a field.
     const toggle = spec
       ? spec.control === "toggle" ||
         spec.control === "radio" ||
+        spec.control === "textField" ||
+        spec.control === "secureField" ||
+        spec.control === "textEditor" ||
         (spec.control === "button" && isToggleRole(target.attrs["role"]))
       : isToggleRole(target.attrs["role"]);
     if (toggle && !spec?.disabled && target.attrs["aria-disabled"] !== "true") out.activates.set(label, target);

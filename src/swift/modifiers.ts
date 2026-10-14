@@ -190,7 +190,7 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   if (n.selfAlignV && ctx.mode === "app")
     m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
   if (st.hidden) m.push(".hidden()");
-  // A `<label>` tap changes its checkbox or radio, anywhere in the label's box.
+  // A `<label>` tap changes its checkbox or radio, or focuses its text field, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
   if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
   const a = n.a11y;

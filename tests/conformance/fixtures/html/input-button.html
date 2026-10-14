@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="input; @type; @value">
+<meta name="markswift-themes" content="light,dark">
+<title>input buttons</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.boxed { border-radius: 8px; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="ua">
+  <p class="cap">unstyled submit / reset / button: Chrome's UA font and theme</p>
+  <div class="row">
+    <input type="submit">
+    <input type="reset">
+    <input type="button" value="Save draft">
+    <input type="submit" value="Send for review">
+  </div>
+</section>
+<section class="v" id="boxed">
+  <p class="cap">author radius and padding, UA font</p>
+  <div class="row">
+    <input type="submit" class="boxed" value="Publish">
+    <input type="button" class="boxed" value="Preview changes">
+  </div>
+</section>
+</main>
+</body>
+</html>

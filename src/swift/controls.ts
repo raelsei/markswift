@@ -72,6 +72,13 @@ const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: stri
     edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
   },
 };
+/**
+ * Chrome's closed `<select>` (any `appearance` but `none`), px: the menulist's internal text padding inside the
+ * author's (`PopupInternalPaddingStart` 4, `PopupInternalPaddingEnd` arrow box + 1) and the arrow box at the inner
+ * border edge, its chevron centred in it. Measured in Chromium 153: a 59 px label in a 1 px border is 81 px wide with
+ * native appearance and 61 px with `none`; the chevron's centre sits 7.5 px inside the right border.
+ */
+const MENU = { start: 4, end: 16, arrowBox: 15 };
 /** Editable text controls: their own text is laid out in the CSS line box. */
 export const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
 
@@ -84,13 +91,17 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
     if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
-    // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it — scaling
-    // with Dynamic Type like the font; leading over the face's natural line (a bundled face's own metrics, else SF's).
+    // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it and its
+    // half-leading above the first line — scaling with Dynamic Type like the font; leading over the face's natural line
+    // (a bundled face's own metrics, else SF's).
     const lh = n.font.lineHeight;
-    const face = n.font.family.kind === "custom" ? deps.fontMetrics?.[n.font.family.name.toLowerCase()] : undefined;
-    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (n.font.family.kind === "system" || face))
+    const family = n.font.family.kind === "custom" ? n.font.family.name : undefined;
+    const face = family !== undefined ? deps.fontMetrics?.[family.toLowerCase()] : undefined;
+    const editor =
+      n.control === "textEditor" ? `, editor: true${family !== undefined ? `, face: ${str(family)}` : ""}` : "";
+    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (family === undefined || face))
       out.push(
-        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""})`,
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""}${editor})`,
       );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
@@ -259,8 +270,29 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // Closed, a picker shows its selection and, unless `appearance: none` removed it, the
       // browser's arrow. App mode keeps that look as a Menu label (never the option list) over an
       // inline Picker, so the native menu and selection behaviour stay.
-      const arrow = n.appearance === "none" ? [] : ['    Image(systemName: "chevron.down")'];
-      if (still) return ["HStack(spacing: 4.0) {", ...indent(painted(n.value ?? "", ".leading"), 1), ...arrow, "}"];
+      const ua = n.appearance !== "none";
+      // Chrome's menulist pads its text inside the author's padding: 4 px at the start, the arrow box + 1 at the end.
+      const pad = ua
+        ? [`.padding(EdgeInsets(top: 0.0, leading: ${num(MENU.start)}, bottom: 0.0, trailing: ${num(MENU.end)}))`]
+        : [];
+      // The arrow box sits at the inner border edge, over the author's end padding (Chrome's `SetupMenuListArrow`).
+      const inset = n.padding[1] - (n.style.border?.width ?? n.style.borderSides?.right?.width ?? 0);
+      const arrow = ua
+        ? [
+            ".overlay(alignment: .trailing) {",
+            '    Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))',
+            `    .frame(width: ${num(MENU.arrowBox)})`,
+            ...(inset > 0 ? [`    .padding(.trailing, ${num(-inset)})`] : []),
+            "}",
+          ]
+        : [];
+      if (still)
+        return [
+          `Text(verbatim: ${str(n.value ?? "")})`,
+          ...pad,
+          ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)",
+          ...arrow,
+        ];
       const options: PickerOption[] = n.options?.length ? n.options : n.value !== undefined ? [{ label: n.value }] : [];
       // Consecutive options of one `<optgroup>` are a Section headed by its label; disabled ones stay listed, greyed.
       const runs: PickerOption[][] = [];
@@ -295,11 +327,10 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         "    }",
         "    .pickerStyle(.inline)",
         "} label: {",
-        "    HStack(spacing: 4.0) {",
-        `        Text(verbatim: ${state ?? '""'})`,
-        ...(n.width.kind === "hug" ? [] : ["        .frame(maxWidth: .infinity, alignment: .leading)"]),
-        ...(arrow.length ? ['        Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))'] : []),
-        "    }",
+        `    Text(verbatim: ${state ?? '""'})`,
+        ...indent(pad, 1),
+        ...(n.width.kind === "hug" ? [] : ["    .frame(maxWidth: .infinity, alignment: .leading)"]),
+        ...indent(arrow, 1),
         "    .contentShape(Rectangle())",
         "}",
         ".menuStyle(.button)",
@@ -430,11 +461,18 @@ function body(n: ControlNode, deps: ControlDeps): string[] {
 
 /**
  * An input button's caption (`@value`, or Chrome's "Submit"/"Reset"), painted by the control:
- * centred across a fill-width box, as Chrome centres it.
+ * centred across a fill-width box, as Chrome centres it. One line, as the browser never wraps it; the UA font (Arial)
+ * maps to the wider SF Pro, so the caption shrinks into the measured width instead of wrapping or truncating.
  */
 function caption(n: ControlNode): string[] | undefined {
   if (n.control !== "button" || n.files || n.value === undefined || n.content.length) return undefined;
-  return [`Text(verbatim: ${str(n.value)})`, ...(n.width.kind === "fill" ? [".frame(maxWidth: .infinity)"] : [])];
+  return [
+    `Text(verbatim: ${str(n.value)})`,
+    ".lineLimit(1)",
+    // ponytail: 0.8 covers SF Pro over Arial (~6 % wider); a caption that still overflows truncates.
+    ".minimumScaleFactor(0.8)",
+    ...(n.width.kind === "fill" ? [".frame(maxWidth: .infinity)"] : []),
+  ];
 }
 
 /**

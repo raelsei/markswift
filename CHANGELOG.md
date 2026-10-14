@@ -6,6 +6,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Added
 - `<video poster>` is drawn as an Image of the captured poster at the video's frame and `object-fit`, and `<input type=image>` as an Image of its `src` with `alt` as the label and the button trait (both reported as approximated; playback and the submit action are not translated). Both were empty placeholder boxes.
+- App mode: tapping a text field's `<label>` (`for` or wrapping) focuses the field through its `@MarkswiftFocused` member, as in the browser.
 
 ### Changed
 - Fidelity: a line wrap that falls exactly at a styled run boundary (before an `<a>` or `<strong>`) becomes a forced break like the other measured breaks; app output is unchanged.
@@ -25,6 +26,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - Text between block children of a block box (`<li>Fruit<ul>…</ul></li>`) is its anonymous block's line box, like text in a flex/grid box, instead of its glyph area: app mode keeps the half-leading above and below it, so list rows and nested lists sit where Chrome puts them. An inline host (a `<label>` around a checkbox and its caption) keeps its glyph area.
 - `inset`/`outset`/`groove`/`ridge` borders use Chromium 153+'s edge tones (Blink's WebKit-matching shading): the lit edges lighten unless the colour is very light, and a very dark colour lightens for both edges, so black draws #a8a8a8 lit / #545454 shadowed instead of Chrome 152's #545454 / #000.
 - App mode on iOS/macOS 26+: a one-line text whose `line-height` is below the font's natural line (`leading-none` labels) keeps the CSS line box but lays its `Text` out at the natural line height, so the glyphs overflow the box as in CSS instead of the `Text` being shorter than its glyphs; the accessibility audit no longer reports such labels as clipped text (the shadcn-checkbox and shadcn-radio-group known entries are retired). Text the browser broke into lines keeps its compressed lines (`markswiftLineHeight(…, compressLines: true)`); a one-line label that wraps under Dynamic Type gets natural spacing between its lines.
+- App mode: a `<textarea>`'s first line sits where Chrome's line box puts it — `TextEditor` pads half the CSS leading above its first line and below its last, less what iOS's text view already lowers a face with glyphs above its ascent (Geist) (`markswiftFieldLineHeight(…, editor: true, face:)`), instead of drawing 0.5–3.5 pt high.
+- A closed `<select>` with native appearance pads its label like Chrome's menulist (4 px at the start, 16 px at the end inside the author's padding) and centres its arrow in a 15 px box at the inner border edge, over the author's end padding, as Chrome draws it (the label sat 4 pt left and the arrow ~10 pt left).
+- `<input type=submit|reset|button>` captions keep one line and shrink into the measured width (the UA font Arial maps to the wider SF Pro) instead of wrapping (app) or truncating (fidelity).
 
 ## [1.0.0] — 2026-10-14
 
