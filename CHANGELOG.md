@@ -4,6 +4,11 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Changed
+- Fidelity: a line wrap that falls exactly at a styled run boundary (before an `<a>` or `<strong>`) becomes a forced break like the other measured breaks; app output is unchanged.
+- Inline boxes: every painted element on a run's inline chain (`<mark><b>…</b></mark>`) gets its background layer, including background images, outlines and box shadows; a transparent border no longer adds an empty layer. Inline `opacity` fades the run's glyphs, decoration, shadow and gradient fill and the inline boxes under it; inline `filter`, `backdrop-filter`, `mix-blend-mode`, `mask-image`, `clip-path` and visible text inside a hidden host are reported.
+- Fidelity: a bundled family without a `wght` axis (separate static faces) selects its face by named weight (`.custom(name, fixedSize:).weight(…)`) instead of a variation the files cannot honour, so its bold face renders. `BundledFamily.wght` records the axis; app mode keeps its Dynamic Type `.custom(name, size:, relativeTo:)` fonts.
+
 ## [1.0.0] — 2026-10-14
 
 Reusable SwiftUI components from HTML and CSS: data parameters, `ForEach` over repeated content, `on<Name>` actions, names from the markup, tool-owned output with `--update`, one Swift package for many components (`markswift build`), an npm package that runs on Node.js, and visual and behaviour gates measured on the iOS runtime.
