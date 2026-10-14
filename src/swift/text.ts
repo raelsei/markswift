@@ -132,6 +132,9 @@ export function textExpr(
       if (Math.abs(g) >= 0.5) out.push(`.padding(.${edge}, ${num(g)})`);
     }
   }
+  // App: `text-wrap: balance` keeps the native breaks but at the narrowest width that holds the line count.
+  // ponytail: only text the browser wrapped; a single line Dynamic Type later wraps stays greedy.
+  if (ctx.mode === "app" && n.balance && n.lines > 1) out.push(".markswiftBalance()");
   // In-app hrefs go to the view's action members; anything else (an absolute URL) opens as usual.
   const routes = new Map<string, string>();
   for (const r of runs) if (r.link?.action) routes.set(r.link.href, ctx.control?.actionOf.get(r.link.action.key) ?? "");

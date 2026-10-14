@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { EmitMode } from "../../../src/swift/context.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
+import type { ControlNode } from "../../../src/model/semantic.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 
 const FONT = {
@@ -239,4 +240,71 @@ test("details draw the captured summary and marker, no system chevron, no pinned
   expect(view).toContain('Text(verbatim: s_d ? "▾ " : "▸ ")');
   const group = view.slice(view.indexOf("DisclosureGroup("));
   expect(group.slice(0, group.indexOf(".disclosureGroupStyle(") + 200)).not.toContain(".frame(height:");
+});
+
+test("042: disabled-field-dim — a disabled text field or editor keeps the design's opacity in app mode", () => {
+  // SwiftUI dims a disabled Button itself, but not a TextField/TextEditor whose text has its own colour.
+  const dim = { display: "inline-block", ...BOX, opacity: "0.5" };
+  const { view } = swift([
+    el("input", { type: "text", value: "Read only", disabled: "" }, { x: 0, y: 0, w: 320, h: 38 }, [], dim),
+    el("textarea", { disabled: "" }, { x: 0, y: 50, w: 320, h: 64 }, [text("Locked", 10, 58, 50, 20)], dim),
+  ]);
+  expect(view.match(/\.disabled\(true\)/g)).toHaveLength(2);
+  expect(view.match(/\.opacity\(0\.5\)/g)).toHaveLength(2);
+});
+
+test("042: field-face-leading — an editor in a bundled face spaces its lines from that face's natural line", () => {
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "controls.html",
+    combo: { screen: "controls", theme: "light" },
+    size: { w: 320, h: 100 },
+    dpr: 2,
+    canvas: "white",
+    fonts: [],
+    root: el("main", {}, { x: 0, y: 0, w: 320, h: 100 }, [
+      field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)]),
+    ]),
+  };
+  const screen = inferScreen(doc, "Controls");
+  const editor = (screen.root.kind === "stack" ? screen.root.children[0] : screen.root) as ControlNode;
+  editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
+  const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
+  const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
+  expect(view).toContain(".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3)");
+});
+
+test("042: control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {
+  // Radix switch: a 32×18.4 track (1 px border) with a 16 px thumb at the start; a fixed frame centres by default.
+  const track = el(
+    "button",
+    { role: "switch", "aria-checked": "false", id: "sw" },
+    { x: 0, y: 0, w: 32, h: 18.4 },
+    [
+      el("span", { id: "thumb" }, { x: 1, y: 1.2, w: 16, h: 16 }, [], {
+        display: "block",
+        "background-color": "rgb(255, 255, 255)",
+      }),
+    ],
+    { display: "inline-flex", "align-items": "center", ...BOX },
+  );
+  const { view } = swift([track]);
+  expect(view).toContain(".frame(width: 32.0, alignment: .leading)");
+});
+
+test("042: editor-edge-effect — an app-mode editor draws no scroll edge effect over its first line", () => {
+  // iOS 26 softens the top edge of a scroll view whose content reaches it; a `<textarea>` paints no such fade.
+  const { view } = swift([field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)])]);
+  expect(view).toMatch(/\.scrollContentBackground\(\.hidden\)\n\s*\.markswiftScrollEdgeEffectHidden\(\)\n/);
+});
+
+test("042: field-text-centre — a select's or field's single line stays centred in its app-mode height floor", () => {
+  // Chrome centres a select's and an input's text in the box; an editor's text starts at the top.
+  const { view } = swift([
+    field("select", { id: "region" }, 0, 32, [option("Frankfurt", { selected: "" })]),
+    field("input", { id: "name", type: "text", value: "Ada" }, 40, 32),
+    field("textarea", { id: "bio" }, 80, 64, [text("Designer.", 0, 0, 0, 0)]),
+  ]);
+  expect(view.match(/minHeight: 32\.0, alignment: \.leading\)/g)).toHaveLength(2);
+  expect(view).toContain("minHeight: 64.0, alignment: .topLeading)");
 });

@@ -52,6 +52,18 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - `<details>` draws its captured summary and marker without a system chevron or a pinned closed height.
 - `appearance` and `accent-color` are captured: `accent-color` tints checkboxes, radios, ranges and progress bars; `appearance: none` removes the select arrow and keeps the author's box on checkboxes and ranges.
 - App mode grows with Dynamic Type: fixed heights on boxes that lay out text are floors (content Chrome lets overflow the box, such as an icon taller than its badge, does not grow it), `MarkswiftMeasuredLayout` moves frames below a grown child, hugging label columns fit their text (`markswiftFitWidth`), `TextEditor` sizes to its text, fields honour CSS `line-height` growth, an off-centre text's line-box surplus is a floor instead of padding, and a control's chevron stays beside its label. The R7 behaviour check scales the Chrome reference to true AX3 (measured per-text-style factors; it launched at AX2 before) and treats authored heights as floors.
+- Text straight inside a flex or grid box beside other items (an accordion trigger's title beside its chevron) keeps its CSS line box instead of its glyph area, so the row is as tall as in the browser.
+- A table caption painted below its rows (`caption-side: bottom`) stays below them even when the markup puts it first; the table's paint no longer lands on the caption's side.
+- App mode: a hugging box with a `max-width` (an empty state's `max-w-sm` column) fits the width its container offers instead of growing to its content's one-line width past it.
+- App mode: a button or link taller than its label (`h-8`, `size-8`) keeps the label where the browser put it — centred — when its height becomes a Dynamic Type floor, instead of pinning it to the top.
+- App mode: `text-wrap: balance` text that wraps keeps native line breaking at the narrowest width that holds its line count (`markswiftBalance`), so its lines come out about equally long as in the browser instead of greedy.
+- App mode: a disabled text field or editor keeps the design's `:disabled` opacity; SwiftUI does not dim a field whose text has its own colour, so its text stayed at full strength.
+- App mode: text fields and editors in a bundled webfont honour CSS `line-height` too, spaced from that face's own natural line (they kept the face's natural line before), so a `<textarea>`'s lines sit as far apart as in the browser.
+- A control's content stays where the browser laid it out inside a fixed-size control on both axes (a Radix switch's thumb at the track's start, moved only by its transform) instead of being centred.
+- App mode: a `<textarea>`'s `TextEditor` no longer fades its first line under iOS 26's scroll edge effect.
+- App mode: a `<select>`'s, text input's or date input's single line stays vertically centred in its box when the box's height becomes a Dynamic Type floor, as Chrome centres it.
+- A table row's or row group's bottom border (`border-b` on a `<tr>` in a collapsed table) no longer adds a point of padding to the row: CSS ignores row padding and a collapsed border lies inside the cells, so every row came out one point too tall.
+- A table row whose cells are `vertical-align: middle` (or `bottom`) centres (or bottom-aligns) a cell shorter than the row, instead of pinning it to the row's top.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 

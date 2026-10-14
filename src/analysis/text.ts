@@ -268,7 +268,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
   if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse")
     trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
-  const frame = leaf ? host.bounds : (union ?? host.bounds);
+  const measured = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
   // `<center>`, `align=center` and friends compute to `-webkit-center/-left/-right`; the side is the same.
@@ -278,8 +278,14 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   const first = out[0]?.font;
   const lh = first?.lineHeight ?? (first ? first.size * 1.2 : 16);
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
-  let lines = Math.max(1, Math.round((union?.h ?? frame.h) / lh));
-  if (leaf) lines = Math.min(lines, Math.max(1, Math.round((frame.h - base.padding[0] - base.padding[2]) / lh)));
+  let lines = Math.max(1, Math.round((union?.h ?? measured.h) / lh));
+  if (leaf) lines = Math.min(lines, Math.max(1, Math.round((measured.h - base.padding[0] - base.padding[2]) / lh)));
+  // Runs straight inside a flex/grid box are an anonymous item whose box is its line boxes, not the
+  // glyph union (an accordion trigger's title beside its icon); Blink floors the half-leading above.
+  const frame =
+    !leaf && measured.h < lines * lh - 0.5 && /flex|grid/.test(host.styles["display"] ?? "")
+      ? { ...measured, y: round2(measured.y - Math.floor((lines * lh - measured.h) / 2)), h: round2(lines * lh) }
+      : measured;
   let growth: TextNode["lineBoxGrowth"];
   if (leaf) {
     // A box taller than its line boxes. The surplus becomes padding so the text lands where the
@@ -370,6 +376,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     lines,
   };
   if (growth) node.lineBoxGrowth = growth;
+  if (host.styles["text-wrap-style"] === "balance") node.balance = true;
   addStateRunColors(node, built);
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
@@ -448,7 +455,13 @@ function reportTextLosses(
       `overflow-wrap: ${ow} → native breaking decides where an overlong word splits`,
     );
   const tws = s["text-wrap-style"];
-  if (tws === "balance" || tws === "pretty" || tws === "stable")
+  if (tws === "balance")
+    note(
+      "approximated",
+      "text-wrap-style",
+      "text-wrap-style: balance → native line breaking at the narrowest width that keeps the line count (app mode)",
+    );
+  else if (tws === "pretty" || tws === "stable")
     note("approximated", "text-wrap-style", `text-wrap-style: ${tws} → native line breaking`);
   const ws = s["word-spacing"];
   if (ws && ws !== "normal" && px(ws) !== 0) note("approximated", "word-spacing", `word-spacing ${ws} dropped`);

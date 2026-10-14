@@ -14,6 +14,7 @@
  * is identical in both modes.
  */
 import type { Theme } from "../model/layout.ts";
+import type { FontMetrics } from "../model/fonts.ts";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
@@ -44,6 +45,8 @@ export interface ControlDeps extends ColorCtx {
   toggleOf?: ControlMembers["toggleOf"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
+  /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
+  fontMetrics?: FontMetrics;
 }
 
 /**
@@ -70,7 +73,7 @@ const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: stri
   },
 };
 /** Editable text controls: their own text is laid out in the CSS line box. */
-const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
+export const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
 
 export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
@@ -82,12 +85,12 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
     // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it — scaling
-    // with Dynamic Type like the font. ponytail: system faces only (the runtime's SF natural line); bundled faces keep
-    // their natural line until controls carry the face metrics.
+    // with Dynamic Type like the font; leading over the face's natural line (a bundled face's own metrics, else SF's).
     const lh = n.font.lineHeight;
-    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && n.font.family.kind === "system")
+    const face = n.font.family.kind === "custom" ? deps.fontMetrics?.[n.font.family.name.toLowerCase()] : undefined;
+    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (n.font.family.kind === "system" || face))
       out.push(
-        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)})`,
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""})`,
       );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops
@@ -173,7 +176,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
-      // The node paints its own background; the editor's would sit on top of it. The editor insets
+      // The node paints its own background; the editor's would sit on top of it, and so would iOS 26's
+      // scroll edge effect over the first line. The editor insets
       // its text inside its frame, which the CSS padding already does. It has no prompt: the
       // placeholder is drawn while the text is empty, where the first line starts. It is as tall as
       // its text (or the placeholder) at the native font, so Dynamic Type grows it; the captured
@@ -181,6 +185,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       return [
         `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
+        ".markswiftScrollEdgeEffectHidden()",
         ".markswiftTextEditorInsets()",
         ...(state
           ? [`.markswiftFitsText(${n.placeholder ? `${state}.isEmpty ? ${str(n.placeholder)} : ${state}` : state})`]

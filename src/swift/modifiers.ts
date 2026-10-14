@@ -17,6 +17,7 @@ import { borderSideModifiers } from "./borders.ts";
 import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "./effects.ts";
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
+import { FIELDS } from "./controls.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
 }
@@ -133,10 +134,12 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // and SwiftUI's automatic dimming from `.disabled(true)`. App mode keeps the native one (a
   // live control must dim the way the platform dims); fidelity keeps the design's number and
   // omits `.disabled` entirely, since nothing interacts with a rendered image. `aria-disabled` on an
-  // element emitted as a Button dims the same way.
+  // element emitted as a Button dims the same way. SwiftUI does not dim a text field or editor
+  // whose text has its own colour, so those keep the design's opacity in app mode too.
   const nativeDim =
     ctx.mode === "app" &&
-    ((n.kind === "control" && n.disabled === true) || (!!n.action && !n.action.gesture && n.a11y?.disabled === true));
+    ((n.kind === "control" && n.disabled === true && !FIELDS[n.control]) ||
+      (!!n.action && !n.action.gesture && n.a11y?.disabled === true));
   if (paint?.opacity && !nativeDim)
     m.push(`.opacity(${paint.cond} ? ${num(paint.opacity.state)} : ${num(paint.opacity.rest)})`);
   else if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);

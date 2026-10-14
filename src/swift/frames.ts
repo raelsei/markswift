@@ -13,6 +13,8 @@ const TEXT_CONTROLS: Record<string, true> = {
   textEditor: true,
   datePicker: true,
 };
+/** Controls showing one line of their own text, which Chrome centres in the box. */
+const LINE_CONTROLS: Record<string, true> = { textField: true, secureField: true, picker: true, datePicker: true };
 /**
  * App: the line-box surplus the analysis moved into one edge's padding (text off its box's centre,
  * `lineBoxGrowth.padded`). Emitted as a `minHeight` floor of the measured box aligned away from
@@ -102,11 +104,12 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       ? alignment(n.align === "trailing" ? "end" : n.align, surplus.edge === "top" ? "end" : "start")
       : fillAlignment(n, ctx.mode);
   // A fixed frame centres its content by default; the browser packs a container's content per
-  // its own alignment (block flow / flex start), and text per its text-align.
+  // its own alignment (block flow / flex start), text per its text-align, and a control's content
+  // where it measured it (a switch thumb at the track's start).
+  const aligned =
+    n.kind === "text" || n.kind === "stack" || n.kind === "grid" || (n.kind === "control" && n.content.length);
   if (fixedW || fixedH)
-    parts.push(
-      `.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${n.kind === "text" || n.kind === "stack" || n.kind === "grid" ? `, alignment: ${align}` : ""})`,
-    );
+    parts.push(`.frame(${[fixedW, fixedH].filter(Boolean).join(", ")}${aligned ? `, alignment: ${align}` : ""})`);
   // Limits apply to the painted box. A later infinity frame would expand that paint beyond
   // a finite cap. Margin placement, when needed, is applied after paint by modifiers.ts.
   // Fixed dimensions already include the browser's limits; wrapping them in a flexible cap
@@ -133,10 +136,12 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   if (flex.length) parts.push(`.frame(${flex.join(", ")}, alignment: ${align})`);
   // A finite SwiftUI frame accepts its parent's proposal even for intrinsic content. Ask
   // for the capped frame's ideal size on hugging axes before any background is painted.
+  // App: CSS shrink-to-fit never exceeds the container, so the width fits (`markswiftFitWidth`)
+  // instead of taking the content's ideal — one unwrapped line — past the offered width.
   const hugW = !fixedW && n.width.kind === "hug" && n.maxWidth !== undefined;
   const hugH = !fixedH && n.height.kind === "hug" && n.maxHeight !== undefined;
-  if (hugW || hugH) parts.push(`.fixedSize(horizontal: ${hugW}, vertical: ${hugH})`);
-  if (fit) parts.push(".markswiftFitWidth()");
+  if ((hugW && !app) || hugH) parts.push(`.fixedSize(horizontal: ${hugW && !app}, vertical: ${hugH})`);
+  if (fit || (hugW && app)) parts.push(".markswiftFitWidth()");
   return parts;
 }
 
@@ -162,5 +167,24 @@ function fillAlignment(n: SemNode, mode: EmitMode): string {
     const v = n.axis === "v" ? n.distribution : mode === "app" ? n.align : "start";
     return alignment(h, v);
   }
+  // A control's content where the browser put it in its content box (layout position, before any
+  // transform): a button centres its label — a single label carries the whole content box, so it
+  // reads as centred too — and a switch keeps its thumb at the start.
+  if (n.kind === "control" && n.content.length) {
+    const fs = n.content.map((c) => c.frame);
+    const [h, v] = [
+      [
+        Math.min(...fs.map((f) => f.x)) - n.frame.x - n.padding[3],
+        n.frame.x + n.frame.w - n.padding[1] - Math.max(...fs.map((f) => f.x + f.w)),
+      ],
+      [
+        Math.min(...fs.map((f) => f.y)) - n.frame.y - n.padding[0],
+        n.frame.y + n.frame.h - n.padding[2] - Math.max(...fs.map((f) => f.y + f.h)),
+      ],
+    ].map(([before, after]) => (Math.abs(before! - after!) <= 1 ? "center" : before! < after! ? "start" : "end"));
+    return alignment(h!, v!);
+  }
+  // A single-line field, select or date input: Chrome centres its text in the box (an editor's starts at the top).
+  if (n.kind === "control" && LINE_CONTROLS[n.control]) return ".leading";
   return ".topLeading";
 }

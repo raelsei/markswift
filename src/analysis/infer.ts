@@ -7,6 +7,7 @@ import {
   type SemBase,
   type Overlay,
   type Axis,
+  type CrossAlign,
   type Diagnostic,
   addDiagnostic,
 } from "../model/semantic.ts";
@@ -28,6 +29,9 @@ import { buildText } from "./text.ts";
 import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
 import { clipsText } from "./style-background.ts";
 import { dropInvisible } from "./invisible.ts";
+
+/** A table cell's `vertical-align` as the row's cross alignment (`top`/`baseline` stay at the start). */
+const CELL_ALIGN: Record<string, CrossAlign> = { middle: "center", bottom: "end" };
 
 export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions = {}): Screen {
   const ctx: InferenceContext = {
@@ -246,7 +250,10 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     if (lines[0]!.some((i) => floating(i.node)))
       addDiagnostic(diagnostics, "approximated", "float", "float → side-by-side row; text does not wrap around it");
     reportInlineRows(diagnostics, flow);
-    stack = stackOf(base, "h", lines[0]!, "start", "start");
+    // Cells are as tall as their row; a cell that hugs its content sits where `vertical-align` puts it.
+    const va = new Set(lines[0]!.map((i) => i.node.styles["vertical-align"] ?? ""));
+    const cells = display === "table-row" && va.size === 1 ? CELL_ALIGN[[...va][0]!] : undefined;
+    stack = stackOf(base, "h", lines[0]!, cells ?? "start", "start");
   } else if (multi && lines.length > 1) {
     const floats = items.filter((i) => floating(i.node));
     if (floats.length)
@@ -306,7 +313,8 @@ function captionOutside(n: LayoutNode): LayoutNode {
   const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
   if (!paint.length) return n;
   const rest = n.children.filter((c) => c !== caption);
-  const top = caption === first;
+  // The side it is painted on (`caption-side`), not its place in the markup.
+  const top = caption.bounds.y < Math.min(...rest.map((c) => c.bounds.y));
   const bounds = {
     x: n.bounds.x,
     y: top ? caption.bounds.y + caption.bounds.h : n.bounds.y,

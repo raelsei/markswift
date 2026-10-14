@@ -6,7 +6,7 @@ import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
-import type { ControlNode, SemNode, TextNode } from "../../../src/model/semantic.ts";
+import type { ControlNode, SemNode, StackNode, TextNode } from "../../../src/model/semantic.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
@@ -144,6 +144,67 @@ describe("tables", () => {
     expect(filled).toHaveLength(1);
     expect(filled[0]!.frame).toEqual({ x: 0, y: 26, w: 200, h: 40 });
     expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
+  });
+
+  test("042: caption-bottom — a caption first in the markup but painted below stays below the rows", () => {
+    const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", "border-collapse": "collapse" }, [
+      el("caption", { x: 0, y: 40, w: 200, h: 26 }, { display: "table-caption", "caption-side": "bottom" }, [
+        textNode("Quarterly sales", { x: 0, y: 43, w: 100, h: 20 }),
+      ]),
+      el("tbody", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row-group" }, [
+        el("tr", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-row" }, [
+          el("td", { x: 0, y: 0, w: 200, h: 40 }, { display: "table-cell" }, [
+            textNode("Q1", { x: 0, y: 10, w: 20, h: 20 }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 66 }, { display: "block" }, [table])), "s");
+    const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
+    expect(texts.map((t) => t.runs[0]!.text)).toEqual(["Q1", "Quarterly sales"]);
+  });
+
+  test("042: row-border-inset — a collapsed row border lies inside its cells, not inside the row", () => {
+    const line = {
+      "border-bottom-style": "solid",
+      "border-bottom-width": "1px",
+      "border-bottom-color": "rgb(0, 0, 0)",
+    };
+    const row = (y: number, text: string) =>
+      el("tr", { x: 0, y, w: 200, h: 38 }, { display: "table-row", ...line }, [
+        el("td", { x: 0, y, w: 200, h: 38 }, { display: "table-cell", "padding-top": "8px" }, [
+          textNode(text, { x: 0, y: y + 8, w: 20, h: 20 }),
+        ]),
+      ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 76 }, { display: "table", "border-collapse": "collapse" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 76 }, { display: "table-row-group", ...line }, [
+        row(0, "Q1"),
+        row(38, "Q2"),
+      ]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 76 }, { display: "block" }, [table])), "s");
+    const ruled = flatten(screen.root).filter((n) => n.style.borderSides?.bottom);
+    expect(ruled.map((n) => n.frame.h)).toEqual([76, 38, 38]);
+    expect(ruled.map((n) => n.padding)).toEqual([
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+  });
+
+  test("042: cell-middle — hugging cells of a row sit where `vertical-align: middle` puts them", () => {
+    const cell = (x: number, kids: LayoutNode[]) =>
+      el("td", { x, y: 0, w: 100, h: 38 }, { display: "table-cell", "vertical-align": "middle", padding: "8px" }, kids);
+    const tr = el("tr", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row", "vertical-align": "middle" }, [
+      cell(0, [textNode("Q1", { x: 8, y: 10, w: 20, h: 18 })]),
+      cell(100, [el("span", { x: 108, y: 8, w: 40, h: 22 }, { display: "inline-flex", height: "22px" })]),
+    ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table", "border-collapse": "collapse" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row-group" }, [tr]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 38 }, { display: "block" }, [table])), "s");
+    const rows = flatten(screen.root).filter((n): n is StackNode => n.kind === "stack" && n.axis === "h");
+    expect(rows.map((r) => r.align)).toEqual(["center"]);
   });
 });
 

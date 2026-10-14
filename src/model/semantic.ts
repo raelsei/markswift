@@ -460,6 +460,8 @@ export interface TextNode extends SemBase {
   noWrap?: true;
   /** One word the browser cannot soft-wrap (overflow-wrap normal, no spaces, no space-free script): CSS overflows it rather than breaking mid-word, so app mode must too. */
   unbreakable?: true;
+  /** CSS `text-wrap: balance`: app mode narrows the native lines to equal lengths (`markswiftBalance`). */
+  balance?: true;
   /** Measured height of the laid-out text; lets verifiers spot line-break drift. */
   lines: number;
   /**

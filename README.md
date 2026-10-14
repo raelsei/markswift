@@ -263,24 +263,38 @@ per-fixture table, e.g. for the per-PR macOS numbers in
 <!-- quality-summary tests/conformance/baselines/visual-all-ios.json -->
 | domain | mode | n | mean ssim | min ssim | mean mismatch | anchors ok |
 |---|---|---|---|---|---|---|
-| attribute | app | 14 | 0.9534 | 0.8576 (attr-alt-320-light-app) | 0.0188 | 0/0 |
-| components | app | 100 | 0.9290 | 0.7031 (shadcn-accordion-320-dark-app) | 0.0193 | 0/0 |
+| attribute | app | 14 | 0.9562 | 0.8576 (attr-alt-320-light-app) | 0.0184 | 0/0 |
+| components | app | 100 | 0.9680 | 0.8681 (shadcn-table-320-light-app) | 0.0134 | 0/0 |
 | css-layout | app | 64 | 0.9828 | 0.8424 (display--contents-320-light-app) | 0.0111 | 16/16 |
 | css-misc | app | 12 | 0.9687 | 0.9352 (animation-name-390-dark-app) | 0.0189 | 0/0 |
 | css-paint | app | 80 | 0.9541 | 0.7061 (content-320-dark-app) | 0.0209 | 12/12 |
 | css-typography | app | 100 | 0.9305 | 0.5713 (word-break-320-dark-app) | 0.0289 | 0/0 |
-| html | app | 60 | 0.9291 | 0.7571 (input-320-dark-app) | 0.0271 | 4/4 |
+| html | app | 60 | 0.9393 | 0.8182 (pre-320-dark-app) | 0.0255 | 4/4 |
 | svg | app | 40 | 0.9761 | 0.9326 (svg-lineargradient-320-dark-app) | 0.0164 | 0/0 |
 | tailwind-v4 | app | 8 | 0.9491 | 0.8750 (gradients-390-dark-app) | 0.0269 | 0/0 |
 | attribute | fidelity | 14 | 0.9361 | 0.8417 (attr-alt-320-light-fidelity) | 0.0243 | 0/0 |
-| components | fidelity | 100 | 0.9412 | 0.4874 (shadcn-accordion-320-dark-fidelity) | 0.0166 | 0/0 |
+| components | fidelity | 100 | 0.9655 | 0.8753 (shadcn-table-320-light-fidelity) | 0.0139 | 0/0 |
 | css-layout | fidelity | 64 | 0.9777 | 0.9290 (visibility-320-light-fidelity) | 0.0135 | 16/16 |
 | css-misc | fidelity | 12 | 0.9545 | 0.9312 (pointer-events--none-390-light-fidelity) | 0.0237 | 0/0 |
 | css-paint | fidelity | 80 | 0.9521 | 0.8923 (list-style-type-320-dark-fidelity) | 0.0236 | 12/12 |
 | css-typography | fidelity | 100 | 0.9201 | 0.6544 (font-family-320-dark-fidelity) | 0.0336 | 0/0 |
-| html | fidelity | 60 | 0.9208 | 0.7662 (text-level-320-light-fidelity) | 0.0306 | 4/4 |
+| html | fidelity | 60 | 0.9250 | 0.7662 (text-level-320-light-fidelity) | 0.0297 | 4/4 |
 | svg | fidelity | 40 | 0.9627 | 0.9112 (svg-lineargradient-320-dark-fidelity) | 0.0204 | 0/0 |
 | tailwind-v4 | fidelity | 8 | 0.9484 | 0.8748 (gradients-390-dark-fidelity) | 0.0272 | 0/0 |
+
+Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):
+
+- `shadcn-field@app`: items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei
+- `shadcn-item-320-dark-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei
+- `shadcn-item-320-light-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei
+- `shadcn-table@app`: body text and row rules sit 0.5–1 pt off and the footer rule draws twice — Chrome paints a collapsed row border centred on the grid line, splitting its width into the cells on both sides, while the emitter draws it inside the row's bottom edge (collapsed-border model not mapped); Chrome also draws the cell text heavier — owner: @raelsei
+- `shadcn-textarea-320-dark-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `shadcn-textarea-320-light-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `shadcn-textarea-390-dark-app`: the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei
+- `tw-cards-320-dark-app`: card descriptions wrap one word earlier ("members / and deploys.", "open / pull requests.") and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
+- `tw-cards-390-dark-app`: card descriptions wrap one word earlier and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
+- `tw-form-390-dark-app`: the intro and checkbox descriptions wrap one word earlier ("deployments and / environment variables."), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei
+- `tw-form-390-light-app`: the intro and checkbox descriptions wrap one word earlier ("deployments and / environment variables."), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei
 <!-- /quality-summary -->
 
 Of 462 captures per mode, 299 `app` and 274 `fidelity` captures reach SSIM ≥ 0.95; 401 and 410

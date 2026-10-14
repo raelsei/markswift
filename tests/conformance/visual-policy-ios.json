@@ -11,10 +11,10 @@
       "minSsim": 0.83
     },
     "components@app": {
-      "minSsim": 0.69
+      "minSsim": 0.94
     },
     "components@fidelity": {
-      "minSsim": 0.48
+      "minSsim": 0.87
     },
     "css-layout@app": {
       "minSsim": 0.83
@@ -41,7 +41,7 @@
       "minSsim": 0.64
     },
     "html@app": {
-      "minSsim": 0.75
+      "minSsim": 0.81
     },
     "html@fidelity": {
       "minSsim": 0.76
@@ -58,5 +58,18 @@
     "tailwind-v4@fidelity": {
       "minSsim": 0.86
     }
+  },
+  "exceptions": {
+    "shadcn-table@app": "body text and row rules sit 0.5–1 pt off and the footer rule draws twice — Chrome paints a collapsed row border centred on the grid line, splitting its width into the cells on both sides, while the emitter draws it inside the row's bottom edge (collapsed-border model not mapped); Chrome also draws the cell text heavier — owner: @raelsei",
+    "shadcn-field@app": "items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei",
+    "shadcn-item-320-dark-app": "the description wraps one word earlier (\"Deploys, failures / and mentions.\", \"A summary every / Monday morning.\") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei",
+    "shadcn-item-320-light-app": "the description wraps one word earlier (\"Deploys, failures / and mentions.\", \"A summary every / Monday morning.\") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei",
+    "shadcn-textarea-320-dark-app": "the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei",
+    "shadcn-textarea-320-light-app": "the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei",
+    "shadcn-textarea-390-dark-app": "the placeholder is drawn in the default placeholder grey, there is no resize grip, and the first line sits 0.5 pt high — the capture has no `::placeholder` colour (needs a LayoutDoc field), TextEditor draws no grip, and it adds no half-leading above its first line — owner: @raelsei",
+    "tw-cards-320-dark-app": "card descriptions wrap one word earlier (\"members / and deploys.\", \"open / pull requests.\") and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei",
+    "tw-cards-390-dark-app": "card descriptions wrap one word earlier and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei",
+    "tw-form-390-dark-app": "the intro and checkbox descriptions wrap one word earlier (\"deployments and / environment variables.\"), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei",
+    "tw-form-390-light-app": "the intro and checkbox descriptions wrap one word earlier (\"deployments and / environment variables.\"), the select label sits 3.5 pt further left with a different arrow, and the textarea text sits 3.5 pt high — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10); Chrome's UA select inner padding and arrow, and the TextEditor first-line placement, are not mapped — owner: @raelsei"
   }
 }
