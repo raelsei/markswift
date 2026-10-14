@@ -279,7 +279,8 @@ test("N18 a shrink sum below 1 in a shrinking row is rejected", () =>
 
 test("P1 app emits MarkswiftFlexRow; fidelity is byte-identical to the unadmitted row and notes the pin", () => {
   const doc = flexDoc(P1);
-  const app = compileLayout(doc, { name: "RowView", mode: "app" }).code;
+  // Without extraction: the subview preview of the two equal items would frame the first's captured width.
+  const app = compileLayout(doc, { name: "RowView", mode: "app", extract: false }).code;
   expect(app).toContain(
     "MarkswiftFlexRow(items: [.init(grow: 1.0, shrink: 0.0, basis: 0.0), .init(grow: 2.0, shrink: 0.0, basis: 0.0)], spacing: 8.0) {",
   );
