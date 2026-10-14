@@ -349,8 +349,9 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
 `diagnostics` (one quoted note each):
 
 - Flex-wrap outside the native-wrap subset: `approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size`.
-- Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/content bases and shrink, admitted
-  when its solver reproduces Chrome; a second capture at 320 px confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
+- Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/%/content bases and shrink with CSS's
+  freeze loop and px min/max-width clamps, admitted when its solver reproduces Chrome; a second capture at 320 px
+  confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
 - Grids outside the `MarkswiftTracks` subset (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) whose
   items span, leave holes, overlap or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
@@ -461,7 +462,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
 - Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; label-tap
   focus; CSS animations; iPad hover and keyboard.
-- The full flex algorithm (wrap with grow, min/max freeze loop).
+- The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`, `<bdo>`/`<bdi>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
   for single conversions; browser-response font bytes; variable-font instances.

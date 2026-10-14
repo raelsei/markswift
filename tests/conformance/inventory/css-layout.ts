@@ -500,7 +500,7 @@ export default {
       ir: "StackNode.flex",
       via: "style",
       impl: "partial",
-      note: "In an admitted flex row (`MarkswiftFlexRow`, app mode: nowrap, no reverse/RTL/order/auto margins, `min-width` auto|0, no `max-width`, proven by the TS solver mirror within 1px at the captured width and, in `convert`, at a 320px probe) a `<px>`/`0`/`0%` basis or a px `width` becomes the item's border-box basis and `auto`/`content` its native content width (single-line text only). Other rows, other bases (`50%`, `calc`) and fidelity keep the measured width.",
+      note: "In an admitted flex row (`MarkswiftFlexRow`, app mode: nowrap, no reverse/RTL/order/auto margins, proven by the TS solver mirror within 1px at the captured width and, in `convert`, at a 320px probe) a `<px>`/`0`/`0%` basis or a px `width` becomes the item's border-box basis, a `%` basis or `%` width (item without horizontal padding) its fraction of the row, and `auto`/`content` its native content width (single-line text only). px `min-width`/`max-width` clamp definite bases in CSS's freeze loop. Other rows, other bases (`calc`) and fidelity keep the measured width.",
       spec: mdn("flex-basis"),
     },
     {
@@ -522,7 +522,7 @@ export default {
       ir: "StackNode.flex / SemBase.width / SemBase.height = fill",
       via: "style",
       impl: "partial",
-      note: "Equal grow factors among siblings → fill. Unequal ratios in a row the solver mirror reproduces become `MarkswiftFlexRow` in app mode (fidelity keeps the captured widths and reports the pin); every other unequal row, wrapping rows and column flex pin the measured size with an approximated diagnostic. The runtime has no min-content clamp or freeze loop, so the 320px probe demotes rows Chrome clamps there.",
+      note: "Equal grow factors among siblings → fill. Unequal ratios in a row the solver mirror reproduces become `MarkswiftFlexRow` in app mode (fidelity keeps the captured widths and reports the pin); every other unequal row, wrapping rows and column flex pin the measured size with an approximated diagnostic. The runtime runs CSS's freeze loop (px min/max-width clamps, factor sums below 1) but takes `min-width: auto` as the padding box, not min-content, so the 320px probe demotes rows Chrome clamps there.",
       spec: mdn("flex-grow"),
     },
     {
@@ -544,7 +544,7 @@ export default {
       ir: "StackNode.flex",
       via: "style",
       impl: "partial",
-      note: "Shrink weighted by basis in an admitted `MarkswiftFlexRow` (app mode; the shrink sum must be 0 or ≥ 1), so a row of 150px cards shrunk on a phone reflows; fidelity keeps the captured widths and reports the pin. Outside admitted rows shrunk items keep the measured width and SwiftUI's own compression decides elsewhere (`flex-shrink: 0` is not `.layoutPriority`).",
+      note: "Shrink weighted by the inner (content-box) basis in an admitted `MarkswiftFlexRow` (app mode; a shrink sum below 1 takes only that share of the overflow, px `min-width` freezes an item), so a row of 150px cards shrunk on a phone reflows; fidelity keeps the captured widths and reports the pin. Outside admitted rows shrunk items keep the measured width and SwiftUI's own compression decides elsewhere (`flex-shrink: 0` is not `.layoutPriority`).",
       spec: mdn("flex-shrink"),
     },
     {

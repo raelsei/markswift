@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Changed
+- `MarkswiftFlexRow` runs CSS's flex freeze loop: px `min-width`/`max-width` clamp items with a definite basis, shrink is weighted by the inner (content-box) basis, grow and shrink factor sums below 1 leave the unused share, and a percentage `flex-basis` or `width` (item without horizontal padding) follows the row; such rows are now admitted.
+
 ## [1.0.0] — 2026-10-14
 
 Reusable SwiftUI components from HTML and CSS: data parameters, `ForEach` over repeated content, `on<Name>` actions, names from the markup, tool-owned output with `--update`, one Swift package for many components (`markswift build`), an npm package that runs on Node.js, and visual and behaviour gates measured on the iOS runtime.

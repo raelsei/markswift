@@ -1,20 +1,56 @@
-/// CSS flex row: grow / shrink / basis (px, or nil = content), gaps; no wrap, no min/max.
+/// CSS flex row: grow / shrink / basis (px, nil = content, or a fraction of the row), min/max clamps, gaps; no wrap.
 struct MarkswiftFlexRow: Layout {
-    struct Item: Sendable { var grow: CGFloat; var shrink: CGFloat; var basis: CGFloat? }
+    struct Item: Sendable {
+        var grow: CGFloat
+        var shrink: CGFloat
+        var basis: CGFloat?
+        var min: CGFloat = 0
+        var max: CGFloat? = nil
+        /// Horizontal padding and border: the box's floor, excluded from the shrink weight.
+        var inset: CGFloat = 0
+        /// Percentage basis: `basis + fraction × width`.
+        var fraction: CGFloat? = nil
+    }
     enum Align: Sendable { case start, center, end, stretch }
     var items: [Item]
     var spacing: CGFloat
     var align: Align = .stretch
 
-    /// Pure allocation; `MarkswiftFlexRow.widths` and `solveFlexRow` (src/analysis/flex-row.ts) must agree.
+    /// Pure allocation, the CSS flex freeze loop; `MarkswiftFlexRow.widths` and `solveFlexRow`
+    /// (src/analysis/flex-row.ts) must agree.
     static func widths(width: CGFloat, items: [Item], bases: [CGFloat], spacing: CGFloat) -> [CGFloat] {
-        let free = width - bases.reduce(0, +) - CGFloat(max(0, items.count - 1)) * spacing
-        if free >= 0 {
-            let g = items.map(\.grow).reduce(0, +)
-            return bases.indices.map { g > 0 ? bases[$0] + free * items[$0].grow / max(1, g) : bases[$0] }
+        func clamp(_ v: CGFloat, _ i: Int) -> CGFloat {
+            Swift.max(items[i].min, items[i].inset, Swift.min(items[i].max ?? .infinity, v))
         }
-        let s = bases.indices.map { items[$0].shrink * bases[$0] }.reduce(0, +)
-        return bases.indices.map { s > 0 ? max(0, bases[$0] + free * items[$0].shrink * bases[$0] / s) : bases[$0] }
+        let base = bases.indices.map { i in
+            items[i].fraction.map { Swift.max(items[i].inset, bases[i] + $0 * width) } ?? bases[i]
+        }
+        let space = width - CGFloat(Swift.max(0, items.count - 1)) * spacing
+        let growing = base.indices.map { clamp(base[$0], $0) }.reduce(0, +) < space
+        let factor = items.map { growing ? $0.grow : $0.shrink }
+        let weight = items.indices.map { growing ? items[$0].grow : items[$0].shrink * Swift.max(0, base[$0] - items[$0].inset) }
+        var size = base.indices.map { clamp(base[$0], $0) }
+        var frozen = base.indices.map { factor[$0] == 0 || (growing ? base[$0] > size[$0] : base[$0] < size[$0]) }
+        func left() -> CGFloat { space - base.indices.map { frozen[$0] ? size[$0] : base[$0] }.reduce(0, +) }
+        let initial = left()
+        // Each pass freezes at least one item; the bound only stops a non-finite measure from looping.
+        for _ in 0...items.count where frozen.contains(false) {
+            var free = left()
+            let open = items.indices.filter { !frozen[$0] }
+            let factors = open.map { factor[$0] }.reduce(0, +)
+            if factors < 1 && abs(initial * factors) < abs(free) { free = initial * factors }
+            let total = open.map { weight[$0] }.reduce(0, +)
+            let violation = open.map { i in
+                let target = base[i] + (total > 0 ? free * weight[i] / total : 0)
+                size[i] = clamp(target, i)
+                return size[i] - target
+            }
+            let sum = violation.reduce(0, +)
+            for (k, i) in open.enumerated() where abs(sum) < 0.000001 || (sum > 0 ? violation[k] > 0 : violation[k] < 0) {
+                frozen[i] = true
+            }
+        }
+        return size
     }
 
     private func bases(_ subviews: Subviews) -> [CGFloat] {
@@ -28,8 +64,10 @@ struct MarkswiftFlexRow: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let b = bases(subviews)
+        // Without a width a percentage basis is indefinite: CSS sizes that item by its content.
+        let ideal = subviews.indices.map { items[$0].fraction == nil ? b[$0] : subviews[$0].sizeThatFits(.unspecified).width }
         let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil }
-            ?? b.reduce(0, +) + CGFloat(max(0, b.count - 1)) * spacing
+            ?? ideal.reduce(0, +) + CGFloat(max(0, b.count - 1)) * spacing
         let w = Self.widths(width: width, items: items, bases: b, spacing: spacing)
         return CGSize(width: width, height: heights(w, proposal.height, subviews).max() ?? 0)
     }

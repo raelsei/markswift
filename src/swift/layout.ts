@@ -38,9 +38,13 @@ function hugsRowHeight(n: StackNode, ctx: EmitContext): boolean {
 
 /** App mode: an admitted flex row (`StackNode.flex`) laid out by the runtime `MarkswiftFlexRow`. */
 function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: EmitContext): string[] {
-  const items = flex.items.map(
-    (i) => `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)})`,
-  );
+  const items = flex.items.map((i) => {
+    const extra = (["min", "max", "inset", "fraction"] as const).map((k) => {
+      const v = i[k];
+      return v === undefined ? "" : `, ${k}: ${num(v)}`;
+    });
+    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")})`;
+  });
   const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
   return [
