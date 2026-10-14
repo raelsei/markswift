@@ -4,6 +4,12 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Changed
+- Form controls start from the state the browser paints: an input value, `<textarea>` text, `checked` or `<option selected>` that a page script (or a `prepare` hook) changed after load wins over the markup attribute.
+- `<fieldset disabled>` disables the controls inside it, except those in its first `<legend>`.
+- Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
+- `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
+
 ## [1.0.0] — 2026-10-14
 
 Reusable SwiftUI components from HTML and CSS: data parameters, `ForEach` over repeated content, `on<Name>` actions, names from the markup, tool-owned output with `--update`, one Swift package for many components (`markswift build`), an npm package that runs on Node.js, and visual and behaviour gates measured on the iOS runtime.
