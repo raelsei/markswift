@@ -20,6 +20,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `<fieldset disabled>` disables the controls inside it, except those in its first `<legend>`.
 - Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
 - `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
+- `inset`/`outset`/`groove`/`ridge` borders use Chromium 153+'s edge tones (Blink's WebKit-matching shading): the lit edges lighten unless the colour is very light, and a very dark colour lightens for both edges, so black draws #a8a8a8 lit / #545454 shadowed instead of Chrome 152's #545454 / #000.
 
 ## [1.0.0] — 2026-10-14
 

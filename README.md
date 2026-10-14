@@ -380,8 +380,8 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - A CSS scroll box (`overflow: auto`) paints its background, border, radius and min-height on the content inside
   the `ScrollView`, not on the scroll view, so rounded bottom corners are cut while it scrolls.
 - `<ul>` item spacing: list rows sit a little apart from Chrome's (`html` `ul` app SSIM 0.85–0.86 on iOS).
-- `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); UA-bordered
-  buttons use Chromium 152's outset/inset shading; unstyled theme-painted buttons have no pressed look.
+- `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); unstyled
+  theme-painted buttons have no pressed look.
 - Tapping a `<label>` does not focus its text field; `<bdo>`/`<bdi>` are not mapped.
 - Accessibility: the 10 known audit issues above; hit-region findings are reported, not failing.
 
