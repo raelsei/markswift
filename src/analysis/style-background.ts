@@ -47,10 +47,11 @@ function layerValue(list: string | undefined, i: number): string | undefined {
 /**
  * `url()` layer `i` of `background-*` / `mask-*` → image paint with its size, top-left
  * position and repeat resolved in px. The position needs the drawn size: explicit
- * `background-size`, the natural size (a data: svg's intrinsic size, an embedded raster's
- * header), or the cover/contain scaling of that; unknown (remote files) → only a `0% 0%`
- * position is certain. A data: svg is parsed here into the paint's `vector`; one that
- * cannot be drawn is reported to `diagnostics`.
+ * `background-size`, the natural size (a data: svg's width/height, an embedded raster's
+ * header; a viewBox-only svg has just a ratio and fits the positioning area, per CSS), or the
+ * cover/contain scaling of that; unknown (remote files) → only a `0% 0%` position is certain.
+ * A data: svg is parsed here into the paint's `vector`; one that cannot be drawn is reported
+ * to `diagnostics`.
  */
 export function imagePaint(
   url: string,
@@ -62,7 +63,9 @@ export function imagePaint(
   diagnostics: Diagnostic[],
 ): Paint {
   const svg = svgFromDataUrl(url);
-  const img = svg ? svg.intrinsic : rasterSize(url);
+  const vb = svg?.vector?.viewBox;
+  const fit = vb && Math.min(w / vb[2], h / vb[3]);
+  const img = svg ? (svg.intrinsic ?? (fit ? { w: vb![2] * fit, h: vb![3] * fit } : undefined)) : rasterSize(url);
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
   const paint: Paint = { kind: "image", url };
   if (svg?.vector) {

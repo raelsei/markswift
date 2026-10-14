@@ -20,8 +20,9 @@ export function svgFromMarkup(markup: string, frame: Rect): SvgNode | undefined 
 
 /**
  * A `data:image/svg+xml` URL → its vector (drawn in a zero frame; the emitter sizes it) and CSS
- * intrinsic size; `undefined` for any other URL. The payload is parsed once for both. The
- * intrinsic size is px `width`/`height` when both are given, else the viewBox size.
+ * natural size; `undefined` for any other URL. The payload is parsed once for both. The natural
+ * size is px `width`/`height`; one of them alone takes the other from the viewBox ratio. With
+ * neither (or `%`) the image has a ratio but no size: the caller fits the viewBox into its area.
  */
 export function svgFromDataUrl(url: string): { vector?: SvgNode; intrinsic?: { w: number; h: number } } | undefined {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
@@ -34,15 +35,17 @@ export function svgFromDataUrl(url: string): { vector?: SvgNode; intrinsic?: { w
   );
   if (!rootEl) return {};
   const out: { vector?: SvgNode; intrinsic?: { w: number; h: number } } = {};
-  const w = rootEl.attribs["width"]?.trim(),
-    h = rootEl.attribs["height"]?.trim();
+  const px = (v: string | undefined) => (v && /^[\d.]+(px)?$/.test(v.trim()) ? parseFloat(v) : undefined);
+  const w = px(rootEl.attribs["width"]),
+    h = px(rootEl.attribs["height"]);
   const vb = rootEl.attribs["viewbox"]
     ?.trim()
     .split(/[\s,]+/)
     .map(Number);
-  if (w && h && /^[\d.]+(px)?$/.test(w) && /^[\d.]+(px)?$/.test(h))
-    out.intrinsic = { w: parseFloat(w), h: parseFloat(h) };
-  else if (vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0) out.intrinsic = { w: vb[2]!, h: vb[3]! };
+  const ratio = vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0 ? vb[2]! / vb[3]! : undefined;
+  if (w && h) out.intrinsic = { w, h };
+  else if (w && ratio) out.intrinsic = { w, h: w / ratio };
+  else if (h && ratio) out.intrinsic = { w: h * ratio, h };
   const vector = svgFromElement(rootEl, { x: 0, y: 0, w: 0, h: 0 });
   if (vector) out.vector = vector;
   return out;
