@@ -458,11 +458,18 @@ function body(n: ControlNode, deps: ControlDeps): string[] {
 
 /**
  * An input button's caption (`@value`, or Chrome's "Submit"/"Reset"), painted by the control:
- * centred across a fill-width box, as Chrome centres it.
+ * centred across a fill-width box, as Chrome centres it. One line, as the browser never wraps it; the UA font (Arial)
+ * maps to the wider SF Pro, so the caption shrinks into the measured width instead of wrapping or truncating.
  */
 function caption(n: ControlNode): string[] | undefined {
   if (n.control !== "button" || n.files || n.value === undefined || n.content.length) return undefined;
-  return [`Text(verbatim: ${str(n.value)})`, ...(n.width.kind === "fill" ? [".frame(maxWidth: .infinity)"] : [])];
+  return [
+    `Text(verbatim: ${str(n.value)})`,
+    ".lineLimit(1)",
+    // ponytail: 0.8 covers SF Pro over Arial (~6 % wider); a caption that still overflows truncates.
+    ".minimumScaleFactor(0.8)",
+    ...(n.width.kind === "fill" ? [".frame(maxWidth: .infinity)"] : []),
+  ];
 }
 
 /**

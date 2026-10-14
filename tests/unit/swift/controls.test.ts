@@ -187,6 +187,18 @@ test("044: a native select pads its label like Chrome's menulist and puts the ar
   }
 });
 
+test("044: an input button's caption stays one line and shrinks into its measured width", () => {
+  const submit = el("input", { id: "go", type: "submit" }, { x: 0, y: 0, w: 58, h: 21 }, [], {
+    display: "inline-block",
+    ...BOX,
+  });
+  for (const mode of ["app", "fidelity"] as const) {
+    const view = swift([submit], mode).view;
+    expect(view).toContain('Text(verbatim: "Submit")\n');
+    expect(view).toMatch(/Text\(verbatim: "Submit"\)\n\s*\.lineLimit\(1\)\n\s*\.minimumScaleFactor\(0\.8\)/);
+  }
+});
+
 test("accent-color tints checkboxes, ranges and progress bars", () => {
   const accent = { display: "inline-block", "accent-color": "rgb(225, 29, 72)" };
   const { view } = swift([
