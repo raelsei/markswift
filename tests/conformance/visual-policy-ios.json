@@ -44,7 +44,7 @@
       "minSsim": 0.81
     },
     "html@fidelity": {
-      "minSsim": 0.76
+      "minSsim": 0.78
     },
     "svg@app": {
       "minSsim": 0.92
