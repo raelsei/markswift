@@ -8,6 +8,8 @@ final class BehaviourTests: XCTestCase {
         let pickers: [Picker]
         /// Every picker's options: a menu picker is a button whose value is its selection, never tapped as a plain button.
         let pickerValues: [String]
+        /// Texts of the `<label>`s whose tap focuses a text field.
+        let labels: [String]
         let actions: [String]
     }
 
@@ -115,8 +117,9 @@ private func rootHeight(_ app: XCUIApplication) -> Double {
 }
 
 /// Interactions inside `markswift.root` (never the keyboard or system chrome). Disabled elements are skipped: the design
-/// disables them, and typing into one is a fatal XCUITest failure. Fields come last, in a fresh launch after the log is
-/// read: their keyboard cannot cover the buttons, and a sheet a button presented (a file importer) cannot cover them.
+/// disables them, and typing into one is a fatal XCUITest failure. Labels and fields come last, in fresh launches after the
+/// log is read: their keyboard cannot cover the buttons, and a sheet a button presented (a file importer) cannot cover
+/// them. Each label is tapped in its own launch, so no earlier keyboard covers it.
 @MainActor
 private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [String: Any] {
     let root = app.otherElements["markswift.root"].firstMatch
@@ -153,6 +156,18 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
     }
     let log = app.staticTexts["markswift.log"].firstMatch
     let hits = log.exists ? log.label : ""
+    var labels: [[String: Any]] = []
+    for text in item.labels {
+        app.launch()
+        let label = root.staticTexts.matching(NSPredicate(format: "label == %@", text)).firstMatch
+        var focused = false
+        if label.waitForExistence(timeout: 2) && label.isHittable {
+            label.tap()
+            let field = root.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true AND label == %@", text)).firstMatch
+            focused = field.waitForExistence(timeout: 2)
+        }
+        labels.append(["label": text, "focused": focused])
+    }
     app.launch()
     var fields: [[String: String]] = []
     for query in [root.textFields, root.secureTextFields, root.textViews] {
@@ -165,5 +180,5 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
             fields.append(["type": typeName(element.elementType), "label": element.label, "value": valueText(element.value)])
         }
     }
-    return ["switches": switches, "fields": fields, "pickers": pickers, "tapped": tapped, "log": hits]
+    return ["switches": switches, "fields": fields, "pickers": pickers, "labels": labels, "tapped": tapped, "log": hits]
 }

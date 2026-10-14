@@ -342,12 +342,16 @@ extension EnvironmentValues {
     var projectedValue: Binding<Bool> { $live }
 }
 
-/// Whether one text field has focus: the live focus (bound with `.focused($…)`), or forced by a harness.
+/// Whether one text field has focus: the live focus (bound with `.focused($…)`), or forced by a harness. Setting it
+/// moves the live focus (a `<label>` tap).
 @propertyWrapper struct MarkswiftFocused: DynamicProperty {
     @FocusState private var live: Bool
     @Environment(\.markswiftForcedStates) private var forced
     init() {}
-    var wrappedValue: Bool { live || forced.contains(.focused) }
+    var wrappedValue: Bool {
+        get { live || forced.contains(.focused) }
+        nonmutating set { live = newValue }
+    }
     var projectedValue: FocusState<Bool>.Binding { $live }
 }
 

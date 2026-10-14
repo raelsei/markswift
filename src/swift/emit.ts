@@ -39,7 +39,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);
   // Control state pass: a control owns its value, so the view that holds it declares the storage.
-  const control = controlMembers(screen.root);
+  const control = controlMembers(screen.root, opts.mode);
   const scaledFonts = new Map<string, string>();
   const ctx: EmitContext = {
     fontMetrics: opts.fontMetrics ?? {},

@@ -1,6 +1,6 @@
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
-import type { ControlMembers, StatePaint } from "./context.ts";
+import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { colorArgs, identifier, memberName, num, str, uniqueName } from "./format.ts";
 import { pairStyle } from "./states.ts";
@@ -40,7 +40,7 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
  * Every control's state property and every distinct action callback for one screen. Names come
  * from the node ids, so regenerating an unchanged design produces the same members.
  */
-export function controlMembers(root: SemNode): ControlMembers {
+export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const members: ControlMembers["members"] = [];
@@ -169,7 +169,13 @@ export function controlMembers(root: SemNode): ControlMembers {
     }
   });
   // Pressed/focused looks: a delta belongs to the nearest enclosing Button (its press drives the
-  // whole label) or to the text field itself; everything else is reported.
+  // whole label) or to the text field itself; everything else is reported. App mode: a text field
+  // some `<label>` names takes focus when the label is tapped, so it owns a focus member too.
+  const labelled = new Set<string>();
+  if (mode === "app")
+    walk(root, (n) => {
+      if (n.labelFor !== undefined) labelled.add(n.labelFor);
+    });
   const statePaint = new Map<string, StatePaint>();
   const pressOf = new Map<SemNode, string>();
   const focusOf = new Map<SemNode, string>();
@@ -192,17 +198,18 @@ export function controlMembers(root: SemNode): ControlMembers {
       } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
     }
     const focused = n.states?.focused;
-    if (focused && n.id) {
-      const field =
-        n.kind === "control" &&
-        !n.disabled &&
-        (n.control === "textField" || n.control === "secureField" || n.control === "textEditor");
-      if (field) {
-        const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
-        members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
-        focusOf.set(n, name);
-        statePaint.set(n.id, pairStyle(n, focused, name));
-      } else note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
+    const field =
+      n.kind === "control" &&
+      !n.disabled &&
+      (n.control === "textField" || n.control === "secureField" || n.control === "textEditor");
+    if (focused && n.id && !field)
+      note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
+    if (field && n.id && (focused || labelled.has(n.id))) {
+      const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
+      members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      focusOf.set(n, name);
+      if (focused) statePaint.set(n.id, pairStyle(n, focused, name));
+      if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);
     }
     for (const o of n.overlays) visit(o.node, own);
     if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own);

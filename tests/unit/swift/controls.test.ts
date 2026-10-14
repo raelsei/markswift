@@ -199,6 +199,27 @@ test("044: an input button's caption stays one line and shrinks into its measure
   }
 });
 
+test("044: tapping a text field's <label> focuses it (app mode)", () => {
+  const children = [
+    el("label", { for: "email" }, { x: 0, y: 0, w: 320, h: 20 }, [text("Email", 0, 0, 40, 20)]),
+    field("input", { id: "email", type: "email" }, 24),
+    el("label", { for: "bio" }, { x: 0, y: 70, w: 320, h: 20 }, [text("Bio", 0, 70, 30, 20)]),
+    field("textarea", { id: "bio" }, 94, 72),
+    el("label", { for: "off" }, { x: 0, y: 170, w: 320, h: 20 }, [text("Off", 0, 170, 30, 20)]),
+    field("input", { id: "off", type: "text", disabled: "" }, 194),
+  ];
+  const app = swift(children).view;
+  expect(app).toContain("@MarkswiftFocused private var isEmailFocused");
+  expect(app).toContain(".focused($isEmailFocused)");
+  expect(app).toContain(".onTapGesture { isEmailFocused = true }");
+  expect(app).toContain(".onTapGesture { isBioFocused = true }");
+  expect(app.match(/@MarkswiftFocused/g)).toHaveLength(2);
+  // Fidelity paints the fields' text: nothing takes focus.
+  const fidelity = swift(children, "fidelity").view;
+  expect(fidelity).not.toContain("MarkswiftFocused private");
+  expect(fidelity).not.toContain(".onTapGesture");
+});
+
 test("accent-color tints checkboxes, ranges and progress bars", () => {
   const accent = { display: "inline-block", "accent-color": "rgb(225, 29, 72)" };
   const { view } = swift([

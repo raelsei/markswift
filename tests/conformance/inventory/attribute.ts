@@ -850,11 +850,12 @@ export default {
       id: "@for",
       group: "Forms",
       class: "mapped",
-      target: "`.accessibilityLabel` on the target control; checkbox/radio labels toggle it on tap (`.onTapGesture`)",
+      target:
+        "`.accessibilityLabel` on the target control; checkbox/radio labels toggle it, text field labels focus it on tap (`.onTapGesture`)",
       ir: "SemBase.a11y.label (control), SemBase.labelFor (label)",
       via: "attribute",
       impl: "yes",
-      note: "`<label for>` (or a wrapping `<label>`) names its control: text fields get `.accessibilityLabel`, checkboxes and radios an `.accessibilityRepresentation { Toggle(isOn:) { Text(label) } }`, and a tap anywhere on the label toggles an enabled checkbox or selects an enabled radio. `aria-label` on the control wins. Focusing a text field from its label is not translated. `<output for>`/`<template for>` are non-visual.",
+      note: "`<label for>` (or a wrapping `<label>`) names its control: text fields get `.accessibilityLabel`, checkboxes and radios an `.accessibilityRepresentation { Toggle(isOn:) { Text(label) } }`, and a tap anywhere on the label toggles an enabled checkbox, selects an enabled radio or (app mode) focuses an enabled text field (`@MarkswiftFocused`). `aria-label` on the control wins. `<output for>`/`<template for>` are non-visual.",
       spec: "https://developer.mozilla.org/docs/Web/HTML/Element/label#for",
     },
     {

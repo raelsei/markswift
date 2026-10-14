@@ -394,7 +394,7 @@ export interface SemBase extends SizeConstraints {
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
-  /** `<label>`: id of the toggle/radio its tap changes. */
+  /** `<label>`: id of the toggle/radio its tap changes, or of the text field it focuses. */
   labelFor?: string;
   /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
   nameHint?: { words: string; source: "component" | "id" | "slot" | "aria" | "class" | "tag" };

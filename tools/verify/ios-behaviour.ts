@@ -65,6 +65,8 @@ interface Prepared {
   pickers: Array<{ current: string; next: string }>;
   /** Option names of every picker: a closed picker exposes only its selection, and a menu picker's value is one of these. */
   pickerValues: string[];
+  /** Texts of the `<label>`s whose tap focuses a text field. */
+  labels: string[];
   /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
   actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
   fonts: boolean;
@@ -93,6 +95,7 @@ interface CaseLog {
         switches: Array<{ label: string; before: string; after: string }>;
         fields: Array<{ type: string; label: string; value: string }>;
         pickers: Array<{ current: string; next: string; reached: boolean }>;
+        labels: Array<{ label: string; focused: boolean }>;
         log: string;
       };
     };
@@ -232,7 +235,14 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   });
   const code = result.files[`${view}.swift`] ?? "";
   // Callbacks only disabled elements call cannot fire: `controlMembers` is the emitter's own key → member naming.
-  const { actionOf } = controlMembers(screen.root);
+  const { actionOf, activate, focusOf } = controlMembers(screen.root, "app");
+  // Text labels whose tap focuses a text field (`<label for>`): the harness taps each and expects that field focused.
+  const focusable = new Set([...focusOf.keys()].map((n) => n.id));
+  const labels: string[] = [];
+  walk(screen.root, (n) => {
+    if (n.kind === "text" && n.labelFor && focusable.has(n.labelFor) && activate.has(n.labelFor))
+      labels.push(n.runs.map((r) => r.text).join(""));
+  });
   const live: Record<string, true> = {};
   walk(screen.root, (n) => {
     if ((n.kind === "control" && n.disabled) || n.a11y?.disabled) return;
@@ -258,6 +268,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       chromeHeightAx3: scaled.layout.size.h,
       pickers,
       pickerValues,
+      labels,
       actions,
       fonts: `${view}+Fonts.swift` in result.files,
     },
@@ -331,6 +342,9 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         fail("interaction", `field:${f.label}`, `value after typing: "${f.value}"`);
     for (const p of ix.pickers)
       if (!p.reached) fail("interaction", `picker:${p.next}`, `could not select "${p.next}" from "${p.current}"`);
+    // HTML: tapping a field's `<label>` focuses the field.
+    for (const l of ix.labels)
+      if (!l.focused) fail("interaction", `label:${l.label}`, "tapping the label did not focus its field");
     const hits = ix.log.split(",");
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
@@ -417,10 +431,11 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, actions }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, actions }) => ({
         view,
         pickers,
         pickerValues,
+        labels,
         actions: actions.map((a) => a.name),
       })),
     ),
