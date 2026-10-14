@@ -128,6 +128,20 @@ describe("Step 1 object-fit", () => {
     expect(code(d)).toMatch(/Color\.clear\s*\n\s*\.overlay\(alignment: \.top\) \{/);
   });
 
+  test("a non-edge percentage object-position is exact: the picture moves by (box − picture) × f", () => {
+    const d = fixture("cover", "25% 75%");
+    const img = image(d);
+    expect(img).toMatchObject({ position: [0.25, 0.75] });
+    expect(code(d)).toMatch(
+      /GeometryReader \{ box in\n\s*let size = box\.size\n\s*Color\.clear\.overlay\(alignment: \.topLeading\) \{\n\s*Image\.markswiftAsset\(/,
+    );
+    expect(code(d)).toMatch(
+      /\.alignmentGuide\(\.leading\) \{ \(\$0\.width - size\.width\) \* 0\.25 \}\s*\n\s*\.alignmentGuide\(\.top\) \{ \(\$0\.height - size\.height\) \* 0\.75 \}/,
+    );
+    const report = compileLayout(d, { name: "F", mode: "app" }).diagnostics;
+    expect(report.flatMap((r) => r.diagnostics.map((x) => x.feature))).not.toContain("object-position");
+  });
+
   test("a px object-position is centred and reported", () => {
     const img = image(fixture("cover", "10px 20px"));
     expect(img).not.toHaveProperty("position");

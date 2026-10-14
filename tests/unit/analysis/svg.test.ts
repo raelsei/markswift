@@ -4,6 +4,7 @@ import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import { svgFromDataUrl, svgFromMarkup } from "../../../src/analysis/svg/markup.ts";
+import { imagePaint } from "../../../src/analysis/style-background.ts";
 import { pathBounds } from "../../../src/analysis/svg/geometry.ts";
 
 test("SVG chart labels and nested tspans use the conversion's bundled fonts", () => {
@@ -203,14 +204,32 @@ describe("data: svg sources are parsed once, during analysis", () => {
     root,
   });
 
-  test("intrinsic size: px width/height, else the viewBox; nothing for rasters or remote files", () => {
+  test("intrinsic size: px width/height (one of them with the viewBox ratio); none for a viewBox-only or % svg", () => {
     const svg =
       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 100' width='160' height='100'%3E%3C/svg%3E";
     expect(svgFromDataUrl(svg)!.intrinsic).toEqual({ w: 160, h: 100 });
-    expect(svgFromDataUrl("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")!.intrinsic).toEqual({
-      w: 20,
-      h: 10,
+    expect(svgFromDataUrl("data:image/svg+xml,%3Csvg viewBox='0 0 20 10'%3E%3C/svg%3E")!.intrinsic).toBeUndefined();
+    expect(
+      svgFromDataUrl("data:image/svg+xml,%3Csvg viewBox='0 0 20 10' width='100%25'%3E%3C/svg%3E")!.intrinsic,
+    ).toBeUndefined();
+    expect(svgFromDataUrl("data:image/svg+xml,%3Csvg viewBox='0 0 20 10' height='30'%3E%3C/svg%3E")!.intrinsic).toEqual(
+      {
+        w: 60,
+        h: 30,
+      },
+    );
+  });
+
+  test("a viewBox-only background svg at `auto` size fits its positioning area (CSS: ratio, no size)", () => {
+    const tall = "data:image/svg+xml,%3Csvg viewBox='0 0 100 200'%3E%3Crect width='100' height='200'/%3E%3C/svg%3E";
+    const s = { "background-size": "auto", "background-position": "50% 50%", "background-repeat": "no-repeat" };
+    expect(imagePaint(tall, s, "background", 0, 300, 100, [])).toMatchObject({
+      size: { w: 50, h: 100 },
+      position: [125, 0],
     });
+  });
+
+  test("svg data URL parsing: base64 payload, non-svg and remote URLs", () => {
     expect(
       svgFromDataUrl(`data:image/svg+xml;base64,${Buffer.from('<svg width="8px" height="4px"/>').toString("base64")}`)!
         .intrinsic,

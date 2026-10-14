@@ -4,10 +4,16 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Added
+- `<video poster>` is drawn as an Image of the captured poster at the video's frame and `object-fit`, and `<input type=image>` as an Image of its `src` with `alt` as the label and the button trait (both reported as approximated; playback and the submit action are not translated). Both were empty placeholder boxes.
+
 ### Changed
 - Fidelity: a line wrap that falls exactly at a styled run boundary (before an `<a>` or `<strong>`) becomes a forced break like the other measured breaks; app output is unchanged.
 - Inline boxes: every painted element on a run's inline chain (`<mark><b>…</b></mark>`) gets its background layer, including background images, outlines and box shadows; a transparent border no longer adds an empty layer. Inline `opacity` fades the run's glyphs, decoration, shadow and gradient fill and the inline boxes under it; inline `filter`, `backdrop-filter`, `mix-blend-mode`, `mask-image`, `clip-path` and visible text inside a hidden host are reported.
 - Fidelity: a bundled family without a `wght` axis (separate static faces) selects its face by named weight (`.custom(name, fixedSize:).weight(…)`) instead of a variation the files cannot honour, so its bold face renders. `BundledFamily.wght` records the axis; app mode keeps its Dynamic Type `.custom(name, size:, relativeTo:)` fonts.
+- Embedded raster backgrounds and masks (PNG, GIF, JPEG with Exif orientation, WebP) use their natural size from the image header: `background-position` is exact (e.g. `right bottom`) and repeats tile through `MarkswiftTile` with their phase and axis instead of `.tile` from the corner.
+- `<img>` `object-position` percentages other than 0/50/100% are exact (the picture moves by `(box − picture) × f` through alignment guides) instead of snapping to the nearest edge or centre.
+- A `data:` SVG background or mask with only a viewBox (no px `width`/`height`) has a ratio but no size, as in CSS: at `background-size: auto` it fits the positioning area instead of drawing at its viewBox size; a single px `width` or `height` takes the other axis from the viewBox ratio.
 
 ## [1.0.0] — 2026-10-14
 

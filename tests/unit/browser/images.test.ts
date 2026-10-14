@@ -31,3 +31,25 @@ test("uncaptured images report an explicit warning rather than imply an existing
   expect(inlineCapturedImages(root, "http://localhost/", new Map())).toHaveLength(1);
   expect(root.currentSrc).toBe("http://localhost/missing.png");
 });
+
+test("a video poster and an image button's src are inlined in place; other inputs keep their src", () => {
+  const node = (tag: string, attrs: Record<string, string>): LayoutNode => ({
+    tag,
+    attrs,
+    styles: {},
+    bounds: { x: 0, y: 0, w: 10, h: 10 },
+    children: [],
+  });
+  const video = node("video", { poster: "poster.png", src: "clip.mp4" });
+  const button = node("input", { type: "image", src: "go.png" });
+  const text = node("input", { type: "text", src: "go.png" });
+  const root = { ...node("main", {}), children: [video, button, text] };
+  const images = new Map([
+    ["http://localhost/poster.png", "data:image/png;base64,p"],
+    ["http://localhost/go.png", "data:image/png;base64,g"],
+  ]);
+  expect(inlineCapturedImages(root, "http://localhost/", images)).toEqual([]);
+  expect(video.attrs).toEqual({ poster: "data:image/png;base64,p", src: "clip.mp4" });
+  expect(button.attrs.src).toBe("data:image/png;base64,g");
+  expect(text.attrs.src).toBe("go.png");
+});
