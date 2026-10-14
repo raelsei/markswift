@@ -176,7 +176,7 @@ function runExpr(
   if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
   let text = r.text;
   // Fidelity bakes the browser's line division in as hard breaks; the collapsible space at a
-  // break becomes the newline.
+  // break becomes the newline — also when the break opens the next run (a wrap before `<a>`).
   if (ctx.mode === "fidelity" && r.breaks?.length) {
     let at = 0;
     let broken = "";
@@ -186,6 +186,12 @@ function runExpr(
     }
     text = broken + text.slice(at);
   }
+  if (
+    ctx.mode === "fidelity" &&
+    text.endsWith(" ") &&
+    n.runs.slice(i + 1).find((x) => x.gap === undefined)?.breaks?.[0] === 0
+  )
+    text = text.slice(0, -1);
   if (literalTransform && r.transform) {
     text = transformLiteral(text, r.transform);
     if (r.transform === "capitalize")
