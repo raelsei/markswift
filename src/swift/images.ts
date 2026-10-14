@@ -221,7 +221,9 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   // CSS object-fit. `fill` stretches to the box (plain `.resizable()`); contain/cover keep the
   // aspect ratio; `none` keeps the natural size. Every non-`fill` picture sits in a box-filling
   // `Color.clear` at its object-position (default centred, as in CSS), so the img's own frame
-  // alignment (top-leading) never places it.
+  // alignment (top-leading) never places it. A percentage other than 0/50/100 offsets the
+  // picture by CSS's `(box − picture) × f` through its own alignment guides; the box size comes
+  // from a GeometryReader because `.overlay` ignores the base view's explicit guides.
   const fit = n.contentMode;
   let view: string[];
   if (src.kind === "raster") {
@@ -250,8 +252,20 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   }
   if (fit === "fill") return [...view, ...a11y];
   const [px, py] = n.position ?? [0.5, 0.5];
-  const third = (f: number) => (f < 1 / 3 ? "start" : f > 2 / 3 ? "end" : "center");
-  if ([px, py].some((f) => f !== 0 && f !== 0.5 && f !== 1))
-    note(n, "approximated", "object-position", "object-position → nearest edge/centre alignment");
-  return ["Color.clear", `.overlay(alignment: ${alignment(third(px), third(py))}) {`, ...indent(view, 1), "}", ...a11y];
+  const side = (f: number) => (f === 0 ? "start" : f === 1 ? "end" : "center");
+  if ([px, py].every((f) => f === 0 || f === 0.5 || f === 1))
+    return ["Color.clear", `.overlay(alignment: ${alignment(side(px), side(py))}) {`, ...indent(view, 1), "}", ...a11y];
+  const guides = [
+    `.alignmentGuide(.leading) { ($0.width - size.width) * ${num(px)} }`,
+    `.alignmentGuide(.top) { ($0.height - size.height) * ${num(py)} }`,
+  ];
+  return [
+    "GeometryReader { box in",
+    "    let size = box.size",
+    "    Color.clear.overlay(alignment: .topLeading) {",
+    ...indent([...view, ...guides], 2),
+    "    }",
+    "}",
+    ...a11y,
+  ];
 }

@@ -376,7 +376,7 @@ nativeTest(
               children: [
                 image(0, "fill"),
                 image(70, "cover", "50% 0%"),
-                image(140, "contain"),
+                image(140, "contain", "25% 75%"),
                 image(210, "none"),
                 image(280, "scale-down"),
               ],

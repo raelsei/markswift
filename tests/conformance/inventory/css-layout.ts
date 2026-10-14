@@ -2125,11 +2125,11 @@ export default {
       id: "object-position",
       group: "Replaced content",
       class: "approximated",
-      target: ".frame(alignment:) on the clipped image / .offset",
+      target: ".overlay(alignment:) / .alignmentGuide on the clipped image",
       ir: "ImageNode.position",
       via: "style",
       impl: "partial",
-      note: "Computed percentages map to the nearest of the nine alignments inside a box-filling `Color.clear`; px offsets are reported and centred.",
+      note: "Computed percentages are exact: 0/50/100% as one of the nine alignments inside a box-filling `Color.clear`, others as `(box − picture) × f` alignment guides against a GeometryReader box; px offsets are reported and centred.",
       spec: mdn("object-position"),
     },
     {

@@ -6,6 +6,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Changed
 - Embedded raster backgrounds and masks (PNG, GIF, JPEG with Exif orientation, WebP) use their natural size from the image header: `background-position` is exact (e.g. `right bottom`) and repeats tile through `MarkswiftTile` with their phase and axis instead of `.tile` from the corner.
+- `<img>` `object-position` percentages other than 0/50/100% are exact (the picture moves by `(box − picture) × f` through alignment guides) instead of snapping to the nearest edge or centre.
 
 ## [1.0.0] — 2026-10-14
 
