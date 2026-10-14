@@ -293,11 +293,13 @@ extension View {
     /// App mode: CSS `line-height` on a text field or editor whose text is `size` points, scaling like a font
     /// `relativeTo: style`. The leading over the face's natural line (default: SF Pro, 2444 per 2048) spaces an editor's
     /// lines and, as half-leading, pads its text above the first line and below the last (an editor's text starts at its
-    /// top, where the browser's first line box does). A field's single line is centred, and at the default size the
-    /// captured box already holds it (Chrome centres it in a shorter input, too): only what Dynamic Type adds pads it.
+    /// top, where the browser's first line box does); `face` names an editor's bundled family (nil: the system font).
+    /// A field's single line is centred, and at the default size the captured box already holds it (Chrome centres it
+    /// in a shorter input, too): only what Dynamic Type adds pads it.
     func markswiftFieldLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
-                                  natural: CGFloat = 2444.0 / 2048, editor: Bool = false) -> some View {
-        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, editor: editor, relativeTo: style))
+                                  natural: CGFloat = 2444.0 / 2048, editor: Bool = false, face: String? = nil) -> some View {
+        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, editor: editor, face: face,
+                                          relativeTo: style))
     }
 }
 
@@ -306,20 +308,42 @@ struct MarkswiftFieldLineHeight: ViewModifier {
     let natural: CGFloat
     let base: CGFloat
     let editor: Bool
+    let face: String?
     @ScaledMetric private var size: CGFloat
 
-    init(factor: CGFloat, natural: CGFloat, base: CGFloat, editor: Bool, relativeTo style: Font.TextStyle) {
+    init(factor: CGFloat, natural: CGFloat, base: CGFloat, editor: Bool, face: String?, relativeTo style: Font.TextStyle) {
         self.factor = factor
         self.natural = natural
         self.base = base
         self.editor = editor
+        self.face = face
         _size = ScaledMetric(wrappedValue: base, relativeTo: style)
     }
 
     func body(content: Content) -> some View {
         let leading = max(0, factor - natural)
-        content.lineSpacing(leading * size).padding(.vertical, leading * (editor ? size : max(0, size - base)) / 2)
+        let half = leading * (editor ? size : max(0, size - base)) / 2
+        // The editor draws its first line lower by its tall glyphs; the top pad gives that back, the bottom keeps the box.
+        let tall = editor ? markswiftTallGlyphs(face, size) : 0
+        content.lineSpacing(leading * size).padding(.top, half - tall).padding(.bottom, half + tall)
     }
+}
+
+/// How far iOS's text view (`TextEditor`) sets its first baseline below the face's ascent: to the top of the font's
+/// bounding box when glyphs rise above the ascent (Geist: 1058 over 1005 per 1000; SF Pro's box stays below it).
+// ponytail: rule measured on iOS 27 with Geist (shadcn-textarea) and SF Pro (tw-form); re-measure if a face disagrees.
+nonisolated func markswiftTallGlyphs(_ face: String?, _ size: CGFloat) -> CGFloat {
+    #if os(iOS)
+    let font = face.map {
+        CTFontCreateWithFontDescriptor(
+            CTFontDescriptorCreateWithAttributes([kCTFontFamilyNameAttribute: $0] as CFDictionary), size, nil)
+    } ?? CTFontCreateUIFontForLanguage(.system, size, nil)
+    guard let font else { return 0 }
+    let box = CTFontGetBoundingBox(font)
+    return max(0, box.origin.y + box.size.height - CTFontGetAscent(font))
+    #else
+    return 0
+    #endif
 }
 
 /// Interaction states a render harness forces on every element at once (the browser reference forces the same).

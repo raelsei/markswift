@@ -95,10 +95,13 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     // half-leading above the first line — scaling with Dynamic Type like the font; leading over the face's natural line
     // (a bundled face's own metrics, else SF's).
     const lh = n.font.lineHeight;
-    const face = n.font.family.kind === "custom" ? deps.fontMetrics?.[n.font.family.name.toLowerCase()] : undefined;
-    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (n.font.family.kind === "system" || face))
+    const family = n.font.family.kind === "custom" ? n.font.family.name : undefined;
+    const face = family !== undefined ? deps.fontMetrics?.[family.toLowerCase()] : undefined;
+    const editor =
+      n.control === "textEditor" ? `, editor: true${family !== undefined ? `, face: ${str(family)}` : ""}` : "";
+    if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (family === undefined || face))
       out.push(
-        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""}${n.control === "textEditor" ? ", editor: true" : ""})`,
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""}${editor})`,
       );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops

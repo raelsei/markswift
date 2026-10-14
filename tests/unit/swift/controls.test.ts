@@ -330,8 +330,9 @@ test("042: field-face-leading — an editor in a bundled face spaces its lines f
   editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
   const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
   const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
+  // The face name lets the runtime find how far the editor's tall glyphs lower its first line (044 item 4).
   expect(view).toContain(
-    ".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3, editor: true)",
+    '.markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3, editor: true, face: "Geist Variable")',
   );
 });
 
