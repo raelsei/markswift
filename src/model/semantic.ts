@@ -559,9 +559,11 @@ export interface ControlNode extends SemBase {
   enterKey?: string;
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
-  /** Radio `@name`; radios with the same group share one selection. */
+  /** Radio `@name`; radios with the same `form` and group share one selection. */
   group?: string;
-  /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
+  /** Grouped radio's form owner (the `<form>`'s node id; absent outside a form). */
+  form?: string;
+  /** `@disabled`, or inside a `<fieldset disabled>`: the control is inert (Chrome also dims it, so the measured style already shows it). */
   disabled?: boolean;
   /** Numeric domain of a slider/progress/gauge, resolved from `@min`/`@max`/`@step`. */
   range?: { min: number; max: number; step?: number };

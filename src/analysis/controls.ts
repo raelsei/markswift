@@ -149,13 +149,15 @@ function autofillField(v: string | undefined): string | undefined {
 
 /**
  * The control this element is, or `undefined` when it is an ordinary box. Attribute-only: the
- * caller supplies the measured base and the built children.
+ * caller supplies the measured base and the built children; `labels` adds what the element's
+ * surroundings decide (its form owner, a `<fieldset disabled>` around it).
  */
-export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undefined {
+export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | undefined {
   const a = n.attrs;
   const diagnostics: Diagnostic[] = [];
+  const form = labels?.forms.get(n);
   // A native control the design marks disabled for assistive technology behaves disabled.
-  const disabled = "disabled" in a || a["aria-disabled"] === "true" ? true : undefined;
+  const disabled = "disabled" in a || a["aria-disabled"] === "true" || labels?.disabled.has(n) ? true : undefined;
   switch (n.tag) {
     case "button": {
       const spec: ControlSpec = { control: "button", diagnostics };
@@ -416,31 +418,49 @@ export interface LabelIndex {
   text: Map<LayoutNode, string>;
   /** Label element → the enabled toggle/radio element (native, or an ARIA toggle role) a tap on the label changes. */
   activates: Map<LayoutNode, LayoutNode>;
-  /** Control element → its nearest ancestor `<form onsubmit>`. */
+  /** `<input>`/`<button>` → its form owner (HTML: the `<form>` its `@form` names, else its nearest ancestor `<form>`). */
   forms: Map<LayoutNode, LayoutNode>;
+  /** Form controls a `<fieldset disabled>` disables (everything in it but its first `<legend>`). */
+  disabled: Set<LayoutNode>;
   /** First element per DOM `id`. */
   byId: Map<string, LayoutNode>;
   /** `role=radio` element → the id of its nearest `role=radiogroup` ancestor. */
   radioGroups: Map<LayoutNode, string>;
 }
 
+/** Elements a `<fieldset disabled>` disables (HTML: form-associated, listed elements). */
+const FIELDSET_DISABLES: Readonly<Record<string, true>> = { button: true, input: true, select: true, textarea: true };
+
 export function labelIndex(root: LayoutNode): LabelIndex {
   const byId = new Map<string, LayoutNode>();
   const labels: LayoutNode[] = [];
   const forms = new Map<LayoutNode, LayoutNode>();
+  const disabled = new Set<LayoutNode>();
   const radioGroups = new Map<LayoutNode, string>();
-  const index = (n: LayoutNode, form?: LayoutNode, group?: LayoutNode) => {
+  const external: LayoutNode[] = [];
+  const index = (n: LayoutNode, form?: LayoutNode, group?: LayoutNode, off = false) => {
     const id = n.attrs["id"];
     if (id && !byId.has(id)) byId.set(id, n);
     if (n.tag === "label") labels.push(n);
-    const owner = n.tag === "form" && n.attrs["onsubmit"]?.trim() ? n : form;
-    if (owner && (n.tag === "button" || n.tag === "input")) forms.set(n, owner);
+    const owner = n.tag === "form" ? n : form;
+    if (n.tag === "button" || n.tag === "input") {
+      if (n.attrs["form"] !== undefined) external.push(n);
+      else if (owner) forms.set(n, owner);
+    }
+    if (off && FIELDSET_DISABLES[n.tag]) disabled.add(n);
+    // A disabled fieldset's first legend stays enabled — unless an outer fieldset disables it.
+    const fieldset = n.tag === "fieldset" && "disabled" in n.attrs;
+    const legend = fieldset ? n.children.find((c) => c.tag === "legend") : undefined;
     const role = n.attrs["role"]?.trim().toLowerCase();
     if (role === "radio" && group) radioGroups.set(n, group.id ?? "");
-    for (const c of n.children) index(c, owner, role === "radiogroup" ? n : group);
+    for (const c of n.children) index(c, owner, role === "radiogroup" ? n : group, off || (fieldset && c !== legend));
   };
   index(root);
-  const out: LabelIndex = { text: new Map(), activates: new Map(), forms, byId, radioGroups };
+  for (const n of external) {
+    const owner = byId.get(n.attrs["form"]!);
+    if (owner?.tag === "form") forms.set(n, owner);
+  }
+  const out: LabelIndex = { text: new Map(), activates: new Map(), forms, disabled, byId, radioGroups };
   const firstControl = (n: LayoutNode): LayoutNode | undefined => {
     for (const c of n.children) {
       const hit = controlOf(c) ? c : firstControl(c);
@@ -455,7 +475,7 @@ export function labelIndex(root: LayoutNode): LabelIndex {
     // ponytail: first label wins when several name one control; HTML concatenates them. Join them if a design needs it.
     const text = textOf(label, target).replace(/\s+/g, " ").trim();
     if (text && !out.text.has(target)) out.text.set(target, text);
-    const spec = controlOf(target);
+    const spec = controlOf(target, out);
     // An ARIA toggle is a `<button>` or an activatable box; HTML: a label's tap clicks its button too.
     const toggle = spec
       ? spec.control === "toggle" ||

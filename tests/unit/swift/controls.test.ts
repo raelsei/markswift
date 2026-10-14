@@ -332,3 +332,29 @@ test("043: a select lists only its visible options, disables the disabled ones a
   // Nothing selected: the browser selects the first option that is not disabled.
   expect(view).toContain('@State private var s_first: String = "Here"');
 });
+
+test("043: a disabled fieldset disables its controls, except inside its first legend", () => {
+  const box = (y: number, h: number) => ({ x: 0, y, w: 320, h });
+  const { view } = swift([
+    el("fieldset", { id: "fs", disabled: "" }, box(0, 200), [
+      el("legend", { id: "first" }, box(0, 40), [field("input", { id: "exempt", type: "text" }, 0)]),
+      field("input", { id: "inside", type: "text" }, 50),
+      el("legend", { id: "second" }, box(100, 40), [field("input", { id: "later", type: "text" }, 100)]),
+      el("fieldset", { id: "inner" }, box(150, 50), [
+        el("legend", { id: "innerLegend" }, box(150, 40), [field("input", { id: "nested", type: "text" }, 150)]),
+      ]),
+    ]),
+    field("input", { id: "outside", type: "text" }, 210),
+  ]);
+  const disabledAfter = (state: string) => {
+    const at = view.indexOf(`text: $${state})`);
+    const next = view.indexOf("TextField(", at + 1);
+    return view.slice(at, next < 0 ? undefined : next).includes(".disabled(true)");
+  };
+  expect(disabledAfter("s_exempt")).toBe(false);
+  expect(disabledAfter("s_inside")).toBe(true);
+  expect(disabledAfter("s_later")).toBe(true);
+  // An inner fieldset's legend is exempt from that fieldset only, not from the outer one.
+  expect(disabledAfter("s_nested")).toBe(true);
+  expect(disabledAfter("s_outside")).toBe(false);
+});
