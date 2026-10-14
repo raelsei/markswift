@@ -308,3 +308,27 @@ test("042: field-text-centre — a select's or field's single line stays centred
   expect(view.match(/minHeight: 32\.0, alignment: \.leading\)/g)).toHaveLength(2);
   expect(view).toContain("minHeight: 64.0, alignment: .topLeading)");
 });
+
+test("043: a select lists only its visible options, disables the disabled ones and heads its groups", () => {
+  const zero = { x: 0, y: 0, w: 0, h: 0 };
+  const { view } = swift([
+    field("select", { id: "pick" }, 0, 38, [
+      option("Choose a size", { disabled: "", hidden: "", selected: "" }),
+      option("S"),
+      el("optgroup", { label: "Large" }, zero, [option("L"), option("XL", { disabled: "" })]),
+      el("optgroup", { label: "Sold out", disabled: "" }, zero, [option("XXL")]),
+    ]),
+    field("select", { id: "first" }, 50, 38, [option("Gone", { disabled: "" }), option("Here")]),
+  ]);
+  // The placeholder shows while closed but is no choice in the menu.
+  expect(view).toContain('@State private var s_pick: String = "Choose a size"');
+  expect(view).not.toContain('["Choose a size"');
+  expect(view).toContain('ForEach(["S"], id: \\.self)');
+  expect(view).toContain('} header: {\n                        Text(verbatim: "Large")');
+  expect(view).toContain('.disabled(["XL"].contains(option))');
+  // A disabled group disables every option in it.
+  expect(view).toMatch(/ForEach\(\["XXL"\], id: \\\.self\) \{ option in\n\s+Text\(option\)\n\s+\.disabled\(true\)/);
+  expect(view).toContain('Text(verbatim: "Sold out")');
+  // Nothing selected: the browser selects the first option that is not disabled.
+  expect(view).toContain('@State private var s_first: String = "Here"');
+});

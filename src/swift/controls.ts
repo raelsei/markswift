@@ -15,7 +15,7 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ControlNode, SemNode } from "../model/semantic.ts";
+import type { ControlNode, PickerOption, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
@@ -254,13 +254,35 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // inline Picker, so the native menu and selection behaviour stay.
       const arrow = n.appearance === "none" ? [] : ['    Image(systemName: "chevron.down")'];
       if (still) return ["HStack(spacing: 4.0) {", ...indent(painted(n.value ?? "", ".leading"), 1), ...arrow, "}"];
-      const options = n.options?.length ? n.options : n.value !== undefined ? [n.value] : [];
+      const options: PickerOption[] = n.options?.length ? n.options : n.value !== undefined ? [{ label: n.value }] : [];
+      // Consecutive options of one `<optgroup>` are a Section headed by its label; disabled ones stay listed, greyed.
+      const runs: PickerOption[][] = [];
+      for (const o of options) {
+        const run = runs.at(-1);
+        if (run && run[0]!.group === o.group) run.push(o);
+        else runs.push([o]);
+      }
+      const rows = (runs.length ? runs : [[]]).flatMap((run) => {
+        const off = run.filter((o) => o.disabled).map((o) => str(o.label));
+        const each = [
+          `ForEach(${run.length ? `[${run.map((o) => str(o.label)).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
+          "    Text(option)",
+          ...(!off.length
+            ? []
+            : off.length === run.length
+              ? ["        .disabled(true)"]
+              : [`        .disabled([${off.join(", ")}].contains(option))`]),
+          "}",
+        ];
+        const group = run[0]?.group;
+        return group === undefined
+          ? each
+          : ["Section {", ...indent(each, 1), "} header: {", `    Text(verbatim: ${str(group)})`, "}"];
+      });
       return [
         "Menu {",
         `    Picker(selection: ${binding}) {`,
-        `        ForEach(${options.length ? `[${options.map(str).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
-        "            Text(option)",
-        "        }",
+        ...indent(rows, 2),
         "    } label: {",
         "        EmptyView()",
         "    }",

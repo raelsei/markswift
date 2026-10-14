@@ -15,6 +15,7 @@ import {
   type ControlNode,
   type Diagnostic,
   type FontSpec,
+  type PickerOption,
   type SemBase,
   type SemNode,
   addDiagnostic,
@@ -105,7 +106,7 @@ export interface ControlSpec {
   disabled?: boolean;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
-  options?: string[];
+  options?: PickerOption[];
   href?: string;
   action?: Action;
   expanded?: boolean;
@@ -192,20 +193,30 @@ export function controlOf(n: LayoutNode, form?: LayoutNode): ControlSpec | undef
       return spec;
     }
     case "select": {
-      const options: string[] = [];
+      const options: PickerOption[] = [];
       let selected: string | undefined;
-      for (const o of optionsOf(n)) {
+      let enabled: string | undefined;
+      const all = optionsOf(n);
+      for (const { option: o, group } of all) {
         // `@label` overrides the element's text; the text itself may be missing from the snapshot.
         const label = (o.attrs["label"] ?? textContent(o)).trim();
-        if (label) options.push(label);
         if ("selected" in o.attrs) selected = label;
+        const off = "disabled" in o.attrs || (group !== undefined && "disabled" in group.attrs);
+        enabled ??= off || !label ? undefined : label;
+        // A `hidden` option (a "Choose…" placeholder) can be shown while closed but is no choice in the menu.
+        if (!label || "hidden" in o.attrs || (group !== undefined && "hidden" in group.attrs)) continue;
+        const option: PickerOption = { label };
+        if (off) option.disabled = true;
+        const heading = group?.attrs["label"]?.trim();
+        if (heading) option.group = heading;
+        options.push(option);
       }
       const spec: ControlSpec = { control: "picker", options, diagnostics };
-      // A closed `<select>` shows the selected option, or the first one when the page names none.
-      const shown = selected || options[0];
+      // A closed `<select>` shows the selected option; with none selected, the browser selects the first enabled one.
+      const shown = selected || enabled || options[0]?.label;
       if (shown) spec.value = shown;
       // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
-      if (!options.length)
+      if (!all.length)
         addDiagnostic(
           diagnostics,
           "approximated",
@@ -504,12 +515,13 @@ const SELF_DRAWN_TEXT: Partial<Record<ControlKind, true>> = {
   stepper: true,
 };
 
-/** `<option>` children, including those inside `<optgroup>`. */
-function optionsOf(n: LayoutNode): LayoutNode[] {
-  const out: LayoutNode[] = [];
+/** `<option>` children, including those of an `<optgroup>` (with that group). */
+function optionsOf(n: LayoutNode): Array<{ option: LayoutNode; group?: LayoutNode }> {
+  const out: Array<{ option: LayoutNode; group?: LayoutNode }> = [];
   for (const c of n.children) {
-    if (c.tag === "option") out.push(c);
-    else if (c.tag === "optgroup") out.push(...optionsOf(c));
+    if (c.tag === "option") out.push({ option: c });
+    else if (c.tag === "optgroup")
+      for (const o of c.children) if (o.tag === "option") out.push({ option: o, group: c });
   }
   return out;
 }

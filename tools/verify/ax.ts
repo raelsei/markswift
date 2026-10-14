@@ -122,7 +122,7 @@ function offeredNames(n: SemNode): string[] {
   }
   if (n.kind === "control") {
     if (n.label) names.push(subtreeText(n.label));
-    names.push(n.placeholder ?? "", n.value ?? "", ...(n.options ?? []));
+    names.push(n.placeholder ?? "", n.value ?? "", ...(n.options ?? []).map((o) => o.label));
   }
   if (n.kind === "text" || n.kind === "control" || n.a11y?.heading !== undefined || n.action)
     names.push(subtreeText(n), subtreeText(n, true));

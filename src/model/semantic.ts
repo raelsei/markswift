@@ -570,8 +570,8 @@ export interface ControlNode extends SemBase {
    * Browsers colour the bar by this state — green, amber, red — and so does the emitter.
    */
   level?: "optimum" | "suboptimal" | "poor";
-  /** Picker choices in document order (`<option>` labels). */
-  options?: string[];
+  /** Picker choices in document order: the `<option>`s a menu lists (`hidden` ones are left out). */
+  options?: PickerOption[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
   /** `<details open>`: initial disclosure state. */
@@ -593,6 +593,13 @@ export interface ControlNode extends SemBase {
   accent?: Color;
   /** Computed `appearance: none`: the author removed the native widget chrome (no select arrow). */
   appearance?: "none";
+}
+
+/** A `<select>` choice: its label, whether it (or its `<optgroup>`) is disabled, and that group's `label`. */
+export interface PickerOption {
+  label: string;
+  disabled?: boolean;
+  group?: string;
 }
 
 export type SemNode = StackNode | GridNode | TextNode | SvgNode | ImageNode | BoxNode | ControlNode;
