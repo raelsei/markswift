@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="fieldset; legend; @disabled; select; optgroup; option; @selected; @hidden; form; @form; @name; input: radio; @value">
+<meta name="markswift-themes" content="light">
+<title>fieldset</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.check { display: flex; gap: 16px; margin: 0 0 8px; }
+label { font-size: 13px; color: var(--muted); }
+fieldset { margin: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+input:not([type]), select { font: inherit; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
+form { margin: 0; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="fieldset">
+  <p class="cap">disabled fieldset; the checkbox in its first legend stays enabled</p>
+  <fieldset disabled>
+    <legend><label><input type="checkbox" checked> Ship elsewhere</label></legend>
+    <div class="field"><label for="street">Street</label><input id="street" value="Main St 1"></div>
+    <div class="field"><label for="city">City</label><input id="city" placeholder="City"></div>
+  </fieldset>
+</section>
+<section class="v" id="select">
+  <p class="cap">hidden placeholder, a disabled option and an optgroup; a disabled first option</p>
+  <div class="field"><label for="size">Size</label><select id="size"><option value="" disabled hidden selected>Choose a size</option><option>S</option><option disabled>M</option><optgroup label="Large"><option>L</option><option>XL</option></optgroup></select></div>
+  <div class="field"><label for="stock">Stock</label><select id="stock"><option disabled>Sold out</option><option>Available</option></select></div>
+</section>
+<section class="v" id="forms">
+  <p class="cap">two forms reuse the radio name; a value set by script</p>
+  <form id="personal" class="check"><label><input type="radio" name="plan" value="free" checked> Free</label><label><input type="radio" name="plan" value="pro"> Pro</label></form>
+  <form id="team" class="check"><label><input type="radio" name="plan" value="free"> Free</label><label><input type="radio" name="plan" value="pro" checked> Pro</label></form>
+  <div class="field"><label for="nick">Nickname</label><input id="nick" value="From markup"></div>
+</section>
+</main>
+<script>document.getElementById("nick").value = "Set by script";</script>
+</body>
+</html>
