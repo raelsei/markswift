@@ -119,16 +119,19 @@ extension View {
     /// face's native line height (default: SF Pro, 2444 per 2048).
     ///
     /// iOS/macOS 26+: `.lineHeight(.multiple(factor:))` makes every line exactly `lineHeight`
-    /// (tight values compress) and puts the first baseline at y = size; the padding pair moves it
-    /// to the CSS half-leading baseline without changing the height. iOS 18–25: `.lineSpacing`
-    /// plus half-leading padding, which cannot compress tight leading.
+    /// and puts the first baseline at y = size; the padding pair moves it to the CSS half-leading
+    /// baseline without changing the height. Tighter than `natural`, the lines stay natural so the
+    /// `Text` frame holds its glyphs (a compressed one is shorter than them, which the accessibility audit
+    /// reports as clipped text) and the padding trims the box to the CSS line box: the ink overflows it, as in CSS.
+    /// `compressLines` (text the browser broke into lines) compresses them instead, keeping CSS's spacing between them.
+    /// iOS 18–25: `.lineSpacing` plus half-leading padding, which cannot compress tight leading.
     /// `halfLeading: false` (a measured box that is not the line box) leaves out the half-leading
     /// above the first and below the last line.
     func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
-                             ascent: CGFloat, descent: CGFloat,
-                             natural: CGFloat = 2444.0 / 2048, halfLeading: Bool = true) -> some View {
+                             ascent: CGFloat, descent: CGFloat, natural: CGFloat = 2444.0 / 2048,
+                             halfLeading: Bool = true, compressLines: Bool = false) -> some View {
         modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
-                                     halfLeading: halfLeading, size: size, relativeTo: style))
+                                     halfLeading: halfLeading, compressLines: compressLines, size: size, relativeTo: style))
     }
 }
 
@@ -138,14 +141,18 @@ struct MarkswiftLineHeight: ViewModifier {
     let descent: CGFloat
     let natural: CGFloat
     let halfLeading: Bool
+    let compressLines: Bool
     @ScaledMetric private var size: CGFloat
+    @Environment(\.displayScale) private var scale
 
-    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, size: CGFloat, relativeTo style: Font.TextStyle) {
+    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, compressLines: Bool,
+         size: CGFloat, relativeTo style: Font.TextStyle) {
         self.factor = factor
         self.ascent = ascent
         self.descent = descent
         self.natural = natural
         self.halfLeading = halfLeading
+        self.compressLines = compressLines
         _size = ScaledMetric(wrappedValue: size, relativeTo: style)
     }
 
@@ -155,9 +162,14 @@ struct MarkswiftLineHeight: ViewModifier {
         if #available(iOS 26.0, macOS 26.0, *) {
             // CSS puts the baseline half the leading plus the ascent below the line top; SwiftUI at y = size.
             let shift = (factor / 2 + (ascent - descent) / 2 - 1) * size
-            content.lineHeight(.multiple(factor: factor))
+            // ponytail: a tight text that wraps only natively (a one-line label under Dynamic Type) keeps natural
+            // spacing between its lines, taller than CSS by (natural − factor) × size per extra line.
+            // A Text's height is rounded up to the pixel, so the trim is too: the box is exactly the CSS line.
+            let tight = factor < natural && !compressLines
+            let overflow = tight ? (natural * size * scale).rounded(.up) / scale - factor * size : 0
+            content.lineHeight(.multiple(factor: tight ? natural : factor))
                 .padding(.top, shift - trim)
-                .padding(.bottom, -shift - trim)
+                .padding(.bottom, -shift - trim - overflow)
         } else {
             content.lineSpacing(max(0, leading)).padding(.vertical, leading / 2 - trim)
         }

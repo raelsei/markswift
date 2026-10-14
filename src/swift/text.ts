@@ -119,6 +119,9 @@ export function textExpr(
     // Half-leading only when the measured box is the line box (not a clipped box or a glyph-box
     // union between flow children) — the same test the padding used.
     if (n.frame.h - n.padding[0] - n.padding[2] < n.lines * lh - 0.5) args.push("halfLeading: false");
+    // Tight leading the browser shows between lines stays compressed on iOS 26+; one-line text keeps natural lines
+    // (its glyphs overflow the CSS line box), so its Text never reads as clipped.
+    if (leading <= -0.01 && n.lines > 1) args.push("compressLines: true");
     out.push(`.markswiftLineHeight(${args.join(", ")})`);
     // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
     // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up

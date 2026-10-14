@@ -1,4 +1,9 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SWIFT_RUNTIME } from "../../../src/swift/runtime.ts";
+import { command } from "../../../tools/verify/process.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { emitSwift } from "../../../src/swift/emit.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc } from "../../../src/model/layout.ts";
@@ -77,6 +82,90 @@ test("tight multi-line leading is reported as compressing on iOS 26+ only", () =
   const msg = report.flatMap((r) => r.diagnostics).find((d) => d.feature === "line-height")?.message;
   expect(msg).toContain("iOS 26");
 });
+
+test("tight leading compresses only text the browser broke into lines", () => {
+  expect(emit(paragraph({ "line-height": "15px" }, 30), "app").view).toContain("compressLines: true");
+  expect(emit(paragraph({ "line-height": "15px" }, 15), "app").view).not.toContain("compressLines");
+  expect(emit(paragraph({}, 40), "app").view).not.toContain("compressLines");
+});
+
+const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
+
+/** `Report` prints the height its child answers at 300 pt of width: around the helper the box, inside it the `Text`. */
+const MAIN = `import SwiftUI
+
+struct Report: Layout {
+    let label: String
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews[0].sizeThatFits(ProposedViewSize(width: 300, height: nil))
+        print("\\(label) \\(Double(size.height))")
+        return size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
+func label(_ tag: String, _ size: CGFloat, _ lineHeight: CGFloat, compress: Bool = false) -> some View {
+    Report(label: "\\(tag)-box") {
+        Report(label: "\\(tag)-text") { Text("Email me about deploys").font(.system(size: size, weight: .medium)) }
+            .markswiftLineHeight(lineHeight, size: size, relativeTo: .subheadline, ascent: 1.0, descent: 0.286,
+                                 compressLines: compress)
+    }
+}
+
+if #available(macOS 26.0, *) { print("os26 1") }
+for scale in [1, 2, 3] as [CGFloat] {
+    let s = "@\\(Int(scale))"
+    for view in [label("none14" + s, 14, 14), label("none13" + s, 13, 13), label("loose" + s, 14, 20),
+                 label("compressed" + s, 14, 14, compress: true)] {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        _ = renderer.nsImage
+    }
+}
+`;
+
+nativeTest(
+  "iOS/macOS 26+: a line-height below the natural line keeps the CSS line box while the Text keeps its glyphs",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-line-height-"));
+    try {
+      await Bun.write(join(directory, "runtime.swift"), SWIFT_RUNTIME);
+      await Bun.write(join(directory, "main.swift"), MAIN);
+      const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
+      await command(
+        [
+          ...["xcrun", "swiftc", "-sdk", sdk, "-target", "arm64-apple-macos15.0", "-swift-version", "6"],
+          ...["-default-isolation", "MainActor", "-o", join(directory, "lh")],
+          ...[join(directory, "runtime.swift"), join(directory, "main.swift")],
+        ],
+        directory,
+        240_000,
+      );
+      const out: Record<string, number> = {};
+      for (const line of (await command([join(directory, "lh")], directory, 30_000)).trim().split("\n")) {
+        const [key, h] = line.split(" ");
+        out[key!] ??= Number(h);
+      }
+      // iOS/macOS 18–25 take the `.lineSpacing` path, which never compressed the Text.
+      if (!out["os26"]) return;
+      // leading-none: the box is the CSS line box at every pixel scale; the Text inside keeps SF's natural line
+      // (2444/2048 of the size, rounded up to the pixel), so its frame holds its glyphs.
+      for (const scale of [1, 2, 3]) {
+        expect([out[`none14@${scale}-box`], out[`none13@${scale}-box`]]).toEqual([14, 13]);
+        expect(out[`none14@${scale}-text`]).toBeGreaterThanOrEqual((14 * 2444) / 2048);
+        expect(out[`none13@${scale}-text`]).toBeGreaterThanOrEqual((13 * 2444) / 2048);
+        // A loose line height is unchanged: Text and box are the CSS line box; so is a compressed one's.
+        expect([out[`loose@${scale}-box`], out[`loose@${scale}-text`]]).toEqual([20, 20]);
+        expect([out[`compressed@${scale}-box`], out[`compressed@${scale}-text`]]).toEqual([14, 14]);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  300000,
+);
 
 test("app floors a padded sub/sup line-box growth instead of padding it", () => {
   const subSup = (mode: "app" | "fidelity") => {

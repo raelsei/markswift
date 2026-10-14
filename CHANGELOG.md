@@ -21,6 +21,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
 - `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
 - `inset`/`outset`/`groove`/`ridge` borders use Chromium 153+'s edge tones (Blink's WebKit-matching shading): the lit edges lighten unless the colour is very light, and a very dark colour lightens for both edges, so black draws #a8a8a8 lit / #545454 shadowed instead of Chrome 152's #545454 / #000.
+- App mode on iOS/macOS 26+: a one-line text whose `line-height` is below the font's natural line (`leading-none` labels) keeps the CSS line box but lays its `Text` out at the natural line height, so the glyphs overflow the box as in CSS instead of the `Text` being shorter than its glyphs; the accessibility audit no longer reports such labels as clipped text (the shadcn-checkbox and shadcn-radio-group known entries are retired). Text the browser broke into lines keeps its compressed lines (`markswiftLineHeight(…, compressLines: true)`); a one-line label that wraps under Dynamic Type gets natural spacing between its lines.
 
 ## [1.0.0] — 2026-10-14
 

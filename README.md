@@ -171,8 +171,9 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   measured layouts move what lies below a grown child,
   hugging label columns fit their text instead of a pinned width, and text editors size to their
   text. Pages taller than the viewport scroll.
-  CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes, tight leading
-  compresses) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
+  CSS `line-height` uses `.lineHeight(.multiple(…))` on iOS 26+ (exact line boxes; tight leading
+  compresses text the browser broke into lines, while one-line text keeps its line box and lets the
+  glyphs overflow it) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
   ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
   `enterkeyhint` choose a text field's iOS keyboard, autofill type and Return key.
 - `fidelity` keeps the captured geometry and line division at fixed sizes. It exists for visual
@@ -339,9 +340,9 @@ mapped, approximated or unmapped in `diagnostics`.
   descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
   height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
   and every action closure is called).
-- 10 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`: five
-  10 px uppercase captions with fixed letter-spacing that the Dynamic Type audit flags, four labels or fields whose
-  measured frame the audit reports as clipping text, and one e-mail address whose label is the address itself.
+- 8 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`: five
+  10 px uppercase captions with fixed letter-spacing that the Dynamic Type audit flags, a text field and a checkbox
+  whose measured frame the audit reports as clipping text, and one e-mail address whose label is the address itself.
 
 ## Pinned geometry
 
@@ -383,7 +384,7 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); unstyled
   theme-painted buttons have no pressed look.
 - Tapping a `<label>` does not focus its text field; `<bdo>`/`<bdi>` are not mapped.
-- Accessibility: the 10 known audit issues above; hit-region findings are reported, not failing.
+- Accessibility: the 8 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
 

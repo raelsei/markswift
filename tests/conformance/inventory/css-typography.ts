@@ -442,7 +442,7 @@ export default {
       ir: "FontSpec.lineHeight",
       via: "style",
       impl: "partial",
-      note: "Natural line height comes from packaged font metrics (measured SF metrics for system fonts); the baseline follows the browser's rounded ascent/descent. App mode releases line-box-derived fixed heights; fidelity retains measured frames. Tighter-than-natural leading compresses on iOS 26+ and is reported, because iOS 18–25 clamps it.",
+      note: "Natural line height comes from packaged font metrics (measured SF metrics for system fonts); the baseline follows the browser's rounded ascent/descent. App mode releases line-box-derived fixed heights; fidelity retains measured frames. Tighter-than-natural leading compresses the lines of text the browser wrapped on iOS 26+ and is reported, because iOS 18–25 clamps it; one-line text keeps the CSS line box with its glyphs overflowing it (the Text keeps its natural line, so it never reads as clipped).",
       spec: `${MDN}line-height`,
     },
     {
