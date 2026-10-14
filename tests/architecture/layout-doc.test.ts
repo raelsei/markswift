@@ -13,7 +13,7 @@ const FINGERPRINTS: Record<number, string> = {
   3: "de56c7ffecbd76f793281327e13bf2e64aa3f6260723ec8bf87d4c0a0f3ab2e8",
 };
 /** The LayoutDoc version not yet shipped in a `v*` tag, or null. The release commit sets it back to null. */
-const UNRELEASED_LAYOUT_DOC_VERSION: number | null = 3;
+const UNRELEASED_LAYOUT_DOC_VERSION: number | null = null;
 
 test("STYLE_WHITELIST and the LayoutDoc schema change only with a LayoutDoc.version bump", () => {
   const fingerprint = createHash("sha256")
