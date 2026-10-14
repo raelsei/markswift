@@ -309,3 +309,39 @@ describe("ARIA names", () => {
     expect(named.map((n) => n.kind)).toEqual(["stack"]);
   });
 });
+
+describe("043 item 10: inline box chain", () => {
+  /** `<p>Find <span …><mark><b>this</b></mark></span></p>`: the run's own element is `b`. */
+  function sentence(span: Record<string, string>): TextNode {
+    const b = el("b", { x: 40, y: 0, w: 30, h: 20 }, { "font-weight": "700" }, [
+      textNode("this", { x: 40, y: 3, w: 30, h: 14 }),
+    ]);
+    const mark = el("mark", { x: 40, y: 0, w: 30, h: 20 }, { "background-color": "rgb(255, 255, 0)" }, [b]);
+    const p = el("p", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [
+      textNode("Find ", { x: 0, y: 3, w: 40, h: 14 }),
+      el("span", { x: 40, y: 0, w: 30, h: 20 }, span, [mark]),
+    ]);
+    const root = el("main", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [p]);
+    return flatten(inferScreen(doc(root), "s").root).find((n): n is TextNode => n.kind === "text")!;
+  }
+
+  test("an outer inline box paints behind a nested run (mark › b)", () => {
+    const text = sentence({});
+    const fills = text.overlays.map((o) => o.node.style.fills);
+    expect(fills).toContainEqual([{ kind: "solid", color: { r: 1, g: 1, b: 0, a: 1 } }]);
+  });
+
+  test("inline opacity fades the run and composites into the box under it", () => {
+    const text = sentence({ opacity: "0.5" });
+    expect(text.runs.find((r) => r.text === "this")?.color.a).toBe(0.5);
+    expect(text.runs.find((r) => r.text.startsWith("Find"))?.color.a).toBe(1);
+    expect(text.overlays[0]?.node.style.opacity).toBe(0.5);
+  });
+
+  test("an inline filter or blend mode is reported, not dropped silently", () => {
+    const text = sentence({ filter: "blur(2px)", "mix-blend-mode": "multiply" });
+    const features = text.diagnostics.map((d) => d.feature);
+    expect(features).toContain("filter");
+    expect(features).toContain("mix-blend-mode");
+  });
+});
