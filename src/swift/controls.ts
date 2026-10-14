@@ -84,13 +84,14 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
     if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
-    // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it — scaling
-    // with Dynamic Type like the font; leading over the face's natural line (a bundled face's own metrics, else SF's).
+    // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it and its
+    // half-leading above the first line — scaling with Dynamic Type like the font; leading over the face's natural line
+    // (a bundled face's own metrics, else SF's).
     const lh = n.font.lineHeight;
     const face = n.font.family.kind === "custom" ? deps.fontMetrics?.[n.font.family.name.toLowerCase()] : undefined;
     if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (n.font.family.kind === "system" || face))
       out.push(
-        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""})`,
+        `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""}${n.control === "textEditor" ? ", editor: true" : ""})`,
       );
   }
   // App mode carries the behaviour and takes SwiftUI's own dimming with it (`modifiers` drops

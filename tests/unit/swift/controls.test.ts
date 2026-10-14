@@ -99,7 +99,11 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(view).toContain('.markswiftFitsText(s_note.isEmpty ? "Add a note" : s_note)');
   expect(view).toContain("minHeight: 72.0");
   expect(view).not.toContain("height: 72.0,");
-  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(4);
+  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(2);
+  // 044 item 4: an editor's text starts at its top, so its half-leading pads above the first line, as Chrome's line box.
+  expect(
+    view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline, editor: true)").length - 1,
+  ).toBe(2);
   const fidelity = swift(
     [field("textarea", { id: "bio" }, 0, 72, [text("Designer and developer.", 0, 0, 0, 0)])],
     "fidelity",
@@ -271,7 +275,9 @@ test("042: field-face-leading — an editor in a bundled face spaces its lines f
   editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
   const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
   const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
-  expect(view).toContain(".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3)");
+  expect(view).toContain(
+    ".markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3, editor: true)",
+  );
 });
 
 test("042: control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {

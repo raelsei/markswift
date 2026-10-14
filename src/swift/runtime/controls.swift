@@ -292,11 +292,12 @@ extension View {
 
     /// App mode: CSS `line-height` on a text field or editor whose text is `size` points, scaling like a font
     /// `relativeTo: style`. The leading over the face's natural line (default: SF Pro, 2444 per 2048) spaces an editor's
-    /// lines; what Dynamic Type adds to it pads the text above and below, so the field grows like the browser's line box.
-    /// At the default size the captured box already holds the line (Chrome centres it in a shorter input, too).
+    /// lines and, as half-leading, pads its text above the first line and below the last (an editor's text starts at its
+    /// top, where the browser's first line box does). A field's single line is centred, and at the default size the
+    /// captured box already holds it (Chrome centres it in a shorter input, too): only what Dynamic Type adds pads it.
     func markswiftFieldLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
-                                  natural: CGFloat = 2444.0 / 2048) -> some View {
-        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, relativeTo: style))
+                                  natural: CGFloat = 2444.0 / 2048, editor: Bool = false) -> some View {
+        modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, editor: editor, relativeTo: style))
     }
 }
 
@@ -304,18 +305,20 @@ struct MarkswiftFieldLineHeight: ViewModifier {
     let factor: CGFloat
     let natural: CGFloat
     let base: CGFloat
+    let editor: Bool
     @ScaledMetric private var size: CGFloat
 
-    init(factor: CGFloat, natural: CGFloat, base: CGFloat, relativeTo style: Font.TextStyle) {
+    init(factor: CGFloat, natural: CGFloat, base: CGFloat, editor: Bool, relativeTo style: Font.TextStyle) {
         self.factor = factor
         self.natural = natural
         self.base = base
+        self.editor = editor
         _size = ScaledMetric(wrappedValue: base, relativeTo: style)
     }
 
     func body(content: Content) -> some View {
         let leading = max(0, factor - natural)
-        content.lineSpacing(leading * size).padding(.vertical, max(0, leading * (size - base)) / 2)
+        content.lineSpacing(leading * size).padding(.vertical, leading * (editor ? size : max(0, size - base)) / 2)
     }
 }
 
