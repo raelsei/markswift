@@ -20,6 +20,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `<fieldset disabled>` disables the controls inside it, except those in its first `<legend>`.
 - Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
 - `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
+- Collapsed table borders (`border-collapse: collapse`) are painted as Chrome does: each grid line is resolved to one border (hidden, width, style, then cell > row > group > table) and drawn centred on the line, half in the row or cell on each side and the outer half in the table, with the cells' content inset by the half. A `<tfoot>` top rule now merges with the last body row's rule instead of drawing twice, and a table caption's margin no longer stretches the rows' painted box.
 
 ## [1.0.0] — 2026-10-14
 
