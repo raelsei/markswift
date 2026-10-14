@@ -63,6 +63,7 @@ All notable changes to Markswift. Versions use SemVer pre-release tags.
 - App mode: a `<textarea>`'s `TextEditor` no longer fades its first line under iOS 26's scroll edge effect.
 - App mode: a `<select>`'s, text input's or date input's single line stays vertically centred in its box when the box's height becomes a Dynamic Type floor, as Chrome centres it.
 - A table row's or row group's bottom border (`border-b` on a `<tr>` in a collapsed table) no longer adds a point of padding to the row: CSS ignores row padding and a collapsed border lies inside the cells, so every row came out one point too tall.
+- A table row whose cells are `vertical-align: middle` (or `bottom`) centres (or bottom-aligns) a cell shorter than the row, instead of pinning it to the row's top.
 
 ## [0.1.0-alpha.1] — 2026-10-10
 
