@@ -2,6 +2,8 @@
 export interface BundledFamily {
   /** `font-weight` range the family covers; `[400, 400]` for a single static face. */
   weight: [number, number];
+  /** `wght` axis range, when the file has one; without it each weight is its own static face. */
+  wght?: [number, number];
   /** `opsz` axis range, when the file has one — `font-size` is clamped into it. */
   opsz?: [number, number];
 }

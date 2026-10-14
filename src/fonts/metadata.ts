@@ -15,6 +15,7 @@ export function bundledFamilies(pkg: FontPackage): BundledFamilies {
     const prev = out[f.family];
     out[f.family] = {
       weight: prev ? [Math.min(prev.weight[0], f.weight[0]), Math.max(prev.weight[1], f.weight[1])] : f.weight,
+      ...(f.axes["wght"] ? { wght: f.axes["wght"] } : prev?.wght ? { wght: prev.wght } : {}),
       ...(f.axes["opsz"] ? { opsz: f.axes["opsz"] } : prev?.opsz ? { opsz: prev.opsz } : {}),
     };
   }

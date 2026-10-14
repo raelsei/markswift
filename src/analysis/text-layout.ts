@@ -5,7 +5,7 @@ import { type BundledFamilies } from "../model/fonts.ts";
 import { round2, px } from "../css/index.ts";
 import { type MeasuredTextRun } from "./context.ts";
 import { fontOf } from "./typography.ts";
-import { decorationOf, contains, textColorOf } from "./text-runs.ts";
+import { decorationOf, contains, textColorOf, collapseOf } from "./text-runs.ts";
 import { edgeWidth, unionRect, insetsOf } from "./geometry.ts";
 
 /**
@@ -133,11 +133,24 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
  * Fragments are grouped by their top edge; the first fragment of each line after the first is
  * a break, and the first output character at or after its raw index is where it goes. Only
  * fidelity bakes the breaks into the output; its emitter reports that.
+ *
+ * A wrap can also fall exactly at a run boundary (before an `<a>` or `<strong>`): that run's own
+ * boxes hold no break, and CDP omits `lines` for a single-line node. Its first baseline is then
+ * below the previous run's last one — baselines, because top edges differ on a shared line when
+ * font sizes do; a `vertical-align` shift is added back first, so call after `markBaselineShifts`.
  */
 export function markLineBreaks(built: MeasuredTextRun[]): void {
+  let prev: Rect | undefined;
+  let prevShift = 0;
+  let explicit = false;
   for (const b of built) {
-    const boxes = b.node.lines;
-    if (!boxes || boxes.length < 2) continue;
+    // A whitespace-only run (`<br>`, a collapsed space) has no glyph box; a newline in it is
+    // already the break, so the run after it must not add a second.
+    if (!/[^ \t\r\n\f]/.test(b.run.text)) {
+      if (b.run.text.includes("\n")) explicit = true;
+      continue;
+    }
+    const boxes = b.node.lines ?? [{ bounds: b.node.bounds, start: 0, length: b.node.text?.length ?? 0 }];
     const ordered = [...boxes].sort((p, q) => p.bounds.y - q.bounds.y || p.bounds.x - q.bounds.x);
     const starts: typeof ordered = [];
     let lineTop = -Infinity;
@@ -147,15 +160,27 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       lineTop = box.bounds.y;
       starts.push(box);
     }
+    const first = starts[0]?.bounds;
+    // A run without a measured box says nothing about where its line is.
+    if (!first || first.h <= 0) continue;
     const breaks: number[] = [];
+    const shift = b.run.baselineOffset ?? 0;
+    if (prev && !explicit && !/^[ \t]*\n/.test(b.run.text)) {
+      const drop = first.y + ASCENT_RATIO * first.h + shift - (prev.y + ASCENT_RATIO * prev.h + prevShift);
+      // A collapsible space the wrap consumed becomes the newline; offset 0 would indent the line.
+      const at = b.run.text.startsWith(" ") && collapseOf(b.styleOf.styles) !== "preserve" ? 1 : 0;
+      if (drop >= Math.max(2, first.h * 0.05, prev.h * 0.05) && at < b.run.text.length) breaks.push(at);
+    }
     for (const box of starts.slice(1)) {
       const at = b.src.findIndex((i) => i >= box.start);
       // A preserved segment break already starts the line; a second one would double it.
       if (at > 0 && b.run.text[at - 1] === "\n") continue;
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at) breaks.push(at);
     }
-    if (!breaks.length) continue;
-    b.run.breaks = breaks;
+    prev = starts[starts.length - 1]!.bounds;
+    prevShift = shift;
+    explicit = /\n[ \t]*$/.test(b.run.text);
+    if (breaks.length) b.run.breaks = breaks;
   }
 }
 

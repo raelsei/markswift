@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { memberName, pascalWords, str } from "../../../src/swift/format.ts";
+import { fontExpr, memberName, pascalWords, str } from "../../../src/swift/format.ts";
+import { fontOf } from "../../../src/analysis/typography.ts";
+import { bundledFamilies } from "../../../src/fonts/metadata.ts";
+import type { FontPackage, PackagedFace } from "../../../src/fonts/types.ts";
 
 describe("str", () => {
   const table: Array<[string, string, string]> = [
@@ -37,4 +40,25 @@ test("pascalWords and memberName build K1 member names", () => {
   expect(memberName("on", "Edit", seen, "Action")).toBe("onEdit2");
   expect(memberName("on", "", seen, "Action")).toBe("onAction");
   expect(memberName("is", "Save", seen, "Control", "Pressed")).toBe("isSavePressed");
+});
+
+test("043 item 11: a bundled family without a wght axis selects its static face in fidelity; app keeps Dynamic Type", () => {
+  const face = (weight: number, axes: Record<string, [number, number]>): PackagedFace => ({
+    family: "Fam",
+    file: `fam-${weight}.ttf`,
+    style: "normal",
+    weight: [weight, weight],
+    axes,
+    metrics: { upem: 1000, ascent: 800, descent: 200, lineGap: 0, useTypoMetrics: false },
+    converted: false,
+    renamed: false,
+  });
+  const pkg = (faces: PackagedFace[]): FontPackage => ({ faces, assets: {}, plist: "", notes: [] });
+  const bold = { "font-family": "Fam", "font-size": "18px", "font-weight": "700" };
+  const staticFont = fontOf(bold, bundledFamilies(pkg([face(400, {}), face(700, {})])));
+  const variableFont = fontOf(bold, bundledFamilies(pkg([face(100, { wght: [100, 900] })])));
+  expect(fontExpr(staticFont, { mode: "fidelity" })).toBe('.custom("Fam", fixedSize: 18.0).weight(.bold)');
+  expect(fontExpr(variableFont, { mode: "fidelity" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
+  for (const f of [staticFont, variableFont])
+    expect(fontExpr(f, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
 });

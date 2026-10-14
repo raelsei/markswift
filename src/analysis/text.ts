@@ -1,5 +1,6 @@
 /** Construct semantic text nodes from measured inline runs. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
+import { type Color } from "../model/values.ts";
 import {
   type TextNode,
   type SemBase,
@@ -235,17 +236,32 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       );
     if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
+    const chain = inlineChain(host, el);
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
-    // carried by a run: SwiftUI has no per-run box. Collected for a background layer below.
-    if (el !== host && !hidden && !painted.includes(el)) {
-      const bg = parseColor(el.styles["background-color"]);
-      if ((bg && bg.a > 0) || EDGES.some((e) => edgeWidth(el.styles, e) > 0)) painted.push(el);
+    // carried by a run: SwiftUI has no per-run box. Every box on the chain is collected for a
+    // background layer below — `<mark><b>x</b></mark>` paints mark's highlight behind bold text.
+    for (const inline of chain) if (!painted.includes(inline) && inlineBoxHasPaint(inline)) painted.push(inline);
+    reportInlineEffects(host, chain, hidden, note);
+    // `opacity` is not inherited but composites every inline box on the chain: the run's paints
+    // carry the product (`<span class="opacity-60">` in prose).
+    const opacity = inlineOpacity(chain);
+    if (!hidden && opacity < 1) {
+      run.color = fade(run.color, opacity);
+      if (run.decoration?.color) run.decoration.color = fade(run.decoration.color, opacity);
+      if (run.shadow) run.shadow = { ...run.shadow, color: fade(run.shadow.color, opacity) };
+      if (run.paint && "stops" in run.paint)
+        run.paint = { ...run.paint, stops: run.paint.stops.map((p) => ({ ...p, color: fade(p.color, opacity) })) };
+      if (painted.some((p) => chain.includes(p)))
+        note(
+          "approximated",
+          "opacity",
+          "inline opacity → glyphs and the inline box fade separately, not composited as one group",
+        );
     }
     // A link inside a sentence never reaches `controlOf` — it is an inline element, so it arrives
     // here as a run. It stays a run: `Text(AttributedString)` with `.link` concatenates like any
     // other run (`Text.markswiftLink`). An absolute URL opens; an in-app href carries the same
     // action a block link would get and the paragraph's `openURL` handler calls it.
-    const chain = inlineChain(host, el);
     const link = chain.find((a) => a.tag === "a" && (a.attrs["href"] ?? "") !== "");
     if (link && !hidden) {
       const action = linkAction(link);
@@ -327,8 +343,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   ) {
     base.height = { kind: "hug" };
   }
-  markLineBreaks(built);
   markBaselineShifts(built, host, note);
+  markLineBreaks(built);
   // An inline element with its own background or border cannot be expressed as a run — SwiftUI
   // has no per-run box. Its measured inline box becomes a background layer instead, so the
   // highlight or key cap lands exactly where the browser painted it. An inline box that wrapped
@@ -337,6 +353,9 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // rectangle with its background.
   for (const el of painted) {
     const style = styleOf(el, []);
+    // The box composites every opacity from the host down to it, not only its own.
+    const opacity = inlineOpacity(inlineChain(host, el));
+    if (opacity < 1) style.opacity = opacity;
     const boxes = el.bounds.h > lh * 1.5 ? inlineFragments(el) : [el.bounds];
     boxes.forEach((b, i) => {
       const box: SemNode = {
@@ -377,7 +396,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   };
   if (growth) node.lineBoxGrowth = growth;
   if (host.styles["text-wrap-style"] === "balance") node.balance = true;
-  addStateRunColors(node, built);
+  addStateRunColors(node, built, host);
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
@@ -405,7 +424,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
  * Runs drawn in another colour while their element is pressed/focused → `node.states[key].runColors`,
  * index-aligned with `node.runs` (gap runs paint nothing and stay empty).
  */
-function addStateRunColors(node: TextNode, built: MeasuredTextRun[]): void {
+function addStateRunColors(node: TextNode, built: MeasuredTextRun[], host: LayoutNode): void {
   node.runs.forEach((run, i) => {
     const el = built.find((b) => b.run === run)?.styleOf;
     const vis = el?.styles["visibility"];
@@ -413,12 +432,77 @@ function addStateRunColors(node: TextNode, built: MeasuredTextRun[]): void {
     for (const key of ["pressed", "focused"] as const) {
       const d = el.states?.[key];
       if (!d || !("color" in d || "-webkit-text-fill-color" in d)) continue;
-      const c = textColorOf({ ...el.styles, ...d });
+      const c = fade(textColorOf({ ...el.styles, ...d }), inlineOpacity(inlineChain(host, el)));
       if (JSON.stringify(c) === JSON.stringify(run.color)) continue;
       const st = ((node.states ??= {})[key] ??= {});
       (st.runColors ??= [])[i] = c;
     }
   });
+}
+
+/** Visible paint of an inline element's own box: background, border, outline or box shadow. */
+function inlineBoxHasPaint(el: LayoutNode): boolean {
+  const s = el.styles;
+  if (s["visibility"] === "hidden" || s["visibility"] === "collapse") return false;
+  if ((s["background-image"] ?? "none") !== "none" || (parseColor(s["background-color"])?.a ?? 0) > 0) return true;
+  // A transparent border or outline (Tailwind's `border` over `border-transparent`) paints nothing.
+  if (EDGES.some((e) => edgeWidth(s, e) > 0 && (parseColor(s[`border-${e}-color`] ?? s["color"])?.a ?? 0) > 0))
+    return true;
+  const os = s["outline-style"] ?? "none";
+  if (
+    os !== "none" &&
+    os !== "hidden" &&
+    px(s["outline-width"]) > 0 &&
+    (parseColor(s["outline-color"] ?? s["color"])?.a ?? 0) > 0
+  )
+    return true;
+  return parseShadows(s["box-shadow"]).some((sh) => sh.color.a > 0);
+}
+
+/** `opacity` composites down the inline chain (it is not inherited, so each box multiplies in). */
+function inlineOpacity(chain: LayoutNode[]): number {
+  return chain.reduce((o, el) => {
+    const v = parseFloat(el.styles["opacity"] ?? "1");
+    return Number.isFinite(v) ? o * Math.min(1, Math.max(0, v)) : o;
+  }, 1);
+}
+
+function fade(c: Color, k: number): Color {
+  return k < 1 ? { ...c, a: round2(c.a * k) } : c;
+}
+
+/** Effects an inline box applies to its text, which the merged native `Text` cannot carry per run. */
+const INLINE_EFFECTS: Record<string, string> = {
+  filter: "none",
+  "backdrop-filter": "none",
+  "mix-blend-mode": "normal",
+  "mask-image": "none",
+  "clip-path": "none",
+};
+
+function reportInlineEffects(
+  host: LayoutNode,
+  chain: LayoutNode[],
+  hidden: boolean,
+  note: (level: DiagnosticLevel, feature: string, message: string) => void,
+): void {
+  for (const el of chain)
+    for (const [prop, initial] of Object.entries(INLINE_EFFECTS)) {
+      const v = el.styles[prop];
+      if (v && v !== initial)
+        note(
+          "approximated",
+          prop,
+          `inline <${el.tag}> ${prop}: ${v.slice(0, 40)} → not applied to its glyphs (merged into the paragraph's Text)`,
+        );
+    }
+  const hv = host.styles["visibility"];
+  if (!hidden && (hv === "hidden" || hv === "collapse"))
+    note(
+      "approximated",
+      "visibility",
+      "visibility: visible inline text inside a hidden text host → hidden with it (one native Text)",
+    );
 }
 
 // ponytail: conservative character set (letters, marks, digits, a few non-breaking punctuation marks); anything else may have a break opportunity.

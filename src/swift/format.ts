@@ -223,13 +223,17 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
  *   to 800, not 400).
  * - **fidelity** — `.markswiftVariable(family, size:, weight:, opsz:)`: the variable axes the browser
  *   actually rendered, so an SSIM against the reference measures the design and not a weight
- *   quantisation. Nothing in this mode is shipped.
+ *   quantisation. Nothing in this mode is shipped. A family without a `wght` axis is a set of
+ *   static faces: a variation request would land on its default (regular) face, so the named
+ *   weight selects the face instead, at a fixed size.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) =>
     Math.abs(w - f.weight) < Math.abs(best[0] - f.weight) ? [w, name] : best,
   )[1];
   if (f.family.kind === "custom") {
+    if (ctx.mode === "fidelity" && f.family.static)
+      return `.custom(${str(f.family.name)}, fixedSize: ${num(f.size)}).weight(.${weightName})`;
     if (ctx.mode === "fidelity")
       return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${f.opsz !== undefined ? `, opsz: ${num(f.opsz)}` : ""})`;
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;

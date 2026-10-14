@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="font-weight; font-family">
+<meta name="markswift-themes" content="light,dark">
+<title>font-weight--static</title>
+<!-- Two static faces of one family (Geist instanced at wght 400 and 700, OFL: ../assets/OFL-Geist.txt); no wght axis. -->
+<style>
+@font-face { font-family: StaticGeist; src: url('../assets/geist-latin-static-400.woff2') format('woff2'); font-style: normal; font-weight: 400; }
+@font-face { font-family: StaticGeist; src: url('../assets/geist-latin-static-700.woff2') format('woff2'); font-style: normal; font-weight: 700; }
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: StaticGeist, system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+p.s { margin: 0 0 8px; font-size: 18px; line-height: 24px; }
+p.s:last-child { margin-bottom: 0; }
+.w7 { font-weight: 700; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section id="static-faces">
+  <p class="cap">one family, two static faces</p>
+  <p class="s">400 Regular static face</p>
+  <p class="s w7">700 Bold static face</p>
+  <p class="s">Regular text with a <b>bold run</b> inside.</p>
+</section>
+</main>
+</body>
+</html>
