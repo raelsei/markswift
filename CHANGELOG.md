@@ -16,6 +16,10 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - A `data:` SVG background or mask with only a viewBox (no px `width`/`height`) has a ratio but no size, as in CSS: at `background-size: auto` it fits the positioning area instead of drawing at its viewBox size; a single px `width` or `height` takes the other axis from the viewBox ratio.
 - `MarkswiftFlexRow` runs CSS's flex freeze loop: px `min-width`/`max-width` clamp items with a definite basis, shrink is weighted by the inner (content-box) basis, grow and shrink factor sums below 1 leave the unused share, and a percentage `flex-basis` or `width` (item without horizontal padding) follows the row; such rows are now admitted.
 - `MarkswiftTracks` sizes `minmax(<px>, fr)` columns like CSS: a floor above its share freezes the track and the other fr tracks share the rest; an fr sum below 1 leaves space unused. Such templates are now admitted.
+- Form controls start from the state the browser paints: an input value, `<textarea>` text, `checked` or `<option selected>` that a page script (or a `prepare` hook) changed after load wins over the markup attribute.
+- `<fieldset disabled>` disables the controls inside it, except those in its first `<legend>`.
+- Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
+- `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
 
 ## [1.0.0] — 2026-10-14
 

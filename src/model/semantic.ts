@@ -571,9 +571,11 @@ export interface ControlNode extends SemBase {
   enterKey?: string;
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
-  /** Radio `@name`; radios with the same group share one selection. */
+  /** Radio `@name`; radios with the same `form` and group share one selection. */
   group?: string;
-  /** `@disabled`: the control is inert (Chrome also dims it, so the measured style already shows it). */
+  /** Grouped radio's form owner (the `<form>`'s node id; absent outside a form). */
+  form?: string;
+  /** `@disabled`, or inside a `<fieldset disabled>`: the control is inert (Chrome also dims it, so the measured style already shows it). */
   disabled?: boolean;
   /** Numeric domain of a slider/progress/gauge, resolved from `@min`/`@max`/`@step`. */
   range?: { min: number; max: number; step?: number };
@@ -582,8 +584,8 @@ export interface ControlNode extends SemBase {
    * Browsers colour the bar by this state — green, amber, red — and so does the emitter.
    */
   level?: "optimum" | "suboptimal" | "poor";
-  /** Picker choices in document order (`<option>` labels). */
-  options?: string[];
+  /** Picker choices in document order: the `<option>`s a menu lists (`hidden` ones are left out). */
+  options?: PickerOption[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
   /** `<details open>`: initial disclosure state. */
@@ -605,6 +607,13 @@ export interface ControlNode extends SemBase {
   accent?: Color;
   /** Computed `appearance: none`: the author removed the native widget chrome (no select arrow). */
   appearance?: "none";
+}
+
+/** A `<select>` choice: its label, whether it (or its `<optgroup>`) is disabled, and that group's `label`. */
+export interface PickerOption {
+  label: string;
+  disabled?: boolean;
+  group?: string;
 }
 
 export type SemNode = StackNode | GridNode | TextNode | SvgNode | ImageNode | BoxNode | ControlNode;

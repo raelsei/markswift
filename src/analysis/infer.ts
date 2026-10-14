@@ -124,7 +124,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   // Controls come before the generic container path: same measured box, native control inside.
-  const spec = policy.route === "control" ? controlOf(n, ctx.labels?.forms.get(n)) : undefined;
+  const spec = policy.route === "control" ? controlOf(n, ctx.labels) : undefined;
   if (spec) {
     const childAxis = mainAxis(n);
     const childCtx: InferenceContext = {

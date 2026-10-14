@@ -308,3 +308,80 @@ test("042: field-text-centre — a select's or field's single line stays centred
   expect(view.match(/minHeight: 32\.0, alignment: \.leading\)/g)).toHaveLength(2);
   expect(view).toContain("minHeight: 64.0, alignment: .topLeading)");
 });
+
+test("043: a disabled fieldset disables its controls, except inside its first legend", () => {
+  const box = (y: number, h: number) => ({ x: 0, y, w: 320, h });
+  const { view } = swift([
+    el("fieldset", { id: "fs", disabled: "" }, box(0, 200), [
+      el("legend", { id: "first" }, box(0, 40), [field("input", { id: "exempt", type: "text" }, 0)]),
+      field("input", { id: "inside", type: "text" }, 50),
+      el("legend", { id: "second" }, box(100, 40), [field("input", { id: "later", type: "text" }, 100)]),
+      el("fieldset", { id: "inner" }, box(150, 50), [
+        el("legend", { id: "innerLegend" }, box(150, 40), [field("input", { id: "nested", type: "text" }, 150)]),
+      ]),
+    ]),
+    field("input", { id: "outside", type: "text" }, 210),
+  ]);
+  const disabledAfter = (state: string) => {
+    const at = view.indexOf(`text: $${state})`);
+    const next = view.indexOf("TextField(", at + 1);
+    return view.slice(at, next < 0 ? undefined : next).includes(".disabled(true)");
+  };
+  expect(disabledAfter("s_exempt")).toBe(false);
+  expect(disabledAfter("s_inside")).toBe(true);
+  expect(disabledAfter("s_later")).toBe(true);
+  // An inner fieldset's legend is exempt from that fieldset only, not from the outer one.
+  expect(disabledAfter("s_nested")).toBe(true);
+  expect(disabledAfter("s_outside")).toBe(false);
+});
+
+test("043: radios group by form owner and name; an unnamed radio only selects", () => {
+  const radio = (id: string, attrs: Record<string, string>, y: number) =>
+    el("input", { id, type: "radio", ...attrs }, { x: 0, y, w: 13, h: 13 }, [], { display: "inline-block" });
+  const box = (y: number) => ({ x: 0, y, w: 320, h: 40 });
+  const { view } = swift([
+    el("form", { id: "a" }, box(0), [
+      radio("a1", { name: "size", value: "s", checked: "" }, 0),
+      radio("a2", { name: "size", value: "m" }, 20),
+    ]),
+    el("form", { id: "b" }, box(60), [
+      radio("b1", { name: "size", value: "s" }, 60),
+      radio("b2", { name: "size", value: "m", checked: "" }, 80),
+    ]),
+    // `form=` names its owner wherever the radio sits.
+    radio("c1", { name: "size", value: "l", form: "b" }, 120),
+    radio("solo", {}, 140),
+  ]);
+  expect(view.split("@State private var s_size").length - 1).toBe(2);
+  expect(view).toContain('@State private var s_size: String = "s"');
+  expect(view).toContain('@State private var s_size_r2: String = "m"');
+  expect(view).toContain('$s_size.markswiftSelects("m")');
+  expect(view).toContain('$s_size_r2.markswiftSelects("l")');
+  // HTML: a radio without a name is its own group; a tap selects it and never clears it.
+  expect(view).toContain("@State private var s_solo: Bool = false");
+  expect(view).toContain("Toggle(isOn: $s_solo.markswiftSelects(true))");
+});
+
+test("043: a select lists only its visible options, disables the disabled ones and heads its groups", () => {
+  const zero = { x: 0, y: 0, w: 0, h: 0 };
+  const { view } = swift([
+    field("select", { id: "pick" }, 0, 38, [
+      option("Choose a size", { disabled: "", hidden: "", selected: "" }),
+      option("S"),
+      el("optgroup", { label: "Large" }, zero, [option("L"), option("XL", { disabled: "" })]),
+      el("optgroup", { label: "Sold out", disabled: "" }, zero, [option("XXL")]),
+    ]),
+    field("select", { id: "first" }, 50, 38, [option("Gone", { disabled: "" }), option("Here")]),
+  ]);
+  // The placeholder shows while closed but is no choice in the menu.
+  expect(view).toContain('@State private var s_pick: String = "Choose a size"');
+  expect(view).not.toContain('["Choose a size"');
+  expect(view).toContain('ForEach(["S"], id: \\.self)');
+  expect(view).toContain('} header: {\n                        Text(verbatim: "Large")');
+  expect(view).toContain('.disabled(["XL"].contains(option))');
+  // A disabled group disables every option in it.
+  expect(view).toMatch(/ForEach\(\["XXL"\], id: \\\.self\) \{ option in\n\s+Text\(option\)\n\s+\.disabled\(true\)/);
+  expect(view).toContain('Text(verbatim: "Sold out")');
+  // Nothing selected: the browser selects the first option that is not disabled.
+  expect(view).toContain('@State private var s_first: String = "Here"');
+});

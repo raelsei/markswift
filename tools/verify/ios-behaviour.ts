@@ -224,9 +224,10 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   const pickerValues: string[] = [];
   walk(screen.root, (n) => {
     if (n.kind !== "control" || n.control !== "picker") return;
-    pickerValues.push(...(n.options ?? []));
-    const current = n.value ?? n.options?.[0];
-    const next = n.options?.find((o) => o !== current);
+    pickerValues.push(...(n.options ?? []).map((o) => o.label));
+    const current = n.value ?? n.options?.[0]?.label;
+    // A disabled option cannot be chosen, so the harness taps the next enabled one.
+    const next = n.options?.find((o) => !o.disabled && o.label !== current)?.label;
     if (current && next) pickers.push({ current, next });
   });
   const code = result.files[`${view}.swift`] ?? "";

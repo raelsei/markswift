@@ -48,9 +48,9 @@ export function controlMembers(root: SemNode): ControlMembers {
   const radioTag = new Map<SemNode, string>();
   const toggleOf: ControlMembers["toggleOf"] = new Map();
   const seen: Record<string, number> = {};
-  // Radios sharing a `name` hold one `String` selection: each radio's tag is its `value` when the
-  // group's values are unique, else its position. HTML: the last `checked` radio wins.
-  // ponytail: groups are keyed by `name` across the whole screen, not by form owner; split by `<form>` if a design has two forms reusing a name.
+  // Radios sharing a form owner and a `name` hold one `String` selection, named after the `name`:
+  // each radio's tag is its `value` when the group's values are unique, else its position. HTML:
+  // the last `checked` radio wins.
   const groups = new Map<string, ControlNode[]>();
   // ARIA toggle roles on an element emitted as a Button or tap gesture (a native checkbox owns its
   // value), and the radios of each `role=radiogroup`, tagged by position (a `<button>`'s `value` is
@@ -64,9 +64,10 @@ export function controlMembers(root: SemNode): ControlMembers {
       if (g !== undefined) ariaGroups.set(g, [...(ariaGroups.get(g) ?? []), n]);
     }
     if (n.kind !== "control" || n.control !== "radio" || n.group === undefined) return;
-    const list = groups.get(n.group);
+    const key = JSON.stringify([n.form ?? null, n.group]);
+    const list = groups.get(key);
     if (list) list.push(n);
-    else groups.set(n.group, [n]);
+    else groups.set(key, [n]);
   });
   const groupState = new Map<string, string>();
   const ariaGroupState = new Map<string, string>();
@@ -129,14 +130,14 @@ export function controlMembers(root: SemNode): ControlMembers {
       return;
     }
     if (n.kind !== "control") return;
-    const key = n.control === "radio" ? n.group : undefined;
+    const key = n.control === "radio" && n.group !== undefined ? JSON.stringify([n.form ?? null, n.group]) : undefined;
     const group = key !== undefined ? groups.get(key) : undefined;
     if (key !== undefined && group) {
       const values = group.map((r) => r.value ?? "on");
       const tags = new Set(values).size === values.length ? values : group.map((_, i) => String(i));
       let name = groupState.get(key);
       if (name === undefined) {
-        name = uniqueName(`s_${identifier(key) || "group"}`, seen);
+        name = uniqueName(`s_${identifier(n.group!) || "group"}`, seen);
         groupState.set(key, name);
         const checked = group.findLastIndex((r) => r.checked);
         members.push({
