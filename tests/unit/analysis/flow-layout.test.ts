@@ -134,4 +134,18 @@ test("text beside a block child in block flow is its anonymous block's line box,
     element({ x: 0, y: 0, w: 200, h: 64 }, font, [run, element({ x: 0, y: 22, w: 200, h: 42 }, { display: "block" })]),
   );
   expect(root.children[0]!.frame).toEqual({ x: 0, y: 0, w: 31, h: 20 });
+
+  // An inline host (`<label><input type=checkbox> Ship</label>`) is only its glyphs' content area: the runs keep it.
+  const caption: LayoutNode = { ...run, bounds: { x: 20, y: 2, w: 31, h: 16 } };
+  const label: LayoutNode = {
+    ...element({ x: 0, y: 2, w: 51, h: 16 }, { ...font, display: "inline", "font-size": "13px" }, [
+      element({ x: 4, y: 4, w: 13, h: 13 }, { display: "inline-block" }),
+      caption,
+    ]),
+    tag: "label",
+  };
+  const legend = screen(element({ x: 0, y: 0, w: 200, h: 21 }, font, [label]));
+  const row = legend.children[0]!;
+  if (row.kind !== "stack") throw new Error("expected the label's row");
+  expect(row.children.find((c) => c.kind === "text")!.frame).toEqual(caption.bounds);
 });
