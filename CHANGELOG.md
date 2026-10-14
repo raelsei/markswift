@@ -6,6 +6,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Added
 - `<video poster>` is drawn as an Image of the captured poster at the video's frame and `object-fit`, and `<input type=image>` as an Image of its `src` with `alt` as the label and the button trait (both reported as approximated; playback and the submit action are not translated). Both were empty placeholder boxes.
+- App mode: tapping a text field's `<label>` (`for` or wrapping) focuses the field through its `@MarkswiftFocused` member, as in the browser.
 
 ### Changed
 - Fidelity: a line wrap that falls exactly at a styled run boundary (before an `<a>` or `<strong>`) becomes a forced break like the other measured breaks; app output is unchanged.
@@ -20,6 +21,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `<fieldset disabled>` disables the controls inside it, except those in its first `<legend>`.
 - Radios group by form owner (`<form>` ancestor or `form=`) and `name`, so two forms may reuse a name; an unnamed radio is select-only (a tap never clears it).
 - `<select>` menus leave out `hidden` options, list `disabled` ones greyed (an `<optgroup disabled>` disables its options) and head each `<optgroup>` with a `Section`; with nothing selected the closed select shows the first enabled option.
+- App mode: a `<textarea>`'s first line sits where Chrome's line box puts it — `TextEditor` pads half the CSS leading above its first line and below its last, less what iOS's text view already lowers a face with glyphs above its ascent (Geist) (`markswiftFieldLineHeight(…, editor: true, face:)`), instead of drawing 0.5–3.5 pt high.
+- A closed `<select>` with native appearance pads its label like Chrome's menulist (4 px at the start, 16 px at the end inside the author's padding) and centres its arrow in a 15 px box at the inner border edge, over the author's end padding, as Chrome draws it (the label sat 4 pt left and the arrow ~10 pt left).
+- `<input type=submit|reset|button>` captions keep one line and shrink into the measured width (the UA font Arial maps to the wider SF Pro) instead of wrapping (app) or truncating (fidelity).
 
 ## [1.0.0] — 2026-10-14
 

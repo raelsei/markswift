@@ -375,14 +375,13 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 ## Known gaps
 
 - 17 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
-  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, collapsed table borders,
-  `::placeholder` colour and `TextEditor` first-line placement.
+  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, collapsed table borders and
+  `::placeholder` colour.
 - A CSS scroll box (`overflow: auto`) paints its background, border, radius and min-height on the content inside
   the `ScrollView`, not on the scroll view, so rounded bottom corners are cut while it scrolls.
 - `<ul>` item spacing: list rows sit a little apart from Chrome's (`html` `ul` app SSIM 0.85–0.86 on iOS).
-- `<input type=submit|reset|button>` captions in the UA font can truncate (fidelity) or wrap (app); UA-bordered
-  buttons use Chromium 152's outset/inset shading; unstyled theme-painted buttons have no pressed look.
-- Tapping a `<label>` does not focus its text field; `<bdo>`/`<bdi>` are not mapped.
+- UA-bordered buttons use Chromium 152's outset/inset shading; unstyled theme-painted buttons have no pressed look.
+- `<bdo>`/`<bdi>` are not mapped.
 - Accessibility: the 10 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
@@ -460,8 +459,8 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; label-tap
-  focus; CSS animations; iPad hover and keyboard.
+- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
+  iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`, `<bdo>`/`<bdi>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
