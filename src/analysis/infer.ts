@@ -26,7 +26,18 @@ import { buildWrapping } from "./wrapping.ts";
 import { admitFlexRow } from "./flex-row.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
-import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
+import {
+  unionRect,
+  insetsOf,
+  renders,
+  hangsLeading,
+  floating,
+  isFlex,
+  mainAxis,
+  outOfFlow,
+  edgeWidth,
+} from "./geometry.ts";
+import { collapseTableBorders } from "./table-borders.ts";
 import { clipsText } from "./style-background.ts";
 import { dropInvisible } from "./invisible.ts";
 
@@ -65,7 +76,8 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
 }
 
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
-  const n = input.tag === "table" ? captionOutside(input) : input;
+  const t = collapseTableBorders(input);
+  const n = t.tag === "table" ? captionOutside(t) : t;
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
@@ -315,14 +327,14 @@ function captionOutside(n: LayoutNode): LayoutNode {
   const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
   if (!paint.length) return n;
   const rest = n.children.filter((c) => c !== caption);
-  // The side it is painted on (`caption-side`), not its place in the markup.
+  // The side it is painted on (`caption-side`), not its place in the markup; the rows' box ends at
+  // the table's border, not at the caption's margin.
   const top = caption.bounds.y < Math.min(...rest.map((c) => c.bounds.y));
-  const bounds = {
-    x: n.bounds.x,
-    y: top ? caption.bounds.y + caption.bounds.h : n.bounds.y,
-    w: n.bounds.w,
-    h: n.bounds.h - caption.bounds.h,
-  };
+  const shown = rest.filter(renders);
+  if (!shown.length) return n;
+  const grid = shown.map((c) => c.bounds).reduce(unionRect);
+  const [bt, bb] = [edgeWidth(n.styles, "top"), edgeWidth(n.styles, "bottom")];
+  const bounds = { x: n.bounds.x, y: grid.y - bt, w: n.bounds.w, h: grid.h + bt + bb };
   const rows: LayoutNode = {
     tag: "div",
     attrs: {},

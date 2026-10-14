@@ -164,32 +164,79 @@ describe("tables", () => {
     expect(texts.map((t) => t.runs[0]!.text)).toEqual(["Q1", "Quarterly sales"]);
   });
 
-  test("042: row-border-inset — a collapsed row border lies inside its cells, not inside the row", () => {
-    const line = {
-      "border-bottom-style": "solid",
-      "border-bottom-width": "1px",
-      "border-bottom-color": "rgb(0, 0, 0)",
-    };
-    const row = (y: number, text: string) =>
-      el("tr", { x: 0, y, w: 200, h: 38 }, { display: "table-row", ...line }, [
-        el("td", { x: 0, y, w: 200, h: 38 }, { display: "table-cell", "padding-top": "8px" }, [
-          textNode(text, { x: 0, y: y + 8, w: 20, h: 20 }),
-        ]),
-      ]);
-    const table = el("table", { x: 0, y: 0, w: 200, h: 76 }, { display: "table", "border-collapse": "collapse" }, [
-      el("tbody", { x: 0, y: 0, w: 200, h: 76 }, { display: "table-row-group", ...line }, [
-        row(0, "Q1"),
-        row(38, "Q2"),
+  const rule = (side: string) => ({
+    [`border-${side}-style`]: "solid",
+    [`border-${side}-width`]: "1px",
+    [`border-${side}-color`]: "rgb(0, 0, 0)",
+  });
+  const pad = { "padding-top": "8px", "padding-right": "8px", "padding-bottom": "8px", "padding-left": "8px" };
+  const row = (y: number, h: number, text: string, styles: Record<string, string> = {}) =>
+    el("tr", { x: 0, y, w: 200, h }, { display: "table-row", ...styles }, [
+      el("td", { x: 0, y, w: 200, h }, { display: "table-cell", ...pad }, [
+        textNode(text, { x: 8, y: y + h / 2 - 10, w: 20, h: 20 }),
       ]),
     ]);
-    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 76 }, { display: "block" }, [table])), "s");
-    const ruled = flatten(screen.root).filter((n) => n.style.borderSides?.bottom);
-    expect(ruled.map((n) => n.frame.h)).toEqual([76, 38, 38]);
-    expect(ruled.map((n) => n.padding)).toEqual([
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
+  /** Every painted rule as `<frame y>:<side>=<width>`, in tree order. */
+  const rules = (root: SemNode) =>
+    flatten(root).flatMap((n) =>
+      Object.entries(n.style.borderSides ?? {}).map(([side, edge]) => `${n.frame.y}:${side}=${edge!.width}`),
+    );
+
+  test("044: collapsed-rule — a row border is centred on the grid line: half in each row, the footer's top rule drawn once", () => {
+    // Chrome's boxes: each row holds half of every collapsed line it touches.
+    const table = el("table", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "table" }, [
+      el("tbody", { x: 0, y: 0, w: 200, h: 73.5 }, { display: "table-row-group" }, [
+        row(0, 36.5, "Q1", rule("bottom")),
+        row(36.5, 37, "Q2", rule("bottom")),
+      ]),
+      el("tfoot", { x: 0, y: 73.5, w: 200, h: 37 }, { display: "table-footer-group", ...rule("top") }, [
+        row(73.5, 37, "Sum"),
+      ]),
     ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "block" }, [table])), "s");
+    expect(rules(screen.root)).toEqual(["0:bottom=0.5", "36.5:top=0.5", "36.5:bottom=0.5", "73.5:top=0.5"]);
+    const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
+    expect(texts.map((t) => [t.padding[0], t.padding[2]])).toEqual([
+      [8, 8.5],
+      [8.5, 8.5],
+      [8.5, 8],
+    ]);
+  });
+
+  test("044: collapsed-outer — the table holds the outer half of its edge cells' borders, cells the inner half", () => {
+    const box = { ...rule("top"), ...rule("right"), ...rule("bottom"), ...rule("left") };
+    const cell = (x: number, w: number) =>
+      el("td", { x, y: 0.5, w, h: 37 }, { display: "table-cell", ...pad, ...box }, [
+        textNode("Q", { x: x + 8.5, y: 9, w: 10, h: 20 }),
+      ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table" }, [
+      el("tr", { x: 0.5, y: 0.5, w: 199, h: 37 }, { display: "table-row" }, [cell(0.5, 99.5), cell(100, 99.5)]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 38 }, { display: "block" }, [table])), "s");
+    const framed = flatten(screen.root).filter((n) => n.style.border);
+    expect(framed.map((n) => [n.frame, n.style.border!.width, n.padding])).toEqual([
+      [{ x: 0, y: 0, w: 200, h: 38 }, 0.5, [0.5, 0.5, 0.5, 0.5]],
+    ]);
+    expect(rules(screen.root)).toEqual([
+      "0.5:top=0.5",
+      "0.5:bottom=0.5",
+      "0.5:right=0.5",
+      "0.5:left=0.5",
+      "0.5:right=0.5",
+      "0.5:left=0.5",
+    ]);
+  });
+
+  test("044: separated — cells apart by `border-spacing` keep their own borders", () => {
+    const cell = (x: number) =>
+      el("td", { x, y: 2, w: 97, h: 36 }, { display: "table-cell", ...pad, ...rule("bottom") }, [
+        textNode("Q", { x: x + 8, y: 10, w: 10, h: 20 }),
+      ]);
+    const table = el("table", { x: 0, y: 0, w: 200, h: 40 }, { display: "table" }, [
+      el("tr", { x: 2, y: 2, w: 196, h: 36 }, { display: "table-row" }, [cell(2), cell(101)]),
+    ]);
+    const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 40 }, { display: "block" }, [table])), "s");
+    expect(rules(screen.root)).toEqual(["2:bottom=1", "2:bottom=1"]);
   });
 
   test("042: cell-middle — hugging cells of a row sit where `vertical-align: middle` puts them", () => {
