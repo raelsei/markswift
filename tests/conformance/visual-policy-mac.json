@@ -15,7 +15,7 @@
       "minSsim": 0.53
     },
     "components@fidelity": {
-      "minSsim": 0.47
+      "minSsim": 0.86
     },
     "css-layout@app": {
       "minSsim": 0.78
@@ -42,7 +42,7 @@
       "minSsim": 0.62
     },
     "html@app": {
-      "minSsim": 0.59
+      "minSsim": 0.64
     },
     "html@fidelity": {
       "minSsim": 0.73
