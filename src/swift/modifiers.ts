@@ -54,39 +54,23 @@ export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[]
 /**
  * The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area.
  * A node with a pressed/focused look paints the union style of `pairStyle`, its colours as ternaries.
+ * App: a scroll box's padding scrolls with its content (layout.ts); everything else here belongs to its ScrollView.
  */
 export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
-  const m: string[] = [];
+  const scrolls = ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
+  const m = scrolls ? [] : paddingModifiers(n, ctx);
   const paint = ctx.statePaint?.get(n.id);
   // A copy for the paint helpers; `frameModifier` and the overlays keep `n` (identity lookups).
   const p = paint ? ({ ...n, style: paint.style } as SemNode) : n;
   const st = p.style;
-  // App: a padded line-box surplus is a `minHeight` floor instead (`surplusFloor`); content CSS let
-  // overflow the floored box gives its overflow back (`floorOverflow`).
-  const surplus = surplusFloor(n, ctx);
-  const [overTop, overBottom] = floorOverflow(n, ctx);
-  const padding: [number, number, number, number] = [
-    n.padding[0] - overTop,
-    n.padding[1],
-    n.padding[2] - overBottom,
-    n.padding[3],
-  ];
-  if (surplus) padding[surplus.edge === "top" ? 0 : 2] -= surplus.px;
-  const [pt, pr, pb, pl] = padding;
-  if (pt || pr || pb || pl) {
-    if (pt === pr && pr === pb && pb === pl) m.push(`.padding(${num(pt)})`);
-    else m.push(`.padding(${edgeInsets(padding)})`);
-  }
   m.push(...frameModifier(n, ctx));
   // `object-fit: cover` overflows its box and `none` can; the browser clips both to the img box.
   if (n.kind === "image" && (n.contentMode === "cover" || n.contentMode === "none") && !st.clip) m.push(".clipped()");
   const shape = shapeExpr(st, n.frame.w, n.frame.h);
-  // App mode draws fixed overlays outside a scrolling node's ScrollView (`containerExpr`).
-  const hoisted = (o: Overlay) =>
-    o.fixed === true && ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
-  // puts B behind A, so apply the front-most background first.
-  for (const o of [...n.overlays.filter((o) => o.layer === "background" && !hoisted(o))].reverse())
+  // puts B behind A, so apply the front-most background first. A ScrollView keeps only `position: fixed`
+  // overlays; the rest scroll with its content (layout.ts).
+  for (const o of [...n.overlays.filter((o) => o.layer === "background" && (!scrolls || o.fixed))].reverse())
     m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
   m.push(...insetShadowModifiers(p, ctx));
@@ -100,7 +84,8 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // backdrop-filter: over the flat canvases these designs use, blurring the backdrop changes
   // nothing visible, while SwiftUI materials add their own tint (badly in dark mode). The
   // translucent fill above already carries the "glass" look; keep the node flagged approximated.
-  if (st.clip || (st.radius && (n.kind === "stack" || n.kind === "grid") && n.overlays.length))
+  // A scroll box clips its content to its rounded padding box, as `overflow: auto` does.
+  if (st.clip || (st.radius && (n.kind === "stack" || n.kind === "grid") && (n.overlays.length || scrolls)))
     m.push(`.clipShape(${shape})`);
   if (st.border) {
     const b = st.border;
@@ -124,7 +109,7 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
     );
   }
   m.push(...outerShadowModifiers(p, ctx));
-  for (const o of n.overlays.filter((o) => o.layer === "overlay" && !hoisted(o)))
+  for (const o of n.overlays.filter((o) => o.layer === "overlay" && (!scrolls || o.fixed)))
     m.push(...overlayModifier(o, "overlay", ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
   if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, p, ctx));
@@ -153,6 +138,23 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // CSS percentage width: paint inside the fraction; margins (`placementModifiers`) outside.
   if (ctx.mode === "app" && n.width.kind === "fraction") m.push(`.markswiftFraction(${num(n.width.fraction)})`);
   return m;
+}
+
+/** The box's padding. App: a padded line-box surplus is a `minHeight` floor instead (`surplusFloor`); content CSS let
+ * overflow the floored box gives its overflow back (`floorOverflow`). */
+export function paddingModifiers(n: SemNode, ctx: EmitContext): string[] {
+  const surplus = surplusFloor(n, ctx);
+  const [overTop, overBottom] = floorOverflow(n, ctx);
+  const padding: [number, number, number, number] = [
+    n.padding[0] - overTop,
+    n.padding[1],
+    n.padding[2] - overBottom,
+    n.padding[3],
+  ];
+  if (surplus) padding[surplus.edge === "top" ? 0 : 2] -= surplus.px;
+  const [pt, pr, pb, pl] = padding;
+  if (!pt && !pr && !pb && !pl) return [];
+  return [pt === pr && pr === pb && pb === pl ? `.padding(${num(pt)})` : `.padding(${edgeInsets(padding)})`];
 }
 
 /**
