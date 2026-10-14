@@ -10,7 +10,7 @@ import { wrappingExpr } from "./wrapping.ts";
 function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: EmitContext): string[] {
   const layout = t.autoRepeat
     ? `autoRepeat: .${t.autoRepeat.mode}(min: ${num(t.autoRepeat.min)})`
-    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)})`)).join(", ")}]`;
+    : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)}${k.min === undefined ? "" : `, min: ${num(k.min)}`})`)).join(", ")}]`;
   const stretch = t.stretch ? "" : ", stretch: false";
   return [
     `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,

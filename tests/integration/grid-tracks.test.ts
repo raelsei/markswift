@@ -23,3 +23,17 @@ browserTest(
   },
   30_000,
 );
+
+// core-alpha's #minimum (tests/integration/allocated-layout.test.ts): at 390 the 1fr share (≈90px) is below its 100px
+// floor; at the 320 probe too. Admitted and kept, the solver matches Chrome at both widths.
+browserTest(
+  "a minmax(px, fr) floor is admitted and kept by the probe",
+  async () => {
+    const result = await convertHtml(
+      `<main data-markswift-root style="padding:16px"><div style="display:grid;gap:12px;grid-template-columns:64px minmax(100px,1fr) minmax(0,2fr)"><i>1</i><i>2</i><i>3</i></div></main>`,
+      { name: "MinimumGrid", mode: "app", theme: "light", viewport: { width: 390, height: 800 } },
+    );
+    expect(result.code).toContain("MarkswiftTracks(tracks: [.px(64.0), .fr(1.0, min: 100.0), .fr(2.0)]");
+  },
+  60_000,
+);

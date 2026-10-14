@@ -6,6 +6,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Changed
 - `MarkswiftFlexRow` runs CSS's flex freeze loop: px `min-width`/`max-width` clamp items with a definite basis, shrink is weighted by the inner (content-box) basis, grow and shrink factor sums below 1 leave the unused share, and a percentage `flex-basis` or `width` (item without horizontal padding) follows the row; such rows are now admitted.
+- `MarkswiftTracks` sizes `minmax(<px>, fr)` columns like CSS: a floor above its share freezes the track and the other fr tracks share the rest; an fr sum below 1 leaves space unused. Such templates are now admitted.
 
 ## [1.0.0] — 2026-10-14
 

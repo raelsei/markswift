@@ -352,7 +352,7 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
 - Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/%/content bases and shrink with CSS's
   freeze loop and px min/max-width clamps, admitted when its solver reproduces Chrome; a second capture at 320 px
   confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
-- Grids outside the `MarkswiftTracks` subset (`fr`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) whose
+- Grids outside the `MarkswiftTracks` subset (`fr`, `minmax(px, fr)`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) whose
   items span, leave holes, overlap or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
 - Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.

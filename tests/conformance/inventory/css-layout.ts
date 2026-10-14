@@ -786,7 +786,7 @@ export default {
       ir: "GridNode.columns, GridNode.template",
       via: "style",
       impl: "partial",
-      note: "Chrome reports the resolved px track list for a laid-out grid, so the column count is right for every track syntax. The authored template (Typed OM) decides the rest: px tracks the capture reproduces are exact on native Grid; `fr`, `auto`, px and `repeat(auto-fill|auto-fit, minmax(<px>, 1fr))` templates become `MarkswiftTracks` in app mode when the solver reproduces every captured cell within 1px (fidelity keeps the captured widths and reports the pin). Spans, areas, explicit rows, `%`/`calc`/`fit-content` tracks and the rest stay pinned at captured widths with a diagnostic.",
+      note: "Chrome reports the resolved px track list for a laid-out grid, so the column count is right for every track syntax. The authored template (Typed OM) decides the rest: px tracks the capture reproduces are exact on native Grid; `fr`, `minmax(<px>, fr)`, `auto`, px and `repeat(auto-fill|auto-fit, minmax(<px>, 1fr))` templates become `MarkswiftTracks` in app mode when the solver reproduces every captured cell within 1px (fidelity keeps the captured widths and reports the pin). Spans, areas, explicit rows, `%`/`calc`/`fit-content` tracks and the rest stay pinned at captured widths with a diagnostic.",
       spec: mdn("grid-template-columns"),
     },
     {
@@ -808,7 +808,7 @@ export default {
       ir: "GridNode.template",
       via: "style",
       impl: "partial",
-      note: "Equal fr tracks that fill the content box map to native Grid with fill-width cells. Unequal `fr`/`auto`/px mixes become `MarkswiftTracks` in app mode when the solver reproduces the captured cells within 1px; fr is treated as minmax(0, fr), so far below the captured width CSS keeps min-content where the runtime squeezes. Fidelity keeps the captured widths.",
+      note: "Equal fr tracks that fill the content box map to native Grid with fill-width cells. Unequal `fr`/`auto`/px mixes become `MarkswiftTracks` in app mode when the solver reproduces the captured cells within 1px; a `minmax(<px>, fr)` floor freezes its track as in CSS, but a bare fr is treated as minmax(0, fr), so far below the captured width CSS keeps min-content where the runtime squeezes. Fidelity keeps the captured widths.",
       spec: mdn("grid-template-columns"),
     },
     {

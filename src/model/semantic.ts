@@ -68,8 +68,8 @@ export interface MeasuredLayout {
   frames: Rect[];
 }
 
-/** One authored grid column track the runtime can size: px, fr, or content (`auto`). */
-export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number } | { kind: "auto" };
+/** One authored grid column track the runtime can size: px, fr (`min`: the px floor of `minmax(<min>px, fr)`), or content (`auto`). */
+export type GridTrack = { kind: "px"; px: number } | { kind: "fr"; fr: number; min?: number } | { kind: "auto" };
 /**
  * An authored `grid-template-columns` that `MarkswiftTracks` reproduces. Either explicit `tracks`, or
  * `autoRepeat` (`repeat(auto-fill|auto-fit, minmax(<min>px, 1fr))`, equal columns, count from the width).
