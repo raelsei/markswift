@@ -309,3 +309,31 @@ describe("ARIA names", () => {
     expect(named.map((n) => n.kind)).toEqual(["stack"]);
   });
 });
+
+test("a video poster and an image button draw as an Image of their source, reported", () => {
+  const POSTER = "data:image/png;base64,iVBORw0KGgo=";
+  const box = { x: 0, y: 0, w: 160, h: 90 };
+  const root = inferScreen(
+    doc(
+      el("main", { x: 0, y: 0, w: 160, h: 180 }, { display: "block" }, [
+        el("video", box, { display: "block", "object-fit": "contain" }, [], { poster: POSTER, src: "clip.mp4" }),
+        el("input", { ...box, y: 90 }, { display: "inline-block" }, [], { type: "IMAGE", src: POSTER, alt: "Go" }),
+        el("video", { ...box, y: 180 }, { display: "block" }, [], { src: "clip.mp4" }),
+      ]),
+    ),
+    "s",
+  ).root;
+  const nodes = flatten(root).filter((n) => n.kind === "image");
+  expect(nodes).toMatchObject([
+    { src: POSTER, contentMode: "contain" },
+    { src: POSTER, alt: "Go", a11y: { trait: "isButton" } },
+  ]);
+  expect(nodes.map((n) => n.diagnostics.map((d) => `${d.level}:${d.feature}`))).toEqual([
+    ["approximated:video"],
+    ["approximated:input: image"],
+  ]);
+  // Without a poster there is no static picture: the placeholder stays.
+  expect(flatten(root).some((n) => n.diagnostics.some((d) => d.level === "unmapped" && d.feature === "video"))).toBe(
+    true,
+  );
+});

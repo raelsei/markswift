@@ -485,10 +485,10 @@ export default {
       group: "Media",
       class: "approximated",
       target: "Image (poster frame stands in for the video)",
-      ir: "ImageNode.src (from `<video poster>`, new)",
+      ir: "ImageNode.src (from `<video poster>`)",
       via: "attribute",
-      impl: "no",
-      note: "`<video>` is unmapped (no static content); when a poster exists the design shows it, so the exporter should emit the poster as a plain Image with the video's measured frame and report the video.",
+      impl: "yes",
+      note: "The captured poster bytes are an Image at the video's measured frame and `object-fit`; the `<video>` itself is reported.",
       spec: "https://developer.mozilla.org/docs/Web/HTML/Element/video#poster",
     },
     {
@@ -521,7 +521,7 @@ export default {
       ir: "ImageNode.src",
       via: "attribute",
       impl: "partial",
-      note: "Read for `<img>` only; the emitter references the asset by that path. `<source>`/`<video>`/`<audio>`/`<track>`/`<iframe>`/`<embed>`/`<script>` src are not read (parents are unmapped or non-visual).",
+      note: "Read for `<img>` and `<input type=image>`; the emitter references the asset by that path. `<source>`/`<video>`/`<audio>`/`<track>`/`<iframe>`/`<embed>`/`<script>` src are not read (parents are unmapped or non-visual; a video shows its `poster`).",
       spec: "https://developer.mozilla.org/docs/Web/HTML/Element/img#src",
     },
     {

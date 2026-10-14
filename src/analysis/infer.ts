@@ -70,9 +70,9 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
   // `alt` needs the element's own text style: the browser paints it in place of a broken source.
-  // A data: svg source is parsed here; the emitter draws its vector.
+  // A data: svg source is parsed here; the emitter draws its vector. A `<video>` shows its poster.
   if (policy.route === "image") {
-    const src = n.currentSrc ?? n.attrs["src"] ?? "";
+    const src = n.currentSrc ?? n.attrs[n.tag === "video" ? "poster" : "src"] ?? "";
     const svg = svgFromDataUrl(src);
     const node = withBase(n, ctx, {
       kind: "image",
@@ -92,6 +92,8 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     if (svg?.vector)
       for (const d of svg.vector.diagnostics) addDiagnostic(node.diagnostics, d.level, d.feature, d.message);
     else if (svg) addDiagnostic(node.diagnostics, "unmapped", "img", "img svg data: URL has no viewBox; layer dropped");
+    // `<input type=image>` is a button to assistive technology, as in Chrome's tree.
+    if (n.tag === "input") node.a11y = { ...node.a11y, trait: "isButton" };
     imageFit(n, node);
     return node;
   }

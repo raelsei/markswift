@@ -42,7 +42,10 @@ test("native input selection and element classification share the same input tab
     expect(controlOf(element("input", { type }))?.control).toBe(kind);
     expect(classifyElement("input", { type }).route).toBe("control");
   }
-  expect(classifyElement("input", { type: "image" }).route).toBe("placeholder");
+  expect(classifyElement("input", { type: "image" }).route).toBe("image");
+  expect(controlOf(element("input", { type: "image" }))).toBeUndefined();
+  expect(classifyElement("video", { poster: "p.png" }).route).toBe("image");
+  expect(classifyElement("video", { poster: " " }).route).toBe("placeholder");
   expect(controlOf(element("input", { type: "not-a-type" }))?.control).toBe("textField");
   expect(controlOf(element("input", { type: "constructor" }))?.control).toBe("textField");
 });

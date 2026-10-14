@@ -26,5 +26,5 @@ export const INPUT_CONTROLS: Readonly<Record<string, ControlKind>> = Object.free
 
 export const INPUT_PLACEHOLDERS: Readonly<Record<string, string>> = Object.freeze({
   hidden: "no box of its own; an unexpected captured box has no native control",
-  image: "image submit buttons are not translated; placeholder box only",
+  image: "no native control; classifyElement draws it as a static image of its src",
 });

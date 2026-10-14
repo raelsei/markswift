@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="video; @poster; input: image">
+<title>video</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+video { display: block; width: 100%; height: 180px; border-radius: 12px; background: #111827; }
+.thumb { display: block; width: 200px; height: 90px; object-fit: cover; }
+form { display: flex; align-items: center; gap: 12px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="poster">
+  <p class="cap">video with a poster (letterboxed) / cover-fitted thumbnail</p>
+  <video poster="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAYAAAA/xl1SAAAB+ElEQVR4nO3YsXECURTF0K2AjA5og97cjOugHmoggHEFDq8WKVC+8+/xG8bH5ff5rt5gZeAIX/iWBgIYwACGwHuFu4CAEcwFEDCCuQACRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwH8sl6P27+tvzGAUnhEiF1AKT4KwgCK8REQBlCOb40wgABIa3xLhAEEYAog4EFre/1WV7ALeEL8AQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEe9/wT+i/+kc0AFMAAQ9a2yu4ev8u4MnxnxlfAAGA1gjX394FFCNcf3MApRDX3xhAwMNXFzAEgD+EfgMCRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwEEjGAugIARzAUQMIK54/pzf1dvsDIQwPBND1AAAxjAEHh/AnQBASOYCyBgBHMBBIxgLoCAEcwFEDCCuQACRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwEEjGAugIARzAUQMIK5AAJGMBdAwAjmAggYwVwAASOYCyBghKu4D9HgO6eqaS/SAAAAAElFTkSuQmCC" aria-label="Product tour"></video>
+</section>
+<section class="v" id="thumb">
+  <video class="thumb" poster="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAYAAAA/xl1SAAAB+ElEQVR4nO3YsXECURTF0K2AjA5og97cjOugHmoggHEFDq8WKVC+8+/xG8bH5ff5rt5gZeAIX/iWBgIYwACGwHuFu4CAEcwFEDCCuQACRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwH8sl6P27+tvzGAUnhEiF1AKT4KwgCK8REQBlCOb40wgABIa3xLhAEEYAog4EFre/1WV7ALeEL8AQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEe9/wT+i/+kc0AFMAAQ9a2yu4ev8u4MnxnxlfAAGA1gjX394FFCNcf3MApRDX3xhAwMNXFzAEgD+EfgMCRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwEEjGAugIARzAUQMIK54/pzf1dvsDIQwPBND1AAAxjAEHh/AnQBASOYCyBgBHMBBIxgLoCAEcwFEDCCuQACRjAXQMAI5gIIGMFcAAEjmAsgYARzAQSMYC6AgBHMBRAwgrkAAkYwF0DACOYCCBjBXAABI5gLIGAEcwEEjGAugIARzAUQMIK5AAJGMBdAwAjmAggYwVwAASOYCyBghKu4D9HgO6eqaS/SAAAAAElFTkSuQmCC" muted></video>
+</section>
+<section class="v" id="image-button">
+  <p class="cap">input type=image submit button</p>
+  <form><input type="image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAYCAYAAABKtPtEAAAAXElEQVR4nGOQc1j/fyRjhoF2wKAJAGoB1eTXQwKPBsBoChjNAqNlwGghOFoLjFaDo+2A0YbQaEtwtCk82hcY7QyN9gZHu8Oj4wGjAyKjI0IjfUhspGKGgXbAQGMAYnBRIfPLWSMAAAAASUVORK5CYII=" alt="Search" width="64" height="24"><span>Search the catalog</span></form>
+</section>
+</main>
+</body>
+</html>

@@ -22,6 +22,10 @@ export function inlineCapturedImages(root: LayoutNode, baseURL: string, images: 
       const source = node.currentSrc ?? node.attrs.src;
       if (source) node.currentSrc = resolve(source);
     }
+    // A video poster and an image button draw as an Image of the attribute's (inlined) bytes.
+    const attr =
+      node.tag === "video" ? "poster" : node.tag === "input" && node.attrs.type?.toLowerCase() === "image" ? "src" : "";
+    if (node.attrs[attr]) node.attrs[attr] = resolve(node.attrs[attr]);
     for (const property of ["background-image", "mask-image"]) {
       const value = node.styles[property];
       if (value)
