@@ -103,6 +103,7 @@ export interface ControlSpec {
   enterKey?: string;
   checked?: boolean;
   group?: string;
+  form?: string;
   disabled?: boolean;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
@@ -277,9 +278,12 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         spec.inputType = type as NonNullable<ControlNode["inputType"]>;
       if (control === "toggle" || control === "radio") {
         if ("checked" in a) spec.checked = true;
-        // A radio's `@name` groups it; its `@value` (HTML default "on") tells the group which is selected.
+        // A radio's `@name` groups it within its form owner; its `@value` (HTML default "on") tells the group which is selected.
         if (control === "radio") {
-          if (a["name"]) spec.group = a["name"];
+          if (a["name"]) {
+            spec.group = a["name"];
+            if (form) spec.form = form.id ?? "";
+          }
           spec.value = a["value"] ?? "on";
         }
       } else if (a["value"] !== undefined) spec.value = a["value"];

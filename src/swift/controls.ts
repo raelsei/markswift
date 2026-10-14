@@ -103,7 +103,14 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
   const tag = deps.radioTag.get(n);
-  const binding = !state ? "" : tag !== undefined ? `$${state}.markswiftSelects(${str(tag)})` : `$${state}`;
+  // HTML: an unnamed radio is a group of its own; a tap selects it and nothing clears it.
+  const binding = !state
+    ? ""
+    : tag !== undefined
+      ? `$${state}.markswiftSelects(${str(tag)})`
+      : n.control === "radio"
+        ? `$${state}.markswiftSelects(true)`
+        : `$${state}`;
   const still = deps.mode === "fidelity";
   const press = deps.pressOf?.get(n);
   const buttonStyle = press ? `.buttonStyle(MarkswiftPressStyle(isPressed: $${press}))` : ".buttonStyle(.plain)";
