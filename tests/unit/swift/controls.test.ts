@@ -165,6 +165,28 @@ test("appearance: none removes the select arrow; native checkboxes and ranges dr
   expect(drawn).toContain(".background(Color.markswift(1.0, 1.0, 1.0)");
 });
 
+test("044: a native select pads its label like Chrome's menulist and puts the arrow at the inner border edge", () => {
+  // BOX: 1 px border; 12 px author padding → the 15 px arrow box overhangs the content edge by 12 px.
+  const select = (styles: Record<string, string>) =>
+    el("select", { id: "s" }, { x: 0, y: 0, w: 320, h: 38 }, [option("One")], {
+      display: "inline-block",
+      ...BOX,
+      "padding-left": "12px",
+      "padding-right": "12px",
+      ...styles,
+    });
+  for (const mode of ["app", "fidelity"] as const) {
+    const ua = swift([select({})], mode).view;
+    expect(ua).toContain(".padding(EdgeInsets(top: 0.0, leading: 4.0, bottom: 0.0, trailing: 16.0))");
+    expect(ua).toContain(".overlay(alignment: .trailing) {");
+    expect(ua).toContain(".frame(width: 15.0)");
+    expect(ua).toContain(".padding(.trailing, -12.0)");
+    const none = swift([select({ appearance: "none" })], mode).view;
+    expect(none).not.toContain("leading: 4.0, bottom: 0.0, trailing: 16.0");
+    expect(none).not.toContain(".frame(width: 15.0)");
+  }
+});
+
 test("accent-color tints checkboxes, ranges and progress bars", () => {
   const accent = { display: "inline-block", "accent-color": "rgb(225, 29, 72)" };
   const { view } = swift([

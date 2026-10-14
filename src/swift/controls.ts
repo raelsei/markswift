@@ -72,6 +72,13 @@ const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: stri
     edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
   },
 };
+/**
+ * Chrome's closed `<select>` (any `appearance` but `none`), px: the menulist's internal text padding inside the
+ * author's (`PopupInternalPaddingStart` 4, `PopupInternalPaddingEnd` arrow box + 1) and the arrow box at the inner
+ * border edge, its chevron centred in it. Measured in Chromium 153: a 59 px label in a 1 px border is 81 px wide with
+ * native appearance and 61 px with `none`; the chevron's centre sits 7.5 px inside the right border.
+ */
+const MENU = { start: 4, end: 16, arrowBox: 15 };
 /** Editable text controls: their own text is laid out in the CSS line box. */
 export const FIELDS: Record<string, true> = { textField: true, secureField: true, textEditor: true };
 
@@ -260,8 +267,29 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // Closed, a picker shows its selection and, unless `appearance: none` removed it, the
       // browser's arrow. App mode keeps that look as a Menu label (never the option list) over an
       // inline Picker, so the native menu and selection behaviour stay.
-      const arrow = n.appearance === "none" ? [] : ['    Image(systemName: "chevron.down")'];
-      if (still) return ["HStack(spacing: 4.0) {", ...indent(painted(n.value ?? "", ".leading"), 1), ...arrow, "}"];
+      const ua = n.appearance !== "none";
+      // Chrome's menulist pads its text inside the author's padding: 4 px at the start, the arrow box + 1 at the end.
+      const pad = ua
+        ? [`.padding(EdgeInsets(top: 0.0, leading: ${num(MENU.start)}, bottom: 0.0, trailing: ${num(MENU.end)}))`]
+        : [];
+      // The arrow box sits at the inner border edge, over the author's end padding (Chrome's `SetupMenuListArrow`).
+      const inset = n.padding[1] - (n.style.border?.width ?? n.style.borderSides?.right?.width ?? 0);
+      const arrow = ua
+        ? [
+            ".overlay(alignment: .trailing) {",
+            '    Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))',
+            `    .frame(width: ${num(MENU.arrowBox)})`,
+            ...(inset > 0 ? [`    .padding(.trailing, ${num(-inset)})`] : []),
+            "}",
+          ]
+        : [];
+      if (still)
+        return [
+          `Text(verbatim: ${str(n.value ?? "")})`,
+          ...pad,
+          ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)",
+          ...arrow,
+        ];
       const options: PickerOption[] = n.options?.length ? n.options : n.value !== undefined ? [{ label: n.value }] : [];
       // Consecutive options of one `<optgroup>` are a Section headed by its label; disabled ones stay listed, greyed.
       const runs: PickerOption[][] = [];
@@ -296,11 +324,10 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         "    }",
         "    .pickerStyle(.inline)",
         "} label: {",
-        "    HStack(spacing: 4.0) {",
-        `        Text(verbatim: ${state ?? '""'})`,
-        ...(n.width.kind === "hug" ? [] : ["        .frame(maxWidth: .infinity, alignment: .leading)"]),
-        ...(arrow.length ? ['        Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))'] : []),
-        "    }",
+        `    Text(verbatim: ${state ?? '""'})`,
+        ...indent(pad, 1),
+        ...(n.width.kind === "hug" ? [] : ["    .frame(maxWidth: .infinity, alignment: .leading)"]),
+        ...indent(arrow, 1),
         "    .contentShape(Rectangle())",
         "}",
         ".menuStyle(.button)",

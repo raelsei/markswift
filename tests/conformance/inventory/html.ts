@@ -1400,7 +1400,7 @@ export default {
       ir: "FieldNode (new) { control: picker, options }",
       via: "structure",
       impl: "yes",
-      note: "Arrow drawn unless `appearance: none`; `multiple`/`size>1` still a menu (approximated).",
+      note: "Chrome's menulist arrow (at the inner border edge) and internal text padding unless `appearance: none`; `multiple`/`size>1` still a menu (approximated).",
       spec: `${MDN}select`,
     },
     {
