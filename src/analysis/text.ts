@@ -296,10 +296,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // Glyph union over the line height; a clipped host (line clamp, overflow) shows fewer lines.
   let lines = Math.max(1, Math.round((union?.h ?? measured.h) / lh));
   if (leaf) lines = Math.min(lines, Math.max(1, Math.round((measured.h - base.padding[0] - base.padding[2]) / lh)));
-  // Runs straight inside a flex/grid box are an anonymous item whose box is its line boxes, not the
-  // glyph union (an accordion trigger's title beside its icon); Blink floors the half-leading above.
+  // Runs between flow children are an anonymous box whose box is its line boxes, not the glyph union: an anonymous
+  // flex/grid item (an accordion trigger's title beside its icon) or an anonymous block (`<li>Fruit<ul>…</ul></li>`).
+  // Blink floors the half-leading above.
   const frame =
-    !leaf && measured.h < lines * lh - 0.5 && /flex|grid/.test(host.styles["display"] ?? "")
+    !leaf && measured.h < lines * lh - 0.5
       ? { ...measured, y: round2(measured.y - Math.floor((lines * lh - measured.h) / 2)), h: round2(lines * lh) }
       : measured;
   let growth: TextNode["lineBoxGrowth"];

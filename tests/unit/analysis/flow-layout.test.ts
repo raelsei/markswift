@@ -118,3 +118,20 @@ describe("flex alignment insets", () => {
     expect(root.padding).toEqual([0, 0, 32, 0]);
   });
 });
+
+test("text beside a block child in block flow is its anonymous block's line box, not the glyph box", () => {
+  // `<li>Fruit<ul>…</ul></li>`: Chrome measures the run's 18px glyph box at y 1 inside its 20px line box.
+  const font = { display: "block", "font-size": "15px", "line-height": "20px", "font-family": "system-ui" };
+  const run: LayoutNode = {
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x: 0, y: 1, w: 31, h: 18 },
+    text: "Fruit",
+    children: [],
+  };
+  const root = screen(
+    element({ x: 0, y: 0, w: 200, h: 64 }, font, [run, element({ x: 0, y: 22, w: 200, h: 42 }, { display: "block" })]),
+  );
+  expect(root.children[0]!.frame).toEqual({ x: 0, y: 0, w: 31, h: 20 });
+});
