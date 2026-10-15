@@ -77,6 +77,16 @@ test("details: the closed content joins the disclosure and the control opens the
   expect(control.opens).toEqual({ layer: "more", kind: "inflow" });
 });
 
+test("details: content Chrome already laid out in the closed rest capture is not added twice", () => {
+  const d = details();
+  d.root.children[0]!.children.push(ANSWER(28));
+  const screen = inferScreen(d, "s");
+  applyLayers(screen, d);
+  const control = find(screen.root, "#faq") as ControlNode;
+  expect(control.content.map((c) => c.id)).toEqual(["c"]);
+  expect(control.opens).toEqual({ layer: "more", kind: "inflow" });
+});
+
 /** An item stack: an h3 holding the trigger button, then the next item; `next` sits `gap` px below the h3. */
 const item = (index: number, contentY: number, gap = 0, triggerTag = "button") =>
   doc(

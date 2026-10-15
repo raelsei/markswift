@@ -42,8 +42,8 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     };
     const skip = (reason: string) =>
       report(parent ?? trigger, `content shown by ${layer.id} is not emitted: ${reason}`);
-    const content = () => {
-      const built = layer.nodes.map((node) => buildDetached(node, parentLayout!, doc, options));
+    const content = (nodes: LayoutNode[]) => {
+      const built = nodes.map((node) => buildDetached(node, parentLayout!, doc, options));
       if (built.some((b) => b.fixed))
         report(parent, `a position: fixed descendant of the content shown by ${layer.id} is not emitted`);
       return built.map((b) => b.sem);
@@ -57,7 +57,9 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
         skip(REASON.trigger);
         continue;
       }
-      parent.content.push(...content());
+      // Chrome lays out a closed `<details>`' content (it paints none): rest already captured it.
+      const have = new Set(parent.content.map((c) => c.id));
+      parent.content.push(...content(layer.nodes.filter((n) => n.id === undefined || !have.has(n.id))));
       parent.opens = { layer: layer.id, kind: "inflow" };
       continue;
     }
@@ -87,7 +89,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       skip(REASON.sibling);
       continue;
     }
-    const nodes = content();
+    const nodes = content(layer.nodes);
     for (const n of nodes) n.shownBy = layer.id;
     // One gap per inserted node from the measured open geometry; the old pred → next gap stays after the last one.
     const v = parent.axis === "v";
