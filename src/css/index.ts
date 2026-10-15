@@ -11,3 +11,4 @@ export { rasterSize } from "./raster.ts";
 export { fontWeight, fontFamilies, fontStretch, variationSettings } from "./typography.ts";
 export { parseRadiusXY } from "./radius.ts";
 export { parseTrackTemplate, resolvedGridTracks } from "./grid.ts";
+export { type WidthQuery, widthQuery, passes, matchesWidth, captureWidth, bandOf } from "./media.ts";

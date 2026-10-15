@@ -378,4 +378,10 @@ test("invalid API options fail before browser startup", async () => {
     "assetsDir",
   );
   await expect(convertHtml("<div/>", { timeoutMs: 0 })).rejects.toThrow("timeoutMs");
+  await expect(convertHtml("<div/>", { breakpoints: { max: 100 } })).rejects.toThrow(
+    "breakpoints devices must be positive integer sizes and max an integer ≥ 320",
+  );
+  await expect(convertHtml("<div/>", { breakpoints: { devices: [{ width: 390.5, height: 844 }] } })).rejects.toThrow(
+    "breakpoints devices",
+  );
 });

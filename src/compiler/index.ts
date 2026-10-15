@@ -148,6 +148,8 @@ export function needsProbe(layout: LayoutDoc): boolean {
   return found;
 }
 
+export { planBands, BAND_MIN, BAND_CAP, DEFAULT_BAND_DEVICES, type BandPlan } from "../analysis/bands.ts";
+
 /** Demotes admitted layouts whose authored inputs do not reproduce the probe capture (same node id) within 1px. */
 function verifyAtProbe(screen: Screen, probe: LayoutDoc): void {
   const byId = new Map<string, LayoutNode>();

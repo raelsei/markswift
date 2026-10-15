@@ -105,6 +105,12 @@ export interface FlexRow {
 
 export type Axis = "v" | "h";
 
+/** A width breakpoint: the next band starts at `px` (`inclusive`) or just above it (`max-width`, `width >`). */
+export interface BandEdge {
+  px: number;
+  inclusive: boolean;
+}
+
 /** Cross-axis alignment of children inside a stack. */
 export type CrossAlign = "start" | "center" | "end" | "stretch" | "baseline";
 /** Main-axis distribution. */
