@@ -162,3 +162,19 @@ test("a page without states emits no state members or ternaries", () => {
     expect(code).toContain(".buttonStyle(.plain)");
   }
 });
+
+test("an unstyled theme-painted button gets Chrome's pressed theme without any captured delta", () => {
+  // Computed UA defaults of `<button>` in the light scheme (Chrome 155 / Chromium 153).
+  const ua: Record<string, string> = { appearance: "auto", "background-color": "rgb(239, 239, 239)" };
+  for (const e of ["top", "right", "bottom", "left"]) {
+    ua[`border-${e}-style`] = "outset";
+    ua[`border-${e}-width`] = "2px";
+    ua[`border-${e}-color`] = "rgb(0, 0, 0)";
+  }
+  for (const c of ["top-left", "top-right", "bottom-right", "bottom-left"]) ua[`border-${c}-radius`] = "0px";
+  const { code } = compile([button(undefined, { ...ua, "background-image": "none", "box-shadow": "none" })]);
+  expect(code).toContain("@MarkswiftPressed private var isSavePressed");
+  // Fill 239 → 245, edge 118 → 141 (measured under a real press at DPR 2).
+  expect(code).toContain("isSavePressed ? Color.markswift(0.961, 0.961, 0.961) : Color.markswift(0.937, 0.937, 0.937)");
+  expect(code).toContain("isSavePressed ? Color.markswift(0.553, 0.553, 0.553) : Color.markswift(0.463, 0.463, 0.463)");
+});

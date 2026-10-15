@@ -3,7 +3,7 @@ import { type LayoutNode } from "../model/layout.ts";
 import { type Style, type Diagnostic, type SemBase, type StateStyle, addDiagnostic } from "../model/semantic.ts";
 import { parseShadows } from "../css/index.ts";
 import { backgroundFills } from "./style-background.ts";
-import { borderStyle, themedBorder } from "./style-border.ts";
+import { borderStyle, themedBorder, themedPressed } from "./style-border.ts";
 import { applyEffects } from "./style-effects.ts";
 
 export function styleOf(n: LayoutNode, diagnostics: Diagnostic[]): Style {
@@ -33,15 +33,19 @@ const STATE_FIELDS = [
 ] as const;
 const IDENTITY = { rotate: 0, scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
 
-/** `n.states` → paint deltas against the resting `rest`, by running `styleOf` on the state's computed values. */
+/**
+ * `n.states` → paint deltas against the resting `rest`, by running `styleOf` on the state's computed
+ * values. A theme-painted button is pressed in Chrome's pressed theme, which no computed style shows.
+ */
 export function stateStylesOf(n: LayoutNode, rest: Style): SemBase["states"] {
-  if (!n.states) return undefined;
   const out: NonNullable<SemBase["states"]> = {};
   for (const key of ["pressed", "focused"] as const) {
-    const delta = n.states[key];
-    if (!delta) continue;
+    const delta = n.states?.[key];
+    const styles = delta ? { ...n.styles, ...delta } : n.styles;
+    const themed = key === "pressed" ? themedPressed(n.tag, styles) : undefined;
+    if (!delta && !themed) continue;
     // Diagnostics of the state pass would duplicate the resting ones.
-    const st = styleOf({ ...n, styles: { ...n.styles, ...delta } }, []);
+    const st = { ...styleOf({ ...n, styles }, []), ...themed };
     const diff: StateStyle = {};
     for (const f of STATE_FIELDS) {
       if (JSON.stringify(st[f] ?? null) === JSON.stringify(rest[f] ?? null)) continue;

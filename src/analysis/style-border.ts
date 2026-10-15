@@ -55,36 +55,58 @@ function edgeShade(c: Color, shadowed: boolean): Color {
  * radius (a text field: nor `box-shadow`) and kept `appearance` is not painted from its computed
  * UA border (`2px outset`/`2px inset`): Chrome draws a flat 1px edge with 2px corners over the
  * computed fill, keeping the 2px layout. Keyed by the UA default's computed `border-style
- * border-color / background-color` per colour scheme (light, dark); the value is the edge colour.
+ * border-color / background-color` per colour scheme (light, dark); `edge` is the edge colour.
+ * A button repaints its theme while pressed with no computed-style change (`pressed`: the fill
+ * and edge under a real mouse press; a CDP-forced `:active` flips the computed `border-style` to
+ * `inset` but leaves the theme paint at rest, so it cannot measure this).
  * ponytail: calibrated at DPR 2, light + dark, on Chrome 155 and the corpus's Chromium 153 (same
- * pixels); re-measure if Chrome restyles its controls. Disabled defaults are not listed, so a
- * disabled control keeps its CSS paint; textarea/select (1px solid UA border) keep square corners.
+ * pixels; `<button>` and `<input type=submit>` alike); re-measure if Chrome restyles its controls.
+ * Disabled defaults are not listed, so a disabled control keeps its CSS paint; textarea/select
+ * (1px solid UA border) keep square corners.
  */
-const THEMED_EDGE: Record<string, Color> = {
-  "outset rgb(0, 0, 0) / rgb(239, 239, 239)": parseColor("rgb(118, 118, 118)")!,
-  "outset rgb(255, 255, 255) / rgb(107, 107, 107)": parseColor("rgb(107, 107, 107)")!,
-  "inset rgb(118, 118, 118) / rgb(255, 255, 255)": parseColor("rgb(118, 118, 118)")!,
-  "inset rgb(133, 133, 133) / rgb(59, 59, 59)": parseColor("rgb(133, 133, 133)")!,
+const THEMED: Record<string, { edge: Color; pressed?: { fill: Color; edge: Color } }> = {
+  "outset rgb(0, 0, 0) / rgb(239, 239, 239)": {
+    edge: parseColor("rgb(118, 118, 118)")!,
+    pressed: { fill: parseColor("rgb(245, 245, 245)")!, edge: parseColor("rgb(141, 141, 141)")! },
+  },
+  "outset rgb(255, 255, 255) / rgb(107, 107, 107)": {
+    edge: parseColor("rgb(107, 107, 107)")!,
+    pressed: { fill: parseColor("rgb(97, 97, 97)")!, edge: parseColor("rgb(97, 97, 97)")! },
+  },
+  "inset rgb(118, 118, 118) / rgb(255, 255, 255)": { edge: parseColor("rgb(118, 118, 118)")! },
+  "inset rgb(133, 133, 133) / rgb(59, 59, 59)": { edge: parseColor("rgb(133, 133, 133)")! },
 };
 const THEMED_RADIUS = 2;
 
-/** The 1px themed edge Chrome paints instead of `s`'s computed border, when it draws its theme. */
-export function themedBorder(tag: string, s: Record<string, string>): Partial<Style> | undefined {
+/** The theme Chrome paints `s`'s control with instead of its computed border, when it draws one. */
+function themeOf(tag: string, s: Record<string, string>) {
   if (tag !== "button" && tag !== "input") return undefined;
   if (s["appearance"] === "none" || s["background-image"] !== "none") return undefined;
   const st = s["border-top-style"];
   const c = s["border-top-color"];
-  const color = THEMED_EDGE[`${st} ${c} / ${s["background-color"]}`];
-  if (!color || (st === "inset" && s["box-shadow"] !== "none")) return undefined;
+  const theme = THEMED[`${st} ${c} / ${s["background-color"]}`];
+  if (!theme || (st === "inset" && s["box-shadow"] !== "none")) return undefined;
   const ua = EDGES.every(
     (e) => s[`border-${e}-style`] === st && s[`border-${e}-width`] === "2px" && s[`border-${e}-color`] === c,
   );
   const square = ["top-left", "top-right", "bottom-right", "bottom-left"].every(
     (k) => s[`border-${k}-radius`] === "0px",
   );
-  if (!ua || !square) return undefined;
+  return ua && square ? theme : undefined;
+}
+
+/** The 1px themed edge Chrome paints instead of `s`'s computed border, when it draws its theme. */
+export function themedBorder(tag: string, s: Record<string, string>): Partial<Style> | undefined {
+  const theme = themeOf(tag, s);
+  if (!theme) return undefined;
   const r = THEMED_RADIUS;
-  return { border: { width: 1, color }, radius: [r, r, r, r] };
+  return { border: { width: 1, color: theme.edge }, radius: [r, r, r, r] };
+}
+
+/** The fill and edge Chrome's theme paints while the button is pressed. */
+export function themedPressed(tag: string, s: Record<string, string>): Partial<Style> | undefined {
+  const pressed = themeOf(tag, s)?.pressed;
+  return pressed && { fills: [{ kind: "solid", color: pressed.fill }], border: { width: 1, color: pressed.edge } };
 }
 
 export function borderStyle(
