@@ -11,6 +11,7 @@ import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
+import { titleOf } from "./tooltips.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -50,6 +51,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const labelFor = ctx.labels?.activates.get(n)?.id;
   const hint = nameHintOf(n.tag, n.attrs);
   const field = fieldOf(n.attrs);
+  const tooltip = titleOf(n);
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -70,6 +72,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(field ? { field } : {}),
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
+    ...(tooltip ? { tooltip } : {}),
   };
 }
 
