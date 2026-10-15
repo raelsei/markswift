@@ -5,7 +5,7 @@ import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
 import { stateStylesOf, styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
-import { insetsOf } from "./geometry.ts";
+import { insetsOf, relativeOffset } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
@@ -39,6 +39,9 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
+  const relative = relativeOffset(n, ctx.parent);
+  for (const loss of relative.losses) addDiagnostic(diagnostics, "approximated", "position: relative", loss);
+  const [rx, ry] = relative.offset;
   const a11y = a11yOf(n, ctx);
   // Native controls get their action in `controlOf`; everything else the design makes activatable here.
   const action = policy.route !== "control" && !style.hidden ? activatableAction(n) : undefined;
@@ -55,6 +58,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...constraints,
     ...(selfAlign !== undefined ? { selfAlign } : {}),
     ...(selfAlignV !== undefined ? { selfAlignV } : {}),
+    ...(rx || ry ? { relativeOffset: relative.offset } : {}),
     padding,
     style,
     confidence: "mapped",
