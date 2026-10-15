@@ -26,7 +26,7 @@ import {
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
 import { textPaintOf, clipsText } from "./style-background.ts";
-import { EDGES, edgeWidth, unionRect, isFlex, mainAxis } from "./geometry.ts";
+import { EDGES, edgeWidth, unionRect, isFlex, mainAxis, relativeOffset } from "./geometry.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { linkAction } from "./controls.ts";
 import { isActivatableRole } from "../model/interactive.ts";
@@ -505,7 +505,7 @@ function reportInlineEffects(
   hidden: boolean,
   note: (level: DiagnosticLevel, feature: string, message: string) => void,
 ): void {
-  for (const el of chain)
+  for (const el of chain) {
     for (const [prop, initial] of Object.entries(INLINE_EFFECTS)) {
       const v = el.styles[prop];
       if (v && v !== initial)
@@ -515,6 +515,14 @@ function reportInlineEffects(
           `inline <${el.tag}> ${prop}: ${v.slice(0, 40)} → not applied to its glyphs (merged into the paragraph's Text)`,
         );
     }
+    const [x, y] = relativeOffset(el, host).offset;
+    if (x || y)
+      note(
+        "approximated",
+        "position: relative",
+        `inline <${el.tag}> relative offset (${x}, ${y}) dropped (merged into the paragraph's Text)`,
+      );
+  }
   const hv = host.styles["visibility"];
   if (!hidden && (hv === "hidden" || hv === "collapse"))
     note(

@@ -32,6 +32,8 @@ import {
 const ROOT_MARK = "data-markswift-root-capture";
 /** Stamped (after snapshot A) on every element whose `transform`/`translate`/`rotate`/`scale` is not `none`. */
 const TRANSFORMED_MARK = "data-markswift-transformed";
+/** Stamped (after snapshot A) on every `position: relative` element: snapshot B and the screenshot drop its offset. */
+const RELATIVE_MARK = "data-markswift-relative";
 /** Every property that moves paint without moving layout. */
 const NO_TRANSFORM =
   "transform: none !important; translate: none !important; rotate: none !important; scale: none !important;";
@@ -308,24 +310,29 @@ export class BrowserCapture {
       const states = await captureStates(cdp, spec.open ? `[${LAYER_MARK}]` : rootSel, snapA);
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
-      await page.evaluate((mark) => {
-        for (const el of document.querySelectorAll("*")) {
-          const cs = getComputedStyle(el);
-          if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
-            el.setAttribute(mark, "");
-        }
-      }, TRANSFORMED_MARK);
+      await page.evaluate(
+        ([transformed, relative]) => {
+          for (const el of document.querySelectorAll("*")) {
+            const cs = getComputedStyle(el);
+            if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
+              el.setAttribute(transformed, "");
+            if (cs.position === "relative") el.setAttribute(relative, "");
+          }
+        },
+        [TRANSFORMED_MARK, RELATIVE_MARK] as const,
+      );
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
       // <style> is appended last so node indices of everything else are unchanged. The individual
       // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
       // `will-change: transform` keeps the containing block a transform gave to fixed/absolute
-      // descendants, without transforming anything.
+      // descendants, without transforming anything. Relative offsets move paint without moving layout too: B lays
+      // those boxes out in flow (analysis re-applies the offset from their Typed-OM insets).
       await page.evaluate((css) => {
         const s = document.createElement("style");
         s.id = "__markswift_notransform";
         s.textContent = css;
         document.body.appendChild(s);
-      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
+      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }\n[${RELATIVE_MARK}] { inset: auto !important; }`);
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
@@ -386,7 +393,7 @@ export class BrowserCapture {
           const s = document.createElement("style");
           s.textContent = css;
           document.body.appendChild(s);
-        }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }`);
+        }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }\n[${RELATIVE_MARK}]:has([${ROOT_MARK}]) { inset: auto !important; }`);
         png = await page.screenshot({
           clip: { x, y, width: size.w, height: size.h },
           scale: "device",

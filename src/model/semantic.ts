@@ -368,6 +368,11 @@ export interface SemBase extends SizeConstraints {
   /** Vertical placement inside a flex row from `align-self` when it differs from the row's `align-items`. */
   selfAlignV?: "start" | "center" | "end";
   /**
+   * `position: relative` used offset [x, y] in px, drawn with `.offset`; `frame` is the in-flow box (the capture lays the
+   * box out without it). Absent when zero.
+   */
+  relativeOffset?: [number, number];
+  /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,
    * so overriding the direction on a stack would mirror it a second time.
