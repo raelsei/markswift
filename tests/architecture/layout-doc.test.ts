@@ -11,7 +11,7 @@ import { LAYOUT_DOC_VERSION, LayoutDoc, STYLE_WHITELIST } from "../../src/model/
 const FINGERPRINTS: Record<number, string> = {
   2: "cad15d763304e55bd3849ea25b46a4af44d2ba4d189bf6bb6ff4fd4fa78f6934",
   3: "de56c7ffecbd76f793281327e13bf2e64aa3f6260723ec8bf87d4c0a0f3ab2e8",
-  4: "fe5c5ebb211f64d4b1b99970461511c48a37633ef433cf4ce8f65705fd8e8644",
+  4: "93e15e3ae6ef8fe0cf7ba6edfeb72a18b12cc7d4ec7cccbf6597d9c79b7e2c8d",
 };
 /** The LayoutDoc version not yet shipped in a `v*` tag, or null. The release commit sets it back to null. */
 const UNRELEASED_LAYOUT_DOC_VERSION: number | null = 4;
