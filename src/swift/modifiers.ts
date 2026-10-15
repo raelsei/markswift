@@ -223,6 +223,11 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
   }
+  // D-HOVER: a pointer shows `.help` (iPad, Mac); VoiceOver reads the hint. An author `aria-describedby` hint wins.
+  if (n.tooltip) {
+    m.push(`.help(${str(n.tooltip)})`);
+    if (!a?.hint) m.push(`.accessibilityHint(${str(n.tooltip)})`);
+  }
   return m;
 }
 export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx: EmitContext): string[] {
