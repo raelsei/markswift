@@ -1,4 +1,4 @@
-import type { StackNode, GridNode } from "../model/semantic.ts";
+import type { BandEdge, StackNode, GridNode } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
@@ -138,7 +138,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   // scrolls; the padding and other overlays scroll with the content, which fills a vertical ScrollView's width.
   if (n.scroll && ctx.mode === "app") {
     const scrolling = n.overlays.filter((o) => !o.fixed);
-    const content = [
+    let content = [
       ...out,
       ...paddingModifiers(n, ctx),
       ...(n.scroll === "v"
@@ -150,6 +150,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
         .flatMap((o) => overlayModifier(o, "background", ctx)),
       ...scrolling.filter((o) => o.layer === "overlay").flatMap((o) => overlayModifier(o, "overlay", ctx)),
     ];
+    // A breakpoint root switches bands inside its ScrollView, so the scroll offset survives a switch.
+    if (n === ctx.bandsInside)
+      content = [`${bandsOpen(ctx.screen.breakpoints!.edges)} { band in`, ...indent(content, 1), "}"];
     return decorate(
       n,
       [
@@ -170,4 +173,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       ".clipped()",
     ];
   return body;
+}
+
+/** `MarkswiftBands(edges: […])`: inclusive edges are `.atLeast`, exclusive (`max-width`) ones `.above`. */
+export function bandsOpen(edges: BandEdge[]): string {
+  return `MarkswiftBands(edges: [${edges.map((e) => `.${e.inclusive ? "atLeast" : "above"}(${num(e.px)})`).join(", ")}])`;
 }

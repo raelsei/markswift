@@ -38,9 +38,18 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
 
 /**
  * Every control's state property and every distinct action callback for one screen. Names come
- * from the node ids, so regenerating an unchanged design produces the same members.
+ * from the node ids, so regenerating an unchanged design produces the same members. `byId`
+ * (breakpoint screens): one element is a node per band alternative; its first node owns the
+ * value, toggle, pressed and focused members, every other node of that element reuses them.
  */
-export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
+export function controlMembers(root: SemNode, mode: EmitMode, byId = false): ControlMembers {
+  const firstOf = new Map<string, SemNode>();
+  const elementKey = (n: SemNode) => `${n.id}\u0000${n.kind}\u0000${n.kind === "control" ? n.control : ""}`;
+  if (byId)
+    walk(root, (n) => {
+      if (n.id !== "" && !n.alternatives && !firstOf.has(elementKey(n))) firstOf.set(elementKey(n), n);
+    });
+  const canon = (n: SemNode) => (byId && n.id !== "" && !n.alternatives ? firstOf.get(elementKey(n))! : n);
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const members: ControlMembers["members"] = [];
@@ -58,6 +67,7 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const ariaToggles = new Set<SemNode>();
   const ariaGroups = new Map<string, SemNode[]>();
   walk(root, (n) => {
+    if (canon(n) !== n) return;
     if (n.a11y?.toggle && n.action && (n.kind !== "control" || (n.control === "button" && !n.files))) {
       ariaToggles.add(n);
       const g = n.a11y.group;
@@ -85,6 +95,16 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
         type: "() -> Void",
         decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
       });
+    }
+    const first = canon(n);
+    if (first !== n) {
+      const state = stateOf.get(first);
+      const tag = radioTag.get(first);
+      const toggle = toggleOf.get(first);
+      if (state !== undefined) stateOf.set(n, state);
+      if (tag !== undefined) radioTag.set(n, tag);
+      if (toggle !== undefined) toggleOf.set(n, toggle);
+      return;
     }
     const ax = n.a11y;
     if (ax && ariaToggles.has(n)) {
@@ -188,12 +208,12 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
     const pressed = n.states?.pressed;
     if (pressed && n.id) {
       if (own) {
-        let name = pressOf.get(own);
+        let name = pressOf.get(own) ?? pressOf.get(canon(own));
         if (name === undefined) {
           name = memberName("is", own.action?.words ?? own.id, seen, "Control", "Pressed");
           members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftPressed private var ${name}`] });
-          pressOf.set(own, name);
         }
+        pressOf.set(own, name);
         statePaint.set(n.id, pairStyle(n, pressed, name));
       } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
     }
@@ -205,8 +225,11 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
     if (focused && n.id && !field)
       note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
     if (field && n.id && (focused || labelled.has(n.id))) {
-      const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
-      members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      let name = focusOf.get(canon(n));
+      if (name === undefined) {
+        name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
+        members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      }
       focusOf.set(n, name);
       if (focused) statePaint.set(n.id, pairStyle(n, focused, name));
       if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);

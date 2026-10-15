@@ -20,7 +20,7 @@
     "quality": "bun run tools/quality.ts",
     "pilot": "bun run tests/conformance/pilot-run.ts",
     "test:browser": "MARKSWIFT_BROWSER_TESTS=1 bun test tests/integration tests/conformance",
-    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/unit/swift/tracks.test.ts tests/unit/swift/flex-row.test.ts tests/unit/swift/measured-layout.test.ts tests/unit/swift/line-height.test.ts tests/unit/swift/bands.test.ts tests/conformance/pilot-run.test.ts tests/integration/perf.test.ts",
+    "test:native": "MARKSWIFT_SWIFT_TESTS=1 bun test tests/integration/swift.test.ts tests/unit/swift/wrapping.test.ts tests/unit/swift/tracks.test.ts tests/unit/swift/flex-row.test.ts tests/unit/swift/measured-layout.test.ts tests/unit/swift/line-height.test.ts tests/unit/swift/bands.test.ts tests/unit/swift/bands-emit.test.ts tests/conformance/pilot-run.test.ts tests/integration/perf.test.ts",
     "test:unit": "bun test tests/unit",
     "test:architecture": "bun test tests/architecture",
     "test:conformance": "bun test tests/conformance",

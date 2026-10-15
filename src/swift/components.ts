@@ -822,7 +822,10 @@ export function extractComponents(
       );
     };
     const body = [`${acc}var body: some View {`, ...indent(expand(first), 1), "}"];
+    // A breakpoint row holding a band holder reads the band `MarkswiftBands` chose from the environment.
+    let banded = false;
     visit(first, (node) => {
+      banded ||= !!node.alternatives;
       if (node !== first && isContainer(node))
         body.push(
           "",
@@ -860,6 +863,7 @@ export function extractComponents(
         ]
       : [];
     const members = [
+      ...(banded ? ["@Environment(\\.markswiftBand) private var band"] : []),
       ...scaled,
       t.binding ? `@Binding ${acc}var ${n.row}: ${n.type}` : `${acc}let ${n.row}: ${n.type}`,
       ...bindings.map((b) => `@Binding ${acc}var ${b.name}: ${b.type}`),
