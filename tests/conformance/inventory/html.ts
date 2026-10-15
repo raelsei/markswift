@@ -1435,7 +1435,7 @@ export default {
       ir: "DisclosureNode (new) + SemBase.expanded (new)",
       via: "structure",
       impl: "yes",
-      note: "Captured summary and `::marker` (swapped ▸/▾ with the state), no system chevron, no pinned height in app mode; `open` seeds the state.",
+      note: "Captured summary and `::marker` (swapped ▸/▾ with the state), no system chevron, no pinned height in app mode; `open` seeds the state. App mode: a closed `<details>`' content is captured open and emitted in the DisclosureGroup, bound to an `init`-seeded `is<Name>Expanded` (a `#Preview` shows it open).",
       spec: `${MDN}details`,
     },
     {
@@ -1457,7 +1457,7 @@ export default {
       ir: "DisclosureNode.summary (new)",
       via: "structure",
       impl: "yes",
-      note: "Captured summary and `::marker` (swapped ▸/▾ with the state), no system chevron, no pinned height in app mode; `open` seeds the state.",
+      note: "Captured summary and `::marker` (swapped ▸/▾ with the state), no system chevron, no pinned height in app mode; `open` seeds the state. App mode: tapping it shows the closed content captured open (`is<Name>Expanded`).",
       spec: `${MDN}summary`,
     },
 
