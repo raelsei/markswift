@@ -334,9 +334,9 @@ mapped, approximated or unmapped in `diagnostics`.
   descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
   height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
   and every action closure is called).
-- 8 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`: five
-  10 px uppercase captions with fixed letter-spacing that the Dynamic Type audit flags, a text field and a checkbox
-  whose measured frame the audit reports as clipping text, and one e-mail address whose label is the address itself.
+- 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
+  outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
+  e-mail address whose label is the address itself (the design gives no other description).
 
 ## Pinned geometry
 
@@ -372,9 +372,9 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
 - `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
-- Unstyled theme-painted buttons have no pressed look.
-- `<bdo>`/`<bdi>` are not mapped.
-- Accessibility: the 8 known audit issues above; hit-region findings are reported, not failing.
+- An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
+  the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
+- Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
 
@@ -454,7 +454,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 - Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
-- `<select multiple>`, `<datalist>`, `<bdo>`/`<bdi>`.
+- `<select multiple>`, `<datalist>`, an author `unicode-bidi`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
   for single conversions; browser-response font bytes; variable-font instances.
 - Remote image download, @2x images and asset catalogs.

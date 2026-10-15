@@ -21,60 +21,18 @@
   ],
   "known": [
     {
-      "case": "shadcn-button",
-      "check": "audit:dynamicType",
-      "match": "VARIANTS",
-      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-button",
-      "check": "audit:dynamicType",
-      "match": "SIZES",
-      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-button",
-      "check": "audit:dynamicType",
-      "match": "ICON + STATE",
-      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-native-select",
-      "check": "audit:dynamicType",
-      "match": "SIZES",
-      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "shadcn-progress",
-      "check": "audit:dynamicType",
-      "match": "VALUES",
-      "reason": "10 px uppercase tracking-wider section caption: Text(.system(size: @ScaledMetric(relativeTo: .caption2))) with a fixed .kerning(0.5); the audit reports Dynamic Type as partially supported for it at xSmall, large and AX5",
-      "owner": "post-1.0"
-    },
-    {
       "case": "shadcn-input",
       "check": "audit:textClipped",
       "match": "Email",
-      "reason": "audit reports the field's label/value text clipped at every content size: the TextField keeps the measured 32 pt height (h-8)",
-      "owner": "post-1.0"
-    },
-    {
-      "case": "tw-form",
-      "check": "audit:textClipped",
-      "match": "Preview deployments",
-      "reason": "audit reports the label text clipped at every content size, large included: the measured row/control frame is tighter than the native text it holds",
-      "owner": "post-1.0"
+      "reason": "platform finding on the value, not the emitted field: the audit reports a stock TextField holding \"ada@example.com\" as clipped text at xSmall, large and AX5 whatever its style, font or frame (.roundedBorder + .font(.body), fixed heights 21-40 pt), while \"ada@examle.com\" or \"nopqgy\" in the same fields pass (measured on iOS 27, iPhone 17, 2026-10-15)",
+      "owner": "by-design"
     },
     {
       "case": "tw-settings",
       "check": "audit:sufficientElementDescription",
       "match": "ada@example.com",
       "reason": "the account e-mail is a plain Text whose label is the address itself; the audit wants a human-readable description (the design gives none)",
-      "owner": "post-1.0"
+      "owner": "by-design"
     }
   ]
 }

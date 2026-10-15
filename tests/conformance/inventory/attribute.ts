@@ -855,7 +855,7 @@ export default {
       ir: "SemBase.a11y.label (control), SemBase.labelFor (label)",
       via: "attribute",
       impl: "yes",
-      note: "`<label for>` (or a wrapping `<label>`) names its control: text fields get `.accessibilityLabel`, checkboxes and radios an `.accessibilityRepresentation { Toggle(isOn:) { Text(label) } }`, and a tap anywhere on the label toggles an enabled checkbox, selects an enabled radio or (app mode) focuses an enabled text field (`@MarkswiftFocused`). `aria-label` on the control wins. `<output for>`/`<template for>` are non-visual.",
+      note: "`<label for>` (or a wrapping `<label>`) names its control: text fields get `.accessibilityLabel`, checkboxes and radios an `.accessibilityRepresentation { Toggle(isOn:) { EmptyView() }.accessibilityLabel(label) }`, and a tap anywhere on the label toggles an enabled checkbox, selects an enabled radio or (app mode) focuses an enabled text field (`@MarkswiftFocused`). `aria-label` on the control wins. `<output for>`/`<template for>` are non-visual.",
       spec: "https://developer.mozilla.org/docs/Web/HTML/Element/label#for",
     },
     {
