@@ -20,6 +20,8 @@ const doc: LayoutDoc = {
   source: "font-context",
   combo: { screen: "test", theme: "light" },
   size: { w: 200, h: 60 },
+  viewport: { x: 0, y: 0, w: 200, h: 60 },
+  conditions: [],
   dpr: 1,
   canvas: "white",
   fonts: [],

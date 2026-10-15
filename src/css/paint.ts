@@ -69,6 +69,13 @@ export function parseBackgroundImage(s: string | undefined, dropped?: string[]):
   return layers.map((layer) => parseGradient(layer, dropped));
 }
 
+/** Every `url(…)` in a computed value, in order, unquoted and unescaped (`content`, `list-style-image`). */
+export function cssUrls(value: string | undefined): string[] {
+  return [...(value ?? "").matchAll(/url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)]*))\s*\)/gs)].map((u) =>
+    (u[1] ?? u[2] ?? u[3] ?? "").replace(/\\(.)/g, "$1").trim(),
+  );
+}
+
 /**
  * One `background-image` layer: `[repeating-]{linear,radial,conic}-gradient(…)` or
  * `url(…)`; anything else → `unsupported`. Gradient centers given in px stay at the

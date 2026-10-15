@@ -11,6 +11,8 @@ function doc(root: LayoutNode, screen = "probe"): LayoutDoc {
     source: "probe.html",
     combo: { screen, theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
+    viewport: { x: 0, y: 0, w: root.bounds.w, h: root.bounds.h },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

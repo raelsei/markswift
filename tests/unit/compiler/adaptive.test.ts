@@ -19,6 +19,8 @@ function page(theme: "light" | "dark", card: string, edge?: string): LayoutDoc {
     source: "card.html",
     combo: { screen: "card", theme },
     size: { w: 200, h: 100 },
+    viewport: { x: 0, y: 0, w: 200, h: 100 },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

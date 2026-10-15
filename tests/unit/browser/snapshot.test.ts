@@ -138,14 +138,18 @@ describe("toLayout", () => {
       ],
     ]);
     const root = snapshotToTree(snap).children[0]!;
-    attachPreferredSizes(root, {
-      "": { width: "auto", height: "auto" },
-      "0": { width: "auto", height: "auto" },
-      "1": { width: "auto", height: "auto" },
-      "1/0": { width: "120px", height: "40px" },
-      "2": { width: "999px", height: "999px" },
-      "3": { width: "80px", height: "40px" },
-    });
+    attachPreferredSizes(
+      root,
+      {
+        "": { width: "auto", height: "auto" },
+        "0": { width: "auto", height: "auto" },
+        "1": { width: "auto", height: "auto" },
+        "1/0": { width: "120px", height: "40px" },
+        "2": { width: "999px", height: "999px" },
+        "3": { width: "80px", height: "40px" },
+      },
+      {},
+    );
     const node = toLayout(root, { x: 0, y: 0 }, pathIdentity)!;
     expect(node.preferredSize).toEqual({ width: "auto", height: "auto" });
     expect(node.children.map((child) => [child.tag, child.preferredSize])).toEqual([

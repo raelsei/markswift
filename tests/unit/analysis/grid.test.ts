@@ -24,6 +24,8 @@ function capture(
     source: "grid.html",
     combo: { screen: "grid", theme: "light" },
     size: { w: 360, h: 200 },
+    viewport: { x: 0, y: 0, w: 360, h: 200 },
+    conditions: [],
     dpr: 1,
     canvas: "white",
     fonts: [],

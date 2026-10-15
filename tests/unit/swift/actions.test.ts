@@ -34,6 +34,8 @@ function compile(children: LayoutNode[]) {
     source: "actions.html",
     combo: { screen: "actions", theme: "light" },
     size: { w: 320, h: 400 },
+    viewport: { x: 0, y: 0, w: 320, h: 400 },
+    conditions: [],
     dpr: 2,
     canvas: "white",
     fonts: [],

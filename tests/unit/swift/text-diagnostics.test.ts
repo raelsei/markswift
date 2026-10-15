@@ -11,6 +11,8 @@ function doc(styles: Record<string, string> = {}, lines?: LayoutNode["lines"]): 
     source: "paragraph.html",
     combo: { screen: "paragraph", theme: "light" },
     size: { w: 320, h: 180 },
+    viewport: { x: 0, y: 0, w: 320, h: 180 },
+    conditions: [],
     dpr: 2,
     canvas: "white",
     fonts: [],

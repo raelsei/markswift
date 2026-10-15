@@ -102,6 +102,8 @@ describe("raster background emission", () => {
       source: "test",
       combo: { screen: "s", theme: "light" },
       size: { w: 200, h: 100 },
+      viewport: { x: 0, y: 0, w: 200, h: 100 },
+      conditions: [],
       dpr: 3,
       canvas: "rgb(255, 255, 255)",
       fonts: [],

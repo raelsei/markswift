@@ -20,6 +20,8 @@ const doc = (child: LayoutNode): LayoutDoc => ({
   source: "diagnostics",
   combo: { screen: "d", theme: "light" },
   size: { w: 200, h: 200 },
+  viewport: { x: 0, y: 0, w: 200, h: 200 },
+  conditions: [],
   dpr: 1,
   canvas: "rgb(255, 255, 255)",
   fonts: [],

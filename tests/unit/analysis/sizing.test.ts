@@ -248,6 +248,8 @@ test("app wraps a fraction box in markswiftFraction after its paint; fidelity pi
     source: "fraction.html",
     combo: { screen: "fraction", theme: "light" },
     size: { w: 300, h: 100 },
+    viewport: { x: 0, y: 0, w: 300, h: 100 },
+    conditions: [],
     dpr: 1,
     canvas: "white",
     fonts: [],

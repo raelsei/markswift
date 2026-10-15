@@ -1,15 +1,21 @@
-/** Read cascaded sizing without mutating the page or trying to parse framework stylesheets. */
+/** Read cascaded sizing and pseudo-element styles DOMSnapshot omits, without mutating the page. */
 import type { Page } from "playwright-core";
-import type { PreferredSize } from "../model/layout.ts";
+import type { LayoutNode, PreferredSize } from "../model/layout.ts";
 
 export type PreferredSizes = Record<string, PreferredSize>;
+export type PseudoStyles = Record<string, NonNullable<LayoutNode["pseudoStyles"]>>;
 
 /** DOM element paths match snapshot traversal; text and generated pseudo-elements do not count. */
-export async function readPreferredSizes(page: Page, selector: string): Promise<PreferredSizes> {
+export async function readPreferredSizes(
+  page: Page,
+  selector: string,
+): Promise<{ sizes: PreferredSizes; pseudoStyles: PseudoStyles }> {
   return page.evaluate((selector) => {
     const root = document.querySelector(selector);
     if (!root) throw new Error(`capture root ${selector} not found`);
+    const PLACEHOLDER_KEYS = ["color", "-webkit-text-fill-color", "opacity", "font-style", "font-weight"];
     const out: Record<string, PreferredSize> = {};
+    const pseudoStyles: PseudoStyles = {};
     const walk = (el: Element, path: string) => {
       const typed = el as Element & {
         computedStyleMap?: () => { get(property: string): { toString(): string } | undefined };
@@ -20,7 +26,7 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
       if (width !== undefined && height !== undefined) {
         const entry: (typeof out)[string] = { width, height };
         const position = map?.get("position")?.toString();
-        if (position === "absolute" || position === "fixed") {
+        if (position === "absolute" || position === "fixed" || position === "relative" || position === "sticky") {
           const inset = (k: string) => map?.get(k)?.toString() ?? "auto";
           entry.insets = { top: inset("top"), right: inset("right"), bottom: inset("bottom"), left: inset("left") };
         }
@@ -35,11 +41,17 @@ export async function readPreferredSizes(page: Page, selector: string): Promise<
         if ((display === "grid" || display === "inline-grid") && rows && rows !== "none") entry.gridTemplateRows = rows;
         out[path] = entry;
       }
+      if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.hasAttribute("placeholder")) {
+        const ph = getComputedStyle(el, "::placeholder");
+        pseudoStyles[path] = {
+          placeholder: Object.fromEntries(PLACEHOLDER_KEYS.map((k) => [k, ph.getPropertyValue(k)])),
+        };
+      }
       Array.from(el.children).forEach((child, i) => {
         walk(child, path ? `${path}/${i}` : String(i));
       });
     };
     walk(root, "");
-    return out;
+    return { sizes: out, pseudoStyles };
   }, selector);
 }

@@ -248,7 +248,7 @@ export class BrowserCapture {
       );
       const cdp = await this.context.newCDPSession(page);
       const conditional = await readConditionalRules(page, spec.root, viewport.width);
-      const preferredSizes = await readPreferredSizes(page, spec.root);
+      const { sizes, pseudoStyles } = await readPreferredSizes(page, spec.root);
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
@@ -280,7 +280,7 @@ export class BrowserCapture {
       const tree = snapshotToTree(snapA, snapB, states);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
-      attachPreferredSizes(rootRaw, preferredSizes);
+      attachPreferredSizes(rootRaw, sizes, pseudoStyles);
       delete rootRaw.attrs[ROOT_MARK];
       // Origin, size and screenshot come from the root's untransformed (snapshot B) box, the same
       // space as every child's bounds; `rootRect` would include an ancestor's transform.
@@ -322,6 +322,7 @@ export class BrowserCapture {
           size,
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
           viewport: { x: -box.x || 0, y: -box.y || 0, w: viewport.width, h: viewport.height },
+          conditions: [],
           dpr: this.opts.dpr,
           canvas,
           fonts,

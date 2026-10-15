@@ -23,6 +23,8 @@ function swift(children: LayoutNode[], mode: EmitMode): string {
     source: "a11y.html",
     combo: { screen: "a11y", theme: "light" },
     size: { w: 320, h: 400 },
+    viewport: { x: 0, y: 0, w: 320, h: 400 },
+    conditions: [],
     dpr: 2,
     canvas: "white",
     fonts: [],

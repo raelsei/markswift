@@ -69,6 +69,8 @@ function doc(root: LayoutNode): LayoutDoc {
     source: "components-test",
     combo: { screen: "list", theme: "light" },
     size: { w: 393, h: 200 },
+    viewport: { x: 0, y: 0, w: 393, h: 200 },
+    conditions: [],
     dpr: 3,
     canvas: "rgb(255,255,255)",
     fonts: [],

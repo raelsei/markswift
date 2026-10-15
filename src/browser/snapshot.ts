@@ -8,8 +8,8 @@
 import type { LayoutNode, Rect } from "../model/layout.ts";
 import { STYLE_WHITELIST } from "../model/layout.ts";
 import type { NodeIdentity } from "../input/types.ts";
-import type { PreferredSizes } from "./sizing.ts";
-import { round2 } from "../css/index.ts";
+import type { PreferredSizes, PseudoStyles } from "./sizing.ts";
+import { cssUrls, round2 } from "../css/index.ts";
 
 /** CDP `RareStringData`: sparse per-node strings (`value[k]` belongs to node `index[k]`). */
 interface RareStringData {
@@ -82,6 +82,10 @@ interface Raw {
   paint?: number;
   /** See `LayoutNode.states`. */
   states?: LayoutNode["states"];
+  /** See `LayoutNode.pseudoStyles`. */
+  pseudoStyles?: LayoutNode["pseudoStyles"];
+  /** Pseudo-elements only: every layout entry in snapshot order (the first is the container); bounds from snapshot B when present. */
+  parts?: Array<{ bounds: Rect; text: boolean }>;
   parent?: Raw;
   children: Raw[];
 }
@@ -112,10 +116,11 @@ const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
 
-/** Join CSS size intent while wrappers still exist, before display:contents is flattened. */
-export function attachPreferredSizes(root: Raw, sizes: PreferredSizes): void {
+/** Join CSS size intent and pseudo-element styles while wrappers still exist, before display:contents is flattened. */
+export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoStyles: PseudoStyles): void {
   const walk = (raw: Raw, path: string) => {
     if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
+    if (Object.hasOwn(pseudoStyles, path)) raw.pseudoStyles = pseudoStyles[path];
     let i = 0;
     for (const child of raw.children) {
       if (child.type !== 1 || child.pseudo !== undefined) continue;
@@ -190,13 +195,23 @@ export function snapshotToTree(
     if (r.type === 3) r.text = r.value.trim() ? r.value : t !== undefined && t >= 0 ? S[t]! : "";
     else if (r.pseudo) r.text = t !== undefined && t >= 0 ? S[t]! : "";
     if (L.paintOrders) r.paint = L.paintOrders[li];
+    if (r.pseudo !== undefined) (r.parts ??= []).push({ bounds: { ...r.bounds }, text: t !== undefined && t >= 0 });
   }
   const LB = boxes?.documents[0]?.layout;
   if (LB) {
+    const seen = new Map<Raw, number>();
     for (let li = 0; li < LB.nodeIndex.length; li++) {
       const r = raws[LB.nodeIndex[li]!];
       const b = LB.bounds[li];
-      if (r && b) r.bounds = { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! };
+      if (r && b) {
+        r.bounds = { x: b[0]!, y: b[1]!, w: b[2]!, h: b[3]! };
+        if (r.parts) {
+          const k = seen.get(r) ?? 0;
+          seen.set(r, k + 1);
+          const part = r.parts[k];
+          if (part) part.bounds = { ...r.bounds };
+        }
+      }
       const o = LB.offsetRects?.[li];
       if (r && o) r.offset = { x: o[0]!, y: o[1]!, w: o[2]!, h: o[3]! };
     }
@@ -370,7 +385,9 @@ export function findByAttr(root: Raw, attr: string, value: string): Raw | undefi
  *
  * - `::before`/`::after`/`::marker` become element nodes with that tag, their
  *   computed styles, the derived border box and one `#text` child holding the
- *   generated text (counters/quotes already resolved by the browser). `::after`
+ *   generated text (counters/quotes already resolved by the browser), plus one
+ *   `img` child per image the browser laid out from `content: url()` /
+ *   `list-style-image` (`attrs.src`, its box), in layout order. `::after`
  *   is placed after the element's real children, the others before. They do
  *   not consume an element index; their path is `<parent path>/::before`.
  *   Empty ones (`content: ""` without a box) are dropped.
@@ -406,6 +423,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
   if (raw.states) node.states = raw.states;
+  if (raw.pseudoStyles) node.pseudoStyles = raw.pseudoStyles;
   appendChildren(raw, origin, identity, path, node.children);
   return node;
 }
@@ -484,17 +502,50 @@ function pseudoElement(
   if (!tag || !raw.bounds) return undefined;
   const text = raw.text?.trim() ? raw.text : undefined;
   const box = raw.box && raw.box.w > 0 && raw.box.h > 0 ? raw.box : undefined;
-  if (!text && !box) return undefined;
+  const pseudoPath = parentPath === "" ? tag : `${parentPath}/${tag}`;
+  // An image entry: after the container, no text, a real box, and not a wrapper around the pseudo's own text
+  // (quotes, flex counters lay out such boxes).
+  // ponytail: the k-th image box takes the k-th url(); a `content` mixing gradients/image-set() with url() mis-assigns — parse image functions in order if a design needs it.
+  const parts = raw.parts ?? [];
+  const texts = parts.filter((p) => p.text).map((p) => p.bounds);
+  const contains = (o: Rect, i: Rect) =>
+    i.x >= o.x - 0.5 && i.y >= o.y - 0.5 && i.x + i.w <= o.x + o.w + 0.5 && i.y + i.h <= o.y + o.h + 0.5;
+  let urls = cssUrls(raw.styles["content"]);
+  if (raw.pseudo === "marker" && !urls.length) urls = cssUrls(raw.styles["list-style-image"]);
+  const children: LayoutNode[] = [];
+  let textAt = -1;
+  for (const [i, p] of parts.entries()) {
+    if (p.text) {
+      if (textAt < 0) textAt = children.length;
+      continue;
+    }
+    if (i === 0 || !(p.bounds.w > 0 && p.bounds.h > 0) || texts.some((t) => contains(p.bounds, t))) continue;
+    const k = children.length;
+    const src = urls[k];
+    if (src === undefined) continue;
+    const img: LayoutNode = { tag: "img", attrs: { src }, styles: {}, bounds: rebase(p.bounds, origin), children: [] };
+    const id = identity("img", img.attrs, `${pseudoPath}/${k}`);
+    if (id !== undefined) img.id = id;
+    children.push(img);
+  }
+  if (!text && !box && !children.length) return undefined;
+  if (text)
+    children.splice(textAt < 0 ? children.length : textAt, 0, {
+      tag: "#text",
+      attrs: {},
+      styles: {},
+      bounds: rebase(raw.bounds, origin),
+      text,
+      children: [],
+    });
   const node: LayoutNode = {
     tag,
     attrs: {},
     styles: raw.styles,
     bounds: rebase(box ?? raw.bounds, origin),
-    children: text
-      ? [{ tag: "#text", attrs: {}, styles: {}, bounds: rebase(raw.bounds, origin), text, children: [] }]
-      : [],
+    children,
   };
-  const id = identity(tag, node.attrs, parentPath === "" ? tag : `${parentPath}/${tag}`);
+  const id = identity(tag, node.attrs, pseudoPath);
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.states) node.states = raw.states;

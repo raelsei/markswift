@@ -40,6 +40,8 @@ function cardDoc(shadows: string, border = "0px", background = "rgb(255, 140, 0)
     source: "shadow-test",
     combo: { screen: "card", theme: "light" },
     size: { w: 180, h: 230 },
+    viewport: { x: 0, y: 0, w: 180, h: 230 },
+    conditions: [],
     dpr: 3,
     canvas: "rgb(24,21,43)",
     fonts: [],

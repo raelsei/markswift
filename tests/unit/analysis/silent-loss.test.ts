@@ -33,6 +33,8 @@ function doc(root: LayoutNode): LayoutDoc {
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
+    viewport: { x: 0, y: 0, w: root.bounds.w, h: root.bounds.h },
+    conditions: [],
     dpr: 3,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

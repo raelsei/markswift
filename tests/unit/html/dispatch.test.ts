@@ -26,6 +26,8 @@ function document(root: LayoutNode): LayoutDoc {
     source: "elements.html",
     combo: { screen: "elements", theme: "light" },
     size: { w: 120, h: 40 },
+    viewport: { x: 0, y: 0, w: 120, h: 40 },
+    conditions: [],
     dpr: 1,
     canvas: "white",
     fonts: [],

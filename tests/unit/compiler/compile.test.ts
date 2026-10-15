@@ -8,6 +8,8 @@ const layout: LayoutDoc = {
   source: "component.html",
   combo: { screen: "card", theme: "light" },
   size: { w: 200, h: 80 },
+  viewport: { x: 0, y: 0, w: 200, h: 80 },
+  conditions: [],
   dpr: 1,
   canvas: "rgb(255, 255, 255)",
   fonts: [],

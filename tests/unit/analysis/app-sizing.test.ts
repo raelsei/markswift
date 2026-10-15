@@ -34,17 +34,18 @@ function textNode(text: string, bounds: Rect): LayoutNode {
   return { tag: "#text", attrs: {}, styles: { ...INHERITED }, bounds, text, children: [] };
 }
 
-function doc(root: LayoutNode, viewport?: Rect): LayoutDoc {
+function doc(root: LayoutNode, viewport: Rect = { x: 0, y: 0, w: root.bounds.w, h: root.bounds.h }): LayoutDoc {
   return {
     version: LAYOUT_DOC_VERSION,
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
+    viewport,
+    conditions: [],
     dpr: 3,
     canvas: "rgb(255, 255, 255)",
     fonts: [],
     root,
-    ...(viewport ? { viewport } : {}),
   };
 }
 
@@ -210,7 +211,8 @@ describe("Step 3 trailing inset", () => {
       [el("div", { x: 0, y: 24, w: 390, h: 100 }, { display: "block", ...RED })],
       { id: "root" },
     );
-    const screen = inferScreen(doc(root), "s");
+    // A viewport taller than the root: the min-height is a design floor, not `100vh`.
+    const screen = inferScreen(doc(root, { x: 0, y: 0, w: 390, h: 844 }), "s");
     expect(screen.root.padding[2]).toBe(24);
     expect(screen.root.minHeight).toBe(760);
   });
@@ -293,10 +295,6 @@ describe("Step 4 viewport", () => {
     const s = byId(inferScreen(doc(root, VIEWPORT), "s").root, "s");
     expect(s.minHeight).toBe(844);
     expect(features(s)).toContain("approximated:min-height");
-  });
-
-  test("without a recorded viewport the root keeps its min-height", () => {
-    expect(inferScreen(doc(tallRoot()), "s").root.minHeight).toBe(844);
   });
 });
 

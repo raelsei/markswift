@@ -24,6 +24,8 @@ function screen(...children: LayoutNode[]) {
     source: "test",
     combo: { screen: "s", theme: "light" },
     size: { w: 300, h: 200 },
+    viewport: { x: 0, y: 0, w: 300, h: 200 },
+    conditions: [],
     dpr: 3,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

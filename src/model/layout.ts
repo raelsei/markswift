@@ -11,7 +11,7 @@ export type Rect = z.infer<typeof Rect>;
 export const PreferredSize = z.object({
   width: z.string(),
   height: z.string(),
-  /** Typed-OM computed insets of an absolute/fixed box: `auto` survives here (DOMSnapshot reports used px), and says which edge the author anchored. */
+  /** Typed-OM computed insets of a positioned box (`absolute`, `fixed`, `relative`, `sticky`): `auto` and `%` survive here (DOMSnapshot reports used px, and a relative `%` top against an auto-height containing block as a non-zero px it never applies). */
   insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
   /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
   autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
@@ -34,7 +34,9 @@ export interface LayoutNode {
    * Lower-case tag name, `#text`, or a pseudo-element: `::before` / `::after` /
    * `::marker` (generated content materialised by the snapshot: styles, border
    * box, and one `#text` child with the browser-resolved text — counters,
-   * quotes, list markers). `::after` follows the element's real children.
+   * quotes, list markers). `::before`/`::after`/`::marker` also get one `img` child per image the browser laid
+   * out from `content: url()` / `list-style-image` (`attrs.src`, its box). `::after` follows the element's real
+   * children.
    */
   tag: string;
   /** Raw attributes. */
@@ -64,6 +66,8 @@ export interface LayoutNode {
   paint?: number;
   /** Paint the element shows in an interaction state: computed values of whitelisted paint properties that differ from rest (`:hover`+`:active` = pressed, `:focus`+`:focus-visible` = focused), captured by forcing the state over CDP. */
   states?: { pressed?: Record<string, string>; focused?: Record<string, string> };
+  /** Pseudo-element styles DOMSnapshot does not report, read with getComputedStyle(el, "::<name>"). `placeholder`: inputs and textareas with a `placeholder` attribute (color, -webkit-text-fill-color, opacity, font-style, font-weight). */
+  pseudoStyles?: { placeholder?: Record<string, string> };
   children: LayoutNode[];
 }
 
@@ -85,6 +89,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
         focused: z.record(z.string(), z.string()).optional(),
       })
       .optional(),
+    pseudoStyles: z.object({ placeholder: z.record(z.string(), z.string()).optional() }).optional(),
     children: z.array(LayoutNode),
   }),
 );
@@ -131,10 +136,20 @@ export type Theme = Combo["theme"];
 /** Version of the saved-capture format. Bump it with any STYLE_WHITELIST or schema change, or a change in what a
  * captured value means — once per release cycle: while the version is unreleased (see
  * tests/architecture/layout-doc.test.ts, which pins the schema to it) later changes re-pin its fingerprint. */
-export const LAYOUT_DOC_VERSION = 3;
+export const LAYOUT_DOC_VERSION = 4;
 
 /** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
 export const VALIDATION_MARK = "data-markswift-validation";
+
+/** A size `@media`/`@container` condition whose rules hit captured elements; `matches` at this capture's viewport;
+ * `container` is the query container's node id. Filled by breakpoint capture; empty otherwise. */
+export const LayoutCondition = z.object({
+  kind: z.enum(["media", "container"]),
+  query: z.string(),
+  matches: z.boolean(),
+  container: z.string().optional(),
+});
+export type LayoutCondition = z.infer<typeof LayoutCondition>;
 
 export const LayoutDoc = z.object({
   version: z.literal(LAYOUT_DOC_VERSION),
@@ -142,8 +157,9 @@ export const LayoutDoc = z.object({
   combo: Combo,
   /** CSS px size of the capture root (the phone's content area). */
   size: z.object({ w: z.number(), h: z.number() }),
-  /** The browser viewport in capture-root coordinates (the root's top-left is 0,0): what `100vh` and `position: fixed` resolved against. Absent in hand-built docs. */
-  viewport: Rect.optional(),
+  /** The browser viewport in capture-root coordinates (the root's top-left is 0,0): what `100vh` and `position: fixed` resolved against. */
+  viewport: Rect,
+  conditions: z.array(LayoutCondition).default([]),
   dpr: z.number(),
   /** Effective background behind the root (computed color string). */
   canvas: z.string().default("rgb(255, 255, 255)"),
@@ -175,12 +191,14 @@ export const STYLE_WHITELIST = [
   "border-bottom-right-radius",
   "border-bottom-style",
   "border-bottom-width",
+  "border-collapse",
   "border-left-color",
   "border-left-style",
   "border-left-width",
   "border-right-color",
   "border-right-style",
   "border-right-width",
+  "border-spacing",
   "border-top-color",
   "border-top-left-radius",
   "border-top-right-radius",
@@ -192,11 +210,17 @@ export const STYLE_WHITELIST = [
   "clear",
   "clip-path",
   "color",
+  "color-scheme",
   "column-gap",
+  "container-name",
+  "container-type",
+  "content",
   "direction",
   "display",
+  "empty-cells",
   "fill",
   "fill-opacity",
+  "fill-rule",
   "filter",
   "flex-basis",
   "flex-direction",
@@ -206,20 +230,34 @@ export const STYLE_WHITELIST = [
   "float",
   "font-family",
   "font-feature-settings",
+  "font-optical-sizing",
   "font-size",
+  "font-stretch",
   "font-style",
   "font-variant-caps",
   "font-variant-numeric",
+  "font-variation-settings",
   "font-weight",
+  "grid-auto-columns",
   "grid-auto-flow",
+  "grid-auto-rows",
+  "grid-column-end",
+  "grid-column-start",
+  "grid-row-end",
+  "grid-row-start",
+  "grid-template-areas",
   "grid-template-columns",
   "grid-template-rows",
   "height",
   "hyphens",
   "justify-content",
+  "justify-items",
+  "justify-self",
   "left",
   "letter-spacing",
   "line-height",
+  "list-style-image",
+  "list-style-type",
   "margin-bottom",
   "margin-left",
   "margin-right",
@@ -244,10 +282,12 @@ export const STYLE_WHITELIST = [
   "overflow-wrap",
   "overflow-x",
   "overflow-y",
+  "overlay",
   "padding-bottom",
   "padding-left",
   "padding-right",
   "padding-top",
+  "pointer-events",
   "position",
   "right",
   "rotate",
@@ -261,6 +301,7 @@ export const STYLE_WHITELIST = [
   "stroke-opacity",
   "stroke-width",
   "tab-size",
+  "table-layout",
   "text-align",
   "text-decoration-color",
   "text-decoration-line",
@@ -277,6 +318,7 @@ export const STYLE_WHITELIST = [
   "transform",
   "transform-origin",
   "translate",
+  "unicode-bidi",
   "vertical-align",
   "visibility",
   "-webkit-line-clamp",

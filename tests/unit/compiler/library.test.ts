@@ -29,6 +29,8 @@ function page(screen: string, theme: "light" | "dark", children: Node[]): Layout
     source: `${screen}.html`,
     combo: { screen, theme },
     size: { w: 200, h: 100 },
+    viewport: { x: 0, y: 0, w: 200, h: 100 },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

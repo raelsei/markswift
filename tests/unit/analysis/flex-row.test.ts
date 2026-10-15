@@ -99,6 +99,8 @@ function flexDoc(specs: Spec[], rowStyles: Record<string, string> = {}, width = 
     source: "flex-row.html",
     combo: { screen: "row", theme: "light" },
     size: { w: width, h: 40 },
+    viewport: { x: 0, y: 0, w: width, h: 40 },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

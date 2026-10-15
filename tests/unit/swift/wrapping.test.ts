@@ -48,6 +48,8 @@ function fixture(wrap = "wrap"): LayoutDoc {
     source: "wrap-test",
     combo: { screen: "s", theme: "light" },
     size: { w: 200, h: 90 },
+    viewport: { x: 0, y: 0, w: 200, h: 90 },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255,255,255)",
     fonts: [],

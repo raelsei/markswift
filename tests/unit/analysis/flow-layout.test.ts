@@ -14,6 +14,8 @@ function screen(root: LayoutNode): StackNode {
     source: "flow-layout-test",
     combo: { screen: "s", theme: "light" },
     size: { w: root.bounds.w, h: root.bounds.h },
+    viewport: { x: 0, y: 0, w: root.bounds.w, h: root.bounds.h },
+    conditions: [],
     dpr: 1,
     canvas: "rgb(255, 255, 255)",
     fonts: [],

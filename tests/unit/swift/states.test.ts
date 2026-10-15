@@ -51,6 +51,8 @@ function doc(children: LayoutNode[]): LayoutDoc {
     source: "states.html",
     combo: { screen: "states", theme: "light" },
     size: { w: 320, h: 400 },
+    viewport: { x: 0, y: 0, w: 320, h: 400 },
+    conditions: [],
     dpr: 2,
     canvas: "white",
     fonts: [],
