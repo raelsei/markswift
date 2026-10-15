@@ -11,7 +11,7 @@ import { chromium, type Browser, type BrowserContext, type Response } from "play
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
 import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
-import { readConditionalRules } from "./conditions.ts";
+import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
@@ -287,6 +287,7 @@ export class BrowserCapture {
       const box = rootRaw.bounds;
       const root = box && toLayout(rootRaw, { x: box.x, y: box.y }, identity);
       if (!box || !root) throw new Error(`capture root ${spec.root} has no layout`);
+      const conditions = applyConditionMarks(root, conditional.found);
       // One integer size for the screenshot clip and the native frame: Chrome floors a fractional clip.
       const size = { w: Math.floor(box.w), h: Math.floor(box.h) };
       let png: Uint8Array | undefined;
@@ -314,7 +315,7 @@ export class BrowserCapture {
       await Promise.all(imageReads);
       errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
       return {
-        warnings: [...errors.map((message) => ({ source: "capture" as const, message })), ...conditional],
+        warnings: [...errors.map((message) => ({ source: "capture" as const, message })), ...conditional.warnings],
         layout: {
           version: LAYOUT_DOC_VERSION,
           source,
@@ -322,7 +323,7 @@ export class BrowserCapture {
           size,
           // `|| 0`: a root at the page origin gives -0, which JSON and deep equality treat differently.
           viewport: { x: -box.x || 0, y: -box.y || 0, w: viewport.width, h: viewport.height },
-          conditions: [],
+          conditions,
           dpr: this.opts.dpr,
           canvas,
           fonts,

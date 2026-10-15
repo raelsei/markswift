@@ -157,10 +157,12 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 - Options: `name`, `mode` (`app` | `fidelity`), `theme` (`adaptive` | `light` | `dark`),
   `darkClass`, `css` (compiled CSS), `root` (default `[data-markswift-root]`, otherwise `body`),
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
-  `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion).
+  `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion), `breakpoints` (`true` or
+  `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`).
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
-  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`.
+  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`;
+  with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`).
 
 ## Modes
 
