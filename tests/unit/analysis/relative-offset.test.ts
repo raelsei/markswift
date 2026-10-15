@@ -129,6 +129,8 @@ describe("placement", () => {
       expect(view.split(".offset(x: 12.0, y: 6.0)").length - 1).toBe(1);
       expect(view.indexOf(".offset(x: 12.0, y: 6.0)")).toBeGreaterThan(view.indexOf(".rotationEffect("));
       expect(view.indexOf(".rotationEffect(")).toBeGreaterThan(-1);
+      // Positioned boxes paint above their in-flow siblings.
+      expect(view).toMatch(/\.offset\(x: 12\.0, y: 6\.0\)\n\s*\.zIndex\(1\)/);
     }
   });
 
