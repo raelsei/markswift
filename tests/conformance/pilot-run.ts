@@ -3,7 +3,9 @@ import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { BrowserCapture } from "../../src/browser/capture.ts";
+import { BrowserCapture, type Capture } from "../../src/browser/capture.ts";
+import { captureLayers, type OpenShots } from "../../src/browser/layers.ts";
+import type { CaptureRequest } from "../../src/input/types.ts";
 import { serveDir } from "../../src/input/server.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
@@ -12,10 +14,11 @@ import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
-import { buildMatrix, loadFixtureSet, loadPilot, type PilotEntry, type RunCase, widthsFor } from "./pilot.ts";
+import { buildMatrix, loadFixtureSet, loadPilot, openKey, type PilotEntry, type RunCase, widthsFor } from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
 const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--renderer none|mac|ios] [--reflow] [--out <dir>]
@@ -44,6 +47,9 @@ type RunEntry = {
   mismatch?: number;
   /** Wall time of `BrowserCapture.capture` for this capture, ms; both modes of one capture share it. */
   captureMs?: number;
+  /** `@open` captures: the layer shown, and the rest capture whose conversion renders it. */
+  openLayer?: string;
+  openSource?: string;
 };
 /** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid` stays in `run.json` only. */
 interface RunEnvironment {
@@ -110,6 +116,15 @@ export function assertCleanSource(status: string) {
     );
 }
 
+/** The Swift view name of a capture key (`details-390-light-app@open:returns` → `PilotDetails390LightAppOpenReturns`). */
+export const pilotName = (key: string) =>
+  "Pilot" +
+  key
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .map((part) => part[0]!.toUpperCase() + part.slice(1))
+    .join("");
+
 async function outputOf(command: string[]): Promise<string> {
   const run = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text()]);
@@ -166,7 +181,7 @@ function findNode(node: LayoutNode, id: string): LayoutNode | undefined {
   }
   return undefined;
 }
-async function saveSource(entry: PilotEntry, captured: Awaited<ReturnType<BrowserCapture["capture"]>>, out: string) {
+async function saveSource(entry: PilotEntry, captured: Capture, out: string) {
   const dir = join(out, entry.key);
   await mkdir(dir, { recursive: true });
   await Promise.all([
@@ -249,7 +264,7 @@ async function run() {
         result.ssim = score.ssim;
         result.mismatch = score.mismatch;
         const anchors: Array<{ id: string; mismatch: number }> = [];
-        for (const id of item.anchors ?? []) {
+        for (const id of result.openLayer ? [] : (item.anchors ?? [])) {
           const node = findNode(layout.root, id);
           if (!node) throw new Error(`anchor ${id} not found`);
           anchors.push({
@@ -316,7 +331,7 @@ async function run() {
         console.error(`${entry.key}: ${String(error)}`);
       }
     };
-    const pending: Array<Job & { conversion: ConversionResult }> = [];
+    const pending: Array<Job & { conversion: RenderResult }> = [];
     /** Render every pending iOS capture in one app build and launch, then score each. */
     const flush = async () => {
       const jobs = pending.splice(0);
@@ -340,28 +355,33 @@ async function run() {
           const pair = matrix.filter(
             (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme,
           );
-          let captured: Awaited<ReturnType<BrowserCapture["capture"]>>;
+          let captured: Capture;
           let captureMs = 0;
+          // 390 captures also open each in-flow layer: its shot is the browser side of an `@open` capture.
+          let shots: OpenShots = {};
           try {
             const t0 = performance.now();
-            captured = await browsers.get(width)!.capture(
-              {
-                screen: item.id,
-                theme,
-                url: `${server.origin}/${item.fixture}`,
-                root: "[data-markswift-root]",
-                screenshot: true,
-                async prepare(page) {
-                  const style = await page.addStyleTag({
-                    content: "[data-markswift-root] { width: 100% !important; }",
-                  });
-                  await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
-                },
+            const browser = browsers.get(width)!;
+            const spec: CaptureRequest = {
+              screen: item.id,
+              theme,
+              url: `${server.origin}/${item.fixture}`,
+              root: "[data-markswift-root]",
+              screenshot: true,
+              async prepare(page) {
+                const style = await page.addStyleTag({
+                  content: "[data-markswift-root] { width: 100% !important; }",
+                });
+                await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
               },
-              htmlIdentity,
-              `pilot:${item.fixture}`,
-            );
+            };
+            const label = `pilot:${item.fixture}`;
+            captured = await browser.capture(spec, htmlIdentity, label);
             captureMs = performance.now() - t0;
+            if (width === 390)
+              shots = await captureLayers((s) => browser.capture(s, htmlIdentity, label), spec, captured, {
+                probeDismiss: false,
+              });
           } catch (error) {
             for (const entry of pair) report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
             continue;
@@ -381,13 +401,7 @@ async function run() {
             report.entries.push(result);
             try {
               const dir = await saveSource(entry, captured, out);
-              const name =
-                "Pilot" +
-                entry.key
-                  .split("-")
-                  .filter(Boolean)
-                  .map((part) => part[0]!.toUpperCase() + part.slice(1))
-                  .join("");
+              const name = pilotName(entry.key);
               const swiftDir = join(dir, "swift");
               const fonts = await packageFonts(
                 captured.layout.fonts,
@@ -464,7 +478,42 @@ async function run() {
                   await finish(job);
                 } else {
                   pending.push({ ...job, conversion });
-                  if (pending.length === IOS_BATCH) await flush();
+                  if (pending.length >= IOS_BATCH) await flush();
+                }
+                // The same view with each in-flow layer shown, against the browser's open shot.
+                for (const [layer, openArg] of Object.entries(compiled.openStates ?? {})) {
+                  const shot = shots[layer];
+                  if (!shot?.png) continue;
+                  const key = openKey(entry.key, layer);
+                  const openDir = join(out, key);
+                  const layout = { ...captured.layout, size: shot.size };
+                  await mkdir(openDir, { recursive: true });
+                  await Promise.all([
+                    Bun.write(join(openDir, "browser.png"), shot.png),
+                    Bun.write(join(openDir, "layout.json"), JSON.stringify(layout, null, 2)),
+                    Bun.write(join(openDir, "warnings.json"), JSON.stringify(captured.warnings, null, 2)),
+                    Bun.write(join(openDir, "diagnostics.json"), JSON.stringify(compiled.diagnostics, null, 2)),
+                    Bun.write(join(openDir, "typecheck.json"), JSON.stringify(check, null, 2)),
+                  ]);
+                  const opened: RunEntry = { ...result, key, size: shot.size, openLayer: layer, openSource: entry.key };
+                  report.entries.push(opened);
+                  report.expected++;
+                  const openJob: Job = {
+                    entry: { ...entry, key },
+                    item,
+                    dir: openDir,
+                    layout,
+                    textMetrics: undefined,
+                    result: opened,
+                  };
+                  const openConversion = { ...conversion, layout, openArg };
+                  if (renderer === "mac") {
+                    await renderMac(openConversion, join(out, "_mac-work"), join(openDir, "native.png"));
+                    await finish(openJob);
+                  } else {
+                    pending.push({ ...openJob, conversion: openConversion });
+                    if (pending.length >= IOS_BATCH) await flush();
+                  }
                 }
               }
             } catch (error) {

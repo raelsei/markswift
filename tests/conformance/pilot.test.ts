@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { buildMatrix, loadFixtureSet, loadPilot, openKey, reflowTag, validatePilot } from "./pilot.ts";
+import { pilotName } from "./pilot-run.ts";
 
 const fixtureRoot = join(import.meta.dir, "fixtures");
 
@@ -87,6 +88,21 @@ test("pilot expands each feature into two widths, themes and output modes withou
       .map((item) => item.width)
       .sort(),
   ).toEqual([320, 320, 320, 320, 390, 390, 390, 390]);
+});
+
+test("Swift view names of matrix keys are unchanged; an @open key adds its layer words", async () => {
+  const old = (key: string) =>
+    "Pilot" +
+    key
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part[0]!.toUpperCase() + part.slice(1))
+      .join("");
+  const matrix = buildMatrix(await loadPilot());
+  expect(matrix).toHaveLength(120);
+  for (const { key } of buildMatrix(await loadFixtureSet(await loadPilot()), true))
+    expect(pilotName(key)).toBe(old(key));
+  expect(pilotName(openKey("details-390-light-app", "returns"))).toBe("PilotDetails390LightAppOpenReturns");
 });
 
 test("--reflow adds 768 captures only for reflow-tagged cases", async () => {
