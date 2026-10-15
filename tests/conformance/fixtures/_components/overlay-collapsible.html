@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>collapsible — shadcn/ui</title>
+    <meta name="markswift-themes" content="light,dark" />
+    <meta name="markswift-rows" content="@aria-*" />
+    <!-- tailwind-v4 globals.css -->
+  </head>
+  <body class="bg-background text-foreground">
+    <div data-markswift-root class="w-[393px] p-4 bg-background text-foreground"><div class="flex flex-col gap-5"><div data-state="open" data-slot="collapsible" class="rounded-xl border p-3"><button type="button" aria-controls="collapsible-content-1" aria-expanded="true" data-state="open" data-slot="collapsible-trigger" class="flex w-full items-center justify-between text-sm font-medium">Build output <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down size-4" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button><div data-state="open" id="collapsible-content-1" data-slot="collapsible-content" class="pt-2 font-mono text-xs text-muted-foreground"><div>bundled 482 modules in 1.8s</div><div>uploaded 2.1 MB</div><div>ready</div></div></div><div data-state="closed" data-slot="collapsible" class="rounded-xl border p-3"><button type="button" aria-controls="collapsible-content-2" aria-expanded="false" data-state="closed" data-slot="collapsible-trigger" class="flex w-full items-center justify-between text-sm font-medium">Advanced settings <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down size-4" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button><div data-state="closed" id="collapsible-content-2" hidden="" data-slot="collapsible-content" class="pt-2 text-xs text-muted-foreground"><div>retries 3, timeout 10 min</div><div>cache keyed by lockfile</div></div></div></div></div>
+<script>
+// Fixture stand-in for Radix: a trigger with aria-controls toggles its target.
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[aria-controls][aria-expanded]");
+  const target = t && document.getElementById(t.getAttribute("aria-controls"));
+  if (!target) return;
+  const open = t.getAttribute("aria-expanded") !== "true";
+  for (const el of [t, target]) {
+    el.setAttribute("data-state", open ? "open" : "closed");
+    el.toggleAttribute("data-open", open);
+    el.toggleAttribute("data-closed", !open);
+  }
+  t.setAttribute("aria-expanded", String(open));
+  target.hidden = !open;
+});
+</script>
+  </body>
+</html>
