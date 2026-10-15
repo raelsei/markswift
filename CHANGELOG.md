@@ -11,6 +11,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - An author `unicode-bidi` (`embed`, `isolate`, `bidi-override`, `isolate-override`, `plaintext`) on inline elements maps to Unicode bidi controls from the captured computed value; `<bdo>`/`<bdi>`/`[dir]` now come from the same value.
 - `font-variation-settings`, `font-stretch` and `font-optical-sizing` are read: `wght`/`opsz` set the weight and optical size, other axes a bundled variable font declares (incl. `wdth` from `font-stretch`) render exactly through `.markswiftVariable(…, axes:)` in both modes (app keeps Dynamic Type), `font-optical-sizing: none` drops the automatic `opsz`; on system fonts `font-stretch` approximates to SF's nearest width (`.width(Font.Width(…))`, reported).
 - A root `color-scheme` that names one scheme (`dark`, `dark only`, `light`, `light only`) forces the view's appearance with `.environment(\.colorScheme, …)` in both modes; an adaptive conversion does so only when both captures agree.
+- `pointer-events: none` overlays pass taps through (`.allowsHitTesting(false)`, app mode).
 
 ## [1.1.0] — 2026-10-15
 

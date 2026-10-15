@@ -5,7 +5,7 @@ import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
 import { stateStylesOf, styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
-import { insetsOf } from "./geometry.ts";
+import { insetsOf, renders } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
@@ -20,6 +20,30 @@ export function finish<T extends SemNode>(node: T): T {
 export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: InferenceContext, extra: T): SemNode {
   const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]));
   return finish({ ...base, ...extra } as unknown as SemNode);
+}
+
+const passing = new WeakMap<LayoutNode, boolean>();
+/**
+ * The element and every rendered element below it compute `pointer-events: none` (an `auto` descendant stays
+ * hittable in CSS). `pointer-events` inherits: a child with no key and no children (046's synthetic pseudo `img`,
+ * `styles: {}`) passes under a `none` parent.
+ */
+export function passesTaps(n: LayoutNode): boolean {
+  let v = passing.get(n);
+  if (v === undefined)
+    passing.set(
+      n,
+      (v =
+        n.styles["pointer-events"] === "none" &&
+        n.children.every(
+          (c) =>
+            c.tag === "#text" ||
+            !renders(c) ||
+            (c.styles["pointer-events"] === undefined && !c.children.length) ||
+            passesTaps(c),
+        )),
+    );
+  return v;
 }
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
@@ -66,6 +90,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(field ? { field } : {}),
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
+    ...(passesTaps(n) ? { hitTesting: false as const } : {}),
   };
 }
 

@@ -29,6 +29,15 @@ export function modifiers(n: SemNode, ctx: EmitContext): string[] {
  * contains another control keeps its view and gains a tap gesture instead.
  */
 export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[] {
+  return [...decorated(n, core, ctx), ...hitTestingModifier(n, ctx)];
+}
+
+/** App: a pass-through overlay (`pointer-events: none`), after the Button/tap gesture, so nothing inside answers a tap. */
+export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
+  return ctx.mode === "app" && n.hitTesting === false ? [".allowsHitTesting(false)"] : [];
+}
+
+function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
   const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
   if (!name) return [...core, ...modifiers(n, ctx)];
   // An ARIA toggle (`role=checkbox|switch|radio`): the tap changes the screen's state, then acts.

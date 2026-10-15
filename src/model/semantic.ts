@@ -409,6 +409,11 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
+  /**
+   * `pointer-events: none` on this overlay's whole element subtree: taps reach what is painted underneath. Set on the
+   * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
+   */
+  hitTesting?: false;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
   states?: { pressed?: StateStyle; focused?: StateStyle };
 }

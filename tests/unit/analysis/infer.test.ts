@@ -370,6 +370,39 @@ describe("paint invisible at rest", () => {
   });
 });
 
+describe("pointer-events", () => {
+  const box = { x: 0, y: 0, w: 100, h: 100 };
+  const paint = { "background-color": "rgb(0, 0, 255)" };
+  const none = { position: "absolute", "pointer-events": "none", ...paint };
+  const positioned = (child: LayoutNode) =>
+    inferScreen(doc(el("main", box, { display: "block", position: "relative" }, [child])), "s").root;
+
+  test("an absolute pass-through veil is flagged", () => {
+    expect(positioned(el("div", box, none)).overlays[0]?.node.hitTesting).toBe(false);
+  });
+
+  test("an in-flow pointer-events: none node is not: it covers no sibling", () => {
+    const root = positioned(el("div", box, { display: "block", "pointer-events": "none", ...paint }));
+    expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
+  });
+
+  test("only the outermost pass-through overlay is flagged", () => {
+    const root = positioned(el("div", box, none, [el("div", { x: 10, y: 10, w: 20, h: 20 }, none)]));
+    expect(flatten(root).filter((n) => n.hitTesting === false)).toEqual([root.overlays[0]!.node]);
+  });
+
+  test("a pointer-events: auto descendant keeps the container hittable", () => {
+    const live = el("div", { x: 10, y: 10, w: 20, h: 20 }, { display: "block", "pointer-events": "auto", ...paint });
+    const root = positioned(el("div", box, none, [live]));
+    expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
+  });
+
+  test("a key-less childless child (046's pseudo img) passes under a none parent", () => {
+    const root = positioned(el("div", box, none, [el("img", { x: 10, y: 10, w: 20, h: 20 }, {})]));
+    expect(root.overlays[0]?.node.hitTesting).toBe(false);
+  });
+});
+
 describe("ARIA names", () => {
   const tab = el(
     "button",

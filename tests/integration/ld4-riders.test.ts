@@ -46,3 +46,20 @@ browserTest(
   },
   30_000,
 );
+
+browserTest(
+  "pointer-events: none on a veil over a button lets the tap through in app mode",
+  async () => {
+    const result = await convertHtml(
+      `<main data-markswift-root><div class="stage"><button type="button" class="btn">Continue</button><div class="veil"></div></div></main>`,
+      {
+        css: ".stage{position:relative;padding:16px}.btn{border:0;font:inherit;padding:8px 16px}.veil{position:absolute;inset:0;background:rgba(37,99,235,.15);pointer-events:none}",
+        mode: "app",
+        theme: "light",
+        viewport: { width: 390, height: 800 },
+      },
+    );
+    expect(result.code.split(".allowsHitTesting(false)").length - 1).toBe(1);
+  },
+  30_000,
+);

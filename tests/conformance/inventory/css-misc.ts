@@ -445,10 +445,10 @@ export default {
       group: "Interaction",
       class: "mapped",
       target: ".allowsHitTesting(false)",
-      ir: "Style.hitTesting (new)",
+      ir: "SemBase.hitTesting",
       via: "style",
-      impl: "no",
-      note: "Decorative overlays (gradients, glows, badges) placed above buttons must not swallow taps in the shipped app; `.allowsHitTesting(false)` is exactly `pointer-events: none`. Needs a whitelist entry; emit only on nodes with an interactive descendant-free subtree to keep the Swift quiet on plain decoration.",
+      impl: "yes",
+      note: "App mode: the outermost overlay whose whole element subtree computes `none` ends with `.allowsHitTesting(false)`, so a decorative veil over a button lets the tap through (behaviour case `_behaviour/pointer-events`). An `auto` descendant keeps the whole overlay hittable (SwiftUI cannot re-enable it under a disabled parent); in-flow nodes cover no sibling and need nothing; fidelity renders an image. The node's action stays for assistive technology.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/pointer-events",
     },
     {

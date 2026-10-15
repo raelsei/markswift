@@ -6,8 +6,9 @@ import { type SemNode, walk } from "../model/semantic.ts";
  * keeps `opacity: 0` content in the accessibility tree (a visually hidden native `<input>` behind
  * a custom checkbox) unless `aria-hidden` removes it. So an `aria-hidden` box goes whatever it
  * holds — Radix's form-value `<input aria-hidden>` beside its toggle is neither seen nor announced.
- * ponytail: `pointer-events` is not captured; an invisible aria-hidden control the design still lets
- * the pointer hit would lose that tap. Capture `pointer-events` if a design relies on it.
+ * ponytail: an aria-hidden transparent control the pointer can still hit (`pointer-events` not `none`)
+ * goes too, losing that tap; keeping it would also need a hittable stand-in (`.contentShape`), since
+ * SwiftUI does not hit-test `opacity(0)` content. Add both if a design relies on such a tap.
  */
 function invisible(n: SemNode): boolean {
   if (n.style.opacity !== 0 || n.diagnostics.some((d) => d.feature === "animation-name")) return false;
@@ -28,15 +29,16 @@ function invisible(n: SemNode): boolean {
   return silent;
 }
 
+/** The in-flow children of a node: a stack's or grid's children, a control's label and content. */
+function inFlowOf(n: SemNode): SemNode[] {
+  if (n.kind === "stack" || n.kind === "grid") return n.children;
+  return n.kind === "control" ? [...(n.label ? [n.label] : []), ...n.content] : [];
+}
+
 /** Removes invisible overlays; an invisible in-flow node keeps its space but draws nothing. Never touches `n` itself. */
 export function dropInvisible(n: SemNode): void {
   n.overlays = n.overlays.filter((o) => !invisible(o.node));
-  const inFlow =
-    n.kind === "stack" || n.kind === "grid"
-      ? n.children
-      : n.kind === "control"
-        ? [...(n.label ? [n.label] : []), ...n.content]
-        : [];
+  const inFlow = inFlowOf(n);
   for (const c of inFlow) {
     if (!invisible(c)) continue;
     c.style.hidden = true;
@@ -44,4 +46,12 @@ export function dropInvisible(n: SemNode): void {
   }
   for (const o of n.overlays) dropInvisible(o.node);
   for (const c of inFlow) dropInvisible(c);
+}
+
+/** Keeps `hitTesting: false` where it changes a tap: on overlays (they paint over siblings), outermost only. */
+export function pruneHitTesting(n: SemNode, overlay = false, inside = false): void {
+  if (n.hitTesting === false && (inside || !overlay)) delete n.hitTesting;
+  const off = inside || n.hitTesting === false;
+  for (const o of n.overlays) pruneHitTesting(o.node, true, off);
+  for (const c of inFlowOf(n)) pruneHitTesting(c, false, off);
 }
