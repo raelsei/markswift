@@ -4,6 +4,13 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-15
+
+Ports the capture-free improvements of the archived core-alpha line (CSS flex freeze loop, grid `minmax` floors, live
+form state, images, inline boxes, static faces) and closes the 1.0 known gaps that need no capture change (collapsed
+table borders, scroll boxes, list spacing, textarea/select metrics, label focus, Chromium 153 border tones, tight
+labels, theme-button pressed look, `<bdo>`/`<bdi>`). LayoutDoc stays 3; 1.0 output regenerates unchanged in format.
+
 ### Added
 - `<video poster>` is drawn as an Image of the captured poster at the video's frame and `object-fit`, and `<input type=image>` as an Image of its `src` with `alt` as the label and the button trait (both reported as approximated; playback and the submit action are not translated). Both were empty placeholder boxes.
 - App mode: tapping a text field's `<label>` (`for` or wrapping) focuses the field through its `@MarkswiftFocused` member, as in the browser.
