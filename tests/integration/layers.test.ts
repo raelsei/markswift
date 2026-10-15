@@ -268,10 +268,8 @@ describe("convert", () => {
         ["hover", "aria-describedby"],
         ["hover", "interestfor"],
       ]);
-      expect(result.code).toContain('.help("Add to library")');
-      // Info and Save extract into one row component: their tooltips are its data.
-      expect(result.code).toMatch(/\.help\(item\.\w+\)/);
-      for (const tip of ["More information", "Save draft"]) expect(result.code).toContain(`"${tip}"`);
+      for (const tip of ["Add to library", "More information", "Save draft"])
+        expect(result.code).toContain(`.help("${tip}")`);
       expect(result.code).not.toContain('Text(verbatim: "Add to library")');
       expect(result.code).not.toContain('Text(verbatim: "More information")');
     },
