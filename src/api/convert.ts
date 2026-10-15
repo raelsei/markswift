@@ -1,17 +1,15 @@
-import type { Page } from "playwright-core";
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
-import { BrowserCapture, type Capture } from "../browser/capture.ts";
+import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
 import { compileLayout, DEFAULT_BAND_DEVICES, needsProbe, planBands } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
-import { htmlIdentity } from "../input/identity.ts";
 import type { HtmlSource } from "../input/types.ts";
-import type { FontFace, Theme } from "../model/layout.ts";
+import type { FontFace } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
-import { captureBands } from "./bands.ts";
+import { captureBands, captureThemes } from "./bands.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -168,54 +166,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       prepared?.close();
     }
   }
-}
-
-/**
- * Capture one page in its theme(s), each raced against `timedOut`. Adaptive: two captures in one browser session;
- * the light one is emitted, the dark one pairs its colours.
- */
-export async function captureThemes(
-  renderer: BrowserCapture,
-  req: {
-    name: string;
-    url: string;
-    html?: string;
-    label: string;
-    root: string;
-    theme: Theme | "adaptive";
-    css?: string;
-    darkClass?: string;
-    waitFor?: string;
-    prepare?: (page: Page) => Promise<void>;
-    viewport?: { width: number; height: number };
-  },
-  timedOut: Promise<never>,
-): Promise<{ primary: Capture; dark?: Capture }> {
-  const shot = (scheme: Theme) =>
-    Promise.race([
-      renderer.capture(
-        {
-          screen: req.name,
-          theme: scheme,
-          url: req.url,
-          html: req.html,
-          root: req.root,
-          waitFor: req.waitFor,
-          viewport: req.viewport,
-          async prepare(page) {
-            if (req.css) await page.addStyleTag({ content: req.css });
-            if (scheme === "dark" && req.darkClass)
-              await page.evaluate((c) => document.documentElement.classList.add(c), req.darkClass);
-            await req.prepare?.(page);
-          },
-        },
-        htmlIdentity,
-        req.label,
-      ),
-      timedOut,
-    ]);
-  const primary = await shot(req.theme === "dark" ? "dark" : "light");
-  return req.theme === "adaptive" ? { primary, dark: await shot("dark") } : { primary };
 }
 
 /**
