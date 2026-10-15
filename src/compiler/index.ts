@@ -190,6 +190,7 @@ function compileView(
   tokens: TokenSet,
   options: Omit<EmitOptions, "tokens" | "adaptive">,
 ): SwiftOutput & { warnings: ConversionWarning[] } {
+  if (dark && dark.colorScheme !== screen.colorScheme) delete screen.colorScheme; // an adaptive pair forces a scheme only when both captures do
   const lookup = screenTokens(tokens, screen);
   // Adaptive: record what the emitter painted per node — bound tokens and literal misses — to
   // catch a colour that changes in dark yet was painted as a light literal.

@@ -631,6 +631,8 @@ export interface Screen {
   /** Backdrop behind the root, from the design. */
   canvas: Color;
   root: SemNode;
+  /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
+  colorScheme?: "light" | "dark";
 }
 
 export function walk(n: SemNode, fn: (n: SemNode, depth: number) => void, depth = 0): void {

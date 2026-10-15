@@ -113,3 +113,26 @@ test("one light colour that pairs with two dark colours on a node is reported, n
     /1 node\(s\) paint a colour that changes in dark .*: card$/,
   );
 });
+
+test("a root color-scheme naming one scheme forces the view's appearance; an adaptive pair only when both agree", () => {
+  const scheme = (theme: "light" | "dark", value?: string): LayoutDoc => {
+    const doc = page(theme, theme === "light" ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)");
+    if (value) doc.root.styles["color-scheme"] = value;
+    return doc;
+  };
+  const forced = String.raw`.environment(\.colorScheme, .dark)`;
+  for (const mode of ["app", "fidelity"] as const) {
+    for (const value of ["dark", "dark only"]) {
+      const code = compileLayout(scheme("light", value), { mode }).code;
+      expect(code.split(forced).length - 1).toBe(1);
+    }
+    for (const value of ["light dark", undefined])
+      expect(compileLayout(scheme("light", value), { mode }).code).not.toContain(
+        String.raw`.environment(\.colorScheme`,
+      );
+  }
+  expect(compileLayout(scheme("light", "normal"), { dark: scheme("dark", "dark") }).code).not.toContain(
+    String.raw`.environment(\.colorScheme`,
+  );
+  expect(compileLayout(scheme("light", "dark"), { dark: scheme("dark", "dark") }).code).toContain(forced);
+});

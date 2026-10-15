@@ -70,7 +70,20 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   dropInvisible(root);
-  return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
+  // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
+  const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
+  const colorScheme =
+    schemes.length === 1 && (schemes[0] === "light" || schemes[0] === "dark") ? schemes[0] : undefined;
+  return {
+    version: 1,
+    name,
+    source: doc.source,
+    theme: doc.combo.theme,
+    size: doc.size,
+    canvas,
+    root,
+    ...(colorScheme ? { colorScheme } : {}),
+  };
 }
 
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {

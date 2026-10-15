@@ -64,7 +64,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   // Body first: emitting it registers the `@ScaledMetric` font sizes declared above it.
-  const body = [`${acc}var body: some View {`, ...indent(refOf(screen.root, ctx), 1), "}"];
+  const scheme = screen.colorScheme ? [`.environment(\\.colorScheme, .${screen.colorScheme})`] : [];
+  const body = [`${acc}var body: some View {`, ...indent([...refOf(screen.root, ctx), ...scheme], 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;
     body.push(

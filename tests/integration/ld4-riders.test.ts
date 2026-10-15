@@ -29,3 +29,20 @@ browserTest(
   },
   30_000,
 );
+
+browserTest(
+  "color-scheme: a root naming one scheme forces it; light dark does not",
+  async () => {
+    const convert = (css: string) =>
+      convertHtml(`<main data-markswift-root><p>x</p></main>`, {
+        css,
+        theme: "light",
+        viewport: { width: 390, height: 800 },
+      });
+    expect((await convert(":root{color-scheme:dark}")).code).toContain(String.raw`.environment(\.colorScheme, .dark)`);
+    expect((await convert(":root{color-scheme:light dark}")).code).not.toContain(
+      String.raw`.environment(\.colorScheme`,
+    );
+  },
+  30_000,
+);
