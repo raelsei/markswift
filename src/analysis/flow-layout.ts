@@ -102,6 +102,8 @@ function liftClearedText(
       frame: { ...base.frame, h: round2(bottom - base.frame.y) },
       diagnostics: [],
       overlays: [],
+      // The outer stack owns the host's offset, like its overlays.
+      relativeOffset: undefined,
     };
     const row = finish(stackOf(rowBase, "h", rowItems, align, distribution));
     const outer = stackOf(

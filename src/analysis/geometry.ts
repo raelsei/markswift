@@ -1,7 +1,7 @@
 /** Measured box geometry and reusable inset calculations. */
 import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type SemNode, type Axis } from "../model/semantic.ts";
-import { px } from "../css/index.ts";
+import { px, resolveLength, round2 } from "../css/index.ts";
 
 /** Rendered at all: a `display: none` box is collapsed away by the browser, so we drop it too. */
 export function renders(n: LayoutNode): boolean {
@@ -33,6 +33,47 @@ export function floating(n: LayoutNode): boolean {
 /** Positioned out of normal flow (`absolute`/`fixed`): placed as an overlay, never laid out by its parent. */
 export function outOfFlow(n: LayoutNode): boolean {
   return n.styles["position"] === "absolute" || n.styles["position"] === "fixed";
+}
+
+const INSET_SIGN: Record<string, number> = { top: 1, left: 1, bottom: -1, right: -1 };
+
+/**
+ * Used offset of a `position: relative` box from its Typed-OM insets (046; the snapshot's computed `top` reports a `%`
+ * against an auto-height block as px Chrome never applies). `top` beats `bottom`; `left` beats `right` unless the
+ * containing block (`cb`, the DOM parent) is rtl. `%` resolves against `cb`'s content box; a `%` top/bottom against an
+ * indefinite height is `auto`, so the other side applies (`top:10%; bottom:5px` → −5, as Chrome). `[0, 0]` for every
+ * other box. `losses` are diagnostic messages.
+ */
+export function relativeOffset(
+  n: LayoutNode,
+  cb: LayoutNode | undefined,
+): { offset: [number, number]; losses: string[] } {
+  const ins = n.preferredSize?.insets;
+  const losses: string[] = [];
+  if (n.styles["position"] !== "relative" || !ins) return { offset: [0, 0], losses };
+  const [pt, pr, pb, pl] = cb ? insetsOf(cb.styles) : [0, 0, 0, 0];
+  // A grid item's containing block is its grid area, which the capture does not record.
+  const known = cb !== undefined && !/grid/.test(cb.styles["display"] ?? "");
+  const width = cb && known ? cb.bounds.w - pl - pr : undefined;
+  // ponytail: only a px `height` counts as definite; Chrome also resolves against a definite `%` height and a stretched
+  // flex/grid item (reported, lands at 0). Upgrade: carry height definiteness down InferenceContext.
+  const height = cb && known && /px$/.test(cb.preferredSize?.height ?? "") ? cb.bounds.h - pt - pb : undefined;
+  const side = (k: keyof typeof ins, ref: number | undefined, axis: string): number | undefined => {
+    const v = ins[k];
+    if (v === "auto") return undefined;
+    if (v.includes("%") && ref === undefined) {
+      losses.push(`${k} ${v} → auto (no definite containing-block ${axis})`);
+      return undefined;
+    }
+    const used = resolveLength(v, ref ?? 0);
+    if (used === undefined) losses.push(`${k} ${v} → 0 (not a px/% length)`);
+    else if (v.includes("%")) losses.push(`${k} ${v} → offset pinned at ${round2(used)}px`);
+    return INSET_SIGN[k]! * (used ?? 0);
+  };
+  const [start, end] = cb?.styles["direction"] === "rtl" ? (["right", "left"] as const) : (["left", "right"] as const);
+  const x = side(start, width, "width") ?? side(end, width, "width") ?? 0;
+  const y = side("top", height, "height") ?? side("bottom", height, "height") ?? 0;
+  return { offset: [round2(x) || 0, round2(y) || 0], losses };
 }
 
 /** A computed `display` that lays out its children as a flex container (`flex`, `inline-flex`). */
