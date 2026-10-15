@@ -150,7 +150,7 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
   `convertHtml(html, options)` is the string shorthand. `compileLayout(layout, { name, mode, dark })`
-  recompiles a saved `LayoutDoc` (version 3) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
+  recompiles a saved `LayoutDoc` (version 4) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
   cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
   and rejects any other with an error naming both versions — recapture the source. A change to the captured style
   list or the schema bumps the LayoutDoc version and is a breaking release.
