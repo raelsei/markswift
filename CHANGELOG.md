@@ -13,6 +13,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - A root `color-scheme` that names one scheme (`dark`, `dark only`, `light`, `light only`) forces the view's appearance with `.environment(\.colorScheme, …)` in both modes; an adaptive conversion does so only when both captures agree.
 - `pointer-events: none` overlays pass taps through (`.allowsHitTesting(false)`, app mode).
 
+### Fixed
+- A stylesheet `fill-rule: evenodd` on SVG shapes is honoured (only the attribute was read).
+
 ## [1.1.0] — 2026-10-15
 
 Ports the capture-free improvements of the archived core-alpha line (CSS flex freeze loop, grid `minmax` floors, live

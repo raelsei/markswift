@@ -63,3 +63,15 @@ browserTest(
   },
   30_000,
 );
+
+browserTest(
+  "fill-rule: a stylesheet evenodd fills the donut even-odd",
+  async () => {
+    const result = await convertHtml(
+      `<main data-markswift-root><svg viewBox="0 0 10 10" width="10" height="10"><path class="h" d="M0 0h10v10H0zM2 2h6v6H2z"/></svg></main>`,
+      { css: ".h{fill:red;fill-rule:evenodd}", theme: "light", viewport: { width: 390, height: 800 } },
+    );
+    expect(result.code).toContain("FillStyle(eoFill: true)");
+  },
+  30_000,
+);
