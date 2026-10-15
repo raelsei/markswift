@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
@@ -47,6 +48,10 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const activate = new Map<string, string>();
   const radioTag = new Map<SemNode, string>();
   const toggleOf: ControlMembers["toggleOf"] = new Map();
+  const openOf: ControlMembers["openOf"] = new Map();
+  const openStates = new Map<string, string>();
+  /** Node with `opens` → its shown state: the condition of the open look under it. */
+  const opener = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
   // Radios sharing a form owner and a `name` hold one `String` selection, named after the `name`:
   // each radio's tag is its `value` when the group's values are unique, else its position. HTML:
@@ -85,6 +90,19 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
         type: "() -> Void",
         decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
       });
+    }
+    // An in-flow layer's shown state: the screen owns it, seeded through `init` so a preview can open it. A
+    // `<details>` binds its DisclosureGroup to it; any other trigger flips it on tap, then runs its action.
+    if (n.opens) {
+      const name = memberName("is", n.opens.layer, seen, "Layer", "Expanded");
+      const disclosure = n.kind === "control" && n.control === "disclosure";
+      const seed = disclosure && n.expanded ? "true" : "false";
+      members.push({ name, kind: "open", type: "Bool", seed, decl: [] });
+      openStates.set(n.opens.layer, name);
+      opener.set(n, name);
+      if (disclosure) stateOf.set(n, name);
+      else openOf.set(n, { state: name, tap: [`${name}.toggle()`, `${actionOf.get(n.action!.key)}()`] });
+      return;
     }
     const ax = n.a11y;
     if (ax && ariaToggles.has(n)) {
@@ -179,12 +197,13 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const statePaint = new Map<string, StatePaint>();
   const pressOf = new Map<SemNode, string>();
   const focusOf = new Map<SemNode, string>();
-  const visit = (n: SemNode, owner: SemNode | undefined): void => {
+  const visit = (n: SemNode, owner: SemNode | undefined, openOwner: SemNode | undefined): void => {
     const pressable =
       n.kind === "control"
         ? !n.disabled && (n.control === "button" || (n.control === "link" && !!n.action))
         : !!n.action && !n.action.gesture && !n.a11y?.disabled;
     const own = pressable ? n : owner;
+    const opens = n.opens ? n : openOwner;
     const pressed = n.states?.pressed;
     if (pressed && n.id) {
       if (own) {
@@ -194,8 +213,19 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
           members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftPressed private var ${name}`] });
           pressOf.set(own, name);
         }
-        statePaint.set(n.id, pairStyle(n, pressed, name));
+        statePaint.set(n.id, pairStyle(n, pressed, name, "pressed"));
       } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
+    }
+    // The open look follows the layer's state; without an owner (fidelity, a skipped layer) it is not drawn.
+    const open = n.states?.open;
+    const shown = opens && opener.get(opens);
+    if (open && n.id && shown) {
+      const press = statePaint.get(n.id);
+      if (press && isDeepStrictEqual(pressed, open)) press.cond = `(${press.cond} || ${shown})`;
+      else {
+        if (press) note(n, "approximated", ":active", "pressed look of an open-state trigger is not reproduced");
+        statePaint.set(n.id, pairStyle(n, open, shown, "open"));
+      }
     }
     const focused = n.states?.focused;
     const field =
@@ -208,17 +238,17 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
       const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
       members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
       focusOf.set(n, name);
-      if (focused) statePaint.set(n.id, pairStyle(n, focused, name));
+      if (focused) statePaint.set(n.id, pairStyle(n, focused, name, "focused"));
       if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);
     }
-    for (const o of n.overlays) visit(o.node, own);
-    if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own);
+    for (const o of n.overlays) visit(o.node, own, opens);
+    if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own, opens);
     if (n.kind === "control") {
-      if (n.label) visit(n.label, own);
-      for (const c of n.content) visit(c, own);
+      if (n.label) visit(n.label, own, opens);
+      for (const c of n.content) visit(c, own, opens);
     }
   };
-  visit(root, undefined);
+  visit(root, undefined, undefined);
   return {
     decls: members.flatMap((m) => m.decl),
     members,
@@ -227,6 +257,8 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
     activate,
     radioTag,
     toggleOf,
+    openOf,
+    openStates,
     statePaint,
     pressOf,
     focusOf,
