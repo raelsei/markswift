@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Added
+- Placeholders paint in the page's `::placeholder` colour (its `-webkit-text-fill-color`, faded by `opacity`): the `TextField`/`SecureField` `prompt:` and the `TextEditor` placeholder overlay in app mode, the painted placeholder in fidelity; a colour that differs in dark becomes an adaptive token. Chrome's default grey keeps the platform placeholder grey (output unchanged); `::placeholder` font style and weight are not drawn. Needs LayoutDoc 4.
+
 ### Changed (breaking)
 - LayoutDoc 4: saved LayoutDoc 3 captures (1.x `layout.json`) are rejected by `compileLayout` with an error naming both versions; recapture the source. LayoutDoc 4 records 26 more computed properties (grid placement, table spacing and layout, `content`, list-style image/type, `pointer-events`, `fill-rule`, `empty-cells`, `color-scheme`, `unicode-bidi`, variable-font axes, container and top-layer properties), the `::placeholder` style of text fields, and a required `viewport` and `conditions` list. Two values change meaning: `preferredSize.insets` is now also recorded for `position: relative` and `sticky`, and `::before`/`::after`/`::marker` nodes gain an `img` child per image the browser drew from `content: url()` or `list-style-image`. Generated Swift is unchanged.
 
