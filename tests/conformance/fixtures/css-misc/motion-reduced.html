@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="animation-name; transition-duration">
+<meta name="markswift-themes" content="light">
+<title>motion-reduced</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 24px; align-items: center; }
+.box { width: 24px; height: 24px; border-radius: 4px; background: var(--accent); }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) { #safe-spin { animation: spin 1s linear infinite; } }
+@media (prefers-reduced-motion: reduce) { #reduce-fade { animation: fade 300ms ease-out both; } }
+#swap { background: #16a34a; animation: spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { #swap { animation: fade 2s ease-in-out infinite alternate; } }
+#press { font: inherit; color: #ffffff; border: 0; border-radius: 6px; padding: 6px 14px; background: #2563eb; transition: background-color 200ms ease; }
+#press:active { background: #1e40af; transition-duration: 50ms; }
+@media (prefers-reduced-motion: reduce) { #press, #press:active { transition-duration: 0s; } }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="animations">
+  <p class="cap">spin only without Reduce Motion / fade only under it / spin swapped for a fade</p>
+  <div class="row"><div class="box" id="safe-spin"></div><div class="box" id="reduce-fade"></div><div class="box" id="swap"></div></div>
+</section>
+<section class="v" id="transitions">
+  <p class="cap">press 50ms in, 200ms out; 0s under Reduce Motion</p>
+  <div class="row"><button id="press">Press</button></div>
+</section>
+</main>
+</body>
+</html>
