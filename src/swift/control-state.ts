@@ -211,6 +211,7 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
       if (focused) statePaint.set(n.id, pairStyle(n, focused, name));
       if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);
     }
+    for (const a of n.alternatives ?? []) visit(a, own);
     for (const o of n.overlays) visit(o.node, own);
     if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own);
     if (n.kind === "control") {
