@@ -191,6 +191,7 @@ describe("open", () => {
   browserTest("hover hint: a tooltip shown 300 ms after mouseenter", async () => {
     const { opened } = await open(`<main data-markswift-root><span data-markswift-opens="hover">i</span></main>
 <script>
+// A real page-side delay: the hover activation must wait for the tooltip's first DOM mutation.
 document.querySelector("span").addEventListener("mouseenter", () => setTimeout(() => {
   const tip = document.createElement("div");
   tip.textContent = "Info";
