@@ -9,8 +9,16 @@ import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
-import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
+import {
+  snapshotToTree,
+  findByAttr,
+  toLayout,
+  attachPreferredSizes,
+  attachMotion,
+  type DomSnapshot,
+} from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
+import { readMotion } from "./motion.ts";
 import { readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
@@ -201,6 +209,9 @@ export class BrowserCapture {
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
+      // Motion is read before settle() finishes it (a finished CSSAnimation leaves getAnimations()).
+      const motion = await readMotion(page, spec.root);
+      errors.push(...motion.warnings);
       await settle(page);
       await Promise.all(sheetReads);
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
@@ -281,6 +292,7 @@ export class BrowserCapture {
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);
+      attachMotion(rootRaw, motion.motion);
       delete rootRaw.attrs[ROOT_MARK];
       // Origin, size and screenshot come from the root's untransformed (snapshot B) box, the same
       // space as every child's bounds; `rootRect` would include an ancestor's transform.

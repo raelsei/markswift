@@ -14,8 +14,7 @@ function all(n: LayoutNode): LayoutNode[] {
   return [n, ...n.children.flatMap(all)];
 }
 const byId = (root: LayoutNode, id: string) => all(root).find((n) => n.attrs["id"] === id)!;
-const byClass = (root: LayoutNode, cls: string) =>
-  all(root).find((n) => n.attrs["class"]?.split(/\s+/).includes(cls))!;
+const byClass = (root: LayoutNode, cls: string) => all(root).find((n) => n.attrs["class"]?.split(/\s+/).includes(cls))!;
 
 browserTest(
   "063: animation-name.html — spin, fade and pulse from Web Animations; rest snapshot still settled",
@@ -116,10 +115,7 @@ browserTest(
       OPTS,
     );
     expect(script.warnings.some((w) => /script animation/.test(w.message))).toBe(true);
-    const starting = await convertHtml(
-      `<style>@starting-style { #s { opacity: 0 } }</style><div id=s>x</div>`,
-      OPTS,
-    );
+    const starting = await convertHtml(`<style>@starting-style { #s { opacity: 0 } }</style><div id=s>x</div>`, OPTS);
     expect(starting.warnings.some((w) => /@starting-style/.test(w.message))).toBe(true);
   },
   120000,
@@ -132,7 +128,8 @@ browserTest(
     expect(dark.layout.canvas).toBe("rgb(11, 14, 19)");
     const a = await capture("components/shadcn-button.html");
     const b = await capture("components/shadcn-button.html");
-    expect(b.layout).toEqual(a.layout);
+    // The tree (motion included); font URLs carry the per-conversion server port.
+    expect(b.layout.root).toEqual(a.layout.root);
   },
   240000,
 );
