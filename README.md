@@ -351,6 +351,7 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
   items span, leave holes, overlap or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
 - Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
+- Percentage relative offsets: `approximated position: relative: left 10% → offset pinned at 34.3px`.
 
 Absolutely and fixed-positioned boxes attach to the corner CSS anchored them to, with their
 captured size and offset; fixed boxes stay outside the page's scroll view.
@@ -363,6 +364,7 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
   only, disabled, validation, open/checked, `data-state` variants) are not.
 - Dialogs and popovers.
 - CSS animations and transitions (captured at their end state, reported).
+- Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
 - `<select multiple>` and `<datalist>`.
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
 - `ui-monospace` maps to a different native face (an explicit support boundary).
@@ -374,6 +376,9 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
 - An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
   the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
+- `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
+  or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
+  drawn as offsets.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
