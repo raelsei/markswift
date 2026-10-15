@@ -39,7 +39,7 @@ const IDENTITY = { rotate: 0, scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
  */
 export function stateStylesOf(n: LayoutNode, rest: Style): SemBase["states"] {
   const out: NonNullable<SemBase["states"]> = {};
-  for (const key of ["pressed", "focused"] as const) {
+  for (const key of ["pressed", "focused", "open"] as const) {
     const delta = n.states?.[key];
     const styles = delta ? { ...n.styles, ...delta } : n.styles;
     const themed = key === "pressed" ? themedPressed(n.tag, styles) : undefined;

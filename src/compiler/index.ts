@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import { LAYOUT_DOC_VERSION, LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import { GENERATED_BY, VERSION } from "../model/version.ts";
 import { inferScreen } from "../analysis/infer.ts";
+import { applyLayers } from "../analysis/layers.ts";
 import { admitTracks } from "../analysis/grid-tracks.ts";
 import { admitFlexRow } from "../analysis/flex-row.ts";
 import { note } from "../swift/diagnostics.ts";
@@ -60,6 +61,20 @@ export interface CompileResult {
   assets: Record<string, Uint8Array>;
   /** Light/dark pairing limitations and palette-map gaps; empty for a single-theme compile without a map. */
   warnings: ConversionWarning[];
+  /** App mode: in-flow layer id → the `init` label (`isMoreExpanded`) that shows it; absent when nothing opens. */
+  openStates?: Record<string, string>;
+}
+
+/** One capture's screen; app mode adds its closed in-flow layers before probe checks and tokens see the screen. */
+function screenOf(
+  d: LayoutDoc,
+  name: string,
+  mode: EmitMode,
+  bundledFamilies: CompileOptions["bundledFamilies"],
+): Screen {
+  const screen = inferScreen(d, name, { bundledFamilies });
+  if (mode === "app") applyLayers(screen, d, { bundledFamilies });
+  return screen;
 }
 
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
@@ -67,14 +82,14 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
   const name = options.name ?? "ConvertedView";
   validateName(name);
   const [doc, darkDoc, probeDoc] = parseDocs(layout, options.dark, options.probe);
-  const infer = (d: LayoutDoc) =>
-    inferScreen(d, `${d.combo.screen}-${d.combo.theme}`, { bundledFamilies: options.bundledFamilies });
+  const mode = options.mode ?? "app";
+  const infer = (d: LayoutDoc) => screenOf(d, `${d.combo.screen}-${d.combo.theme}`, mode, options.bundledFamilies);
   const screen = infer(doc);
   if (probeDoc) verifyAtProbe(screen, probeDoc);
   const dark = darkDoc && infer(darkDoc);
   const tokens = extractTokens(dark ? [screen, dark] : [screen]);
   const result = compileView(screen, dark, name, tokens, {
-    mode: options.mode ?? "app",
+    mode,
     fontMetrics: options.fontMetrics,
     extract: options.extract,
     visibility: options.visibility,
@@ -98,6 +113,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
           }
         : {}),
     },
+    ...(result.openStates ? { openStates: result.openStates } : {}),
   };
 }
 
@@ -302,11 +318,12 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
     options.library,
     components.map((c) => c.name),
   );
-  const infer = (d: LayoutDoc, name: string) =>
-    inferScreen(d, `${name}-${d.combo.theme}`, { bundledFamilies: options.bundledFamilies });
+  const infer = (d: LayoutDoc, name: string, mode: EmitMode) =>
+    screenOf(d, `${name}-${d.combo.theme}`, mode, options.bundledFamilies);
   const screens = components.map((c) => {
     const [doc, darkDoc] = parseDocs(c.layout, c.dark);
-    return { c, screen: infer(doc, c.name), dark: darkDoc && infer(darkDoc, c.name) };
+    const mode = c.mode ?? "app";
+    return { c, screen: infer(doc, c.name, mode), dark: darkDoc && infer(darkDoc, c.name, mode) };
   });
   const tokens = extractTokens(screens.flatMap((s) => (s.dark ? [s.screen, s.dark] : [s.screen])));
   const files: Record<string, string> = {};

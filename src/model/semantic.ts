@@ -416,8 +416,13 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
-  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
-  states?: { pressed?: StateStyle; focused?: StateStyle };
+  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
+   * open: while a layer this node or an ancestor `opens` is shown). */
+  states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
+  /** App mode: this node's tap toggles the in-flow layer `layer` (`analysis/layers.ts`). */
+  opens?: { layer: string; kind: "inflow" };
+  /** App mode: id of the in-flow layer whose open state shows this node. */
+  shownBy?: string;
 }
 
 export interface StackNode extends SemBase {
