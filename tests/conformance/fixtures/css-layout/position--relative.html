@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="position: relative; top; right; bottom; left">
+<title>position--relative</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; --warn: #dc2626; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 12px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 4px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 10px; }
+.v:last-child { margin-bottom: 0; }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.b { box-sizing: border-box; height: 24px; background: var(--soft); border-radius: 6px; padding: 4px 10px; font-size: 13px; line-height: 16px; }
+.b + .b { margin-top: 4px; }
+.r { position: relative; background: var(--accent); color: var(--accent-fg); }
+.row { display: flex; gap: 8px; }
+.row .b { margin: 0; width: 72px; }
+.badge { position: absolute; top: -6px; right: -6px; background: var(--warn); color: #fff; font-size: 11px; line-height: 14px; padding: 1px 6px; border-radius: 999px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v">
+  <p class="cap">px: top 6px left 12px, then right 10px bottom 4px</p>
+  <div class="frame">
+    <div class="b">before</div>
+    <div class="b r" id="px-tl" style="top: 6px; left: 12px">top 6px · left 12px</div>
+    <div class="b">between</div>
+    <div class="b r" id="px-rb" style="right: 10px; bottom: 4px">right 10px · bottom 4px</div>
+    <div class="b">after</div>
+  </div>
+</section>
+<section class="v">
+  <p class="cap">%: left 10% of the containing block width</p>
+  <div class="frame">
+    <div class="b r" id="pct-left" style="left: 10%; width: 60%">left 10%</div>
+    <div class="b">after</div>
+  </div>
+</section>
+<section class="v">
+  <p class="cap">% top, auto-height block: 0 alone, bottom wins beside it</p>
+  <div class="frame">
+    <div class="b r" id="pct-auto" style="top: 10%">top 10% → 0</div>
+    <div class="b r" id="pct-auto-bottom" style="top: 10%; bottom: 5px">top 10% · bottom 5px</div>
+    <div class="b">after</div>
+  </div>
+</section>
+<section class="v">
+  <p class="cap">% top in an 80px-high block</p>
+  <div class="frame" style="height: 80px">
+    <div class="b r" id="pct-definite" style="top: 25%">top 25%</div>
+    <div class="b">after</div>
+  </div>
+</section>
+<section class="v">
+  <p class="cap">rtl: left and right both set → right wins</p>
+  <div class="frame" dir="rtl">
+    <div class="b r" id="rtl" style="left: 8px; right: 24px; width: 70%">right 24px wins</div>
+    <div class="b">after</div>
+  </div>
+</section>
+<section class="v">
+  <p class="cap">negative top with a badge; a nested offset; a flex item</p>
+  <div class="frame">
+    <div class="b">before</div>
+    <div class="b r" id="neg" style="top: -10px; left: 20px; width: 60%">top -10px<span class="badge">3</span></div>
+    <div class="b r" id="outer" style="top: 4px; left: 8px; width: 80%; height: auto; background: var(--soft); color: var(--fg); padding: 4px"><div class="b r" id="inner" style="left: 16px; top: 2px; width: 50%">nested</div></div>
+    <div class="row" style="margin-top: 14px">
+      <div class="b">one</div><div class="b r" id="flex-item" style="top: 6px; left: 4px">two</div><div class="b">three</div>
+    </div>
+  </div>
+</section>
+</main>
+</body>
+</html>
