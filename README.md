@@ -372,6 +372,12 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
 - `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
+- Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
+  `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
+  fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
+  `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
+  descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
+  hit it.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
