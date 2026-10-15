@@ -17,7 +17,9 @@
     "shadcn-accordion",
     "shadcn-breadcrumb",
     "tw-form",
-    "tw-settings"
+    "tw-settings",
+    "overlay-collapsible",
+    "overlay-accordion"
   ],
   "known": [
     {
