@@ -52,6 +52,7 @@ test("a LayoutDoc of another version fails with both versions named", () => {
   const dark = { ...layout, combo: { screen: "card", theme: "dark" }, version: LAYOUT_DOC_VERSION + 1 };
   for (const [version, compile] of [
     [1, () => compileLayout({ ...layout, version: 1 } as unknown as LayoutDoc)],
+    [3, () => compileLayout({ ...layout, version: 3 } as unknown as LayoutDoc)],
     [LAYOUT_DOC_VERSION + 1, () => compileLayout(layout, { dark: dark as unknown as LayoutDoc })],
   ] as const)
     expect(compile).toThrow(

@@ -1,6 +1,6 @@
 import { expectClose } from "../../helpers/color.ts";
 import { describe, expect, test } from "bun:test";
-import { paintWithin, parseBackgroundImage, resolvePaint } from "../../../src/css/index.ts";
+import { cssUrls, paintWithin, parseBackgroundImage, resolvePaint } from "../../../src/css/index.ts";
 import type { Color, Paint } from "../../../src/model/values.ts";
 
 describe("parseBackgroundImage", () => {
@@ -204,6 +204,19 @@ describe("paintWithin", () => {
     expect(paintWithin(r, { x: 0, y: 0, w: 200, h: 40 }, { x: 0, y: 0, w: 100, h: 40 })).toMatchObject({
       center: [1, 0.5],
     });
+  });
+});
+
+describe("cssUrls", () => {
+  test("every url() in order, unquoted; none → []", () => {
+    expect(cssUrls(`url("a.png") " x" url(b.svg) url('c')`)).toEqual(["a.png", "b.svg", "c"]);
+    expect(cssUrls("normal")).toEqual([]);
+    expect(cssUrls(undefined)).toEqual([]);
+  });
+
+  test("data URLs survive; escapes inside quotes are unescaped", () => {
+    expect(cssUrls('url("data:image/svg+xml,%3Csvg%3E")')).toEqual(["data:image/svg+xml,%3Csvg%3E"]);
+    expect(cssUrls("url(\"a\\\"b.png\") url('c\\'d')")).toEqual(['a"b.png', "c'd"]);
   });
 });
 
