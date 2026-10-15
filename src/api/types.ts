@@ -36,7 +36,9 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
    * Capture one layout per CSS width band (`@media` width thresholds) instead of one viewport. `true`: devices
    * 390×844, 834×1210, 1210×834, 1376×1032 up to `max` (default 1376); a band without a device is captured at its
    * lower bound with `viewport.height`; the configured `viewport` is the capture of its own band. Thresholds below
-   * 320 px or above `max`, and beyond six bands, are reported.
+   * 320 px or above `max`, and beyond six bands, are reported. The view emits every element whose authored inputs are
+   * equal in all bands once and switches the others at the CSS thresholds (`MarkswiftBands`, at the width offered to
+   * the view); a root that does not follow the viewport width keeps the first band's layout, with a warning.
    */
   breakpoints?: true | { devices?: Array<{ width: number; height: number }>; max?: number };
 }

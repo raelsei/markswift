@@ -27,6 +27,7 @@ export async function captureThemes(
     prepare?: (page: Page) => Promise<void>;
     viewport?: { width: number; height: number };
     layers?: boolean;
+    breakpoints?: boolean;
   },
   timedOut: Promise<never>,
 ): Promise<{ primary: Capture; dark?: Capture }> {
@@ -40,6 +41,7 @@ export async function captureThemes(
       root: req.root,
       waitFor: req.waitFor,
       viewport: req.viewport,
+      ...(req.breakpoints ? { breakpoints: true } : {}),
       async prepare(page) {
         if (req.css) await page.addStyleTag({ content: req.css });
         if (scheme === "dark" && req.darkClass)
