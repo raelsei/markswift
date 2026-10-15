@@ -1,7 +1,7 @@
 import type { TextNode, TextRun } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 import type { ColorCtx, ControlMembers, EmitMode } from "./context.ts";
-import { colorExpr, fontExpr, nearestTextStyle, num, str } from "./format.ts";
+import { colorExpr, fontExpr, fontSizeExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
 import { textBoxAlignment, clipsFirstLine, SYSTEM_LINE_HEIGHT } from "./text-box.ts";
@@ -269,7 +269,11 @@ function runExpr(
         );
     }
   }
-  if (r.kerning !== undefined && r.kerning !== 0) e += `.kerning(${num(r.kerning)})`;
+  if (r.kerning !== undefined && r.kerning !== 0) {
+    // App-mode text grows with Dynamic Type, so its tracking is the same share of the scaled size.
+    const size = fontSizeExpr(r.font, ctx);
+    e += `.kerning(${size === num(r.font.size) ? num(r.kerning) : `${size} * ${num(r.kerning)} / ${num(r.font.size)}`})`;
+  }
   if (r.tabularNums) e += ".monospacedDigit()";
   if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
   return e;

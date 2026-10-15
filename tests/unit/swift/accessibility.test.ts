@@ -91,6 +91,19 @@ test("app-mode system fonts scale with Dynamic Type; fidelity and SVG text stay 
   expect(svg).not.toContain("@ScaledMetric");
 });
 
+test("app-mode letter-spacing scales with the Dynamic Type size it rides on; fidelity keeps the px", () => {
+  const caption: LayoutNode = {
+    tag: "p",
+    id: "cap",
+    attrs: {},
+    styles: { ...FONT, display: "block", "font-size": "10px", "line-height": "14px", "letter-spacing": "0.5px" },
+    bounds: { x: 0, y: 0, w: 320, h: 14 },
+    children: [text("VARIANTS", 0, 0, 60, 14)],
+  };
+  expect(swift([caption], "app")).toContain(".kerning(textSize10 * 0.5 / 10.0)");
+  expect(swift([caption], "fidelity")).toContain(".kerning(0.5)");
+});
+
 const radius = (r: string) => ({
   "border-top-left-radius": r,
   "border-top-right-radius": r,
