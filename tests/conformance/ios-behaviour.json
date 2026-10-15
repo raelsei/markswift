@@ -17,7 +17,8 @@
     "shadcn-accordion",
     "shadcn-breadcrumb",
     "tw-form",
-    "tw-settings"
+    "tw-settings",
+    "_behaviour/pointer-events"
   ],
   "known": [
     {

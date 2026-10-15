@@ -329,11 +329,11 @@ mapped, approximated or unmapped in `diagnostics`.
 
 - Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
   fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
-- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures in the iOS simulator, on `v*` tags,
-  weekly and on dispatch): the accessibility tree, Apple's accessibility audit (Dynamic Type, clipped text, element
-  descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
-  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
-  and every action closure is called).
+- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures and a `pointer-events: none`
+  tap-through case in the iOS simulator, on `v*` tags, weekly and on dispatch): the accessibility tree, Apple's
+  accessibility audit (Dynamic Type, clipped text, element descriptions, traits; hit regions are reported, not
+  failing), Dynamic Type at xSmall, large and AX5 plus the root height at AX3 against Chrome scaled to AX3,
+  right-to-left mirroring, and interaction (toggles, text fields, pickers and every action closure is called).
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
