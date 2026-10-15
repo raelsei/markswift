@@ -58,7 +58,7 @@ export function str(s: string): string {
     else if (ch === "\r") out += "\\r";
     else if (ch === "\t") out += "\\t";
     else if (c >= 0xd800 && c <= 0xdfff) out += "\uFFFD";
-    // Bidi controls (`<bdo>`/`<bdi>` runs) are escaped so the source does not reorder on screen.
+    // Bidi controls (`unicode-bidi` runs) are escaped so the source does not reorder on screen.
     else if (
       c < 0x20 ||
       (c >= 0x7f && c <= 0x9f) ||

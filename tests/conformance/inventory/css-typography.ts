@@ -1166,12 +1166,12 @@ export default {
     {
       id: "unicode-bidi",
       group: "Writing modes",
-      class: "approximated",
-      target: "Unicode isolate/override controls around the element's runs",
+      class: "mapped",
+      target: "Unicode embed/isolate/override controls around the element's runs",
       ir: "TextRun.text",
-      via: "structure",
-      impl: "partial",
-      note: "The UA values only, from the tag and `dir`: `<bdo>` isolate-override, `<bdi>`/`<output>`/`[dir]` isolate, wrapped as LRI/RLI…PDI and LRO/RLO…PDF in the computed `direction`. An author `unicode-bidi` (`span { unicode-bidi: bidi-override }`, `plaintext`) is not captured: LayoutDoc 4 needs `unicode-bidi` in the style whitelist.",
+      via: "style",
+      impl: "yes",
+      note: "The captured computed value on inline boxes, in the computed `direction`: `embed` LRE/RLE…PDF, `isolate` LRI/RLI…PDI, `bidi-override` LRO/RLO…PDF, `isolate-override` both, `plaintext` FSI…PDI; Core Text runs UAX #9 over the controls. Blocks are ignored (Blink's UA `isolate`); a text host keeps only the override of `*-override`; a host's own `plaintext` and `::marker` boxes are not mapped.",
       spec: `${MDN}unicode-bidi`,
     },
     {
