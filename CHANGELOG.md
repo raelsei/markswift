@@ -12,6 +12,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Added
 - LayoutDoc 4 records the page's size conditions (`conditions`: `@media`/`@container` query, whether it holds, the query container) and marks the elements their rules match (`conditional`). `convert({ breakpoints })` captures one layout per CSS width band (devices 390/834/1210/1376 px up to 1376 px; uncovered bands at their lower bound) and returns them as `bands`.
+- Capture: open-state pass — each discovered trigger is opened in a fresh page; LayoutDoc 4 records `layers` (new content, placement, modality, dismissal), the trigger's `states.open` paint and `pseudoStyles.backdrop`.
 
 ## [1.1.0] — 2026-10-15
 

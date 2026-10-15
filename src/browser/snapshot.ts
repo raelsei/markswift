@@ -58,8 +58,10 @@ export interface DomSnapshot {
   strings: string[];
 }
 
-interface Raw {
+export interface Raw {
   idx: number;
+  /** CDP `backendNodeId`: stable across snapshots of one page. */
+  backend?: number;
   type: number;
   name: string;
   value: string;
@@ -116,19 +118,34 @@ const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
 
+/** Element children that consume a path index (every DOM element child; text and generated pseudo-elements do not). */
+export const pathChildren = (raw: Raw): Raw[] => raw.children.filter((c) => c.type === 1 && c.pseudo === undefined);
+
 /** Join CSS size intent and pseudo-element styles while wrappers still exist, before display:contents is flattened. */
 export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoStyles: PseudoStyles): void {
   const walk = (raw: Raw, path: string) => {
     if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
     if (Object.hasOwn(pseudoStyles, path)) raw.pseudoStyles = pseudoStyles[path];
-    let i = 0;
-    for (const child of raw.children) {
-      if (child.type !== 1 || child.pseudo !== undefined) continue;
-      const childPath = path ? `${path}/${i++}` : String(i++);
-      walk(child, childPath);
-    }
+    for (const [i, child] of pathChildren(raw).entries()) walk(child, path ? `${path}/${i}` : String(i));
   };
   walk(root, "");
+}
+
+/** The descendant of `root` at element path `path` (`""` = `root`), counted as `attachPreferredSizes` counts. */
+export function rawAt(root: Raw, path: string): Raw | undefined {
+  let raw: Raw | undefined = root;
+  for (const step of path ? path.split("/") : []) raw = raw && pathChildren(raw)[Number(step)];
+  return raw;
+}
+
+/** Inverse of `rawAt`: `raw`'s element path from `root`, or undefined when it is not `root` or below it. */
+export function pathOf(root: Raw, raw: Raw): string | undefined {
+  const steps: number[] = [];
+  for (let r = raw; r !== root; r = r.parent!) {
+    if (!r.parent) return undefined;
+    steps.unshift(pathChildren(r.parent).indexOf(r));
+  }
+  return steps.join("/");
 }
 
 /**
@@ -161,6 +178,8 @@ export function snapshotToTree(
       styles: {},
       children: [],
     };
+    const backend = doc.nodes.backendNodeId?.[i];
+    if (backend !== undefined) raws[i]!.backend = backend;
   }
   for (let i = 0; i < n; i++) {
     const p = doc.nodes.parentIndex[i]!;

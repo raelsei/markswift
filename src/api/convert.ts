@@ -80,7 +80,9 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       waitFor: options.waitFor,
       prepare: options.prepare,
     };
-    const first = await captureThemes(renderer, req, timedOut);
+    // The open-state pass runs on the primary captures only, never on the probe.
+    const layered = { ...req, layers: true };
+    const first = await captureThemes(renderer, layered, timedOut);
     const plan = bp
       ? planBands(first.primary.layout.conditions, {
           first: viewport,
@@ -88,7 +90,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
           max: (bp === true ? undefined : bp.max) ?? 1376,
         })
       : undefined;
-    const bands = plan ? await captureBands(renderer, req, { viewport, captured: first }, plan, timedOut) : [first];
+    const bands = plan ? await captureBands(renderer, layered, { viewport, captured: first }, plan, timedOut) : [first];
     const { primary: capture, dark } = bands[0]!;
     // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
     // show another allocation, so its probe proves nothing and is not compiled.
@@ -169,6 +171,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
 }
 
 /**
+
  * Faces of several captures: the first list, plus faces only a later one declared. A face several
  * declared is one face, loaded if any capture loaded it. Identical lists come back as the first.
  */
