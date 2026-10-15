@@ -1,6 +1,8 @@
 /** Plan 052: each LayoutDoc 4 rider read end to end from Chrome's computed serialisation. */
 import { expect, test } from "bun:test";
+import { inferScreen } from "../../src/analysis/infer.ts";
 import { convertHtml } from "../../src/index.ts";
+import { walk } from "../../src/model/semantic.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
@@ -72,6 +74,22 @@ browserTest(
       { css: ".h{fill:red;fill-rule:evenodd}", theme: "light", viewport: { width: 390, height: 800 } },
     );
     expect(result.code).toContain("FillStyle(eoFill: true)");
+  },
+  30_000,
+);
+
+browserTest(
+  "empty-cells: hide leaves only the non-empty cell painted",
+  async () => {
+    const result = await convertHtml(
+      `<main data-markswift-root><table style="empty-cells:hide;border-spacing:4px"><tr><td style="background:red;width:20px;height:20px"></td><td style="background:red">x</td></tr></table></main>`,
+      { theme: "light", viewport: { width: 390, height: 800 } },
+    );
+    let filled = 0;
+    walk(inferScreen(result.layout, "t").root, (n) => {
+      if (n.style.fills.length) filled++;
+    });
+    expect(filled).toBe(1);
   },
   30_000,
 );

@@ -37,7 +37,7 @@ import {
   outOfFlow,
   edgeWidth,
 } from "./geometry.ts";
-import { collapseTableBorders } from "./table-borders.ts";
+import { collapseTableBorders, hideEmptyCells } from "./table-borders.ts";
 import { clipsText } from "./style-background.ts";
 import { dropInvisible, pruneHitTesting } from "./invisible.ts";
 
@@ -88,7 +88,7 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
 }
 
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
-  const t = collapseTableBorders(input);
+  const t = hideEmptyCells(collapseTableBorders(input));
   const n = t.tag === "table" ? captionOutside(t) : t;
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")

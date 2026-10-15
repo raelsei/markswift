@@ -2080,10 +2080,10 @@ export default {
       group: "Table",
       class: "mapped",
       target: "no .background/.border on empty cells",
-      ir: "Style.fills, Style.border (cleared)",
+      ir: "LayoutNode paint rewrite (`hideEmptyCells`)",
       via: "style",
-      impl: "no",
-      note: "`hide` suppresses paint on empty cells; not whitelisted, empty cells keep their fills.",
+      impl: "yes",
+      note: "Separated tables only (collapsed ones ignore it, as in CSS). A cell is empty as Chrome decides it (probed): only collapsible whitespace inside, so `&nbsp;` or an empty `<span>` still paints. Its background, border and box-shadow are hidden; its box keeps its place. Plan 049 keeps the rewrite.",
       spec: mdn("empty-cells"),
     },
     {

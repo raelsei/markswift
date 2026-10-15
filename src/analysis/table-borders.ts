@@ -151,3 +151,36 @@ export function collapseTableBorders(table: LayoutNode): LayoutNode {
   };
   return rewrite(table);
 }
+
+const HIDDEN_PAINT: Record<string, string> = {
+  "background-color": "rgba(0, 0, 0, 0)",
+  "background-image": "none",
+  "border-top-style": "none",
+  "border-right-style": "none",
+  "border-bottom-style": "none",
+  "border-left-style": "none",
+  "box-shadow": "none",
+};
+const SECTION = /^table-(row|row-group|header-group|footer-group)$/;
+
+/**
+ * `empty-cells: hide` in the separated border model: an empty cell paints no background, border or shadow; its box
+ * keeps its place. Empty as Chrome decides it (probed): only collapsible whitespace inside — an empty `<span>` or
+ * `&nbsp;` still paints. Collapsed tables ignore the property.
+ */
+export function hideEmptyCells(table: LayoutNode): LayoutNode {
+  if (!/^(inline-)?table$/.test(table.styles["display"] ?? "") || table.styles["border-collapse"] === "collapse")
+    return table;
+  const rewrite = (n: LayoutNode): LayoutNode => {
+    const d = n.styles["display"] ?? "";
+    if (d === "table-cell")
+      return n.styles["empty-cells"] === "hide" &&
+        n.children.every((c) => !renders(c) || (c.tag === "#text" && /^[ \t\n\r\f]*$/.test(c.text ?? "")))
+        ? { ...n, styles: { ...n.styles, ...HIDDEN_PAINT } }
+        : n;
+    if (n !== table && !SECTION.test(d)) return n;
+    const children = n.children.map(rewrite);
+    return children.some((c, i) => c !== n.children[i]) ? { ...n, children } : n;
+  };
+  return rewrite(table);
+}

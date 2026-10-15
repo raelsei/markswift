@@ -323,6 +323,47 @@ describe("tables", () => {
     const rows = flatten(screen.root).filter((n): n is StackNode => n.kind === "stack" && n.axis === "h");
     expect(rows.map((r) => r.align)).toEqual(["center"]);
   });
+
+  test("052: empty-cells: hide paints no background or border on whitespace-only cells of a separated table", () => {
+    const edge = (side: string) => ({
+      [`border-${side}-style`]: "solid",
+      [`border-${side}-width`]: "2px",
+      [`border-${side}-color`]: "rgb(0, 0, 0)",
+    });
+    const paint = (emptyCells: string) => ({
+      display: "table-cell",
+      "empty-cells": emptyCells,
+      "background-color": "rgb(255, 0, 0)",
+      ...edge("top"),
+      ...edge("right"),
+      ...edge("bottom"),
+      ...edge("left"),
+    });
+    const painted = (collapse: string, emptyCells: string) => {
+      const cell = (x: number, kids: LayoutNode[]) => el("td", { x, y: 0, w: 46, h: 24 }, paint(emptyCells), kids);
+      const row = el("tr", { x: 0, y: 0, w: 200, h: 24 }, { display: "table-row" }, [
+        cell(0, []),
+        cell(50, [textNode(" ", { x: 52, y: 2, w: 0, h: 0 })]),
+        cell(100, [el("span", { x: 102, y: 2, w: 0, h: 20 }, { display: "inline" })]),
+        cell(150, [textNode("x", { x: 152, y: 2, w: 8, h: 20 })]),
+      ]);
+      const table = el("table", { x: 0, y: 0, w: 200, h: 24 }, { display: "table", "border-collapse": collapse }, [
+        row,
+      ]);
+      const nodes = flatten(
+        inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 24 }, { display: "block" }, [table])), "s").root,
+      );
+      return {
+        fills: [...new Set(nodes.filter((n) => n.style.fills.length).map((n) => n.frame.x))].sort((a, b) => a - b),
+        borders: [...new Set(nodes.filter((n) => n.style.border || n.style.borderSides).map((n) => n.frame.x))].sort(
+          (a, b) => a - b,
+        ),
+      };
+    };
+    expect(painted("separate", "hide")).toEqual({ fills: [100, 150], borders: [100, 150] });
+    expect(painted("separate", "show")).toEqual({ fills: [0, 50, 100, 150], borders: [0, 50, 100, 150] });
+    expect(painted("collapse", "hide").fills).toEqual([0, 50, 100, 150]);
+  });
 });
 
 describe("paint invisible at rest", () => {

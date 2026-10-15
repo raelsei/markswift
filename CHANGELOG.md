@@ -12,6 +12,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `font-variation-settings`, `font-stretch` and `font-optical-sizing` are read: `wght`/`opsz` set the weight and optical size, other axes a bundled variable font declares (incl. `wdth` from `font-stretch`) render exactly through `.markswiftVariable(…, axes:)` in both modes (app keeps Dynamic Type), `font-optical-sizing: none` drops the automatic `opsz`; on system fonts `font-stretch` approximates to SF's nearest width (`.width(Font.Width(…))`, reported).
 - A root `color-scheme` that names one scheme (`dark`, `dark only`, `light`, `light only`) forces the view's appearance with `.environment(\.colorScheme, …)` in both modes; an adaptive conversion does so only when both captures agree.
 - `pointer-events: none` overlays pass taps through (`.allowsHitTesting(false)`, app mode).
+- `empty-cells: hide` on separated tables: a cell holding only collapsible whitespace paints no background, border or shadow.
 
 ### Fixed
 - A stylesheet `fill-rule: evenodd` on SVG shapes is honoured (only the attribute was read).
