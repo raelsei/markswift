@@ -45,9 +45,18 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
 export function controlMembers(root: SemNode, mode: EmitMode, byId = false): ControlMembers {
   const firstOf = new Map<string, SemNode>();
   const elementKey = (n: SemNode) => `${n.id}\u0000${n.kind}\u0000${n.kind === "control" ? n.control : ""}`;
+  // Ids that name different elements in different bands (script-driven DOM, reported by the merge): their id-keyed
+  // paint and label taps would land on the wrong element, so they are dropped.
+  // ponytail: the pressed look and label tap of such elements are lost; key them by element if a design needs them.
+  const keyOfId = new Map<string, string>();
+  const ambiguous = new Set<string>();
   if (byId)
     walk(root, (n) => {
-      if (n.id !== "" && !n.alternatives && !firstOf.has(elementKey(n))) firstOf.set(elementKey(n), n);
+      if (n.id === "" || n.alternatives) return;
+      const key = elementKey(n);
+      if (!firstOf.has(key)) firstOf.set(key, n);
+      if ((keyOfId.get(n.id) ?? key) !== key) ambiguous.add(n.id);
+      keyOfId.set(n.id, key);
     });
   const canon = (n: SemNode) => (byId && n.id !== "" && !n.alternatives ? firstOf.get(elementKey(n))! : n);
   const stateOf = new Map<SemNode, string>();
@@ -243,6 +252,10 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     }
   };
   visit(root, undefined);
+  for (const id of ambiguous) {
+    statePaint.delete(id);
+    activate.delete(id);
+  }
   return {
     decls: members.flatMap((m) => m.decl),
     members,

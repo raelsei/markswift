@@ -126,6 +126,24 @@ test("repeated cards holding a holder stay one ForEach whose row reads the band 
   expect(without).not.toContain("markswiftBand");
 });
 
+test("an id that names different elements in two bands (script insert) lends no paint across them", () => {
+  const docs = [390, 834].map((w) => {
+    const wide = w > 600;
+    const go = el("root/" + (wide ? 2 : 1), "button", { x: 0, y: 40, w: 60, h: 20 }, {}, [txt("Go", 60)], {
+      states: { pressed: { "background-color": "rgb(0, 0, 128)" } },
+    });
+    return band(w, [
+      ...(wide ? [el("root/0", "header", { x: 0, y: 0, w, h: 20 }, {}, [txt("Wide header", w)])] : []),
+      el(`root/${wide ? 1 : 0}`, "p", { x: 0, y: 20, w, h: 20 }, {}, [txt("intro", w)]),
+      go,
+    ]);
+  });
+  const merged = compile(docs);
+  expect(merged.warnings.map((w) => w.source)).toEqual(["breakpoints"]);
+  // root/1 is the button in band 0 and the intro paragraph in band 1: its pressed paint would recolour the text.
+  expect(merged.code).not.toMatch(/Text\(verbatim: "intro"\)[^\n]*\n(?: +\.[^\n]*\n)*? +\.background\(\(is\w+Pressed/);
+});
+
 test("fidelity mode compiles a breakpoint view", () => {
   const code = compile(
     [390, 834].map((w) => band(w, [wrap(w, [coloured(w, w > 600)]), plain(w)])),
