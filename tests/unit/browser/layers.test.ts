@@ -4,6 +4,7 @@ import type { Capture } from "../../../src/browser/capture.ts";
 import type { DomSnapshot } from "../../../src/browser/snapshot.ts";
 import type { CaptureRequest, Trigger } from "../../../src/input/types.ts";
 import { captureLayers, laidOut, layerIds, layerRoots, openDelta, outsidePoint } from "../../../src/browser/layers.ts";
+import { compileLayout } from "../../../src/compiler/index.ts";
 
 const node = (id: string, extra: Partial<LayoutNode> = {}): LayoutNode => ({
   id,
@@ -281,5 +282,70 @@ describe("captureLayers", () => {
     expect(r.layout.layers?.map((l) => l.id)).toEqual(["t1"]);
     expect(Object.keys(shots)).toEqual(["t1"]);
     expect(r.layout.root.children[1]!.states).toEqual({ open: { "background-color": "rgb(240, 240, 240)" } });
+  });
+});
+
+describe("compileLayout ignores the open state", () => {
+  const BLOCK = {
+    display: "block",
+    "background-color": "rgb(255, 255, 255)",
+    color: "rgb(0, 0, 0)",
+    "font-size": "16px",
+  };
+  const text = (t: string, x: number, y: number): LayoutNode => ({
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x, y, w: 80, h: 20 },
+    text: t,
+    children: [],
+  });
+  const withOpen = (): LayoutDoc => {
+    const d = LayoutDoc.parse(doc([layer("edit-profile")]));
+    d.root.styles = BLOCK;
+    d.root.bounds = { x: 0, y: 0, w: 390, h: 100 };
+    d.root.children = [
+      node("0", {
+        tag: "button",
+        styles: { ...BLOCK, display: "inline-block" },
+        bounds: { x: 8, y: 8, w: 100, h: 24 },
+        children: [text("Edit profile", 10, 10)],
+        states: {
+          pressed: { "background-color": "rgb(200, 200, 200)" },
+          open: { "background-color": "rgb(240, 240, 240)" },
+        },
+      }),
+      node("1", {
+        tag: "p",
+        styles: BLOCK,
+        bounds: { x: 8, y: 40, w: 374, h: 20 },
+        children: [text("Hello", 8, 40)],
+        pseudoStyles: { backdrop: { "background-color": "rgba(0, 0, 0, 0.4)" } },
+      }),
+    ];
+    return d;
+  };
+  const strip = (n: LayoutNode): LayoutNode => {
+    const { open: _, ...states } = n.states ?? {};
+    const { backdrop: __, ...pseudo } = n.pseudoStyles ?? {};
+    const { states: ___, pseudoStyles: ____, ...rest } = n;
+    return {
+      ...rest,
+      ...(Object.keys(states).length ? { states } : {}),
+      ...(Object.keys(pseudo).length ? { pseudoStyles: pseudo } : {}),
+      children: n.children.map(strip),
+    };
+  };
+
+  test("app and fidelity code and diagnostics are byte-identical without layers, states.open and ::backdrop", () => {
+    const full = withOpen();
+    const { layers: _, ...rest } = withOpen();
+    const without: LayoutDoc = { ...rest, root: strip(rest.root) };
+    expect(JSON.stringify(without)).not.toContain("backdrop");
+    for (const mode of ["app", "fidelity"] as const) {
+      const [a, b] = [compileLayout(full, { name: "V", mode }), compileLayout(without, { name: "V", mode })];
+      expect(a.code).toBe(b.code);
+      expect(a.diagnostics).toEqual(b.diagnostics);
+    }
   });
 });

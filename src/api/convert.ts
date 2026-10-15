@@ -2,13 +2,14 @@ import type { Page } from "playwright-core";
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
 import { BrowserCapture, type Capture } from "../browser/capture.ts";
+import { captureLayers } from "../browser/layers.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
 import { compileLayout, needsProbe } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import { htmlIdentity } from "../input/identity.ts";
-import type { HtmlSource } from "../input/types.ts";
+import type { CaptureRequest, HtmlSource } from "../input/types.ts";
 import type { FontFace, Theme } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
 
@@ -73,7 +74,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       waitFor: options.waitFor,
       prepare: options.prepare,
     };
-    const { primary: capture, dark } = await captureThemes(renderer, req, timedOut);
+    const { primary: capture, dark } = await captureThemes(renderer, { ...req, layers: true }, timedOut);
     // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
     // show another allocation, so its probe proves nothing and is not compiled.
     const probe =
@@ -137,7 +138,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
 
 /**
  * Capture one page in its theme(s), each raced against `timedOut`. Adaptive: two captures in one browser session;
- * the light one is emitted, the dark one pairs its colours.
+ * the light one is emitted, the dark one pairs its colours. `layers`: also run the open-state pass on each theme
+ * (the primary one probes dismissal; dark copies it by layer id).
  */
 export async function captureThemes(
   renderer: BrowserCapture,
@@ -153,34 +155,44 @@ export async function captureThemes(
     waitFor?: string;
     prepare?: (page: Page) => Promise<void>;
     viewport?: { width: number; height: number };
+    layers?: boolean;
   },
   timedOut: Promise<never>,
 ): Promise<{ primary: Capture; dark?: Capture }> {
-  const shot = (scheme: Theme) =>
-    Promise.race([
-      renderer.capture(
-        {
-          screen: req.name,
-          theme: scheme,
-          url: req.url,
-          html: req.html,
-          root: req.root,
-          waitFor: req.waitFor,
-          viewport: req.viewport,
-          async prepare(page) {
-            if (req.css) await page.addStyleTag({ content: req.css });
-            if (scheme === "dark" && req.darkClass)
-              await page.evaluate((c) => document.documentElement.classList.add(c), req.darkClass);
-            await req.prepare?.(page);
-          },
-        },
-        htmlIdentity,
-        req.label,
-      ),
-      timedOut,
-    ]);
-  const primary = await shot(req.theme === "dark" ? "dark" : "light");
-  return req.theme === "adaptive" ? { primary, dark: await shot("dark") } : { primary };
+  const race = (spec: CaptureRequest) => Promise.race([renderer.capture(spec, htmlIdentity, req.label), timedOut]);
+  const shot = async (scheme: Theme, probeDismiss: boolean) => {
+    const spec: CaptureRequest = {
+      screen: req.name,
+      theme: scheme,
+      url: req.url,
+      html: req.html,
+      root: req.root,
+      waitFor: req.waitFor,
+      viewport: req.viewport,
+      async prepare(page) {
+        if (req.css) await page.addStyleTag({ content: req.css });
+        if (scheme === "dark" && req.darkClass)
+          await page.evaluate((c) => document.documentElement.classList.add(c), req.darkClass);
+        await req.prepare?.(page);
+      },
+    };
+    const capture = await race(spec);
+    if (req.layers) await captureLayers(race, spec, capture, { probeDismiss });
+    return capture;
+  };
+  const primary = await shot(req.theme === "dark" ? "dark" : "light", true);
+  if (req.theme !== "adaptive") return { primary };
+  const dark = await shot("dark", false);
+  for (const layer of dark.layout.layers ?? []) {
+    const light = primary.layout.layers?.find((l) => l.id === layer.id);
+    if (light) layer.dismiss = light.dismiss;
+    else
+      dark.warnings.push({
+        source: "capture",
+        message: `layer ${layer.id} opens only in the dark theme; its dismissal was not probed`,
+      });
+  }
+  return { primary, dark };
 }
 
 /**

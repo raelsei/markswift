@@ -145,6 +145,9 @@ export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
   );
 }
 
+/** Capture key of a layer's open state: `<caseId>-<width>-<theme>-<mode>@open:<layerId>` (390, `app` only). */
+export const openKey = (key: string, layer: string) => `${key}@open:${layer}`;
+
 if (import.meta.main) {
   const command = process.argv[2];
   if (command === "--validate" || command === "--list") {
