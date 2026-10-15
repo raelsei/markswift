@@ -28,10 +28,17 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
   untrustedInput?: boolean;
   /** Mounted selector to await before capture. */
   waitFor?: string;
-  /** Optional application-specific setup, such as opening a menu; runs before every capture. */
+  /** Optional application-specific setup, such as opening a menu; runs before every capture, including each open-state capture. */
   prepare?: (page: Page) => Promise<void>;
   /** Upper bound for the whole conversion (browser, network, font conversion), in ms. Default 120000. */
   timeoutMs?: number;
+  /**
+   * Capture one layout per CSS width band (`@media` width thresholds) instead of one viewport. `true`: devices
+   * 390×844, 834×1210, 1210×834, 1376×1032 up to `max` (default 1376); a band without a device is captured at its
+   * lower bound with `viewport.height`; the configured `viewport` is the capture of its own band. Thresholds below
+   * 320 px or above `max`, and beyond six bands, are reported.
+   */
+  breakpoints?: true | { devices?: Array<{ width: number; height: number }>; max?: number };
 }
 
 export interface ConversionResult extends CompileResult {
@@ -41,4 +48,6 @@ export interface ConversionResult extends CompileResult {
   layout: LayoutDoc;
   /** The dark capture of an `adaptive` conversion. */
   darkLayout?: LayoutDoc;
+  /** One capture per width band (`breakpoints`), ascending; `bands[0].layout` is `layout`. */
+  bands?: Array<{ layout: LayoutDoc; darkLayout?: LayoutDoc }>;
 }

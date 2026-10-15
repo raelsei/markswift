@@ -116,10 +116,12 @@ export interface LayoutNode {
   lines?: Array<{ bounds: Rect; start: number; length: number }>;
   /** Global paint order index (stacking), when available. */
   paint?: number;
-  /** Paint the element shows in an interaction state: computed values of whitelisted paint properties that differ from rest (`:hover`+`:active` = pressed, `:focus`+`:focus-visible` = focused), captured by forcing the state over CDP. */
-  states?: { pressed?: Record<string, string>; focused?: Record<string, string> };
-  /** Pseudo-element styles DOMSnapshot does not report, read with getComputedStyle(el, "::<name>"). `placeholder`: inputs and textareas with a `placeholder` attribute (color, -webkit-text-fill-color, opacity, font-style, font-weight). */
-  pseudoStyles?: { placeholder?: Record<string, string> };
+  /** Paint the element shows in an interaction state: computed values of whitelisted paint properties that differ from rest (`:hover`+`:active` = pressed, `:focus`+`:focus-visible` = focused), captured by forcing the state over CDP. `open`: paint while the layer this node triggers (or sits inside the trigger of) is open — PAINT_KEYS that differ from rest. */
+  states?: { pressed?: Record<string, string>; focused?: Record<string, string>; open?: Record<string, string> };
+  /** Indices into `LayoutDoc.conditions` whose inner rules match this element (stamped at capture). Absent when none. */
+  conditional?: number[];
+  /** Pseudo-element styles DOMSnapshot does not report, read with getComputedStyle(el, "::<name>"). `placeholder`: inputs and textareas with a `placeholder` attribute (color, -webkit-text-fill-color, opacity, font-style, font-weight). `backdrop`: `::backdrop` of a top-layer element (`overlay: auto`) — background-color, background-image, opacity, filter; its box is the viewport. */
+  pseudoStyles?: { placeholder?: Record<string, string>; backdrop?: Record<string, string> };
   /** CSS animations and state transitions read from Chrome's Web Animations objects before settle (browser/motion.ts). */
   motion?: Motion;
   children: LayoutNode[];
@@ -141,9 +143,16 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
       .object({
         pressed: z.record(z.string(), z.string()).optional(),
         focused: z.record(z.string(), z.string()).optional(),
+        open: z.record(z.string(), z.string()).optional(),
       })
       .optional(),
-    pseudoStyles: z.object({ placeholder: z.record(z.string(), z.string()).optional() }).optional(),
+    pseudoStyles: z
+      .object({
+        placeholder: z.record(z.string(), z.string()).optional(),
+        backdrop: z.record(z.string(), z.string()).optional(),
+      })
+      .optional(),
+    conditional: z.array(z.number().int().nonnegative()).optional(),
     motion: Motion.optional(),
     children: z.array(LayoutNode),
   }),
@@ -195,9 +204,13 @@ export const LAYOUT_DOC_VERSION = 4;
 
 /** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
 export const VALIDATION_MARK = "data-markswift-validation";
+/** Capture stamps the indices (space-separated) of the `conditions` whose inner rules match an element; moved to `conditional`. */
+export const CONDITIONAL_MARK = "data-markswift-conditional";
+/** Capture stamps a serial on the query container of a `@container` condition; resolved to its node id. */
+export const CONTAINER_MARK = "data-markswift-container";
 
 /** A size `@media`/`@container` condition whose rules hit captured elements; `matches` at this capture's viewport;
- * `container` is the query container's node id. Filled by breakpoint capture; empty otherwise. */
+ * `container` is the query container's node id. Order is capture-local (`LayoutNode.conditional` indexes it). */
 export const LayoutCondition = z.object({
   kind: z.enum(["media", "container"]),
   query: z.string(),
@@ -205,6 +218,37 @@ export const LayoutCondition = z.object({
   container: z.string().optional(),
 });
 export type LayoutCondition = z.infer<typeof LayoutCondition>;
+
+/** What a trigger shows when activated, captured in a fresh page (`browser/layers.ts`). */
+export const Layer = z.object({
+  /** Slug of the trigger's accessible name (`edit-profile`), unique per doc; joins light/dark and names the `@open:<id>` capture. */
+  id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  /** LayoutNode id of the trigger inside `root`. */
+  trigger: z.string(),
+  activation: z.enum(["click", "hover", "contextmenu"]),
+  relation: z.enum([
+    "aria-controls",
+    "aria-describedby",
+    "popovertarget",
+    "commandfor",
+    "interestfor",
+    "details",
+    "dom-diff",
+  ]),
+  /** `:modal`, `aria-modal=true` inside the layer, or the root (or an ancestor) became `aria-hidden`/`inert` on open. */
+  modal: z.boolean(),
+  /** inflow: every root is inside the capture root, not top-layer, not fixed. anchored: CSS anchor positioning or a
+   * fixed 0,0 box placed by a translate (Floating UI / Radix popper). viewport: anything else. */
+  placement: z.enum(["viewport", "anchored", "inflow"]),
+  /** inflow: LayoutNode id of the element whose children the layer joins, and the index of nodes[0] in its open children. */
+  parent: z.string().optional(),
+  index: z.number().optional(),
+  /** Layer roots in paint order, root coordinates, same identity function as `root`. */
+  nodes: z.array(LayoutNode),
+  /** Probed in the light (primary) theme; inflow layers are not probed (all false / empty). */
+  dismiss: z.object({ escape: z.boolean(), outside: z.boolean(), buttons: z.array(z.string()) }),
+});
+export type Layer = z.infer<typeof Layer>;
 
 export const LayoutDoc = z.object({
   version: z.literal(LAYOUT_DOC_VERSION),
@@ -221,6 +265,8 @@ export const LayoutDoc = z.object({
   /** `@font-face` rules of the page, deduplicated — the faces the browser resolved, in declaration order. */
   fonts: z.array(FontFace),
   root: LayoutNode,
+  /** Layers the page's triggers open (absent = no trigger opened anything). */
+  layers: z.array(Layer).optional(),
 });
 export type LayoutDoc = z.infer<typeof LayoutDoc>;
 

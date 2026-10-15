@@ -16,7 +16,8 @@ import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import type { Theme } from "../model/layout.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { GENERATED_BY } from "../model/version.ts";
-import { captureThemes, unionFaces } from "./convert.ts";
+import { unionFaces } from "./convert.ts";
+import { captureThemes } from "./bands.ts";
 
 export interface BuildComponent {
   /** Swift view name, e.g. `AccordionView`. */
@@ -130,6 +131,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
           css: c.css,
           darkClass: c.darkClass,
           waitFor: c.waitFor,
+          layers: true,
         },
         timedOut,
       );

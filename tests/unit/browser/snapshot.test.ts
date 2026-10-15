@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { STYLE_WHITELIST } from "../../../src/model/layout.ts";
 import {
   attachPreferredSizes,
+  pathOf,
+  rawAt,
   snapshotToTree,
   srcsetUrls,
   toLayout,
@@ -159,6 +161,39 @@ describe("toLayout", () => {
       ["aside", { width: "80px", height: "40px" }],
     ]);
     expect(node.children.find((child) => child.tag === "section")!.id).toBe("1/0");
+  });
+
+  test("rawAt/pathOf count <script> but skip pseudo-elements and text; backend comes from backendNodeId", () => {
+    const snap = synth([
+      "html",
+      {},
+      undefined,
+      [
+        [
+          "main",
+          {},
+          { b: [0, 0, 200, 100] },
+          [
+            ["::before", {}, { b: [0, 0, 20, 20], pseudo: "before", text: "x" }, []],
+            ["script", {}, undefined, []],
+            "Text",
+            ["div", {}, { b: [0, 20, 120, 40] }, [["span", {}, { b: [0, 20, 10, 10] }, []]]],
+          ],
+        ],
+      ],
+    ]);
+    snap.documents[0]!.nodes.backendNodeId = snap.documents[0]!.nodes.nodeType.map((_, i) => i + 100);
+    const html = snapshotToTree(snap);
+    const root = html.children[0]!;
+    const span = rawAt(root, "1/0")!;
+    expect([span.name, span.backend]).toEqual(["span", 106]);
+    expect(rawAt(root, "0")!.name).toBe("script");
+    expect(rawAt(root, "")).toBe(root);
+    expect(rawAt(root, "2")).toBeUndefined();
+    expect(pathOf(root, span)).toBe("1/0");
+    expect(pathOf(root, root)).toBe("");
+    expect(pathOf(span, root)).toBeUndefined();
+    expect(root.backend).toBe(101);
   });
 
   test("display: contents children are hoisted in order and keep DOM-based paths", () => {

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { convertHtml } from "../../src/index.ts";
 import { formatWarning } from "../../src/cli/output.ts";
+import type { LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
@@ -34,6 +35,34 @@ browserTest(
     expect(media!.message).toContain(".title");
     expect(result.warnings.find((w) => w.feature === "container-query")?.message).toContain(".inner");
     expect(formatWarning(media!)).toStartWith("approximated media-query: @media (min-width: 600px)");
+
+    const nodes: LayoutNode[] = [];
+    const collect = (n: LayoutNode) => {
+      nodes.push(n);
+      n.children.forEach(collect);
+    };
+    collect(result.layout.root);
+    const byClass = (c: string) => nodes.find((n) => n.attrs.class === c)!;
+    const card = byClass("card");
+    const { conditions } = result.layout;
+    expect(conditions).toHaveLength(2);
+    expect(conditions).toContainEqual({ kind: "media", query: "(min-width: 600px)", matches: false });
+    expect(conditions).toContainEqual({
+      kind: "container",
+      query: "(min-width: 400px)",
+      container: card.id!,
+      matches: false,
+    });
+    const mediaIndex = conditions.findIndex((c) => c.kind === "media");
+    const containerIndex = conditions.findIndex((c) => c.kind === "container");
+    expect(byClass("split").conditional).toContain(mediaIndex);
+    expect(byClass("title").conditional).toContain(mediaIndex);
+    expect(byClass("inner").conditional).toContain(containerIndex);
+    expect(card.conditional).toBeUndefined();
+    expect(nodes.find((n) => n.attrs.id === "half")!.conditional).toBeUndefined();
+    expect(
+      nodes.flatMap((n) => Object.keys(n.attrs)).filter((k) => /^data-markswift-(conditional|container)/.test(k)),
+    ).toEqual([]);
 
     const notes = (r: typeof result, id: string) =>
       r.diagnostics
