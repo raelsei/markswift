@@ -2,10 +2,14 @@
  * Paint-only interaction states: force `:hover`+`:active` on every pressable element and
  * `:focus`+`:focus-visible` on every text field of the capture root, take one DOM snapshot per state,
  * and keep the paint properties that changed. Layout never comes from these snapshots.
+ * With `motion`, the CSSTransitions forcing and releasing each state starts are read too, under both
+ * `prefers-reduced-motion` values.
  */
-import type { CDPSession } from "playwright-core";
-import { STYLE_WHITELIST } from "../model/layout.ts";
+import type { CDPSession, ElementHandle, Page } from "playwright-core";
+import { STYLE_WHITELIST, type Motion, type Transition } from "../model/layout.ts";
 import { PRESSABLE_SELECTOR, TEXT_ENTRY_SELECTOR } from "../model/interactive.ts";
+import { readTransitions } from "./motion.ts";
+import { finishAnimations } from "./settle.ts";
 import type { DomSnapshot } from "./snapshot.ts";
 
 /** Properties that move paint, not layout (all are in STYLE_WHITELIST). */
@@ -109,8 +113,20 @@ export async function captureStates(
   cdp: CDPSession,
   root: string,
   rest: DomSnapshot,
-): Promise<{ pressed: StateDeltas; focused: StateDeltas; warnings: string[] }> {
-  const out = { pressed: new Map() as StateDeltas, focused: new Map() as StateDeltas, warnings: [] as string[] };
+  motion?: { page: Page; sheet: ElementHandle; root: string; authorReduce: boolean },
+): Promise<{
+  pressed: StateDeltas;
+  focused: StateDeltas;
+  /** Keyed by element path (see `MotionByPath`). */
+  transitions: Record<string, NonNullable<Motion["transitions"]>>;
+  warnings: string[];
+}> {
+  const out = {
+    pressed: new Map() as StateDeltas,
+    focused: new Map() as StateDeltas,
+    transitions: {} as Record<string, NonNullable<Motion["transitions"]>>,
+    warnings: [] as string[],
+  };
   await cdp.send("DOM.enable");
   let css = false;
   try {
@@ -127,8 +143,7 @@ export async function captureStates(
       if (!nodeIds.length) continue;
       if (!css) await cdp.send("CSS.enable");
       css = true;
-      await forceStates(cdp, nodeIds, [...classes]);
-      try {
+      const snapshot = async () => {
         const snap = (await cdp.send("DOMSnapshot.captureSnapshot", STATE_ARGS)) as unknown as DomSnapshot;
         const { deltas, moved, revealed } = diffStates(rest, snap, state === "focused");
         out[state] = deltas;
@@ -136,10 +151,52 @@ export async function captureStates(
           out.warnings.push(`${moved} element(s) change layout under ${label}; their ${state} paint is not reproduced`);
         if (revealed > 0)
           out.warnings.push(`${revealed} element(s) appear or disappear under ${label}; not reproduced`);
-      } finally {
-        await forceStates(cdp, nodeIds, []);
+      };
+      if (!motion) {
+        await forceStates(cdp, nodeIds, [...classes]);
+        try {
+          await snapshot();
+        } finally {
+          await forceStates(cdp, nodeIds, []);
+        }
+        continue;
+      }
+      // `no-preference` first, `reduce` (the context's own media) last, so the page ends where it began.
+      const { page, sheet } = motion;
+      const passes: Array<{ into: Record<string, Transition[]>; back: Record<string, Transition[]> }> = [];
+      for (const media of ["no-preference", "reduce"] as const) {
+        await page.emulateMedia({ reducedMotion: media });
+        // Flushes the media switch while transitions are still off, and settles the CSS animations it re-created.
+        await finishAnimations(page);
+        await sheet.evaluate((s) => {
+          (s as HTMLStyleElement).disabled = true;
+        });
+        await forceStates(cdp, nodeIds, [...classes]);
+        let into: Record<string, Transition[]> = {};
+        let back: Record<string, Transition[]> = {};
+        try {
+          into = await readTransitions(page, motion.root); // finishes them: the snapshot sees end values
+          if (media === "reduce") await snapshot();
+        } finally {
+          await forceStates(cdp, nodeIds, []);
+          back = await readTransitions(page, motion.root);
+          await sheet.evaluate((s) => {
+            (s as HTMLStyleElement).disabled = false;
+          });
+        }
+        passes.push({ into, back });
+      }
+      const [normal, reduce] = passes as [(typeof passes)[0], (typeof passes)[0]];
+      const paths = new Set([normal, reduce].flatMap((p) => [...Object.keys(p.into), ...Object.keys(p.back)]));
+      for (const path of paths) {
+        const pair = { in: normal.into[path] ?? [], out: normal.back[path] ?? [] };
+        const reduced = { in: reduce.into[path] ?? [], out: reduce.back[path] ?? [] };
+        // The reduced rule (see `Motion`).
+        const differs = JSON.stringify(reduced) !== JSON.stringify(pair);
+        (out.transitions[path] ??= {})[state] = motion.authorReduce || differs ? { ...pair, reduced } : pair;
       }
     }
+    if (motion) await finishAnimations(motion.page);
   } finally {
     if (css) await cdp.send("CSS.disable");
     await cdp.send("DOM.disable");

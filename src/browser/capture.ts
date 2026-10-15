@@ -263,8 +263,14 @@ export class BrowserCapture {
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
-      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs).
-      const states = await captureStates(cdp, `[${ROOT_MARK}="1"]`, snapA);
+      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs), plus the
+      // CSSTransitions each state starts.
+      const states = await captureStates(cdp, `[${ROOT_MARK}="1"]`, snapA, {
+        page,
+        sheet: noTransition,
+        root: spec.root,
+        authorReduce: motion.authorReduce,
+      });
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
       await page.evaluate((mark) => {
@@ -292,6 +298,8 @@ export class BrowserCapture {
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);
+      for (const [path, transitions] of Object.entries(states.transitions))
+        motion.motion[path] = { ...motion.motion[path], transitions };
       attachMotion(rootRaw, motion.motion);
       delete rootRaw.attrs[ROOT_MARK];
       // Origin, size and screenshot come from the root's untransformed (snapshot B) box, the same
