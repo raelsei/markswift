@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
+import { placeItems } from "../../../src/analysis/grid-tracks.ts";
 import type { GridNode } from "../../../src/model/semantic.ts";
 
 function capture(
@@ -268,7 +269,7 @@ test("an equal-fill auto-fit grid carries its pinned column count to fidelity, o
   const message = "repeat(auto-fit, minmax(100px, 1fr)) pinned at 3 columns";
   expect(grid(input).template?.fidelityNote).toContain(message);
   const rows = structuredClone(input);
-  rows.root.preferredSize!.gridTemplateRows = "20px";
+  rows.root.preferredSize!.gridTemplateRows = "40px";
   const pins = grid(rows).diagnostics.filter((d) => d.feature === "grid-template-columns");
   expect(pins.map((d) => d.message).join("\n")).toContain(message);
   expect(grid(plain).diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
@@ -317,12 +318,10 @@ test("an fr template the solver reproduces is admitted; children keep their capt
       { kind: "fr", fr: 2 },
     ],
     stretch: true,
-    cells: [0, 1],
-    margins: [
-      [0, 0],
-      [0, 0],
+    items: [
+      { child: 0, margin: [0, 0], fixed: false, colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 1, justify: "stretch" },
+      { child: 1, margin: [0, 0], fixed: false, colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1, justify: "stretch" },
     ],
-    fixed: [],
     fidelityNote: expect.stringContaining("fixed column widths") as unknown as string,
   });
   expect(n.diagnostics.filter((d) => d.feature === "grid-template-columns")).toEqual([]);
@@ -522,12 +521,10 @@ test("a px-sized icon painted last keeps its frame and its DOM cell in an auto c
   expect(n.children.map((c) => c.id)).toEqual(["cell1", "cell0"]);
   expect(n.template).toMatchObject({
     tracks: [{ kind: "auto" }, { kind: "fr", fr: 1 }],
-    cells: [1, 0],
-    margins: [
-      [2, 0],
-      [0, 0],
+    items: [
+      { child: 1, margin: [2, 0], fixed: true, colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 1, justify: "stretch" },
+      { child: 0, margin: [0, 0], fixed: false, colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1, justify: "stretch" },
     ],
-    fixed: [0],
   });
   const app = compileLayout(input, { name: "GridView", mode: "app" }).code;
   const head = "MarkswiftTracks(tracks: [.auto, .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0, stretch: false) {";
@@ -544,6 +541,8 @@ test("app emits MarkswiftTracks with allocated cells; fidelity is byte-identical
   expect(app).toContain("MarkswiftTracks(tracks: [.fr(1.0), .fr(2.0)], hSpacing: 10.0, vSpacing: 10.0) {");
   expect(app).toContain(".frame(maxWidth: .infinity");
   expect(app).not.toContain(".frame(width: 112.67");
+  expect(app).not.toContain("markswiftGridCell");
+  expect(app).not.toContain("rows:");
   const plain = structuredClone(input);
   delete plain.root.preferredSize!.gridTemplateColumns;
   const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
@@ -566,4 +565,323 @@ test("auto-repeat without stretch emits its minimum and stretch: false", () => {
   expect(compileLayout(input, { name: "GridView", mode: "app" }).code).toContain(
     "MarkswiftTracks(autoRepeat: .fill(min: 100.0), hSpacing: 10.0, vSpacing: 10.0, stretch: false) {",
   );
+});
+
+test.each<[string, number, Parameters<typeof placeItems>[1], Array<[number, number]> | undefined]>([
+  [
+    "probe grid: implicit third row",
+    3,
+    [
+      { col: { span: 2 }, row: { start: 1, span: 2 } },
+      { col: { start: 3, span: 1 }, row: { start: 1, span: 1 } },
+      { col: { start: 3, span: 1 }, row: { start: 2, span: 1 } },
+      { col: { span: 1 }, row: { span: 1 } },
+    ],
+    [
+      [1, 1],
+      [3, 1],
+      [3, 2],
+      [1, 3],
+    ],
+  ],
+  [
+    "card header action",
+    2,
+    [
+      { col: { span: 1 }, row: { span: 1 } },
+      { col: { span: 1 }, row: { span: 1 } },
+      { col: { start: 2, span: 1 }, row: { start: 1, span: 2 } },
+    ],
+    [
+      [1, 1],
+      [1, 2],
+      [2, 1],
+    ],
+  ],
+  [
+    "holes",
+    3,
+    [
+      { col: { start: 3, span: 1 }, row: { span: 1 } },
+      { col: { start: 1, span: 1 }, row: { start: 2, span: 1 } },
+      { col: { span: 1 }, row: { span: 1 } },
+    ],
+    [
+      [3, 1],
+      [1, 2],
+      [2, 2],
+    ],
+  ],
+  ["an implicit column", 2, [{ col: { start: 3, span: 1 }, row: { span: 1 } }], undefined],
+  [
+    "two items in one cell",
+    2,
+    [
+      { col: { start: 1, span: 1 }, row: { start: 1, span: 1 } },
+      { col: { start: 1, span: 1 }, row: { start: 1, span: 1 } },
+    ],
+    undefined,
+  ],
+])("placeItems: %s", (_label, k, items, expected) => {
+  expect(placeItems(k, items)).toEqual(expected);
+});
+
+/** A 360px grid (content 348, gaps 10) with an authored template and the computed px tracks. */
+function placed(
+  template: string | undefined,
+  columns: string,
+  rows: string,
+  boxes: Array<[number, number, number, number]>,
+  edit: (doc: LayoutDoc) => void = () => {},
+): LayoutDoc {
+  const doc = capture(columns, rows, boxes);
+  if (template) doc.root.preferredSize = { width: "360px", height: "200px", gridTemplateColumns: template };
+  edit(doc);
+  return doc;
+}
+const setStyles = (node: LayoutNode, styles: Record<string, string>) => Object.assign(node.styles, styles);
+const area = (name: string) => ({
+  "grid-column-start": name,
+  "grid-column-end": name,
+  "grid-row-start": name,
+  "grid-row-end": name,
+});
+const POSITIVES: Record<string, () => LayoutDoc> = {
+  span: () =>
+    placed(
+      "1fr 1fr",
+      "169px 169px",
+      "20px 20px",
+      [
+        [0, 0, 348, 20],
+        [0, 30, 169, 20],
+        [179, 30, 169, 20],
+      ],
+      (d) => void setStyles(d.root.children[0]!, { "grid-column-start": "span 2" }),
+    ),
+  areas: () =>
+    placed(
+      "100px 1fr",
+      "100px 238px",
+      "20px 20px",
+      [
+        [110, 30, 238, 20],
+        [0, 30, 100, 20],
+        [0, 0, 348, 20],
+      ],
+      (d) => {
+        d.root.styles["grid-template-areas"] = '"head head" "side main"';
+        for (const [i, name] of ["main", "side", "head"].entries()) setStyles(d.root.children[i]!, area(name));
+      },
+    ),
+  holes: () =>
+    placed(
+      "repeat(3, 1fr)",
+      "109.333px 109.333px 109.333px",
+      "20px 20px",
+      [
+        [238.667, 0, 109.333, 20],
+        [0, 30, 109.333, 20],
+        [119.333, 30, 109.333, 20],
+      ],
+      (d) => {
+        setStyles(d.root.children[0]!, { "grid-column-start": "3" });
+        setStyles(d.root.children[1]!, { "grid-column-start": "1", "grid-row-start": "2" });
+      },
+    ),
+  justify: () => justify(1),
+  rows: () =>
+    placed(
+      "1fr auto",
+      "278px 60px",
+      "20px 20px 36px",
+      [
+        [0, 0, 278, 20],
+        [0, 30, 278, 20],
+        [288, 0, 60, 50],
+        [0, 60, 278, 36],
+      ],
+      (d) => {
+        d.root.preferredSize!.gridTemplateRows = "auto auto";
+        d.root.styles["grid-auto-rows"] = "36px";
+        setStyles(d.root.children[2]!, {
+          "grid-column-start": "2",
+          "grid-row-start": "1",
+          "grid-row-end": "span 2",
+          "justify-self": "end",
+        });
+        text(d, 2, 1);
+      },
+    ),
+  implicit: () =>
+    placed(
+      undefined,
+      "348px",
+      "11px 11px 20px 20px",
+      [
+        [0, 0, 24, 24],
+        [0, 26, 348, 20],
+        [0, 48, 348, 20],
+      ],
+      (d) => {
+        setStyles(d.root, { "grid-auto-columns": "auto", "row-gap": "2px" });
+        d.root.children[0]!.preferredSize = { width: "24px", height: "24px" };
+        setStyles(d.root.children[0]!, { "grid-row-start": "span 2", "grid-row-end": "span 2" });
+      },
+    ),
+};
+/** `justify-items: start`; Start (auto), End, Center and Stretch; `endLines`: the End cell's text lines. */
+function justify(endLines: number): LayoutDoc {
+  return placed(
+    "1fr 1fr",
+    "169px 169px",
+    "20px 20px",
+    [
+      [0, 0, 50, 20],
+      [308, 0, 40, 20],
+      [54.5, 30, 60, 20],
+      [179, 30, 169, 20],
+    ],
+    (d) => {
+      d.root.styles["justify-items"] = "start";
+      for (const [i, js] of ["auto", "end", "center", "stretch"].entries()) {
+        if (js !== "auto") d.root.children[i]!.styles["justify-self"] = js;
+        text(d, i, i === 1 ? endLines : 1);
+      }
+    },
+  );
+}
+const at = (n: GridNode) => n.template?.items.map((it) => [it.colStart, it.rowStart, it.colSpan, it.rowSpan]);
+
+test("grid placement: spans, areas and holes are admitted with their resolved cells", () => {
+  expect(at(grid(POSITIVES.span!()))).toEqual([
+    [1, 1, 2, 1],
+    [1, 2, 1, 1],
+    [2, 2, 1, 1],
+  ]);
+  const areas = grid(POSITIVES.areas!());
+  expect(at(areas)).toEqual([
+    [2, 2, 1, 1],
+    [1, 2, 1, 1],
+    [1, 1, 2, 1],
+  ]);
+  expect(areas.template?.tracks).toEqual([
+    { kind: "px", px: 100 },
+    { kind: "fr", fr: 1 },
+  ]);
+  expect(at(grid(POSITIVES.holes!()))).toEqual([
+    [3, 1, 1, 1],
+    [1, 2, 1, 1],
+    [2, 2, 1, 1],
+  ]);
+});
+
+test("grid placement: justify-self and justify-items resolve; justified cells hug their content", () => {
+  const n = grid(POSITIVES.justify!());
+  expect(n.template?.items.map((it) => it.justify)).toEqual(["start", "end", "center", "stretch"]);
+  expect(n.children.slice(0, 3).map((c) => c.width)).toEqual([
+    { kind: "fixed", px: 50, hug: true },
+    { kind: "fixed", px: 40, hug: true },
+    { kind: "fixed", px: 60, hug: true },
+  ]);
+});
+
+test("grid placement: explicit auto rows, a px grid-auto-rows and a row span", () => {
+  const n = grid(POSITIVES.rows!());
+  expect(n.template).toMatchObject({
+    tracks: [{ kind: "fr", fr: 1 }, { kind: "auto" }],
+    rows: [{ kind: "auto" }, { kind: "auto" }],
+    autoRow: { kind: "px", px: 36 },
+  });
+  expect(n.template?.items[2]).toMatchObject({ colStart: 2, rowStart: 1, rowSpan: 2, justify: "end" });
+  expect(at(n)?.[3]).toEqual([1, 3, 1, 1]);
+});
+
+test("grid placement: one implicit auto column is a 1fr track (shadcn Alert)", () => {
+  const n = grid(POSITIVES.implicit!());
+  expect(n.template?.tracks).toEqual([{ kind: "fr", fr: 1 }]);
+  expect(n.template?.rows).toBeUndefined();
+  expect(n.template?.items.map((it) => [it.colStart, it.rowStart, it.rowSpan, it.fixed])).toEqual([
+    [1, 1, 2, true],
+    [1, 3, 1, false],
+    [1, 4, 1, false],
+  ]);
+});
+
+test.each<[string, LayoutDoc]>([
+  ["a template line name", POSITIVES.span!()],
+  ["span <name>", POSITIVES.span!()],
+  ["a line past the explicit columns", POSITIVES.span!()],
+  ["two items in one cell", POSITIVES.holes!()],
+  ["grid-auto-flow: row dense", POSITIVES.span!()],
+  ["an item with order: 1", POSITIVES.span!()],
+  ["justify-self: safe end", POSITIVES.justify!()],
+  ["grid-auto-rows: minmax(10px, auto)", POSITIVES.rows!()],
+  ["grid-auto-rows: 30px 40px", POSITIVES.rows!()],
+  ["a justified item with wrapped text and no px width", justify(2)],
+  ["a column span over an auto track", POSITIVES.span!()],
+  ["one implicit column without grid-auto-columns", POSITIVES.implicit!()],
+  ["one implicit column with justify-content: center", POSITIVES.implicit!()],
+  ["an item 2px below its row", POSITIVES.implicit!()],
+  [
+    "an auto-fill grid with a placed item",
+    authored(
+      "repeat(auto-fill, minmax(100px, 1fr))",
+      [
+        [0, 0, 109.333, 20],
+        [119.333, 0, 109.333, 20],
+        [238.667, 0, 109.333, 20],
+      ],
+      (d) => void (d.root.children[1]!.styles["grid-column-start"] = "2"),
+    ),
+  ],
+])("no placement admission: %s", (label, doc) => {
+  const kids = doc.root.children;
+  const EDITS: Record<string, () => void> = {
+    "a template line name": () => void (kids[0]!.styles["grid-column-start"] = "a"),
+    "span <name>": () => void (kids[0]!.styles["grid-column-start"] = "span x"),
+    "a line past the explicit columns": () => void (kids[1]!.styles["grid-column-start"] = "3"),
+    "two items in one cell": () => {
+      for (const k of kids.slice(0, 2)) setStyles(k, { "grid-column-start": "1", "grid-row-start": "1" });
+    },
+    "grid-auto-flow: row dense": () => void (doc.root.styles["grid-auto-flow"] = "row dense"),
+    "an item with order: 1": () => void (kids[1]!.styles.order = "1"),
+    "justify-self: safe end": () => void (kids[1]!.styles["justify-self"] = "safe end"),
+    "grid-auto-rows: minmax(10px, auto)": () => void (doc.root.styles["grid-auto-rows"] = "minmax(10px, auto)"),
+    "grid-auto-rows: 30px 40px": () => void (doc.root.styles["grid-auto-rows"] = "30px 40px"),
+    "a column span over an auto track": () => void (doc.root.preferredSize!.gridTemplateColumns = "auto 1fr"),
+    "one implicit column without grid-auto-columns": () => void delete doc.root.styles["grid-auto-columns"],
+    "one implicit column with justify-content: center": () => void (doc.root.styles["justify-content"] = "center"),
+    "an item 2px below its row": () => void (kids[1]!.bounds.y += 2),
+  };
+  EDITS[label]?.();
+  const n = grid(doc);
+  expect(n.template).toBeUndefined();
+  expect(pinned(n)).toBe(true);
+});
+
+test("placed grids emit rows and .markswiftGridCell in app; fidelity is byte-identical to the unadmitted grid", () => {
+  const app = (doc: LayoutDoc) => compileLayout(doc, { name: "GridView", mode: "app" }).code;
+  const rows = app(POSITIVES.rows!());
+  expect(rows).toContain(
+    "MarkswiftTracks(tracks: [.fr(1.0), .auto], rows: [.auto, .auto], autoRow: .px(36.0), hSpacing: 10.0, vSpacing: 10.0) {",
+  );
+  expect(rows).toContain(".markswiftGridCell(column: 2, row: 1, rowSpan: 2, justify: .end)");
+  expect(rows).toContain(".markswiftGridCell(column: 1, row: 3)");
+  expect(rows).toContain(".markswiftFitWidth()");
+  expect(app(POSITIVES.span!())).toContain(".markswiftGridCell(column: 1, row: 1, columnSpan: 2)");
+  const implicit = app(POSITIVES.implicit!());
+  expect(implicit).toContain("MarkswiftTracks(tracks: [.fr(1.0)], hSpacing: 10.0, vSpacing: 2.0) {");
+  expect(implicit).toContain(".markswiftGridCell(column: 1, row: 1, rowSpan: 2)");
+  for (const [name, make] of Object.entries(POSITIVES)) {
+    const input = make();
+    expect(grid(input).template, name).toBeDefined();
+    const plain = structuredClone(input);
+    delete plain.root.preferredSize?.gridTemplateColumns;
+    delete plain.root.styles["grid-auto-columns"];
+    const fidelity = compileLayout(input, { name: "GridView", mode: "fidelity" });
+    const reference = compileLayout(plain, { name: "GridView", mode: "fidelity" });
+    expect(fidelity.code, name).toBe(reference.code);
+    expect(fidelity.diagnostics, name).toEqual(reference.diagnostics);
+  }
 });
