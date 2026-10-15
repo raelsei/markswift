@@ -368,6 +368,8 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
   (iPad and landscape layouts included). Paint-only pressed and focused deltas *are* captured; other states (hover
   only, disabled, validation, open/checked, `data-state` variants) are not.
 - Dialogs and popovers.
+- Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
+  (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - CSS animations and transitions (captured at their end state, reported).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
 - `<select multiple>` and `<datalist>`.
