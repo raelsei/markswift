@@ -634,7 +634,7 @@ export default {
       ir: "ConversionWarning",
       via: "none",
       impl: "yes",
-      note: "One viewport per capture. `@media` rules with a width/height/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning; breakpoint branching is post-1.0.",
+      note: "One viewport per capture. `@media` rules with a width/height/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning. The capture records each size condition in `LayoutDoc.conditions` and marks the elements its rules match (`LayoutNode.conditional`); `convert({ breakpoints })` captures one layout per width band.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/@media",
     },
     {
@@ -645,7 +645,7 @@ export default {
       ir: "ConversionWarning",
       via: "none",
       impl: "yes",
-      note: "One viewport per capture. `@container` rules with a width/height/inline-size/block-size/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning; breakpoint branching is post-1.0.",
+      note: "One viewport per capture. `@container` rules with a width/height/inline-size/block-size/aspect-ratio/orientation condition that restyle captured elements are reported as a capture warning. The capture records each size condition in `LayoutDoc.conditions` and marks the elements its rules match (`LayoutNode.conditional`); `convert({ breakpoints })` captures one layout per width band.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/@container",
     },
 

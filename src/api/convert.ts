@@ -1,16 +1,15 @@
-import type { Page } from "playwright-core";
 import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
-import { BrowserCapture, type Capture } from "../browser/capture.ts";
+import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
-import { compileLayout, needsProbe } from "../compiler/index.ts";
+import { compileLayout, DEFAULT_BAND_DEVICES, needsProbe, planBands } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
-import { htmlIdentity } from "../input/identity.ts";
 import type { HtmlSource } from "../input/types.ts";
-import type { FontFace, Theme } from "../model/layout.ts";
+import type { FontFace } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
+import { captureBands, captureThemes } from "./bands.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -24,6 +23,14 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   ) {
     throw new Error("viewport dimensions must be positive integers and dpr must be positive and finite");
   }
+  const bp = options.breakpoints;
+  if (
+    bp !== undefined &&
+    bp !== true &&
+    (!(bp.devices ?? []).every((d) => [d.width, d.height].every((n) => Number.isInteger(n) && n > 0)) ||
+      (bp.max !== undefined && !(Number.isInteger(bp.max) && bp.max >= 320)))
+  )
+    throw new Error("breakpoints devices must be positive integer sizes and max an integer ≥ 320");
   const timeoutMs = options.timeoutMs ?? 120_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be positive and finite");
   if (["html", "file", "url"].filter((key) => key in source).length !== 1)
@@ -73,26 +80,37 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       waitFor: options.waitFor,
       prepare: options.prepare,
     };
-    const { primary: capture, dark } = await captureThemes(renderer, req, timedOut);
+    const first = await captureThemes(renderer, req, timedOut);
+    const plan = bp
+      ? planBands(first.primary.layout.conditions, {
+          first: viewport,
+          devices: (bp === true ? undefined : bp.devices) ?? DEFAULT_BAND_DEVICES,
+          max: (bp === true ? undefined : bp.max) ?? 1376,
+        })
+      : undefined;
+    const bands = plan ? await captureBands(renderer, req, { viewport, captured: first }, plan, timedOut) : [first];
+    const { primary: capture, dark } = bands[0]!;
     // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
     // show another allocation, so its probe proves nothing and is not compiled.
+    const probeWidth = plan ? plan.probes[0] : viewport.width > 320 ? 320 : 390;
     const probe =
-      options.probe !== false && needsProbe(capture.layout)
+      options.probe !== false && probeWidth !== undefined && needsProbe(capture.layout)
         ? (
             await captureThemes(
               renderer,
               {
                 ...req,
                 theme: capture.layout.combo.theme,
-                viewport: { width: viewport.width > 320 ? 320 : 390, height: viewport.height },
+                viewport: { width: probeWidth, height: plan?.captures[0]?.height ?? viewport.height },
               },
               timedOut,
             )
           ).primary.layout
         : undefined;
-    const sources = new Map([...capture.fontFiles, ...(dark?.fontFiles ?? [])].map((f) => [f.file, f.bytes]));
+    const captures = bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary]));
+    const sources = new Map(captures.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
-      dark ? unionFaces([capture.layout.fonts, dark.layout.fonts]) : capture.layout.fonts,
+      captures.length > 1 ? unionFaces(captures.map((c) => c.layout.fonts)) : capture.layout.fonts,
       sources,
       undefined,
       deadline,
@@ -112,15 +130,30 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
       compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
     }
-    const pageWarnings = dark
-      ? [...new Map([...capture.warnings, ...dark.warnings].map((w) => [w.message, w])).values()]
-      : capture.warnings;
+    const pageWarnings =
+      captures.length > 1
+        ? [...new Map(captures.flatMap((c) => c.warnings).map((w) => [w.message, w])).values()]
+        : capture.warnings;
+    const notes = (plan?.notes ?? []).map((message) => ({
+      source: "capture" as const,
+      level: "approximated" as const,
+      feature: "media-query",
+      message,
+    }));
     return {
       ...compiled,
       assets,
-      warnings: [...pageWarnings, ...fonts.notes, ...compiled.warnings],
+      warnings: [...pageWarnings, ...notes, ...fonts.notes, ...compiled.warnings],
       layout: capture.layout,
       ...(dark ? { darkLayout: dark.layout } : {}),
+      ...(plan
+        ? {
+            bands: bands.map((b) => ({
+              layout: b.primary.layout,
+              ...(b.dark ? { darkLayout: b.dark.layout } : {}),
+            })),
+          }
+        : {}),
     };
   } catch (error) {
     if (deadline.aborted) throw new Error(`conversion timed out after ${timeoutMs} ms`, { cause: error });
@@ -133,54 +166,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       prepared?.close();
     }
   }
-}
-
-/**
- * Capture one page in its theme(s), each raced against `timedOut`. Adaptive: two captures in one browser session;
- * the light one is emitted, the dark one pairs its colours.
- */
-export async function captureThemes(
-  renderer: BrowserCapture,
-  req: {
-    name: string;
-    url: string;
-    html?: string;
-    label: string;
-    root: string;
-    theme: Theme | "adaptive";
-    css?: string;
-    darkClass?: string;
-    waitFor?: string;
-    prepare?: (page: Page) => Promise<void>;
-    viewport?: { width: number; height: number };
-  },
-  timedOut: Promise<never>,
-): Promise<{ primary: Capture; dark?: Capture }> {
-  const shot = (scheme: Theme) =>
-    Promise.race([
-      renderer.capture(
-        {
-          screen: req.name,
-          theme: scheme,
-          url: req.url,
-          html: req.html,
-          root: req.root,
-          waitFor: req.waitFor,
-          viewport: req.viewport,
-          async prepare(page) {
-            if (req.css) await page.addStyleTag({ content: req.css });
-            if (scheme === "dark" && req.darkClass)
-              await page.evaluate((c) => document.documentElement.classList.add(c), req.darkClass);
-            await req.prepare?.(page);
-          },
-        },
-        htmlIdentity,
-        req.label,
-      ),
-      timedOut,
-    ]);
-  const primary = await shot(req.theme === "dark" ? "dark" : "light");
-  return req.theme === "adaptive" ? { primary, dark: await shot("dark") } : { primary };
 }
 
 /**
