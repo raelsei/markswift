@@ -52,8 +52,10 @@ stylesheet, and `--url http://localhost:5173/card --root '#preview'` for a runni
 Options (`npx markswift convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
 `ConvertedView`), `--root <selector>`, `--width`/`--height` (default 390 × 844),
 `--theme adaptive|light|dark` (default `adaptive`), `--dark-class <name>`, `--mode app|fidelity`
-(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options or hand-edited files
-refused by `--update`, 1 conversion or file error. Warnings and diagnostics go to stderr.
+(default `app`), `--css <file>`, `--url <url>`, `--breakpoints <auto|W[xH],…>` (one capture per CSS width band — auto:
+390, 834×1210, 1210×834, 1376×1032 — and one view that switches at the CSS thresholds). Exit status: 0 converted,
+2 invalid options or hand-edited files refused by `--update`, 1 conversion or file error. Warnings and diagnostics go
+to stderr.
 
 ## What you get
 
@@ -153,18 +155,21 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   recompiles a saved `LayoutDoc` (version 4) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
   cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
   and rejects any other with an error naming both versions — recapture the source. A change to the captured style
-  list or the schema bumps the LayoutDoc version and is a breaking release.
+  list or the schema bumps the LayoutDoc version and is a breaking release. `compileLayout(layout, { variants,
+  darkVariants, variantProbes })` compiles saved width-band captures (ascending, `layout` is band 0) into one view.
 - Options: `name`, `mode` (`app` | `fidelity`), `theme` (`adaptive` | `light` | `dark`),
   `darkClass`, `css` (compiled CSS), `root` (default `[data-markswift-root]`, otherwise `body`),
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion), `breakpoints` (`true` or
-  `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`). Open states need no option: triggers
+  `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`, and emits one view whose differing
+  elements switch at the CSS thresholds through `MarkswiftBands`). Open states need no option: triggers
   are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native `popovertarget`/`commandfor`/`interestfor`/
   `<details>`, shadcn `data-slot`, `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
   in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`, not yet emitted.
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
-  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`;
+  the view does not follow, font packaging, light/dark pairing, width-band merging), `layout` and, for adaptive
+  conversions, `darkLayout`;
   with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`).
 
 ## Modes
@@ -364,9 +369,11 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- Breakpoint branching: one viewport and one layout per capture, media and container queries are not reconstructed
-  (iPad and landscape layouts included). Paint-only pressed and focused deltas *are* captured; other states (hover
-  only, disabled, validation, open/checked, `data-state` variants) are not.
+- Breakpoint branching without `--breakpoints`: one viewport and one layout per capture. With it, CSS width media
+  queries switch the view at the root's proposed width; height, orientation and container queries are reported, a
+  fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band. Paint-only
+  pressed and focused deltas *are* captured; other states (hover only, disabled, validation, open/checked,
+  `data-state` variants) are not.
 - Dialogs and popovers.
 - CSS animations and transitions (captured at their end state, reported).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
@@ -461,7 +468,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
+- Dialogs and popovers; validation and `data-state` variants; CSS animations;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`, an author `unicode-bidi`.
