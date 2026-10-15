@@ -165,13 +165,36 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
     let keep = 0;
     while (keep < open.length && open[keep] === chain[keep]) keep++;
     const prev = built[i - 1];
-    if (prev) edit(prev, open.slice(keep).reverse().map((el) => marks(el, false).close).join(""), true);
-    edit(b, chain.slice(keep).map((el) => marks(el, false).open).join(""), false);
+    if (prev)
+      edit(
+        prev,
+        open
+          .slice(keep)
+          .reverse()
+          .map((el) => marks(el, false).close)
+          .join(""),
+        true,
+      );
+    edit(
+      b,
+      chain
+        .slice(keep)
+        .map((el) => marks(el, false).open)
+        .join(""),
+      false,
+    );
     open = chain;
   });
   const last = built[built.length - 1];
   if (!last) return;
-  edit(last, open.reverse().map((el) => marks(el, false).close).join(""), true);
+  edit(
+    last,
+    open
+      .reverse()
+      .map((el) => marks(el, false).close)
+      .join(""),
+    true,
+  );
   if (own) {
     edit(built[0]!, own.open, false);
     edit(last, own.close, true);

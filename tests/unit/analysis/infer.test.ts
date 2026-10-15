@@ -83,9 +83,13 @@ describe("text groups", () => {
 
   test("bdo overrides and bdi isolates their runs with Unicode bidi controls, in the computed direction", () => {
     const inline = (tag: string, dir: string, text: string, x: number, attrs: Record<string, string> = {}) =>
-      el(tag, { x, y: 0, w: 40, h: 20 }, { display: "inline", direction: dir }, [
-        textNode(text, { x, y: 3, w: 40, h: 14 }),
-      ], attrs);
+      el(
+        tag,
+        { x, y: 0, w: 40, h: 20 },
+        { display: "inline", direction: dir },
+        [textNode(text, { x, y: 3, w: 40, h: 14 })],
+        attrs,
+      );
     const p = el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
       textNode("a ", { x: 0, y: 3, w: 10, h: 14 }),
       inline("bdo", "rtl", "rev", 10, { dir: "rtl" }),
