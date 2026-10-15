@@ -235,11 +235,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       const out = wrap(`Toggle(isOn: ${binding}) {`, body(n, deps), ["}", `.toggleStyle(${style})`]);
       if (style === ".switch" && n.accent) out.push(`.tint(${tint})`);
       // The drawn style ignores the label, so VoiceOver gets a plain Toggle named by the `<label>`
-      // (or `aria-label`); the representation does not inherit the visible style.
+      // (or `aria-label`); the representation does not inherit the visible style. Its label is no
+      // `Text`: one would be laid out in the mark's frame (growing it) and audited as clipped text.
       if (n.a11y?.label)
         out.push(
           ".accessibilityRepresentation {",
-          `    Toggle(isOn: ${binding}) { Text(verbatim: ${str(n.a11y.label)}) }`,
+          `    Toggle(isOn: ${binding}) { EmptyView() }.accessibilityLabel(Text(verbatim: ${str(n.a11y.label)}))`,
           "}",
         );
       return out;

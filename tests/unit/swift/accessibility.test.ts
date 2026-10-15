@@ -91,7 +91,7 @@ test("app-mode system fonts scale with Dynamic Type; fidelity and SVG text stay 
   expect(svg).not.toContain("@ScaledMetric");
 });
 
-test("app-mode letter-spacing scales with the Dynamic Type size it rides on; fidelity keeps the px", () => {
+test("app-mode captions scale with .caption, never .caption2; letter-spacing scales with the size; fidelity keeps px", () => {
   const caption: LayoutNode = {
     tag: "p",
     id: "cap",
@@ -100,7 +100,11 @@ test("app-mode letter-spacing scales with the Dynamic Type size it rides on; fid
     bounds: { x: 0, y: 0, w: 320, h: 14 },
     children: [text("VARIANTS", 0, 0, 60, 14)],
   };
-  expect(swift([caption], "app")).toContain(".kerning(textSize10 * 0.5 / 10.0)");
+  const app = swift([caption], "app");
+  // The accessibility audit reports any `.caption2`-relative font (even `.font(.caption2)`) as partially unsupported.
+  expect(app).toContain("@ScaledMetric(relativeTo: .caption) private var textSize10: CGFloat = 10.0");
+  expect(app).not.toContain(".caption2");
+  expect(app).toContain(".kerning(textSize10 * 0.5 / 10.0)");
   expect(swift([caption], "fidelity")).toContain(".kerning(0.5)");
 });
 
@@ -278,7 +282,10 @@ test("a <label> names its control, and tapping it toggles a checkbox", () => {
   expect(viewOf(app, 'TextField("you@example.com"')).toContain('.accessibilityLabel("Email")');
   const rep = app.indexOf(".accessibilityRepresentation {");
   expect(rep).toBeGreaterThan(-1);
-  expect(app.slice(rep)).toContain('Toggle(isOn: $s_rememberBox) { Text(verbatim: "Remember me") }');
+  // No Text in the representation: a label Text in the mark's small frame is clipped text to the audit and grows the frame.
+  expect(app.slice(rep)).toContain(
+    'Toggle(isOn: $s_rememberBox) { EmptyView() }.accessibilityLabel(Text(verbatim: "Remember me"))',
+  );
   expect(viewOf(app, "private var v_remember: some View")).toContain(".onTapGesture { s_rememberBox.toggle() }");
   expect(viewOf(app, "private var v_off: some View")).not.toContain(".onTapGesture");
   const work = viewOf(app, 'TextField("", text: $s_work)');

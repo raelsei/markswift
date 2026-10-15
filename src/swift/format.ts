@@ -185,7 +185,13 @@ const WEIGHT_NAMES: Array<[number, string]> = [
   [900, "black"],
 ];
 
-/** Default point size of each `Font.TextStyle` at the standard content size — the table `relativeTo:` scales against. */
+/**
+ * Default point size of each `Font.TextStyle` at the standard content size — the table `relativeTo:` scales against.
+ * No `.caption2` (11): Xcode's accessibility audit reports every `.caption2`-relative font, `.font(.caption2)`
+ * included, as partially supporting Dynamic Type at xSmall, large and AX5, while the same 10–11 pt sizes relative
+ * to `.caption` pass, so the smallest text scales with `.caption`. ponytail: measured on iOS 27 (iPhone 17,
+ * 2026-10-15); re-measure when the audit changes.
+ */
 const TEXT_STYLE_SIZES: Array<[number, string]> = [
   [34, "largeTitle"],
   [28, "title"],
@@ -196,7 +202,6 @@ const TEXT_STYLE_SIZES: Array<[number, string]> = [
   [15, "subheadline"],
   [13, "footnote"],
   [12, "caption"],
-  [11, "caption2"],
 ];
 
 /** The `Font.TextStyle` whose default size is nearest `size`: what an app-mode font scales with. */

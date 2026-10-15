@@ -41,7 +41,6 @@ const AX3_FACTOR: Record<string, number> = {
   subheadline: 2.15,
   footnote: 2.22,
   caption: 2.44,
-  caption2: 2.69,
 };
 
 interface Known {
