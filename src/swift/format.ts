@@ -58,7 +58,16 @@ export function str(s: string): string {
     else if (ch === "\r") out += "\\r";
     else if (ch === "\t") out += "\\t";
     else if (c >= 0xd800 && c <= 0xdfff) out += "\uFFFD";
-    else if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029) out += `\\u{${c.toString(16)}}`;
+    // Bidi controls (`<bdo>`/`<bdi>` runs) are escaped so the source does not reorder on screen.
+    else if (
+      c < 0x20 ||
+      (c >= 0x7f && c <= 0x9f) ||
+      c === 0x2028 ||
+      c === 0x2029 ||
+      (c >= 0x202a && c <= 0x202e) ||
+      (c >= 0x2066 && c <= 0x2069)
+    )
+      out += `\\u{${c.toString(16)}}`;
     else out += ch;
   }
   return out + '"';

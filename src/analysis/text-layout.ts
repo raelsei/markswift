@@ -126,6 +126,59 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
 }
 
 /**
+ * The UA's `unicode-bidi` of an element: `<bdo>` isolates and overrides, `<bdi>`, `<output>` and any
+ * `[dir]` isolate. A text host's own `<bdo>` only overrides: isolating the whole paragraph would hide
+ * its strong characters from the base-direction rule. ponytail: tag and `dir` only; an author
+ * `unicode-bidi` (`span { unicode-bidi: bidi-override }`) is not captured — LayoutDoc 4.
+ */
+function bidiOf(el: LayoutNode, host: boolean): { isolate: boolean; override: boolean } | undefined {
+  if (el.tag === "bdo") return { isolate: !host, override: true };
+  if (host || (el.tag !== "bdi" && el.tag !== "output" && el.attrs["dir"] === undefined)) return undefined;
+  return { isolate: true, override: false };
+}
+
+/**
+ * Bidi isolation and override as Unicode controls around each element's runs: SwiftUI has no
+ * per-run direction, and Core Text runs UAX #9 over the controls (LRI/RLI…PDI, LRO/RLO…PDF). The
+ * direction is the computed one, which Chrome already resolved for `dir=auto` from the content.
+ * Call after trimming and before `markLineBreaks`; the controls map to no source index.
+ */
+export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
+  const marks = (el: LayoutNode, isHost: boolean) => {
+    const b = bidiOf(el, isHost)!;
+    const rtl = el.styles["direction"] === "rtl";
+    return {
+      open: (b.isolate ? (rtl ? "\u2067" : "\u2066") : "") + (b.override ? (rtl ? "\u202E" : "\u202D") : ""),
+      close: (b.override ? "\u202C" : "") + (b.isolate ? "\u2069" : ""),
+    };
+  };
+  const own = bidiOf(host, true) ? marks(host, true) : undefined;
+  const edit = (b: MeasuredTextRun, s: string, end: boolean) => {
+    if (!s) return;
+    b.run.text = end ? b.run.text + s : s + b.run.text;
+    const pad = Array.from(s, () => -1);
+    b.src = end ? [...b.src, ...pad] : [...pad, ...b.src];
+  };
+  let open: LayoutNode[] = [];
+  built.forEach((b, i) => {
+    const chain = inlineChain(host, b.styleOf).filter((el) => bidiOf(el, false));
+    let keep = 0;
+    while (keep < open.length && open[keep] === chain[keep]) keep++;
+    const prev = built[i - 1];
+    if (prev) edit(prev, open.slice(keep).reverse().map((el) => marks(el, false).close).join(""), true);
+    edit(b, chain.slice(keep).map((el) => marks(el, false).open).join(""), false);
+    open = chain;
+  });
+  const last = built[built.length - 1];
+  if (!last) return;
+  edit(last, open.reverse().map((el) => marks(el, false).close).join(""), true);
+  if (own) {
+    edit(built[0]!, own.open, false);
+    edit(last, own.close, true);
+  }
+}
+
+/**
  * The browser's line division, re-expressed as offsets into each run's laid-out text.
  *
  * A measured box is an inline *fragment*, not a line: Blink splits one at every collapsed

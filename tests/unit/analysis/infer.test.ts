@@ -80,6 +80,27 @@ describe("text groups", () => {
     expect(texts).toHaveLength(1);
     expect(texts[0]?.runs.map((r) => r.text)).toEqual(["hello"]);
   });
+
+  test("bdo overrides and bdi isolates their runs with Unicode bidi controls, in the computed direction", () => {
+    const inline = (tag: string, dir: string, text: string, x: number, attrs: Record<string, string> = {}) =>
+      el(tag, { x, y: 0, w: 40, h: 20 }, { display: "inline", direction: dir }, [
+        textNode(text, { x, y: 3, w: 40, h: 14 }),
+      ], attrs);
+    const p = el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
+      textNode("a ", { x: 0, y: 3, w: 10, h: 14 }),
+      inline("bdo", "rtl", "rev", 10, { dir: "rtl" }),
+      textNode(" b ", { x: 50, y: 3, w: 10, h: 14 }),
+      inline("bdi", "ltr", "iso", 60),
+      textNode(" c ", { x: 100, y: 3, w: 10, h: 14 }),
+      inline("span", "rtl", "sp", 110, { dir: "rtl" }),
+      textNode(" d", { x: 150, y: 3, w: 10, h: 14 }),
+    ]);
+    const root = el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [p]);
+    const text = flatten(inferScreen(doc(root), "s").root).find((n): n is TextNode => n.kind === "text")!;
+    expect(text.runs.map((r) => r.text).join("|")).toBe(
+      "a |\u2067\u202Erev\u202C\u2069| b |\u2066iso\u2069| c |\u2067sp\u2069| d",
+    );
+  });
 });
 
 describe("line height", () => {

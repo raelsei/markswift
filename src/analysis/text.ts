@@ -21,6 +21,7 @@ import {
   markBaselineShifts,
   inlineFragments,
   withInlineGaps,
+  markBidi,
 } from "./text-layout.ts";
 import { fontOf, SYSTEM_DESIGNS } from "./typography.ts";
 import { styleOf } from "./style.ts";
@@ -284,6 +285,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
   if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse")
     trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
+  markBidi(built, host);
   const measured = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
