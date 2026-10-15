@@ -64,6 +64,33 @@ nativeTest(
 );
 
 nativeTest(
+  "font axes: a system font-stretch width and markswiftVariable(axes:) typecheck in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-axes-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml('<main data-markswift-root><p style="font-stretch:75%">Narrow</p></main>', {
+          name: "AxesCard",
+          mode,
+        });
+        if (mode === "app") expect(result.code).toContain(".width(Font.Width(-0.1))");
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        await Bun.write(
+          join(output, "Axes.swift"),
+          'import SwiftUI\nfunc axesProbe() -> Font { .markswiftVariable("Geist", size: 14, weight: 650, axes: ["wdth": 80]) }\n',
+        );
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
+
+nativeTest(
   "public conversion renders on macOS in both modes",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-mac-"));

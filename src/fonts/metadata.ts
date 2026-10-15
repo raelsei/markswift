@@ -13,10 +13,12 @@ export function bundledFamilies(pkg: FontPackage): BundledFamilies {
     if (f.style !== "normal") continue; // `fontOf` resolves a family, not a face; italic is a run flag.
     // A family shipped as several static weights is one family covering their union.
     const prev = out[f.family];
+    const { wght: _w, opsz: _o, ...axes } = f.axes;
     out[f.family] = {
       weight: prev ? [Math.min(prev.weight[0], f.weight[0]), Math.max(prev.weight[1], f.weight[1])] : f.weight,
       ...(f.axes["wght"] ? { wght: f.axes["wght"] } : prev?.wght ? { wght: prev.wght } : {}),
       ...(f.axes["opsz"] ? { opsz: f.axes["opsz"] } : prev?.opsz ? { opsz: prev.opsz } : {}),
+      ...(Object.keys(axes).length ? { axes } : prev?.axes ? { axes: prev.axes } : {}),
     };
   }
   return out;

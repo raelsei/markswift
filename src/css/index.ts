@@ -8,6 +8,6 @@ export { type TransformLoss, parseTransform, parseOrigin, cssTransform } from ".
 export { parseFilters, parseClipPath } from "./effects.ts";
 export { parseBackgroundRepeat, parseBackgroundSize, parseBackgroundPosition } from "./background.ts";
 export { rasterSize } from "./raster.ts";
-export { fontWeight, fontFamilies } from "./typography.ts";
+export { fontWeight, fontFamilies, fontStretch, variationSettings } from "./typography.ts";
 export { parseRadiusXY } from "./radius.ts";
 export { parseTrackTemplate, resolvedGridTracks } from "./grid.ts";

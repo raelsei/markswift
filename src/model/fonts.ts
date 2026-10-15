@@ -6,6 +6,8 @@ export interface BundledFamily {
   wght?: [number, number];
   /** `opsz` axis range, when the file has one — `font-size` is clamped into it. */
   opsz?: [number, number];
+  /** Variation axes other than `wght`/`opsz` the file declares (`wdth`, `GRAD`, …), by tag. */
+  axes?: Record<string, [number, number]>;
 }
 
 export type BundledFamilies = Readonly<Record<string, BundledFamily>>;

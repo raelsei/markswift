@@ -190,6 +190,10 @@ export interface FontSpec {
   weight: number;
   /** Optical size axis value when the family has one (Chrome uses font-size). */
   opsz?: number;
+  /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
+  stretch?: number;
+  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
 }
