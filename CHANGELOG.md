@@ -7,6 +7,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 ### Changed (breaking)
 - LayoutDoc 4: saved LayoutDoc 3 captures (1.x `layout.json`) are rejected by `compileLayout` with an error naming both versions; recapture the source. LayoutDoc 4 records 26 more computed properties (grid placement, table spacing and layout, `content`, list-style image/type, `pointer-events`, `fill-rule`, `empty-cells`, `color-scheme`, `unicode-bidi`, variable-font axes, container and top-layer properties), the `::placeholder` style of text fields, and a required `viewport` and `conditions` list. Two values change meaning: `preferredSize.insets` is now also recorded for `position: relative` and `sticky`, and `::before`/`::after`/`::marker` nodes gain an `img` child per image the browser drew from `content: url()` or `list-style-image`. Generated Swift is unchanged.
 
+### Added
+- LayoutDoc 4 records the page's size conditions (`conditions`: `@media`/`@container` query, whether it holds, the query container) and marks the elements their rules match (`conditional`). `convert({ breakpoints })` captures one layout per CSS width band (devices 390/834/1210/1376 px up to 1376 px; uncovered bands at their lower bound) and returns them as `bands`.
+
 ## [1.1.0] — 2026-10-15
 
 Ports the capture-free improvements of the archived core-alpha line (CSS flex freeze loop, grid `minmax` floors, live
