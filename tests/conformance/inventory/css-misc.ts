@@ -483,7 +483,7 @@ export default {
       ir: "—",
       via: "none",
       impl: "yes",
-      note: "Whitelisted. `auto`: native checkbox/radio/range ignore the author's background and border (dropped); an unstyled button or text field (no author background, border or radius; a text field also no `box-shadow`) paints Chrome's theme (1px edge, 2px corners) instead of its computed `2px outset`/`2px inset` border; `none`: the CSS box is painted and `<select>` loses its arrow.",
+      note: "Whitelisted. `auto`: native checkbox/radio/range ignore the author's background and border (dropped); an unstyled button or text field (no author background, border or radius; a text field also no `box-shadow`) paints Chrome's theme (1px edge, 2px corners) instead of its computed `2px outset`/`2px inset` border, and an unstyled button takes Chrome's pressed theme (fill and edge) while pressed; `none`: the CSS box is painted and `<select>` loses its arrow.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/appearance",
     },
     {
@@ -588,7 +588,7 @@ export default {
       ir: "`LayoutNode.states.pressed` / `SemBase.states.pressed`",
       via: "style",
       impl: "yes",
-      note: "Paint-only: backgrounds, text, border, outline and shadow colours, opacity, scale. Gradient/filter/non-scale-transform changes and layout-changing styles are reported, not reproduced; deltas outside a Button are reported.",
+      note: "Paint-only: backgrounds, text, border, outline and shadow colours, opacity, scale. Gradient/filter/non-scale-transform changes and layout-changing styles are reported, not reproduced; deltas outside a Button are reported. An unstyled theme-painted button has no computed delta but gets Chrome's pressed theme (measured fill and edge per colour scheme).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/:active",
     },
     {
