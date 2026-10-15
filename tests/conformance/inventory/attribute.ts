@@ -49,6 +49,17 @@ export default {
       spec: "https://developer.mozilla.org/docs/Web/HTML/Global_attributes/data-*",
     },
     {
+      id: "@data-markswift-opens",
+      group: "NodeIdentity & styling",
+      class: "mapped",
+      target: "open-state capture of the element's layer",
+      ir: "LayoutDoc.layers",
+      via: "attribute",
+      impl: "yes",
+      note: "`click`, `hover` or `contextmenu`: the open-state pass activates the element that way in its own page and records what gains layout as a layer; any other value is reported and the element is not opened. Captured, not yet emitted.",
+      spec: "https://developer.mozilla.org/docs/Web/HTML/Global_attributes/data-*",
+    },
+    {
       id: "@id",
       group: "NodeIdentity & styling",
       class: "non-visual",

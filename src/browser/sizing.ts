@@ -14,6 +14,7 @@ export async function readPreferredSizes(
     const root = document.querySelector(selector);
     if (!root) throw new Error(`capture root ${selector} not found`);
     const PLACEHOLDER_KEYS = ["color", "-webkit-text-fill-color", "opacity", "font-style", "font-weight"];
+    const BACKDROP_KEYS = ["background-color", "background-image", "opacity", "filter"];
     const out: Record<string, PreferredSize> = {};
     const pseudoStyles: PseudoStyles = {};
     const walk = (el: Element, path: string) => {
@@ -45,6 +46,18 @@ export async function readPreferredSizes(
         const ph = getComputedStyle(el, "::placeholder");
         pseudoStyles[path] = {
           placeholder: Object.fromEntries(PLACEHOLDER_KEYS.map((k) => [k, ph.getPropertyValue(k)])),
+        };
+      }
+      // A top-layer element (`showModal()`, `showPopover()`, fullscreen) paints its `::backdrop` over the viewport.
+      // Typed OM reports `overlay: none` there; getComputedStyle has the used value.
+      if (
+        el.matches(":modal, :popover-open, :fullscreen") &&
+        getComputedStyle(el).getPropertyValue("overlay") === "auto"
+      ) {
+        const bd = getComputedStyle(el, "::backdrop");
+        pseudoStyles[path] = {
+          ...pseudoStyles[path],
+          backdrop: Object.fromEntries(BACKDROP_KEYS.map((k) => [k, bd.getPropertyValue(k)])),
         };
       }
       Array.from(el.children).forEach((child, i) => {

@@ -8,14 +8,25 @@
 import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
-import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type LayoutDoc } from "../model/layout.ts";
-import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, type DomSnapshot } from "./snapshot.ts";
+import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
+import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, rawAt, type DomSnapshot } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
-import type { NodeIdentity, CaptureRequest } from "../input/types.ts";
+import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
 import { captureStates } from "./states.ts";
+import {
+  LAYER_MARK,
+  assembleLayer,
+  dismissCandidates,
+  findTriggers,
+  openLayer,
+  probeDismiss,
+  rootHidden,
+  triggerPaint,
+  type DismissCandidate,
+} from "./layers.ts";
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
@@ -57,6 +68,11 @@ export interface Capture {
    * faces collapse onto one entry.
    */
   fontFiles: Array<{ file: string; bytes: Uint8Array }>;
+  /** Rest captures: what the open-state pass activates (`browser/layers.ts`), in document order. */
+  triggers?: Trigger[];
+  /** `spec.open` captures whose trigger opened something: the layer, the open root size, and the trigger-subtree
+   * paint while open (LayoutNode id → delta). */
+  opened?: { layer: Layer; size: { w: number; h: number }; openPaint: Record<string, Record<string, string>> };
 }
 
 export interface CaptureOptions {
@@ -202,6 +218,7 @@ export class BrowserCapture {
       const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
       await settle(page);
+      const cdp = await this.context.newCDPSession(page);
       await Promise.all(sheetReads);
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
       for (const href of unreadable)
@@ -246,14 +263,49 @@ export class BrowserCapture {
         },
         { sel: spec.root, mark: ROOT_MARK },
       );
-      const cdp = await this.context.newCDPSession(page);
+      const rootSel = `[${ROOT_MARK}="1"]`;
+      const found = spec.open ? undefined : await findTriggers(page, rootSel);
+      errors.push(...(found?.warnings ?? []));
+      // Open path (`spec.open`): activate the trigger, mark the roots of what gained layout.
+      const opening = spec.open && (await openLayer(page, cdp, rootSel, ROOT_MARK, spec.open));
+      if (spec.open && !opening) errors.push(`trigger ${spec.open.id} is not in its open-state page; nothing opened`);
+      const roots = await Promise.all(
+        (opening ? opening.roots : []).map(async (_, i) => (await page.$(`[${LAYER_MARK}="${i}"]`))!),
+      );
+      // 066: enter read — roots[i] ↔ layer.nodes[i], before settle
+      if (opening) {
+        // Drops the :focus-visible ring the content took when it opened.
+        await settle(page);
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await settle(page);
+      }
+      const rootInfo = roots.length
+        ? await page.evaluate(
+            (mark) =>
+              [...document.querySelectorAll(`[${mark}]`)]
+                .sort((a, b) => Number(a.getAttribute(mark)) - Number(b.getAttribute(mark)))
+                .map((el) => {
+                  const cs = getComputedStyle(el);
+                  return {
+                    modal: el.matches(":modal"),
+                    anchored:
+                      cs.getPropertyValue("position-area") !== "none" ||
+                      cs.getPropertyValue("position-anchor") !== "normal",
+                  };
+                }),
+            LAYER_MARK,
+          )
+        : [];
+      const hiddenOnOpen = !!opening && roots.length > 0 && !opening.hidden && (await rootHidden(page, rootSel));
       const conditional = await readConditionalRules(page, spec.root, viewport.width);
       const { sizes, pseudoStyles } = await readPreferredSizes(page, spec.root);
+      const layerSizes = await Promise.all(roots.map((_, i) => readPreferredSizes(page, `[${LAYER_MARK}="${i}"]`)));
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs).
-      const states = await captureStates(cdp, `[${ROOT_MARK}="1"]`, snapA);
+      // In an open page, the layer's own buttons and fields.
+      const states = await captureStates(cdp, spec.open ? `[${LAYER_MARK}]` : rootSel, snapA);
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
       await page.evaluate((mark) => {
@@ -276,7 +328,7 @@ export class BrowserCapture {
       }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
-      await cdp.detach();
+      // (the CDP session stays open for the dismiss probes)
       const tree = snapshotToTree(snapA, snapB, states);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
@@ -290,6 +342,37 @@ export class BrowserCapture {
       const conditions = applyConditionMarks(root, conditional.found);
       // One integer size for the screenshot clip and the native frame: Chrome floors a fractional clip.
       const size = { w: Math.floor(box.w), h: Math.floor(box.h) };
+      const triggers = found?.triggers.map((t) => {
+        const raw = rawAt(rootRaw, t.path)!;
+        return { ...t, trigger: identity(raw.name, raw.attrs, t.path) ?? t.path };
+      });
+      let opened: Capture["opened"];
+      let candidates: DismissCandidate[] = [];
+      if (spec.open && opening && roots.length) {
+        const marked = roots.map((_, i) => findByAttr(tree, LAYER_MARK, String(i))!);
+        marked.forEach((raw, i) => {
+          delete raw.attrs[LAYER_MARK];
+          attachPreferredSizes(raw, layerSizes[i]!.sizes, layerSizes[i]!.pseudoStyles);
+        });
+        const { layer, paths } = assembleLayer({
+          trigger: spec.open,
+          rootRaw,
+          root,
+          marked,
+          origin: { x: box.x, y: box.y },
+          identity,
+          info: rootInfo,
+          hiddenOnOpen,
+        });
+        // 066: enter attach — after layer assembly
+        const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity);
+        if (changed)
+          errors.push(
+            `${changed} element(s) inside trigger ${spec.open.id} appear or disappear while its layer is open; not reproduced`,
+          );
+        if (spec.probeDismiss && layer.placement !== "inflow") candidates = dismissCandidates(marked, paths, identity);
+        opened = { layer, size, openPaint: paint };
+      }
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
         const { x, y, w, h } = box;
@@ -312,8 +395,24 @@ export class BrowserCapture {
           type: "png",
         });
       }
+      if (opened && opening && spec.open && spec.probeDismiss && opened.layer.placement !== "inflow") {
+        await page.keyboard.press("Escape");
+        // 066: exit read — same roots, before settle
+        await settle(page);
+        opened.layer.dismiss = await probeDismiss(page, opening, {
+          root: rootSel,
+          trigger: spec.open,
+          candidates,
+          viewport,
+          escape: !(await opening.isOpen()),
+          warn: (message) => errors.push(message),
+        });
+      }
+      await cdp.detach();
       await Promise.all(imageReads);
-      errors.push(...inlineCapturedImages(root, await page.evaluate(() => document.baseURI), images));
+      const baseURI = await page.evaluate(() => document.baseURI);
+      for (const node of [root, ...(opened?.layer.nodes ?? [])])
+        errors.push(...inlineCapturedImages(node, baseURI, images));
       return {
         warnings: [...errors.map((message) => ({ source: "capture" as const, message })), ...conditional.warnings],
         layout: {
@@ -331,6 +430,8 @@ export class BrowserCapture {
         },
         png,
         fontFiles,
+        ...(triggers ? { triggers } : {}),
+        ...(opened ? { opened } : {}),
       };
     } finally {
       await page.close();

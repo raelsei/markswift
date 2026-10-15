@@ -1,8 +1,14 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildMatrix, loadFixtureSet, loadPilot, reflowTag, validatePilot } from "./pilot.ts";
+import { buildMatrix, loadFixtureSet, loadPilot, openKey, reflowTag, validatePilot } from "./pilot.ts";
 
 const fixtureRoot = join(import.meta.dir, "fixtures");
+
+test("openKey appends @open:<layerId> to a matrix key", () => {
+  expect(openKey("overlay-dialog-390-light-app", "edit-profile")).toBe(
+    "overlay-dialog-390-light-app@open:edit-profile",
+  );
+});
 
 test("pilot manifest resolves the original eight plus seven text fixtures with explicit outcomes", async () => {
   const cases = await loadPilot();

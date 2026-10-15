@@ -131,6 +131,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
           css: c.css,
           darkClass: c.darkClass,
           waitFor: c.waitFor,
+          layers: true,
         },
         timedOut,
       );

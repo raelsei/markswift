@@ -28,7 +28,7 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
   untrustedInput?: boolean;
   /** Mounted selector to await before capture. */
   waitFor?: string;
-  /** Optional application-specific setup, such as opening a menu; runs before every capture. */
+  /** Optional application-specific setup, such as opening a menu; runs before every capture, including each open-state capture. */
   prepare?: (page: Page) => Promise<void>;
   /** Upper bound for the whole conversion (browser, network, font conversion), in ms. Default 120000. */
   timeoutMs?: number;
