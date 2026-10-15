@@ -119,14 +119,14 @@ const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
 
 /** Element children that consume a path index (every DOM element child; text and generated pseudo-elements do not). */
-const pathChildren = (raw: Raw) => raw.children.filter((c) => c.type === 1 && c.pseudo === undefined);
+export const pathChildren = (raw: Raw): Raw[] => raw.children.filter((c) => c.type === 1 && c.pseudo === undefined);
 
 /** Join CSS size intent and pseudo-element styles while wrappers still exist, before display:contents is flattened. */
 export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoStyles: PseudoStyles): void {
   const walk = (raw: Raw, path: string) => {
     if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
     if (Object.hasOwn(pseudoStyles, path)) raw.pseudoStyles = pseudoStyles[path];
-    pathChildren(raw).forEach((child, i) => walk(child, path ? `${path}/${i}` : String(i)));
+    for (const [i, child] of pathChildren(raw).entries()) walk(child, path ? `${path}/${i}` : String(i));
   };
   walk(root, "");
 }

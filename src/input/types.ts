@@ -1,6 +1,19 @@
 /** Browser capture contract, independent of source frameworks and corpus tooling. */
 import type { Page } from "playwright-core";
-import type { Theme } from "../model/layout.ts";
+import type { Layer, Theme } from "../model/layout.ts";
+
+/** An element the open-state pass activates (`browser/layers.ts`). */
+export interface Trigger {
+  /** Element path from the capture root. */
+  path: string;
+  activation: Layer["activation"];
+  /** Set by the native rules (`popovertarget`, `commandfor`, `interestfor`, `details`). */
+  relation?: Layer["relation"];
+  /** Layer id: slug of the trigger's name, unique per page. */
+  id: string;
+  /** LayoutNode id of the trigger. */
+  trigger: string;
+}
 
 export interface CaptureRequest {
   /** Logical screen name (`home`). */
@@ -20,6 +33,10 @@ export interface CaptureRequest {
   viewport?: { width: number; height: number };
   /** Hook after load, before settle (class toggles etc.). */
   prepare?(page: Page): Promise<void>;
+  /** Internal to the layer pass: open this trigger and report what it shows (`Capture.opened`). */
+  open?: Trigger;
+  /** Internal to the layer pass: with `open`, also probe how the layer is dismissed. */
+  probeDismiss?: boolean;
 }
 
 /** Stable node identity for re-sync. `path` = element-index path from the capture root ("0/2/1"); `tag` lower-case; `attrs` raw. */
