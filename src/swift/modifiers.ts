@@ -183,6 +183,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       if (t.tx !== 0 || t.ty !== 0) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
   }
+  // CSS relative positioning moves paint, not layout: outside rotation/scale, which apply about the box's own origin.
+  if (n.relativeOffset) m.push(`.offset(x: ${num(n.relativeOffset[0])}, y: ${num(n.relativeOffset[1])})`);
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);

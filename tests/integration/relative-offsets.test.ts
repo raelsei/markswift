@@ -39,8 +39,10 @@ browserTest(
 browserTest(
   "a float lift does not repeat the host's offset",
   async () => {
+    // The text sits in a block `<p>`: the lift splits a block box whose line boxes the float shortened (a bare text run
+    // beside the float is built from a box without line boxes and stays a plain side-by-side row).
     const result = await convertHtml(
-      `<main data-markswift-root style="width:200px;font:15px/20px system-ui"><div id="h" style="position:relative;top:5px"><div style="float:left;width:60px;height:40px;background:#0a0"></div>Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt</div></main>`,
+      `<main data-markswift-root style="width:200px;font:15px/20px system-ui"><div id="h" style="position:relative;top:5px"><div style="float:left;width:60px;height:40px;background:#0a0"></div><p style="margin:0">Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt</p></div></main>`,
       OPTIONS,
     );
     const messages = result.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message);
