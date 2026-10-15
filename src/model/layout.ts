@@ -66,6 +66,8 @@ export interface LayoutNode {
   paint?: number;
   /** Paint the element shows in an interaction state: computed values of whitelisted paint properties that differ from rest (`:hover`+`:active` = pressed, `:focus`+`:focus-visible` = focused), captured by forcing the state over CDP. */
   states?: { pressed?: Record<string, string>; focused?: Record<string, string> };
+  /** Indices into `LayoutDoc.conditions` whose inner rules match this element (stamped at capture). Absent when none. */
+  conditional?: number[];
   /** Pseudo-element styles DOMSnapshot does not report, read with getComputedStyle(el, "::<name>"). `placeholder`: inputs and textareas with a `placeholder` attribute (color, -webkit-text-fill-color, opacity, font-style, font-weight). */
   pseudoStyles?: { placeholder?: Record<string, string> };
   children: LayoutNode[];
@@ -89,6 +91,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
         focused: z.record(z.string(), z.string()).optional(),
       })
       .optional(),
+    conditional: z.array(z.number().int().nonnegative()).optional(),
     pseudoStyles: z.object({ placeholder: z.record(z.string(), z.string()).optional() }).optional(),
     children: z.array(LayoutNode),
   }),
@@ -140,9 +143,13 @@ export const LAYOUT_DOC_VERSION = 4;
 
 /** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
 export const VALIDATION_MARK = "data-markswift-validation";
+/** Capture stamps the indices (space-separated) of the `conditions` whose inner rules match an element; moved to `conditional`. */
+export const CONDITIONAL_MARK = "data-markswift-conditional";
+/** Capture stamps a serial on the query container of a `@container` condition; resolved to its node id. */
+export const CONTAINER_MARK = "data-markswift-container";
 
 /** A size `@media`/`@container` condition whose rules hit captured elements; `matches` at this capture's viewport;
- * `container` is the query container's node id. Filled by breakpoint capture; empty otherwise. */
+ * `container` is the query container's node id. Order is capture-local (`LayoutNode.conditional` indexes it). */
 export const LayoutCondition = z.object({
   kind: z.enum(["media", "container"]),
   query: z.string(),
