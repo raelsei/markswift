@@ -70,7 +70,7 @@ export interface CompileResult {
   assets: Record<string, Uint8Array>;
   /** Light/dark pairing limitations and palette-map gaps; empty for a single-theme compile without a map. */
   warnings: ConversionWarning[];
-  /** App mode: in-flow layer id → the `init` label (`isMoreExpanded`) that shows it; absent when nothing opens. */
+  /** App mode: layer id → the `init` label (`isMoreExpanded`, `isEditProfilePresented`) that shows it; absent when nothing opens. */
   openStates?: Record<string, string>;
 }
 

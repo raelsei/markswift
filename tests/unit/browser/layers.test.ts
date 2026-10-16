@@ -337,15 +337,17 @@ describe("compileLayout ignores the open state", () => {
     };
   };
 
-  test("app and fidelity code and diagnostics are byte-identical without layers, states.open and ::backdrop", () => {
+  // App mode consumes layers (059 in-flow content, 060 drawn presentations); fidelity never does.
+  test("fidelity code and diagnostics are byte-identical without layers, states.open and ::backdrop", () => {
     const full = withOpen();
     const { layers: _, ...rest } = withOpen();
     const without: LayoutDoc = { ...rest, root: strip(rest.root) };
     expect(JSON.stringify(without)).not.toContain("backdrop");
-    for (const mode of ["app", "fidelity"] as const) {
-      const [a, b] = [compileLayout(full, { name: "V", mode }), compileLayout(without, { name: "V", mode })];
-      expect(a.code).toBe(b.code);
-      expect(a.diagnostics).toEqual(b.diagnostics);
-    }
+    const [a, b] = [
+      compileLayout(full, { name: "V", mode: "fidelity" }),
+      compileLayout(without, { name: "V", mode: "fidelity" }),
+    ];
+    expect(a.code).toBe(b.code);
+    expect(a.diagnostics).toEqual(b.diagnostics);
   });
 });

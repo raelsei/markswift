@@ -276,7 +276,11 @@ function present(
       buttons: layer.dismiss.buttons.filter((id) => !!inside.get(id)?.action),
     },
   };
-  for (const o of overlays) o.presentation = presentation;
+  for (const o of overlays) {
+    o.presentation = presentation;
+    // A scrim draws but lets taps through to the presentation's own outside-tap layer.
+    if (!content.includes(o)) o.node.hitTesting = false;
+  }
   screen.root.overlays.push(...overlays);
   trigger.opens = {
     layer: layer.id,

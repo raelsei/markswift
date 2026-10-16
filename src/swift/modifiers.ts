@@ -1,4 +1,4 @@
-import type { SemNode, Overlay } from "../model/semantic.ts";
+import type { SemNode, Overlay, Presentation } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import {
   colorArgs,
@@ -40,8 +40,9 @@ export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
 function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
   const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
   if (!name) return [...core, ...modifiers(n, ctx)];
-  // An ARIA toggle (`role=checkbox|switch|radio`) or an in-flow layer's trigger: the tap changes the screen's state, then acts.
-  const tap = ctx.control.toggleOf.get(n)?.tap ?? ctx.control.openOf.get(n)?.tap;
+  // An ARIA toggle (`role=checkbox|switch|radio`), a layer's trigger or a presentation's closing button: the tap changes
+  // the screen's state and acts.
+  const tap = ctx.control.toggleOf.get(n)?.tap ?? ctx.control.openOf.get(n)?.tap ?? ctx.control.closeOf.get(n);
   if (n.action!.gesture)
     return [
       ...core,
@@ -79,7 +80,9 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // Decorative absolutely-positioned children behind the content. `.background(A).background(B)`
   // puts B behind A, so apply the front-most background first. A ScrollView keeps only `position: fixed`
   // overlays; the rest scroll with its content (layout.ts).
-  for (const o of [...n.overlays.filter((o) => o.layer === "background" && (!scrolls || o.fixed))].reverse())
+  for (const o of [
+    ...n.overlays.filter((o) => o.layer === "background" && !o.presentation && (!scrolls || o.fixed)),
+  ].reverse())
     m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
   m.push(...insetShadowModifiers(p, ctx));
@@ -118,8 +121,9 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
     );
   }
   m.push(...outerShadowModifiers(p, ctx));
-  for (const o of n.overlays.filter((o) => o.layer === "overlay" && (!scrolls || o.fixed)))
+  for (const o of n.overlays.filter((o) => o.layer === "overlay" && !o.presentation && (!scrolls || o.fixed)))
     m.push(...overlayModifier(o, "overlay", ctx));
+  m.push(...presentationModifiers(n, ctx));
   // CSS effect order: filter → clip-path → mask → opacity.
   if (st.filters) for (const f of st.filters) m.push(...filterModifier(f, p, ctx));
   if (st.clipPath) m.push(clipPathModifier(st.clipPath, p, ctx));
@@ -206,6 +210,12 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A `<label>` tap changes its checkbox or radio, or focuses its text field, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
   if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
+  // A drawn presentation's trigger: what its content anchors to, and the long-press that opens a hover card (D-HOVER).
+  if (n.opens?.kind === "presentation") {
+    if (n.opens.anchor) m.push(`.markswiftAnchor(${str(n.opens.layer)})`);
+    const state = ctx.control.openStates.get(n.opens.layer);
+    if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
+  }
   const a = n.a11y;
   if (a) {
     const container = n.kind === "stack" || n.kind === "grid" || a.container;
@@ -229,8 +239,9 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     const opened = ctx.control.openOf.get(n);
     // `.accessibilityValue` replaces the "1"/"0" a toggle trait derives from `.isSelected`, so it spells them out.
     if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : ${state.on} ? "1" : "0")`);
-    // `aria-expanded` of a trigger whose layer the screen shows follows that state.
-    else if (opened) m.push(`.accessibilityValue(${opened.state} ? "expanded" : "collapsed")`);
+    // `aria-expanded` of a trigger whose layer the screen shows follows that state (only where the design states it).
+    else if (opened && (a.value === "expanded" || a.value === "collapsed"))
+      m.push(`.accessibilityValue(${opened.state} ? "expanded" : "collapsed")`);
     else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
@@ -250,3 +261,46 @@ export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx:
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(x)}, y: ${num(y)})`];
   return [`.${mode}(alignment: .${anchored ? anchored.corner : "topLeading"}) {`, ...indent(body, 1), `}`];
 }
+
+/**
+ * One `.markswiftPresentation` per drawn presentation on `n` (plan 060), its roots in overlay order: a native
+ * `::backdrop` colour, then each root as one expression (066 appends `.transition` to it). Roots `layers.ts` made
+ * pass-through (a scrim) draw where they are; the first content root takes the presentation's placement, any later
+ * one its captured offset.
+ */
+function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
+  const roots = new Map<Presentation, Overlay[]>();
+  for (const o of n.overlays) if (o.presentation) roots.set(o.presentation, [...(roots.get(o.presentation) ?? []), o]);
+  const size = ([w, h]: [number, number]) => `CGSize(width: ${num(w)}, height: ${num(h)})`;
+  return [...roots].flatMap(([p, overlays]) => {
+    const state = ctx.control.openStates.get(p.id);
+    if (!state) return [];
+    const first = overlays.find((o) => o.node.hitTesting !== false);
+    const at = p.placement;
+    const placed =
+      at.kind === "center"
+        ? ".center"
+        : at.kind === "edge"
+          ? `.edge(.${at.edge})`
+          : at.kind === "anchored"
+            ? `.anchored(${str(p.id)}, from: ${unitPoint(at.from)}, to: ${unitPoint(at.to)}, gap: ${size(at.gap)})`
+            : undefined;
+    const body = overlays.flatMap((o) => {
+      const view = ctx.renderNode(o.node);
+      if (o.node.hitTesting === false)
+        return o.covers ? view : [...view, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`];
+      return [...view, `.markswiftPlaced(${(o === first && placed) || `.offset(${size(o.offset)})`})`];
+    });
+    const d = p.dismiss;
+    return [
+      `.markswiftPresentation(isPresented: $${state}, modal: ${p.modal}, dismissOnEscape: ${d.escape}, dismissOnOutside: ${d.outside}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
+      ...indent(
+        [...(p.backdrop ? [`Color.markswift(${colorArgs(p.backdrop)})`, ".allowsHitTesting(false)"] : []), ...body],
+        1,
+      ),
+      "}",
+    ];
+  });
+}
+
+const unitPoint = ([x, y]: [number, number]) => `UnitPoint(x: ${x.toFixed(1)}, y: ${y.toFixed(1)})`;

@@ -196,7 +196,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
-    // One preview per in-flow layer, shown open.
+    // One preview per layer (in-flow or presentation), shown open.
     ...[...control.openStates].flatMap(([layer, state]) => [
       "",
       ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),
