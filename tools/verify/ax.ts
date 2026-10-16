@@ -46,8 +46,15 @@ export const CHECKED_ROLES: Record<string, (n: SemNode) => boolean> = {
   slider: range,
   progressbar: range,
   meter: range,
+  columnheader: (n) => n.a11y?.trait === "isHeader",
+  rowheader: (n) => n.a11y?.trait === "isHeader",
+  /** Matched against the screen's text in DOM order (`axParity`), like `StaticText`. */
+  cell: () => false,
   StaticText: () => false,
 };
+
+/** Table cell roles: their names must appear in the converted screen's text in DOM order (static reading order). */
+const CELL_ROLES: Record<string, true> = { cell: true, columnheader: true, rowheader: true };
 
 /** Roles whose StaticText children are the field's value, covered by the field itself. */
 const FIELD_ROLES: Record<string, true> = { textbox: true, searchbox: true, combobox: true };
@@ -127,7 +134,13 @@ function offeredNames(n: SemNode): string[] {
     if (n.label) names.push(subtreeText(n.label));
     names.push(n.placeholder ?? "", n.value ?? "", ...(n.options ?? []).map((o) => o.label));
   }
-  if (n.kind === "text" || n.kind === "control" || n.a11y?.heading !== undefined || n.action)
+  if (
+    n.kind === "text" ||
+    n.kind === "control" ||
+    n.a11y?.heading !== undefined ||
+    n.action ||
+    n.a11y?.trait === "isHeader"
+  )
     names.push(subtreeText(n), subtreeText(n, true));
   return names.map(normalizeName).filter(Boolean);
 }
@@ -140,7 +153,15 @@ export function axParity(ax: AxNamed[], screen: Screen): AxNamed[] {
   const nodes: SemNode[] = [];
   walk(screen.root, (n) => nodes.push(n));
   const text = subtreeText(screen.root);
+  // Earliest-match greedy search: finds an order-preserving embedding of the cell names whenever one exists.
+  let from = 0;
   return ax.filter(({ role, name }) => {
+    if (CELL_ROLES[role]) {
+      const at = text.indexOf(name, from);
+      if (at < 0) return true;
+      from = at + name.length;
+      if (role === "cell") return false;
+    }
     if (role === "StaticText") return !text.includes(name);
     const fits = CHECKED_ROLES[role];
     return !nodes.some(
