@@ -157,8 +157,14 @@ function present(
     addDiagnostic(n.diagnostics, "approximated", feature, `${layer.id} is not presented: ${reason}`);
     n.confidence = confidenceOf(n.diagnostics);
   };
-  if (!trigger) return skip("its trigger is not in the screen");
-  if (!longPress && !trigger.action) return skip("the trigger is not a button");
+  if (!trigger) {
+    skip("its trigger is not in the screen");
+    return;
+  }
+  if (!longPress && !trigger.action) {
+    skip("the trigger is not a button");
+    return;
+  }
   const overlays = layerOverlays(doc, layer.nodes, options);
   const byId = new Map<string, LayoutNode>();
   const index = (n: LayoutNode) => {
@@ -173,7 +179,10 @@ function present(
   );
   const first = content[0];
   const c = first && byId.get(first.node.id);
-  if (!first || !c) return skip("it has no content box");
+  if (!first || !c) {
+    skip("every root covers the screen");
+    return;
+  }
   // The pure translation the content paints at (Radix centring, Floating UI placement); 0 for anything else.
   const t = first.node.style.transform;
   const pure =
