@@ -1,9 +1,13 @@
-/** App mode: closed in-flow layers (`<details>`, collapsibles, accordion items) become content behind the screen's state. */
-import { type LayoutDoc, type LayoutNode } from "../model/layout.ts";
-import { type Screen, type SemNode, addDiagnostic, confidenceOf, walk } from "../model/semantic.ts";
-import { round2 } from "../css/index.ts";
+/**
+ * App mode: closed in-flow layers (`<details>`, collapsibles, accordion items) become content behind the screen's state;
+ * dialogs, sheets, popovers and hover cards become drawn presentations (plan 060, D-PRESENT).
+ */
+import { type Layer, type LayoutDoc, type LayoutNode } from "../model/layout.ts";
+import { type Presentation, type Screen, type SemNode, addDiagnostic, confidenceOf, walk } from "../model/semantic.ts";
+import { parseColor, round2 } from "../css/index.ts";
 import { type InferOptions } from "./context.ts";
-import { buildDetached } from "./infer.ts";
+import { buildDetached, layerOverlays } from "./infer.ts";
+import { isTooltipLayer } from "./tooltips.ts";
 
 const REASON = {
   container: "its container is a measured, wrapping, flex or grid layout",
@@ -14,12 +18,13 @@ const REASON = {
 
 /**
  * Each `inflow` layer of `doc`: a `<details>` gets the content and `opens`; anything else inserts the content into its
- * plain parent stack after its rest predecessor (`shownBy`), and the trigger Button `opens` it. Skips are reported.
+ * plain parent stack after its rest predecessor (`shownBy`), and the trigger Button `opens` it. Each other layer that
+ * is not a tooltip (062) or a menu (061) becomes a drawn presentation on the root (`present`). Skips are reported.
  */
 // ponytail: content goes into plain stacks only; measured/flex/grid parents report and keep today's output.
 export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOptions = {}): void {
-  const layers = doc.layers?.filter((l) => l.placement === "inflow") ?? [];
-  if (!layers.length) return;
+  if (!doc.layers?.length) return;
+  const layers = doc.layers.filter((l) => l.placement === "inflow");
   const rest = new Map<string, LayoutNode>();
   const index = (n: LayoutNode) => {
     if (n.id !== undefined) rest.set(n.id, n);
@@ -110,4 +115,184 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     parent.children.splice(p, 0, ...nodes);
     trigger.opens = { layer: layer.id, kind: "inflow" };
   }
+  for (const layer of doc.layers)
+    if (
+      layer.placement !== "inflow" &&
+      !isTooltipLayer(layer, doc.root) &&
+      // Menus, listboxes and selects are left to 061.
+      !layer.nodes.some((n) => find(n, (d) => !!MENU_ROLES[d.attrs["role"] ?? ""]))
+    )
+      present(screen, doc, layer, rest, sem, options);
+}
+
+const MENU_ROLES: Record<string, true> = { menu: true, menubar: true, listbox: true };
+
+const find = (n: LayoutNode, test: (n: LayoutNode) => boolean): LayoutNode | undefined =>
+  test(n) ? n : n.children.reduce<LayoutNode | undefined>((hit, c) => hit ?? find(c, test), undefined);
+
+const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+
+/** A unit point along one axis for a CSS-ish side/alignment keyword. */
+const UNIT: Record<string, number> = { start: 0, center: 0.5, end: 1 };
+
+/**
+ * One viewport/anchored layer as a drawn presentation: its roots join `screen.root.overlays` (fixed, sharing one
+ * `Presentation`), placed by classifying the first content root, and the trigger `opens` it.
+ */
+function present(
+  screen: Screen,
+  doc: LayoutDoc,
+  layer: Layer,
+  rest: Map<string, LayoutNode>,
+  sem: Map<string, SemNode>,
+  options: InferOptions,
+): void {
+  const alert = layer.nodes.some((n) => find(n, (d) => d.attrs["role"] === "alertdialog"));
+  const dialog = alert || layer.nodes.some((n) => find(n, (d) => d.tag === "dialog" || d.attrs["role"] === "dialog"));
+  const feature = dialog && layer.placement !== "anchored" ? "dialog" : "@popover";
+  const trigger = sem.get(layer.trigger);
+  const longPress = layer.activation !== "click";
+  const skip = (reason: string) => {
+    const n = trigger ?? screen.root;
+    addDiagnostic(n.diagnostics, "approximated", feature, `${layer.id} is not presented: ${reason}`);
+    n.confidence = confidenceOf(n.diagnostics);
+  };
+  if (!trigger) {
+    skip("its trigger is not in the screen");
+    return;
+  }
+  if (!longPress && !trigger.action) {
+    skip("the trigger is not a button");
+    return;
+  }
+  const overlays = layerOverlays(doc, layer.nodes, options);
+  const byId = new Map<string, LayoutNode>();
+  const index = (n: LayoutNode) => {
+    if (n.id !== undefined && !byId.has(n.id)) byId.set(n.id, n);
+    n.children.forEach(index);
+  };
+  layer.nodes.forEach(index);
+  const vp = doc.viewport;
+  const content = overlays.filter(
+    ({ covers, node: { frame: r } }) =>
+      !covers && !(near(r.x, vp.x) && near(r.y, vp.y) && near(r.w, vp.w) && near(r.h, vp.h)),
+  );
+  const first = content[0];
+  const c = first && byId.get(first.node.id);
+  if (!first || !c) {
+    skip("every root covers the screen");
+    return;
+  }
+  // The pure translation the content paints at (Radix centring, Floating UI placement); 0 for anything else.
+  const t = first.node.style.transform;
+  const pure =
+    t && t.rotate === 0 && t.scaleX === 1 && t.scaleY === 1 && t.skewX === undefined && t.skewY === undefined;
+  const [tx, ty] = pure ? [t.tx, t.ty] : [0, 0];
+  const b = c.bounds;
+  const painted = { x: b.x + tx, y: b.y + ty, w: b.w, h: b.h };
+  const insets = c.preferredSize?.insets;
+  const topLayer = c.styles["overlay"] === "auto";
+  let placement: Presentation["placement"] = { kind: "offset" };
+  const sides = insets ? (["top", "right", "bottom", "left"] as const).filter((s) => insets[s] !== "0px") : [];
+  if (
+    (insets?.top === "50%" && insets.left === "50%" && near(tx, -b.w / 2) && near(ty, -b.h / 2)) ||
+    (topLayer &&
+      (c.tag === "dialog" || c.attrs["popover"] !== undefined) &&
+      (c.preferredSize?.autoMargins?.length ?? 0) === 4) ||
+    (near(painted.x + painted.w / 2, vp.x + vp.w / 2) && near(painted.y + painted.h / 2, vp.y + vp.h / 2))
+  ) {
+    placement = { kind: "center" };
+  } else if (sides.length === 1) {
+    const EDGE = { left: "trailing", top: "bottom", right: "leading", bottom: "top" } as const;
+    placement = { kind: "edge", edge: EDGE[sides[0]!] };
+  } else if (layer.placement === "anchored" && rest.has(layer.trigger)) {
+    const r = rest.get(layer.trigger)!.bounds;
+    const sideAttr = find(c, (d) => d.attrs["data-side"] !== undefined)?.attrs["data-side"];
+    const alignAttr = find(c, (d) => d.attrs["data-align"] !== undefined)?.attrs["data-align"];
+    const side =
+      sideAttr === "top" || sideAttr === "bottom" || sideAttr === "left" || sideAttr === "right"
+        ? sideAttr
+        : painted.y >= r.y + r.h - 1
+          ? "bottom"
+          : painted.y + painted.h <= r.y + 1
+            ? "top"
+            : painted.x >= r.x + r.w - 1
+              ? "right"
+              : painted.x + painted.w <= r.x + 1
+                ? "left"
+                : undefined;
+    if (side) {
+      const v = side === "top" || side === "bottom";
+      // Cross axis: the content's start/centre/end against the trigger's.
+      const [p0, pw, r0, rw] = v ? [painted.x, painted.w, r.x, r.w] : [painted.y, painted.h, r.y, r.h];
+      const align =
+        alignAttr !== undefined && UNIT[alignAttr] !== undefined
+          ? alignAttr
+          : near(p0, r0)
+            ? "start"
+            : near(p0 + pw / 2, r0 + rw / 2)
+              ? "center"
+              : near(p0 + pw, r0 + rw)
+                ? "end"
+                : "start";
+      const a = UNIT[align]!;
+      const main = side === "bottom" || side === "right" ? [1, 0] : [0, 1];
+      const from: [number, number] = v ? [a, main[0]!] : [main[0]!, a];
+      const to: [number, number] = v ? [a, main[1]!] : [main[1]!, a];
+      const gap: [number, number] = [
+        round2(painted.x + painted.w * to[0] - (r.x + r.w * from[0])),
+        round2(painted.y + painted.h * to[1] - (r.y + r.h * from[1])),
+      ];
+      placement = { kind: "anchored", from, to, gap };
+    }
+  }
+  // Centred and anchored content is placed by the runtime: the translation that placed it in CSS goes.
+  if (pure && (placement.kind === "center" || placement.kind === "anchored")) delete first.node.style.transform;
+  const backdrop = overlays
+    .map((o) => byId.get(o.node.id))
+    .filter((n) => n?.styles["overlay"] === "auto")
+    .map((n) => parseColor(n!.pseudoStyles?.backdrop?.["background-color"]))
+    .find((col) => col && col.a > 0);
+  const inside = new Map<string, SemNode>();
+  for (const o of overlays) walk(o.node, (n) => inside.set(n.id, n));
+  const presentation: Presentation = {
+    id: layer.id,
+    trigger: trigger.id,
+    style: alert
+      ? "alertdialog"
+      : feature === "dialog"
+        ? placement.kind === "edge"
+          ? "sheet"
+          : "dialog"
+        : layer.activation === "hover"
+          ? "hovercard"
+          : "popover",
+    placement,
+    ...(backdrop ? { backdrop } : {}),
+    modal: layer.modal,
+    dismiss: {
+      escape: layer.dismiss.escape,
+      outside: layer.dismiss.outside && !alert,
+      buttons: layer.dismiss.buttons.filter((id) => !!inside.get(id)?.action),
+    },
+  };
+  for (const o of overlays) {
+    o.presentation = presentation;
+    // A scrim draws but lets taps through to the presentation's own outside-tap layer.
+    if (!content.includes(o)) o.node.hitTesting = false;
+  }
+  screen.root.overlays.push(...overlays);
+  trigger.opens = {
+    layer: layer.id,
+    kind: "presentation",
+    ...(longPress ? { longPress: true as const } : {}),
+    ...(placement.kind === "anchored" ? { anchor: true as const } : {}),
+  };
+  addDiagnostic(
+    first.node.diagnostics,
+    "approximated",
+    feature,
+    "drawn inside the component's frame: no swipe-to-dismiss, no collision flip; captured at the primary viewport",
+  );
+  first.node.confidence = confidenceOf(first.node.diagnostics);
 }

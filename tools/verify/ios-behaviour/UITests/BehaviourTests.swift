@@ -15,7 +15,12 @@ final class BehaviourTests: XCTestCase {
         let focusLooks: [String]
         let actions: [String]
         /// In-flow layers: tapping the button labelled `trigger` shows the text `shows`; a second tap hides it.
-        struct Layer: Decodable { let id: String; let trigger: String; let shows: String }
+        /// Presentations (`kind` "presentation", 060): the trigger (long-pressed when `longPress`) shows `shows`; `closers`
+        /// close it; a tap at the root's normalised `outsidePoint` may; `buttons` are tapped so their actions log.
+        struct Layer: Decodable {
+            let id: String; let kind: String; let trigger: String; let shows: String
+            let closers: [String]?; let buttons: [String]?; let longPress: Bool?; let outsidePoint: [Double]?
+        }
         let layers: [Layer]
         /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
         struct Motion: Decodable { let live: Bool; let reduced: Bool }
@@ -177,7 +182,9 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
         }
         pickers.append(["current": picker.current, "next": picker.next, "reached": reached])
     }
-    let skip = Set(item.pickers.flatMap { [$0.current, $0.next] } + item.pickerValues)
+    // A presentation's trigger would cover the screen with its content: `layers` opens it in launches of its own.
+    let triggers = item.layers.filter { $0.kind == "presentation" }.map(\.trigger)
+    let skip = Set(item.pickers.flatMap { [$0.current, $0.next] } + item.pickerValues + triggers)
     var tapped: [String] = []
     for query in [root.buttons, root.links] {
         for index in 0..<query.count {
@@ -252,6 +259,7 @@ private func layers(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[St
     let root = app.otherElements["markswift.root"].firstMatch
     let gone = NSPredicate(format: "exists == false")
     return item.layers.map { layer in
+        if layer.kind == "presentation" { return presentation(app, layer) }
         app.launch()
         let shows = root.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", layer.shows)).firstMatch
         let trigger = root.buttons.matching(NSPredicate(format: "label == %@", layer.trigger)).firstMatch
@@ -267,4 +275,51 @@ private func layers(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[St
         }
         return ["id": layer.id, "opened": opened, "closed": closed]
     }
+}
+
+/// A drawn presentation (060), each probe in a fresh launch: open (tap, or long-press), whether the trigger stays
+/// exposed while it is open, each closer, an outside tap, then every other content button so its action logs.
+@MainActor
+private func presentation(_ app: XCUIApplication, _ layer: BehaviourTests.Case.Layer) -> [String: Any] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    let gone = NSPredicate(format: "exists == false")
+    let named = NSPredicate(format: "label == %@", layer.trigger)
+    let shows = root.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", layer.shows)).firstMatch
+    var log: [String] = []
+    func trigger() -> XCUIElement {
+        let button = root.buttons.matching(named).firstMatch
+        return button.exists ? button : root.links.matching(named).firstMatch
+    }
+    func open() -> Bool {
+        app.launch()
+        let t = trigger()
+        guard !shows.exists, t.waitForExistence(timeout: 2), t.isHittable else { return false }
+        if layer.longPress == true { t.press(forDuration: 1.0) } else { t.tap() }
+        return shows.waitForExistence(timeout: 2)
+    }
+    func closes(_ act: () -> Void) -> Bool {
+        act()
+        let closed = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: shows)], timeout: 2) == .completed
+        let hits = app.staticTexts["markswift.log"].firstMatch
+        if hits.exists { log.append(hits.label) }
+        return closed
+    }
+    let opened = open()
+    let triggerExposed = opened && trigger().exists
+    var closers: [String: Bool] = [:]
+    for label in layer.closers ?? [] {
+        closers[label] = open() && closes { root.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch.tap() }
+    }
+    var outside = false
+    if let p = layer.outsidePoint, p.count == 2, open() {
+        outside = closes { root.coordinate(withNormalizedOffset: CGVector(dx: p[0], dy: p[1])).tap() }
+    }
+    for label in layer.buttons ?? [] where open() {
+        let button = root.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+        _ = closes { if button.isHittable { button.tap() } }
+    }
+    return [
+        "id": layer.id, "opened": opened, "triggerExposed": triggerExposed, "closers": closers, "outside": outside,
+        "log": log.joined(separator: ","),
+    ]
 }

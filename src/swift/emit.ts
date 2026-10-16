@@ -217,7 +217,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
         screen.breakpoints!.widths[i + 1],
       ),
     ]),
-    // One preview per in-flow layer, shown open.
+    // One preview per layer (in-flow or presentation), shown open.
     ...[...control.openStates].flatMap(([layer, state]) => [
       "",
       ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),

@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { ControlNode, SemNode } from "../model/semantic.ts";
+import type { ControlNode, Presentation, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
 import { note } from "./diagnostics.ts";
@@ -68,6 +68,11 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   const toggleOf: ControlMembers["toggleOf"] = new Map();
   const openOf: ControlMembers["openOf"] = new Map();
   const openStates = new Map<string, string>();
+  const closeOf: ControlMembers["closeOf"] = new Map();
+  const dismissedOf = new Map<string, string>();
+  // Drawn presentations hang off the root (`analysis/layers.ts`): one shared object per layer id.
+  const presentations = new Map<string, Presentation>();
+  for (const o of root.overlays) if (o.presentation) presentations.set(o.presentation.id, o.presentation);
   /** Node with `opens` → its shown state: the condition of the open look under it. */
   const opener = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
@@ -122,17 +127,37 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
       if (open !== undefined) openOf.set(n, open);
       return;
     }
-    // An in-flow layer's shown state: the screen owns it, seeded through `init` so a preview can open it. A
-    // `<details>` binds its DisclosureGroup to it; any other trigger flips it on tap, then runs its action.
+    // A layer's shown state: the screen owns it, seeded through `init` so a preview can open it. A `<details>` binds
+    // its DisclosureGroup to it; any other in-flow trigger flips it on tap, then runs its action. A presentation's tap
+    // trigger sets it, then acts; a long-press one keeps its own action (`placementModifiers` adds the gesture).
     if (n.opens) {
-      const name = memberName("is", n.opens.layer, seen, "Layer", "Expanded");
+      const name = memberName(
+        "is",
+        n.opens.layer,
+        seen,
+        "Layer",
+        n.opens.kind === "presentation" ? "Presented" : "Expanded",
+      );
       const disclosure = n.kind === "control" && n.control === "disclosure";
       const seed = disclosure && n.expanded ? "true" : "false";
       members.push({ name, kind: "open", type: "Bool", seed, decl: [] });
       openStates.set(n.opens.layer, name);
       opener.set(n, name);
+      const action = n.action && `${actionOf.get(n.action.key)}()`;
       if (disclosure) stateOf.set(n, name);
-      else openOf.set(n, { state: name, tap: [`${name}.toggle()`, `${actionOf.get(n.action!.key)}()`] });
+      else if (n.opens.kind === "inflow") openOf.set(n, { state: name, tap: [`${name}.toggle()`, action!] });
+      else if (!n.opens.longPress) openOf.set(n, { state: name, tap: [`${name} = true`, action!] });
+      const p = presentations.get(n.opens.layer);
+      if (p && (p.dismiss.escape || p.dismiss.outside)) {
+        const dismissed = memberName("on", n.opens.layer, seen, "Layer", "Dismissed");
+        dismissedOf.set(n.opens.layer, dismissed);
+        members.push({
+          name: dismissed,
+          kind: "action",
+          type: "() -> Void",
+          decl: [`/// Escape or a tap outside closed ${n.opens.layer}`, `var ${dismissed}: () -> Void = {}`],
+        });
+      }
       return;
     }
     const ax = n.a11y;
@@ -217,6 +242,15 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
       else if (!n.disabled && n.control === "radio") activate.set(n.id, `${name} = true`);
     }
   });
+  // A presentation's own buttons that close it: the design's action first, then the state goes false.
+  for (const o of root.overlays) {
+    const state = o.presentation && openStates.get(o.presentation.id);
+    if (!state) continue;
+    const buttons = new Set(o.presentation!.dismiss.buttons);
+    walk(o.node, (n) => {
+      if (n.action && buttons.has(n.id)) closeOf.set(n, [`${actionOf.get(n.action.key)}()`, `${state} = false`]);
+    });
+  }
   // Pressed/focused looks: a delta belongs to the nearest enclosing Button (its press drives the
   // whole label) or to the text field itself; everything else is reported. App mode: a text field
   // some `<label>` names takes focus when the label is tapped, so it owns a focus member too.
@@ -298,6 +332,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     toggleOf,
     openOf,
     openStates,
+    closeOf,
+    dismissedOf,
     statePaint,
     pressOf,
     focusOf,

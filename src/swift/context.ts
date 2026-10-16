@@ -10,7 +10,7 @@ export interface SwiftOutput {
   images: Record<string, Uint8Array>;
   /** Nodes whose confidence is not `mapped`, with what each lost. */
   report: Array<{ id: string; kind: string; confidence: Confidence; diagnostics: Diagnostic[] }>;
-  /** App mode: in-flow layer id → its `init` label; absent when nothing opens. */
+  /** App mode: layer id (in-flow or presentation) → its `init` label; absent when nothing opens. */
   openStates?: Record<string, string>;
 }
 
@@ -124,8 +124,8 @@ export interface ControlMembers {
   decls: string[];
   /**
    * Every member in emission order; `value` = design state (`@State private`), `action` =
-   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029), `open` = an
-   * in-flow layer's shown state, an `init`-seeded `@State` (`seed`). `decls` is
+   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029), `open` = a
+   * layer's shown state (in-flow or drawn presentation), an `init`-seeded `@State` (`seed`). `decls` is
    * `members.flatMap(m => m.decl)`.
    */
   members: Array<{
@@ -148,10 +148,15 @@ export interface ControlMembers {
    * `aria-checked="mixed"` follows (`Bool?` state, `nil` = mixed).
    */
   toggleOf: Map<SemNode, { tap: string[]; on: string; mixed?: string }>;
-  /** A trigger Button of an in-flow layer → its shown state and what its tap runs (toggle, then the action). */
+  /** A trigger Button of a layer → its shown state and what its tap runs (in-flow: toggle; presentation: set true; then
+   * the action). Long-press presentation triggers have none. */
   openOf: Map<SemNode, { state: string; tap: string[] }>;
-  /** In-flow layer id → its shown state (the `if` around content with that `shownBy`). */
+  /** Layer id → its shown state (in-flow: the `if` around content with that `shownBy`; presentation: the binding). */
   openStates: Map<string, string>;
+  /** A presentation's own closing button → what its tap runs (its action, then the state goes false). */
+  closeOf: Map<SemNode, string[]>;
+  /** Presentation layer id → its `on<Layer>Dismissed` callback (Escape or an outside tap closed it). */
+  dismissedOf: Map<string, string>;
   /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
   statePaint: Map<string, StatePaint>;
   /** Pressable owner → its `@MarkswiftPressed` member. */

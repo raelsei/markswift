@@ -17,6 +17,9 @@ export interface PilotCase {
   /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` metas (see `motionTag`); set by the loaders. */
   motion?: number[];
   motionReduced?: number[];
+  /** From `<meta name="markswift-viewport-height">` (loadFixtureSet): the capture viewport's height; absent = 2000. A
+   * viewport presentation centres in it, so overlay fixtures capture at a device height iOS can render. */
+  viewportHeight?: number;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -113,7 +116,16 @@ export async function loadPilot(path = join(import.meta.dir, "pilot.json")): Pro
 /** What the runner needs from a case; pilot.json cases add feature, tier and diagnostic expectations. */
 export type RunCase = Pick<
   PilotCase,
-  "id" | "fixture" | "themes" | "expectedText" | "expectedLines" | "anchors" | "reflow" | "motion" | "motionReduced"
+  | "id"
+  | "fixture"
+  | "themes"
+  | "expectedText"
+  | "expectedLines"
+  | "anchors"
+  | "reflow"
+  | "motion"
+  | "motionReduced"
+  | "viewportHeight"
 >;
 
 /** Every `fixtures/<domain>/*.html` (`_`-prefixed dirs excluded). Pilot cases keep their id and expectations;
@@ -128,12 +140,16 @@ export async function loadFixtureSet(pilot: PilotCase[]): Promise<RunCase[]> {
     const html = await Bun.file(join(FIXTURES, fixture)).text();
     const themes = /<meta name="markswift-themes" content="([^"]*)"/.exec(html)?.[1];
     const reflow = reflowTag(html, id);
+    const height = /<meta name="markswift-viewport-height" content="([^"]*)"/.exec(html)?.[1];
+    if (height !== undefined && !/^[1-9]\d*$/.test(height))
+      throw new Error(`fixture ${id}: invalid markswift-viewport-height "${height}"`);
     cases.push({
       id,
       fixture,
       themes: themes ? (themes.split(",") as RunCase["themes"]) : ["light"],
       ...(reflow ? { reflow } : {}),
       ...motionTag(html, id),
+      ...(height ? { viewportHeight: Number(height) } : {}),
     });
   }
   return cases;

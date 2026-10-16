@@ -43,8 +43,10 @@ export interface ControlDeps extends ColorCtx {
   pressOf?: Map<SemNode, string>;
   /** ARIA toggle Button → what its tap runs; built by `controlMembers`. */
   toggleOf?: ControlMembers["toggleOf"];
-  /** In-flow layer trigger → what its tap runs; built by `controlMembers`. */
+  /** Layer trigger → what its tap runs; built by `controlMembers`. */
   openOf?: ControlMembers["openOf"];
+  /** A presentation's closing button → what its tap runs; built by `controlMembers`. */
+  closeOf?: ControlMembers["closeOf"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
@@ -150,9 +152,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      // An ARIA toggle (`role=checkbox|switch|radio`) or an in-flow layer's trigger: the tap changes the
-      // screen's state, then acts.
-      const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap;
+      // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
+      // changes the screen's state and acts.
+      const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap ?? deps.closeOf?.get(n);
       if (tap) return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
       return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
     }

@@ -109,6 +109,32 @@ export function buildDetached(
   return { sem, fixed: ctx.fixed.length };
 }
 
+/**
+ * A presented layer's roots (`layers.ts`) as root overlays, built like the screen's own fixed nodes (fixed
+ * descendants drained into further roots); every one is `fixed`.
+ */
+export function layerOverlays(doc: LayoutDoc, nodes: LayoutNode[], options: InferOptions = {}): Overlay[] {
+  const ctx: InferenceContext = {
+    root: doc.root,
+    fixed: [...nodes],
+    bundledFamilies: options.bundledFamilies ?? {},
+    viewport: doc.viewport,
+    labels: labelIndex(doc.root),
+  };
+  const out: Overlay[] = [];
+  for (let built = 0; built < ctx.fixed.length; ) {
+    const batch = ctx.fixed.slice(built);
+    built = ctx.fixed.length;
+    // `buildOverlays` appends the host's hanging list markers after one overlay per batch node: not layer content.
+    out.push(...buildOverlays(doc.root, batch, undefined, ctx).slice(0, batch.length));
+  }
+  for (const o of out) {
+    dropInvisible(o.node);
+    o.fixed = true;
+  }
+  return out;
+}
+
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   if (ctx.table?.rows === input) return tableGrid(input, ctx.table.slots, ctx);
   const t = hideEmptyCells(collapseTableBorders(input));
