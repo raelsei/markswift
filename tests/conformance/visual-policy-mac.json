@@ -12,6 +12,12 @@
     "attribute@fidelity": {
       "minSsim": 0.84
     },
+    "breakpoints@app": {
+      "minSsim": 0.65
+    },
+    "breakpoints@fidelity": {
+      "minSsim": 0.92
+    },
     "components@app": {
       "minSsim": 0.53
     },
@@ -65,6 +71,12 @@
     }
   },
   "exceptions": {
-    "attr-placeholder@app": "macOS ImageRenderer cannot rasterise AppKit TextField/SecureField/TextEditor; the iOS gate judges it — owner 047"
+    "attr-placeholder@app": "macOS ImageRenderer cannot rasterise AppKit TextField/SecureField/TextEditor; the iOS gate judges it — owner 047",
+    "motion-unmapped-320-light-fidelity": "the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion, D-MOTION) — owner 064",
+    "motion-unmapped-390-light-fidelity": "the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion, D-MOTION) — owner 064",
+    "overlay-dialog-390-dark-app@open:edit-profile@t:50": "macOS ImageRenderer cannot rasterise the dialog's AppKit TextFields (its @open capture scores the same, 0.91); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner 066",
+    "overlay-dialog-390-light-app@open:edit-profile@t:50": "macOS ImageRenderer cannot rasterise the dialog's AppKit TextFields (its @open capture scores the same, 0.91); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner 066",
+    "overlay-sheet-390-dark-app@open:open-sheet@t:100": "macOS ImageRenderer cannot rasterise the sheet's AppKit TextFields (its @open capture scores the same, 0.93); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner 066",
+    "overlay-sheet-390-light-app@open:open-sheet@t:100": "macOS ImageRenderer cannot rasterise the sheet's AppKit TextFields (its @open capture scores the same, 0.93); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner 066"
   }
 }
