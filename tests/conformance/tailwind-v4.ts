@@ -1,6 +1,7 @@
 /**
- * Compiles the Tailwind v4 fixture sources (`fixtures/_tailwind-v4/*.html` → `fixtures/tailwind-v4/`, and the component
- * corpus `fixtures/_components/*.html` → `fixtures/components/`) into self-contained fixtures with the CSS inlined, so
+ * Compiles the Tailwind v4 fixture sources (`fixtures/_tailwind-v4/*.html` → `fixtures/tailwind-v4/`, the component
+ * corpus `fixtures/_components/*.html` → `fixtures/components/`, and `fixtures/_breakpoints/*.html` →
+ * `fixtures/breakpoints/`) into self-contained fixtures with the CSS inlined, so
  * tests never need Tailwind or a CDN. Marker `<!-- tailwind-v4 -->` compiles against `@import "tailwindcss";`;
  * `<!-- tailwind-v4 globals.css -->` compiles against the source dir's `globals.css` (its own Tailwind entry).
  * `MARKSWIFT_TAILWIND_MODULES` = a node_modules with `tailwindcss` 4.1.x and `@tailwindcss/cli`
@@ -15,6 +16,7 @@ const FIXTURES = join(import.meta.dir, "fixtures");
 const DIRS = [
   ["_tailwind-v4", "tailwind-v4"],
   ["_components", "components"],
+  ["_breakpoints", "breakpoints"],
 ] as const;
 const MARKER = /<!-- tailwind-v4( globals\.css)? -->/;
 const modules = resolve(
