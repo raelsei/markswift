@@ -3,7 +3,19 @@ import { inferScreen } from "../../../src/analysis/infer.ts";
 import { applyLayers } from "../../../src/analysis/layers.ts";
 import { LAYOUT_DOC_VERSION, type Layer, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 import type { ControlNode, SemNode, StackNode } from "../../../src/model/semantic.ts";
-import { ALERT, DIALOG, MENU, NATIVE, POPOVER, SHEET, TOOLTIP, presentationDoc } from "../../helpers/presentations.ts";
+import {
+  ALERT,
+  CONTEXT,
+  DIALOG,
+  DROPDOWN,
+  MENU,
+  NATIVE,
+  POPOVER,
+  SELECT,
+  SHEET,
+  TOOLTIP,
+  presentationDoc,
+} from "../../helpers/presentations.ts";
 
 const FONT = { "font-family": "system-ui", "font-size": "15px", "line-height": "20px", color: "rgb(17, 24, 39)" };
 
@@ -234,4 +246,83 @@ test("presentation: an unplaced box keeps its captured offset", () => {
   d.layers![0]!.nodes[1]!.preferredSize!.insets = { top: "20px", right: "auto", bottom: "auto", left: "20px" };
   d.layers![0]!.nodes[1]!.bounds = { x: 20, y: 20, w: 200, h: 200 };
   expect(presented(d).p!.placement).toEqual({ kind: "offset" });
+});
+
+test("menu: a dropdown's items in DOM order, shortcut dropped, the trigger unopened", () => {
+  const { overlays, trigger } = presented(DROPDOWN());
+  expect(overlays).toEqual([]);
+  expect(trigger.opens).toBeUndefined();
+  expect(trigger.menu!.items).toEqual([
+    {
+      kind: "section",
+      label: "My Account",
+      items: [
+        { kind: "button", id: "profile", label: "Profile", action: expect.anything() },
+        { kind: "button", id: "billing", label: "Billing", action: expect.anything() },
+        { kind: "button", id: "settings", label: "Settings", action: expect.anything() },
+      ],
+    },
+    { kind: "divider" },
+    { kind: "toggle", id: "status", label: "Status Bar", checked: true },
+    { kind: "radio", id: "top", options: [{ label: "Top" }, { label: "Bottom" }], selected: 0 },
+    { kind: "divider" },
+    { kind: "button", id: "logout", label: "Log out", action: expect.anything(), destructive: true },
+    { kind: "submenu", id: "invite", label: "Invite users" },
+  ]);
+  expect(JSON.stringify(trigger.menu)).not.toContain("⇧⌘P");
+  expect(trigger.menu!.context).toBeUndefined();
+  expect(messages(trigger)).toEqual(
+    expect.arrayContaining([
+      "@role: native menu popup: the CSS look of the open list is not drawn",
+      "@role: menu shortcut text is dropped",
+      "@role: menu item icons are dropped",
+      "@role: submenu Invite users items are not captured",
+    ]),
+  );
+});
+
+test("menu: a right-click layer is a context menu on a plain node", () => {
+  const { trigger } = presented(CONTEXT());
+  expect(trigger.kind).not.toBe("control");
+  expect(trigger.menu).toMatchObject({
+    layer: "right-click-here",
+    context: true,
+    items: [
+      { kind: "button", label: "Back" },
+      { kind: "button", label: "Forward", disabled: true },
+      { kind: "divider" },
+      { kind: "toggle", label: "Show Bookmarks", checked: false },
+    ],
+  });
+});
+
+test("menu: a listbox is one Picker of grouped options, its value text live in the trigger", () => {
+  const { trigger } = presented(SELECT());
+  expect(trigger.menu!.items).toEqual([
+    {
+      kind: "radio",
+      id: "sl",
+      options: [
+        { label: "Apple", group: "Fruits" },
+        { label: "Banana", group: "Fruits" },
+        { label: "Grapes", group: "More" },
+        { label: "Kiwi", group: "More", disabled: true },
+      ],
+      selected: 1,
+    },
+  ]);
+  const value = trigger.menu!.select!.valueText!;
+  expect(find(trigger, value)).toMatchObject({ kind: "text", runs: [{ text: "Banana" }] });
+  expect(trigger.menu!.select!.value).toBe("Banana");
+  const plain = presented(SELECT(false)).trigger;
+  expect(plain.menu!.select).toEqual({ value: "Banana" });
+  expect(messages(plain)).toContain("@role: the select's value text does not follow the choice");
+});
+
+test("menu: a click trigger that is not a button is reported and gets no menu", () => {
+  const span = presentationDoc({ id: "open", placement: "anchored", nodes: DROPDOWN().layers![0]!.nodes }, "span");
+  const { trigger, overlays } = presented(span);
+  expect(overlays).toEqual([]);
+  expect(trigger.menu).toBeUndefined();
+  expect(messages(trigger)).toContain("@role: menu open is not translated: the trigger is not a button");
 });

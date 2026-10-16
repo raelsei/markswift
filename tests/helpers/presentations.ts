@@ -252,3 +252,172 @@ export const TOOLTIP = () =>
     placement: "anchored",
     nodes: [fixed("div", "t", [16, 48, 120, 30], [], ["0px", "auto", "auto", "0px"], { role: "tooltip" })],
   });
+
+/** A menu item row: `role` and `label` (plus `extra` children: an icon, a shortcut) at row `i` of a menu at y 48. */
+const row = (
+  id: string,
+  role: string,
+  label: string,
+  i: number,
+  attrs: Record<string, string> = {},
+  extra: LayoutNode[] = [],
+) => el("div", id, [20, 52 + i * 28, 216, 28], [text(label, [28, 56 + i * 28, 80, 20]), ...extra], { role, ...attrs });
+const popper = (id: string, content: LayoutNode) =>
+  fixed(
+    "div",
+    `${id}-popper`,
+    [0, 0, 224, 300],
+    [content],
+    ["0px", "auto", "auto", "0px"],
+    {},
+    {
+      transform: "matrix(1, 0, 0, 1, 16, 48)",
+    },
+  );
+
+/** shadcn dropdown (plan 061's fixture table, first row). */
+export const DROPDOWN = () =>
+  presentationDoc({
+    id: "open",
+    placement: "anchored",
+    nodes: [
+      popper(
+        "dd",
+        el(
+          "div",
+          "dd",
+          [16, 48, 224, 300],
+          [
+            el("div", "dd-label", [20, 52, 216, 28], [text("My Account", [28, 56, 80, 20])], {
+              "data-slot": "dropdown-menu-label",
+            }),
+            el(
+              "div",
+              "dd-group",
+              [20, 80, 216, 84],
+              [
+                row("profile", "menuitem", "Profile", 1, {}, [
+                  el("svg", "profile-icon", [28, 60, 16, 16]),
+                  el("span", "profile-shortcut", [200, 60, 30, 16], [text("⇧⌘P", [200, 60, 30, 16])], {
+                    "data-slot": "dropdown-menu-shortcut",
+                  }),
+                ]),
+                row("billing", "menuitem", "Billing", 2),
+                row("settings", "menuitem", "Settings", 3),
+              ],
+              { role: "group" },
+            ),
+            el("div", "sep1", [16, 164, 224, 1], [], { role: "separator" }),
+            row("status", "menuitemcheckbox", "Status Bar", 5, { "aria-checked": "true" }),
+            el(
+              "div",
+              "position",
+              [20, 200, 216, 56],
+              [
+                row("top", "menuitemradio", "Top", 6, { "aria-checked": "true" }),
+                row("bottom", "menuitemradio", "Bottom", 7, { "aria-checked": "false" }),
+              ],
+              { role: "group" },
+            ),
+            el("div", "sep2", [16, 260, 224, 1], [], { role: "separator" }),
+            row("logout", "menuitem", "Log out", 9, { "data-variant": "destructive" }),
+            row("invite", "menuitem", "Invite users", 10, { "aria-haspopup": "menu" }),
+          ],
+          { role: "menu", "data-slot": "dropdown-menu-content" },
+        ),
+      ),
+    ],
+  });
+
+/** shadcn context menu: a right-click `span` area. */
+export const CONTEXT = () =>
+  presentationDoc(
+    {
+      id: "right-click-here",
+      activation: "contextmenu",
+      placement: "anchored",
+      nodes: [
+        popper(
+          "cm",
+          el(
+            "div",
+            "cm",
+            [16, 48, 224, 120],
+            [
+              row("back", "menuitem", "Back", 0),
+              row("forward", "menuitem", "Forward", 1, { "aria-disabled": "true", "data-disabled": "" }),
+              el("div", "cm-sep", [16, 104, 224, 1], [], { role: "separator" }),
+              row("bookmarks", "menuitemcheckbox", "Show Bookmarks", 3, { "aria-checked": "false" }),
+            ],
+            { role: "menu" },
+          ),
+        ),
+      ],
+    },
+    "span",
+  );
+
+/** Radix select: a `role=combobox` trigger showing its `select-value`, a listbox of two labelled groups. */
+export const SELECT = (value = true) => {
+  const option = (id: string, label: string, i: number, attrs: Record<string, string> = {}) =>
+    row(id, "option", label, i, attrs);
+  const group = (id: string, label: string, i: number, options: LayoutNode[]) =>
+    el(
+      "div",
+      id,
+      [20, 52 + i * 28, 216, 84],
+      [
+        el("div", `${id}-label`, [20, 52 + i * 28, 216, 28], [text(label, [28, 56 + i * 28, 80, 20])], {
+          id: `${id}-label`,
+          "data-slot": "select-label",
+        }),
+        ...options,
+      ],
+      { role: "group", "aria-labelledby": `${id}-label` },
+    );
+  const d = presentationDoc({
+    id: "select-a-fruit",
+    placement: "anchored",
+    nodes: [
+      popper(
+        "sl",
+        el(
+          "div",
+          "sl",
+          [16, 48, 224, 200],
+          [
+            group("fruits", "Fruits", 0, [
+              option("apple", "Apple", 1),
+              option("banana", "Banana", 2, { "aria-selected": "true" }),
+            ]),
+            group("more", "More", 3, [
+              option("grapes", "Grapes", 4),
+              option("kiwi", "Kiwi", 5, { "aria-disabled": "true", "data-disabled": "" }),
+            ]),
+          ],
+          { role: "listbox" },
+        ),
+      ),
+    ],
+  });
+  d.root.children = [
+    el(
+      "button",
+      "trigger",
+      [16, 8, 180, 36],
+      [
+        el(
+          "span",
+          "value",
+          [28, 16, 100, 20],
+          [text("Banana", [28, 16, 60, 20])],
+          value ? { "data-slot": "select-value" } : {},
+        ),
+        el("svg", "chevron", [168, 18, 16, 16]),
+      ],
+      { role: "combobox", "aria-expanded": "false" },
+      { display: "flex" },
+    ),
+  ];
+  return d;
+};
