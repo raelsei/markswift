@@ -10,11 +10,17 @@
     "attribute@fidelity": {
       "minSsim": 0.83
     },
+    "breakpoints@app": {
+      "minSsim": 0.91
+    },
+    "breakpoints@fidelity": {
+      "minSsim": 0.92
+    },
     "components@app": {
       "minSsim": 0.94
     },
     "components@fidelity": {
-      "minSsim": 0.9
+      "minSsim": 0.91
     },
     "css-layout@app": {
       "minSsim": 0.83
@@ -46,6 +52,9 @@
     "html@fidelity": {
       "minSsim": 0.78
     },
+    "motion@app": {
+      "minSsim": 0.92
+    },
     "svg@app": {
       "minSsim": 0.92
     },
@@ -60,6 +69,10 @@
     }
   },
   "exceptions": {
+    "motion-unmapped-320-light-fidelity": "the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion, plan 064 D-MOTION) — owner: @raelsei",
+    "motion-unmapped-390-light-fidelity": "the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion, plan 064 D-MOTION) — owner: @raelsei",
+    "overlay-collapsible-320-dark-app": "the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the 320 lines wrap differently — generic ui-* faces are a support boundary (README, plan 059) — owner: @raelsei",
+    "overlay-collapsible-320-light-app": "the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the 320 lines wrap differently — generic ui-* faces are a support boundary (README, plan 059) — owner: @raelsei",
     "shadcn-field@app": "items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei",
     "shadcn-item-320-dark-app": "the description wraps one word earlier (\"Deploys, failures / and mentions.\", \"A summary every / Monday morning.\") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei",
     "shadcn-item-320-light-app": "the description wraps one word earlier (\"Deploys, failures / and mentions.\", \"A summary every / Monday morning.\") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking (decisions 2026-10-10) — owner: @raelsei",
