@@ -351,6 +351,8 @@ nonisolated struct MarkswiftForcedStates: OptionSet, Sendable {
     let rawValue: Int
     static let pressed = MarkswiftForcedStates(rawValue: 1)
     static let focused = MarkswiftForcedStates(rawValue: 2)
+    /// Reduce Motion for harnesses (`accessibilityReduceMotion` has no public setter).
+    static let reduceMotion = MarkswiftForcedStates(rawValue: 4)
 }
 
 extension EnvironmentValues {
