@@ -9,6 +9,7 @@ import {
   type MotionTrack,
   type SemBase,
   type StateField,
+  type SemNode,
   type StateStyle,
   type Style,
   type TransitionMap,
@@ -135,15 +136,7 @@ function mapTransitions(list: Transition[], look: StateStyle, diagnostics: Diagn
 export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[]): Motion | undefined {
   const captured = n.motion;
   if (!captured?.animations && !captured?.reduced) return undefined;
-  const t = style.transform;
-  const base: Record<MotionChannel, number> = {
-    opacity: style.opacity ?? 1,
-    tx: t?.tx ?? 0,
-    ty: t?.ty ?? 0,
-    sx: t?.scaleX ?? 1,
-    sy: t?.scaleY ?? 1,
-    deg: t?.rotate ?? 0,
-  };
+  const base = baseOf(style);
   const animations = mapAnimations(captured.animations ?? [], n, base, diagnostics);
   let reduced: KeyframeMotion[];
   if (captured.reduced) reduced = mapAnimations(captured.reduced, n, base, diagnostics);
@@ -158,22 +151,138 @@ export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[])
       .filter((a) => Object.keys(a.tracks).length);
   if (!animations.length && !reduced.length) return undefined;
   const driven = new Set([...animations, ...reduced].flatMap((a) => Object.keys(a.tracks) as MotionChannel[]));
-  // `.offset` and `.scaleEffect` take both axes: a driven axis takes its partner's static value along.
+  const motion: Motion = {
+    ...(animations.length ? { animations } : {}),
+    ...(JSON.stringify(reduced) !== JSON.stringify(animations) ? { reduced } : {}),
+    base: baseFor(driven, base),
+  };
+  const anchor = anchorOf(n);
+  if (anchor) motion.anchor = anchor;
+  return motion;
+}
+
+/** The settled values of every channel (the computed look). */
+function baseOf(style: Style): Record<MotionChannel, number> {
+  const t = style.transform;
+  return {
+    opacity: style.opacity ?? 1,
+    tx: t?.tx ?? 0,
+    ty: t?.ty ?? 0,
+    sx: t?.scaleX ?? 1,
+    sy: t?.scaleY ?? 1,
+    deg: t?.rotate ?? 0,
+  };
+}
+
+/** `Motion.base` of the `driven` channels; `.offset` and `.scaleEffect` take both axes, so a driven axis takes its partner. */
+function baseFor(driven: Set<MotionChannel>, base: Record<MotionChannel, number>): Motion["base"] {
   for (const [a, b] of [
     ["tx", "ty"],
     ["sx", "sy"],
   ] as const)
     if (driven.has(a) || driven.has(b)) driven.add(a).add(b);
-  const motion: Motion = {
-    ...(animations.length ? { animations } : {}),
-    ...(JSON.stringify(reduced) !== JSON.stringify(animations) ? { reduced } : {}),
-    base: Object.fromEntries([...driven].map((c) => [c, base[c]])),
-  };
+  return Object.fromEntries([...driven].map((c) => [c, base[c]]));
+}
+
+/** `transform-origin` as fractions of the border box; undefined at the centre. */
+function anchorOf(n: LayoutNode): [number, number] | undefined {
   const origin = parseOrigin(n.styles["transform-origin"]);
   const { w, h } = n.bounds;
   if (origin && w > 0 && h > 0 && (Math.abs(origin[0] / w - 0.5) > 1e-6 || Math.abs(origin[1] / h - 0.5) > 1e-6))
-    motion.anchor = [origin[0] / w, origin[1] / h];
-  return motion;
+    return [origin[0] / w, origin[1] / h];
+  return undefined;
+}
+
+/**
+ * In-flow layer content (066): `height` keyframes from 0 to the node's own height (or `auto`) open it, the reverse
+ * closes it; their timing becomes `reveal`, and the lists come back without `height`. Other shapes are reported.
+ */
+export function revealOf(
+  n: LayoutNode,
+  diagnostics: Diagnostic[],
+): { reveal?: NonNullable<Motion["reveal"]>; enter: Anim[]; exit: Anim[] } {
+  const reveal: NonNullable<Motion["reveal"]> = {};
+  const own = (v: string) => v === "auto" || Math.abs(parseFloat(v) - n.bounds.h) <= 1;
+  const zero = (v: string) => parseFloat(v) === 0;
+  const strip = (list: Anim[], key: "open" | "close") =>
+    list.flatMap((a) => {
+      const frames = a.keyframes.filter((k) => Object.hasOwn(k.values, "height"));
+      if (!frames.length) return [a];
+      const [from, to] = frames.map((k) => k.values["height"]!);
+      const easing =
+        frames.length === 2 && frames[0]!.offset === 0 && frames[1]!.offset === 1 && parseEasing(frames[0]!.easing);
+      const shape = key === "open" ? zero(from!) && own(to!) : own(from!) && zero(to!);
+      if (easing && shape && !reveal[key] && a.iterations === 1)
+        reveal[key] = { duration: a.duration, delay: Math.max(0, a.delay), easing };
+      else
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "animation-name",
+          `keyframed height of ${a.name} is not animated (only 0 ↔ the content's height once)`,
+        );
+      const keyframes = a.keyframes.map(({ values: { height: _, ...values }, ...k }) => ({ ...k, values }));
+      return keyframes.some((k) => Object.keys(k.values).length) ? [{ ...a, keyframes }] : [];
+    });
+  const enter = strip(n.motion?.enter ?? [], "open");
+  const exit = strip(n.motion?.exit ?? [], "close");
+  return { ...(reveal.open || reveal.close ? { reveal } : {}), enter, exit };
+}
+
+/**
+ * A layer root's captured enter and exit (066), after its placement is decided (`analysis/layers.ts`): the enter joins
+ * `animations` (the root is inserted when its layer opens, so it plays on appear) with D-MOTION's fallback under Reduce
+ * Motion (movement removed, opacity kept); the first exit becomes `exit`, exact for two keyframes starting at the
+ * settled look, else played first → last (reported).
+ */
+export function layerMotionOf(n: LayoutNode, sem: SemNode, lists: { enter: Anim[]; exit: Anim[] }): void {
+  if (!lists.enter.length && !lists.exit.length) return;
+  const d = sem.diagnostics;
+  const base = baseOf(sem.style);
+  // Centred and anchored content lost the translation that placed it in CSS (the runtime places it): the keyframes
+  // compose on nothing.
+  const src = sem.style.transform
+    ? n
+    : { ...n, styles: { ...n.styles, translate: "none", rotate: "none", scale: "none", transform: "none" } };
+  const m: Motion = { ...sem.motion };
+  const prior = m.animations ?? [];
+  const enter = mapAnimations(lists.enter, src, base, d, new Set(prior.flatMap((a) => Object.keys(a.tracks))));
+  if (enter.length) {
+    const reduced = [
+      ...(m.reduced ?? prior),
+      ...enter
+        .map((a) => ({
+          ...a,
+          tracks: Object.fromEntries(Object.entries(a.tracks).filter(([c]) => !MOVEMENT.includes(c as MotionChannel))),
+        }))
+        .filter((a) => Object.keys(a.tracks).length),
+    ];
+    m.animations = [...prior, ...enter];
+    if (JSON.stringify(reduced) !== JSON.stringify(m.animations)) m.reduced = reduced;
+    else delete m.reduced;
+    const driven = new Set([...m.animations, ...reduced].flatMap((a) => Object.keys(a.tracks) as MotionChannel[]));
+    m.base = { ...baseFor(driven, base), ...m.base };
+  }
+  const [first, ...more] = lists.exit;
+  if (more.length)
+    addDiagnostic(
+      d,
+      "unmapped",
+      "animation-name",
+      `several exit animations; ${more.map((a) => a.name).join(", ")} not played`,
+    );
+  const [exit] = first ? mapAnimations([first], src, base, d) : [];
+  if (exit) {
+    const exact =
+      first!.keyframes.length === 2 &&
+      (Object.entries(exit.tracks) as Array<[MotionChannel, MotionTrack]>).every(([c, t]) => t.from === base[c]);
+    if (!exact) addDiagnostic(d, "approximated", "animation-name", `exit ${first!.name} played as from→to`);
+    m.exit = { motion: exit, ...(exact ? {} : { approximated: true as const }) };
+  }
+  if (!m.animations && !m.exit) return;
+  const anchor = anchorOf(n);
+  if (anchor && !m.anchor) m.anchor = anchor;
+  sem.motion = m;
 }
 
 /** One captured list → IR animations with disjoint channels; dropped ones are reported. */
@@ -182,9 +291,10 @@ function mapAnimations(
   n: LayoutNode,
   base: Record<MotionChannel, number>,
   diagnostics: Diagnostic[],
+  /** Channels already driven (a layer root's own animations, when its enter joins them). */
+  driven = new Set<string>(),
 ): KeyframeMotion[] {
   const out: KeyframeMotion[] = [];
-  const driven = new Set<string>();
   for (const a of list) {
     if (a.timeline) {
       addDiagnostic(

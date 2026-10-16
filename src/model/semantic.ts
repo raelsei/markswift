@@ -258,6 +258,10 @@ export interface Motion {
   base?: Partial<Record<MotionChannel, number>>;
   /** Pressed/focused looks' CSS transitions (`analysis/motion.ts` `transitionsOf`). */
   transitions?: { pressed?: StateTransition; focused?: StateTransition };
+  /** Overlay layer roots: the exit animation, played first → last keyframe as the removal transition (066). */
+  exit?: { motion: KeyframeMotion; approximated?: true };
+  /** In-flow layer content (or a `<details>` disclosure): the `height` 0 ↔ auto timing of opening and closing (066). */
+  reveal?: { open?: TransitionSpec; close?: TransitionSpec };
 }
 export type StateField = keyof StateStyle;
 /** One paint field's transition. Times in ms (`delay` ≥ 0). */

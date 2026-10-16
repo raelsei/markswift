@@ -60,7 +60,10 @@ export function translateLength(t: string, ref: number): number | undefined {
   return v;
 }
 
-/** Animatable 2D channels of one transform value; `order` = its function kinds (`T`ranslate, `R`otate, `S`cale) in list order, runs merged. */
+/**
+ * Animatable 2D channels of one transform value; `order` = its function kinds (`T`ranslate, `R`otate, `S`cale) in list
+ * order, runs merged. Identity functions (tw-animate's `rotate(0deg)`, `scale3d(1, 1, 1)`) compose nothing: no kind.
+ */
 export interface TransformChannels {
   tx: number;
   ty: number;
@@ -94,7 +97,7 @@ export function transformChannels(
     if (dx === undefined || dy === undefined) return false;
     c.tx += dx;
     c.ty += dy;
-    kind("T");
+    if (dx || dy) kind("T");
     return true;
   };
   const scale = (x: string, y = x) => {
@@ -103,14 +106,14 @@ export function transformChannels(
     if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
     c.sx *= fx;
     c.sy *= fy;
-    kind("S");
+    if (fx !== 1 || fy !== 1) kind("S");
     return true;
   };
   const rotate = (a: string) => {
     const deg = hue(a);
     if (deg === undefined || a === "none") return false;
     c.deg += deg;
-    kind("R");
+    if (deg) kind("R");
     return true;
   };
   if (property === "translate") {
