@@ -325,7 +325,8 @@ async function run() {
         const key = `${item.id}-bp-${theme}-app`;
         try {
           const bands: Capture[] = [];
-          for (const viewport of plan!.captures)
+          // Band captures and container-query extras, ascending (as `convert({ breakpoints })` passes them).
+          for (const viewport of [...plan!.captures, ...plan!.extra].sort((a, b) => a.width - b.width))
             bands.push(
               await bpBrowser!.capture(
                 { ...specFor(item, theme, viewport), screenshot: false, breakpoints: true },
@@ -408,7 +409,7 @@ async function run() {
             : `${item.id}-390-${entry.theme}-${entry.mode}`;
           const reflowTag = !entry.arm
             ? item.reflow!
-            : bpPlans.get(item.id)!.captures.some((c) => c.width === entry.width)
+            : [...bpPlans.get(item.id)!.captures, ...bpPlans.get(item.id)!.extra].some((c) => c.width === entry.width)
               ? "breakpoint"
               : "breakpoint-edge";
           if (!source) throw new Error(`reflow source ${reflowSource} missing`);
