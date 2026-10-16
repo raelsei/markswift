@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { applyLayers } from "../../../src/analysis/layers.ts";
 import { LAYOUT_DOC_VERSION, type Anim, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
-import { type SemNode, walk } from "../../../src/model/semantic.ts";
+import { type Easing, type SemNode, walk } from "../../../src/model/semantic.ts";
 import { DIALOG, MENU } from "../../helpers/presentations.ts";
 
-const EASE = { bezier: [0.25, 0.1, 0.25, 1] };
-const EASE_OUT = { bezier: [0, 0, 0.58, 1] };
+const EASE: Easing = { bezier: [0.25, 0.1, 0.25, 1] };
+const EASE_OUT: Easing = { bezier: [0, 0, 0.58, 1] };
 /** tw-animate `enter`/`exit` as Chrome reports them on a `fade-in-0 zoom-in-95` root (`from` / `to` only). */
 const ZOOM = "translate3d(0px, 0px, 0px) scale3d(0.95, 0.95, 0.95) rotate(0deg)";
 const anim = (name: string, frames: Array<Record<string, string>>, duration = 150, easing = "ease"): Anim => ({
