@@ -12,9 +12,11 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `markswift convert --breakpoints` (API `breakpoints`): one view across CSS width bands. Elements whose authored inputs differ between bands become alternatives chosen at layout time by `MarkswiftBands` at the width offered to the view (no first-frame flash); everything else is emitted once and reflows natively. One `@State` per control across bands; a fixed-width root or script-driven DOM differences are reported.
 - Generated images inside text: a `data:` image of an inline `::before`/`::after`/`::marker` (`content: url()`, an inside `list-style-image`) rides in the paragraph as `Text(Image.markswiftRendered(…) { … })` at its CSS size on the baseline (`vertical-align` shifts it), instead of breaking out below the text; outside `list-style-image` markers hang as image overlays. A `url()` the browser did not lay out is reported (`approximated content`/`list-style-image`), an inline source without pixels keeps its advance (`unmapped content: url()`).
 - Extracted rows derive counter markers (`decimal`, `decimal-leading-zero`, alphabetic/latin, roman `::marker`s and `content: counter()`) from the row index through `markswiftCounter(_:_:)` when the captured values form an arithmetic progression (start, `reversed`, step); unextracted output is unchanged.
+- Native tables: admitted tables (separated or collapsed, colspan/rowspan, `border-spacing`, `table-layout: fixed` from `<col>`/first-row widths) are laid out by the runtime `MarkswiftTable` with shared columns; `<th>` announces as a header.
 
 ### Changed
 - `ConversionWarning.source` may be `breakpoints`.
+- Generated Swift for admitted tables is one `MarkswiftTable` of flat cells (rows no longer extract into `ForEach` row components); a table caption sits outside the table's padding, and caption margins are respected.
 
 ### Changed (breaking)
 - Extracted ordered-list rows derive their marker from the row index: the marker string field is gone from the row type and the row subview takes `ordinal: Int`.

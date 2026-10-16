@@ -36,6 +36,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
         if (!it.fixed) allocated.set(n.children[it.child]!, it.justify === "stretch" ? "both" : "height");
     // App mode: MarkswiftFlexRow proposes each item its allocated width; heights stay as the IR says.
     if (opts.mode === "app" && n.kind === "stack" && n.flex) for (const c of n.children) allocated.set(c, "width");
+    // App mode: MarkswiftTable proposes every cell and band its slot; captured heights are the Layout's row floors.
+    if (opts.mode === "app" && n.kind === "grid" && n.table) for (const c of n.children) allocated.set(c, "both");
   });
   // Breakpoint holders: an alternative is laid out by the holder's parent, so it takes the holder's flags.
   for (const [n, v] of allocated) for (const a of n.alternatives ?? []) allocated.set(a, v);

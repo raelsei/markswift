@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode, type Rect } from "../../../src/model/layout.ts";
 import { axParity } from "../../../tools/verify/ax.ts";
+import { collapsed, doc as tableDoc } from "../../helpers/tables.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
@@ -70,4 +71,14 @@ test("a button's name includes descendant labels in any order", () => {
     ]),
   );
   expect(axParity([{ role: "button", name: "loading saving" }], s)).toEqual([]);
+});
+
+test("049: table cells read in DOM order; a `<th>` is a columnheader, a `<td>` is not", () => {
+  const s = inferScreen(tableDoc(collapsed()), "s");
+  expect(s.root.kind === "stack" && s.root.children[0]!.kind).toBe("grid");
+  const cell = (name: string) => ({ role: "cell", name });
+  expect(axParity([cell("north"), cell("ada")], s)).toEqual([]);
+  expect(axParity([cell("ada"), cell("north")], s)).toEqual([cell("north")]);
+  expect(axParity([{ role: "columnheader", name: "region" }], s)).toEqual([]);
+  expect(axParity([{ role: "columnheader", name: "north" }], s)).toEqual([{ role: "columnheader", name: "north" }]);
 });

@@ -49,11 +49,12 @@ export const HTML_ELEMENTS: Readonly<Record<string, ElementPolicy>> = Object.fre
   ...family("br", "line-break"),
   ...family("area base datalist head link meta script source style template title track", "metadata", "nonvisual"),
   ...family(
-    "table tbody td tfoot th thead tr col colgroup",
+    "table",
     "flow",
     "approximated",
     "→ measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated",
   ),
+  ...family("tbody td tfoot th thead tr col colgroup", "flow"),
   ...family(
     "ruby rt",
     "flow",
