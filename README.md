@@ -13,6 +13,18 @@ product, `fidelity` exists for verification ([Modes](#modes)). What is measured 
 [Supported subset](#supported-subset-evidence); everything else the capture loses is reported (see
 [Diagnostics](#diagnostics)).
 
+New in 2.0:
+
+- Breakpoints (opt-in `--breakpoints`): one conversion captures every CSS width band and emits one view that switches
+  on the width SwiftUI offers it; iPad portrait and landscape are width bands ([Library API](#library-api)).
+- Dialogs, alert dialogs, sheets, popovers and hover cards opened by a trigger are found automatically and drawn in the
+  view hierarchy with their CSS look behind an `is<Name>Presented` state seeded through `init`; disclosures expand in
+  place (`is<Name>Expanded`) and menus open native popups ([Not translated](#not-translated) lists the limits).
+- CSS animations and transitions play with their CSS timing and honour Reduce Motion ([Motion](#motion)).
+
+Upgrading from 1.x: saved 1.x captures must be recaptured and some call sites change — see
+[Migrating from 1.x](CHANGELOG.md#migrating-from-1x).
+
 ## Requirements
 
 - Node.js ≥ 20 or Bun ≥ 1.4.2 (tested with 1.4.3), and an installed Google Chrome.
@@ -284,11 +296,13 @@ not by editing generated files. From code: `buildLibrary({ library, components, 
 ## Supported subset (evidence)
 
 Numbers come from the tracked iOS baseline `tests/conformance/baselines/visual-all-ios.json`:
-956 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
-both, in both modes), captured 2026-10-14 from source revision `e906d8e` with Playwright's pinned
-Chromium 153.0.8010.12 and rendered on the iOS runtime (`iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0`,
+1304 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
+both, in both modes, plus 52 `app` captures at 390 px of open layers (`@open:`) and animation frames (`@t:`)),
+captured 2026-10-16 from source revision `c64d6c8` with Playwright's pinned Chromium 153.0.8010.12 and rendered on
+the iOS runtime (`iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0`, Xcode 27.1,
 `UIHostingController` + `drawHierarchy`, so text fields, editors and scroll views are drawn natively). The
-`components` family is 25 shadcn/ui and Tailwind components (`tests/conformance/fixtures/components/`) compiled
+`components` family is 40 shadcn/ui and Tailwind component pages, 13 of them overlays opened by a trigger
+(`tests/conformance/fixtures/components/`), compiled
 offline with Tailwind 4.1. The metric is colour SSIM (minimum over R, G and B, at 1×, both images decoded to sRGB)
 plus pixel mismatch and element-region anchors. `components@app` is held at SSIM ≥ 0.95 per capture except the
 exceptions listed below (at most 20 % of its captures, each with a reason and an owner); every other family has a
@@ -336,7 +350,7 @@ Exceptions (exempt from family floors and the 1.0 component target; the 0.005 dr
 - `tw-cards-390-dark-app`: card descriptions wrap one word earlier and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking, decisions 2026-10-10), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
 <!-- /quality-summary -->
 
-Of 504 captures per mode, 385 `app` and 329 `fidelity` captures reach SSIM ≥ 0.95; 464 and 464
+Of 678 `app` and 626 `fidelity` captures, 528 and 423 reach SSIM ≥ 0.95; 626 and 582
 reach ≥ 0.90 (`jq '[.[] | select(.mode == "app" and .ssim >= 0.95)] | length'` over the baseline).
 Read the table with these limits:
 
@@ -365,13 +379,19 @@ mapped, approximated or unmapped in `diagnostics`.
 
 - Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
   fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
-- iOS behaviour suite (`bun run test:ios-behaviour`, 19 curated component fixtures and a `pointer-events: none`
-  tap-through case in the iOS simulator, on `v*` tags, weekly and on dispatch): the accessibility tree, Apple's
+- iOS behaviour suite (`bun run test:ios-behaviour`, 34 cases in the iOS simulator — 19 curated component fixtures,
+  the 13 overlay fixtures, a `pointer-events: none` tap-through case and a breakpoint page — on `v*` tags, weekly and
+  on dispatch): the accessibility tree, Apple's
   accessibility audit (Dynamic Type, clipped text, element descriptions, traits; hit regions are reported, not
   failing), Dynamic Type at xSmall, large and AX5 plus the root height at AX3 against Chrome scaled to AX3,
   right-to-left mirroring, interaction (toggles, text fields, pickers and every action closure is called), and motion:
   an animated view moves on its live clock, and under Reduce Motion it moves only when something should still move
-  (see Motion); a text field's transitioned focused look arrives, with and without Reduce Motion.
+  (see Motion); a text field's transitioned focused look arrives, with and without Reduce Motion. 2.0 interactions:
+  every disclosure opens and closes from its trigger; every drawn presentation opens (long-press for hover cards),
+  sits in a modal container when modal, closes from each of its closers and from an outside tap where the design
+  allows one, and its buttons' actions
+  are called; every native menu item's action is called; the breakpoint view switches bands while a typed text and a
+  toggled switch keep their values.
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
@@ -426,17 +446,20 @@ captured (a capture warning says so).
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- Breakpoint branching without `--breakpoints`: one viewport and one layout per capture. With it, CSS width media
-  queries switch the view at the root's proposed width and container queries switch at the container's width (stack
-  and grid containers; height, style and scroll-state queries are reported); height and orientation media queries
-  are reported, a fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band.
-  Paint-only pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or
-  accordion item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
-- Dialogs and popovers are drawn inside the component's frame (app mode): no swipe-to-dismiss, collision flip, scroll
-  lock or focus trap beyond VoiceOver's modal containment, and placed as captured at the primary viewport. Menus,
-  menubars and selects open native popups with their captured items (app mode): the CSS look of the open list,
-  shortcut text, item icons and submenu items are not drawn (a submenu is a disabled entry), and a menu trigger has no
-  tap action of its own; tooltips are described below.
+- Height and orientation media queries (reported; landscape is a wider width band), and width breakpoints without
+  `--breakpoints` (one viewport and one layout per capture). With it, CSS width media queries switch the view at the
+  root's proposed width and container queries switch at the container's width (stack and grid containers; height,
+  style and scroll-state queries are reported); a fixed-width root gets no breakpoints, and script-driven DOM
+  differences are emitted once per band.
+- States other than pressed, focused and open: paint-only pressed and focused deltas *are* captured, and so is the
+  open state of a `<details>`, collapsible, accordion item, dialog, sheet, popover, hover card or menu (app mode);
+  hover-only states other than tooltips (`.help`) and hover cards (long-press), and disabled, validation, checked and
+  `data-state` variants are not.
+- Swipe-to-dismiss and system presentation chrome: dialogs and popovers are drawn inside the component's frame (app
+  mode), with no collision flip, scroll lock or focus trap beyond VoiceOver's modal containment, and placed as
+  captured at the primary viewport. Menus, menubars and selects open native popups with their captured items (app
+  mode): the CSS look of the open list, shortcut text, item icons and submenu items are not drawn (a submenu is a
+  disabled entry), and a menu trigger has no tap action of its own; tooltips are described below.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - Scroll-driven animations, keyframed colours/shadows/filters/layout properties, `@starting-style` and script
@@ -448,8 +471,9 @@ captured (a capture warning says so).
 
 ## Known gaps
 
-- 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
-  rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
+- 13 of the 198 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
+  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `ui-monospace` drawn in
+  the wider SF Mono.
 - Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
   `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
   fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
@@ -463,6 +487,12 @@ captured (a capture warning says so).
   Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
   offset, so such lists stay unrolled instead of a `ForEach`.
 - Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
+- Layout: bare text beside a float is not split around it; a `width: %` block inside a `dir=rtl` parent is drawn at
+  the left edge; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
+  `object-fit: cover` image does not refill its box.
+- Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
+  repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width; with
+  `--breakpoints`, layers come from the primary capture and apply in every band.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
@@ -506,7 +536,7 @@ bun run pilot --renderer mac --out tests/conformance/out/<dir>   # add --all for
 bun run quality tests/conformance/baselines/visual-pilot-mac.json tests/conformance/out/<dir> tests/conformance/visual-policy-mac.json
 MARKSWIFT_SIMULATOR='iPhone 17' bun run pilot --renderer ios --all --out tests/conformance/out/<dir>   # iOS renderer
 # iOS breakpoint evidence: `@bp` captures render on an iPad simulator (create it once with
-# `xcrun simctl create "iPad Pro 13-inch (M5)" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB <iOS runtime>`)
+# `xcrun simctl create "iPad Pro 13-inch (M5)" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB com.apple.CoreSimulator.SimRuntime.iOS-27-0`)
 MARKSWIFT_SIMULATOR='iPhone 17' MARKSWIFT_SIMULATOR_IPAD='iPad Pro 13-inch (M5)' bun run pilot --renderer ios --all --reflow --group breakpoints --out tests/conformance/out/<dir>
 ```
 
@@ -539,16 +569,20 @@ reviewed and committed by hand. GitHub Actions workflows:
 | `tools/verify/`, `tools/quality.ts` | Swift typecheck, native rendering, image comparison and the visual gate |
 | `playground/` | Local workbench and the separately deployable conversion service |
 
-## Roadmap after 1.0
+## Roadmap after 2.0
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Menus opened by a trigger; validation and `data-state` variants;
-  iPad hover and keyboard.
+- Validation and `data-state` variants; iPad hover and keyboard.
+- Overlays: swipe-to-dismiss and an opt-in native `.sheet` for bottom drawers; nested triggers (submenus, dialogs
+  opened from a dialog); per-band layers with `--breakpoints`; menu item icons and shortcut text.
+- Motion: scroll-driven animations; mid-flight frame gates for state transitions; author `prefers-reduced-motion`
+  rules for overlay enter/exit.
+- Height and orientation media queries; sticky pinning while scrolling.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
-  for single conversions; browser-response font bytes; variable-font instances.
+  for single conversions; browser-response font bytes; static variable-font instances (smaller font bundles).
 - Remote image download, @2x images and asset catalogs.
 - Sharded iOS visual runs; body re-evaluation and scroll-hitch benchmarks.
 - A Compose target over the target-independent IR.
