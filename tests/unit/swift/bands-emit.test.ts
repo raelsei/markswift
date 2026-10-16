@@ -7,7 +7,7 @@ import { compileLayout, type CompileOptions } from "../../../src/compiler/index.
 import type { LayoutCondition, LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import { typecheck } from "../../../tools/verify/typecheck.ts";
 import { typecheckLoose } from "../../../tools/verify/typecheck-loose.ts";
-import { band, el, txt } from "../../helpers/bands.ts";
+import { band, el, fieldGroupDocs, txt } from "../../helpers/bands.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 const THREE: LayoutCondition[] = [
@@ -194,6 +194,40 @@ test("fidelity mode compiles a breakpoint view", () => {
   ).code;
   expect(code).toContain("MarkswiftBands(edges: [.atLeast(600.0)]) { band in");
 });
+
+test("057: a query container nests MarkswiftBands inside its padding; its members take container band names", () => {
+  for (const mode of ["app", "fidelity"] as const) {
+    const code = compile(fieldGroupDocs({ side: true }), { mode }).code;
+    expect(code).toMatch(
+      /private var v_group: some View \{\n {8}MarkswiftBands\(edges: \[\.atLeast\(448\.0\)\]\) \{ band in\n {12}VStack\(/,
+    );
+    const group = code.slice(code.indexOf("private var v_group"), code.indexOf("// field"));
+    expect(group.indexOf(".padding(8.0)")).toBeGreaterThan(group.lastIndexOf("\n        }\n"));
+    expect(code).toContain("private var v_field_cq_md: some View {");
+    expect(code).toContain("if band >= 1 {\n                        v_field_cq_md");
+    // The host's inner holders bind the closure's band: no container reads the screen's band.
+    expect(code).not.toContain("(_ band: Int)");
+  }
+});
+
+nativeTest(
+  "057: a query-container view typechecks with and without MainActor default isolation",
+  async () => {
+    for (const mode of ["app", "fidelity"] as const) {
+      const r = compile(fieldGroupDocs({ side: true }), { mode });
+      const directory = await mkdtemp(join(tmpdir(), "markswift-bands-emit-"));
+      try {
+        for (const [file, source] of Object.entries(r.files))
+          if (file.endsWith(".swift")) await Bun.write(join(directory, file), source);
+        for (const check of [await typecheck(directory), await typecheckLoose(directory)])
+          if (!check.ok) throw new Error(check.output);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  },
+  180000,
+);
 
 nativeTest(
   "a three-band breakpoint view typechecks with and without MainActor default isolation",

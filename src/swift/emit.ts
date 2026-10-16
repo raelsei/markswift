@@ -21,13 +21,20 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   // Collect container properties depth-first so the body reads top-down.
   const contentMinWidth = new Set<SemNode>();
   const allocated = new Map<SemNode, "width" | "height" | "both">();
-  // Breakpoints: a container takes the name of its nearest enclosing alternative's lowest band (`v_split_md`).
+  // Breakpoints: a container takes the name of its nearest enclosing alternative's lowest band (`v_split_md`); inside
+  // a query container, the band names are the container's (`v_field_cq_md`).
   const bandSuffix = new Map<SemNode, string>();
   const names = screen.breakpoints?.names;
-  if (names)
-    visit(screen.root, (a) => {
-      if (a.bands) visit(a, (n) => bandSuffix.set(n, names[a.bands![0]!]!));
+  if (names) {
+    const hostNames = new Map<SemNode, string[]>();
+    visit(screen.root, (h) => {
+      if (h.containerBands && (h.kind === "stack" || h.kind === "grid"))
+        for (const c of h.children) visit(c, (n) => hostNames.set(n, h.containerBands!.names));
     });
+    visit(screen.root, (a) => {
+      if (a.bands) visit(a, (n) => bandSuffix.set(n, (hostNames.get(a) ?? names)[a.bands![0]!]!));
+    });
+  }
   visit(screen.root, (n) => {
     if (n.kind !== "stack" && n.kind !== "grid") return;
     const suffix = bandSuffix.get(n);
@@ -55,7 +62,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   for (const n of contentMinWidth) for (const a of n.alternatives ?? []) contentMinWidth.add(a);
   // Containers whose subtree holds a holder read the band: `func v_x(_ band: Int)`. An app-mode scrolling root hosts
   // `MarkswiftBands` inside its ScrollView (the offset survives a switch) unless a `fixed` overlay, a modifier outside
-  // the closure that binds `band`, holds a holder.
+  // the closure that binds `band`, holds a holder. A query container's children bind its own `MarkswiftBands` band.
   // ponytail: a root that is itself a holder and scrolls loses its scroll offset on a switch (each alternative has its
   // own ScrollView). Hoist the ScrollView out of the alternatives if designs need it.
   const bandParam = new Set<SemNode>();
@@ -68,11 +75,12 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       const inside = [
         ...(n.alternatives ?? []),
         ...n.overlays.map((o) => o.node),
-        ...(n.kind === "stack" || n.kind === "grid" ? n.children : []),
         ...(n.kind === "control" ? [...(n.label ? [n.label] : []), ...n.content] : []),
       ];
       let found = !!n.alternatives;
       for (const c of inside) found = holdsHolder(c) || found;
+      if (n.kind === "stack" || n.kind === "grid")
+        for (const c of n.children) found = (holdsHolder(c) && !n.containerBands) || found;
       holds.set(n, found);
       if (found && (n.kind === "stack" || n.kind === "grid")) bandParam.add(n);
       return found;

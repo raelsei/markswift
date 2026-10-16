@@ -91,8 +91,16 @@ export function fieldGroupDocs(options: { side?: boolean; wideColor?: string } =
         el(
           "group",
           "div",
-          { x: 16, y: 0, w: gw, h: gw >= 448 ? 36 : 64 },
-          { display: "flex", "flex-direction": "column" },
+          // 8px padding: the content box is `gw` wide.
+          { x: 8, y: 0, w: gw + 16, h: (gw >= 448 ? 36 : 64) + 16 },
+          {
+            display: "flex",
+            "flex-direction": "column",
+            "padding-top": "8px",
+            "padding-right": "8px",
+            "padding-bottom": "8px",
+            "padding-left": "8px",
+          },
           [field("field", gw, gw >= 448, 1)],
         ),
         ...(options.side
