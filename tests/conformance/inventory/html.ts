@@ -460,7 +460,7 @@ export default {
       ir: "TextRun.text",
       via: "structure",
       impl: "yes",
-      note: "Isolated in its computed direction (Chrome resolves the implied `dir=auto` from the content); Core Text runs the bidi algorithm over the controls.",
+      note: "From the computed `unicode-bidi` (UA `isolate`), isolated in its computed direction (Chrome resolves the implied `dir=auto` from the content); Core Text runs the bidi algorithm over the controls.",
       spec: `${MDN}bdi`,
     },
     {
@@ -471,7 +471,7 @@ export default {
       ir: "TextRun.text",
       via: "attribute",
       impl: "yes",
-      note: "`dir` override has no SwiftUI modifier per run; the run is wrapped in Unicode isolate and override controls in its computed direction, which reproduces the glyph order (no caret behaviour in a `Text`). A text host that is itself a `<bdo>` only overrides.",
+      note: "From the computed `unicode-bidi` (UA `isolate-override`): `dir` override has no SwiftUI modifier per run; the run is wrapped in Unicode isolate and override controls in its computed direction, which reproduces the glyph order (no caret behaviour in a `Text`). A text host that is itself a `<bdo>` only overrides; an author `unicode-bidi: normal` removes both.",
       spec: `${MDN}bdo`,
     },
     {

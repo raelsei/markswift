@@ -31,3 +31,16 @@ export async function settle(page: Page): Promise<void> {
     await frame.promise;
   });
 }
+
+/** Finish (or, for infinite ones, cancel) every running animation: the settled look `settle()` leaves. */
+export async function finishAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      try {
+        a.finish();
+      } catch {
+        a.cancel();
+      }
+    }
+  });
+}

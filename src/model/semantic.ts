@@ -214,6 +214,10 @@ export interface FontSpec {
   weight: number;
   /** Optical size axis value when the family has one (Chrome uses font-size). */
   opsz?: number;
+  /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
+  stretch?: number;
+  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
 }
@@ -423,6 +427,8 @@ export interface SemBase extends SizeConstraints {
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
+  /** `title`, inline-run titles and captured tooltip layers (D-HOVER): `.help` + an accessibility hint; never drawn. */
+  tooltip?: string;
   /** `<label>`: id of the toggle/radio its tap changes, or of the text field it focuses. */
   labelFor?: string;
   /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
@@ -434,6 +440,11 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
+  /**
+   * `pointer-events: none` on this overlay's whole element subtree: taps reach what is painted underneath. Set on the
+   * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
+   */
+  hitTesting?: false;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
   states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
@@ -595,6 +606,8 @@ export interface ControlNode extends SemBase {
   swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** The placeholder's paint from `::placeholder` (fill colour × opacity); absent for Chrome's UA grey, which keeps the platform prompt grey. */
+  promptColor?: Color;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
   inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** WHATWG autofill field name from `autocomplete`, e.g. `one-time-code`. */
@@ -661,6 +674,8 @@ export interface Screen {
   /** Backdrop behind the root, from the design. */
   canvas: Color;
   root: SemNode;
+  /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
+  colorScheme?: "light" | "dark";
 }
 
 export function walk(n: SemNode, fn: (n: SemNode, depth: number) => void, depth = 0): void {

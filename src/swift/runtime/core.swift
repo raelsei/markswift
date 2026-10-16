@@ -55,10 +55,12 @@ extension Color {
 
 extension Font {
     /// A bundled variable font at an exact `wght` (and optional `opsz`) axis value — the same
-    /// instance the browser rendered, instead of the nearest named weight.
-    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil) -> Font {
+    /// instance the browser rendered, instead of the nearest named weight — and any other axis by
+    /// its four-letter tag (`["wdth": 80]`).
+    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil, axes extra: [String: CGFloat] = [:]) -> Font {
         var axes: [Int: CGFloat] = [0x7767_6874: weight] // 'wght'
         if let opsz { axes[0x6F70_737A] = opsz }          // 'opsz'
+        for (tag, value) in extra { axes[tag.utf8.reduce(0) { $0 << 8 | Int($1) }] = value }
 #if canImport(UIKit)
         let attrs: [UIFontDescriptor.AttributeName: Any] = [
             .family: family,

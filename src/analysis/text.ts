@@ -9,7 +9,7 @@ import {
   type DiagnosticLevel,
   addDiagnostic,
 } from "../model/semantic.ts";
-import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows } from "../css/index.ts";
+import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows, variationSettings } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
@@ -29,6 +29,7 @@ import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex, mainAxis, relativeOffset } from "./geometry.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { linkAction } from "./controls.ts";
+import { addTooltip, titleOf } from "./tooltips.ts";
 import { isActivatableRole } from "../model/interactive.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
@@ -209,6 +210,20 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         );
       }
     }
+    if (run.font.stretch !== undefined)
+      note(
+        "approximated",
+        "font-stretch",
+        `font-stretch ${run.font.stretch}% → SF's nearest width instance; glyph advances differ from the reference`,
+      );
+    if (run.font.family.kind === "system")
+      for (const tag of Object.keys(variationSettings(s["font-variation-settings"])))
+        if (tag !== "wght" && tag !== "wdth" && tag !== "opsz")
+          note(
+            "approximated",
+            "font-variation-settings",
+            `font-variation-settings axis ${tag} has no system-font mapping → dropped`,
+          );
     const ls = s["letter-spacing"];
     if (ls && ls !== "normal") run.kerning = round2(px(ls));
     const tt = s["text-transform"];
@@ -243,6 +258,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // background layer below — `<mark><b>x</b></mark>` paints mark's highlight behind bold text.
     for (const inline of chain) if (!painted.includes(inline) && inlineBoxHasPaint(inline)) painted.push(inline);
     reportInlineEffects(host, chain, hidden, note);
+    // ponytail: an inline title applies to the whole Text (SwiftUI has no per-run hint); split the run into its own view for per-run hints.
+    if (!hidden) for (const inline of chain) addTooltip(base, titleOf(inline));
     // `opacity` is not inherited but composites every inline box on the chain: the run's paints
     // carry the product (`<span class="opacity-60">` in prose).
     const opacity = inlineOpacity(chain);

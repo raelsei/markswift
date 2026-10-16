@@ -1,7 +1,7 @@
 /** Computed font selection with conversion-scoped bundled families. */
-import { type BundledFamilies } from "../model/fonts.ts";
+import { type BundledFamilies, type BundledFamily } from "../model/fonts.ts";
 import { type FontSpec } from "../model/semantic.ts";
-import { round2, px, fontWeight, fontFamilies } from "../css/index.ts";
+import { round2, px, fontWeight, fontFamilies, fontStretch, variationSettings } from "../css/index.ts";
 
 /**
  * Lower-case family name → the SwiftUI system design that carries it: the CSS generic families,
@@ -46,16 +46,18 @@ export const SYSTEM_DESIGNS: Record<string, "default" | "rounded" | "monospaced"
  * that resolves decides — a family the run bundled becomes `custom` (with `opsz` clamped into
  * the axis range its file declares), a generic or an Apple system stack becomes the matching
  * system design. An unresolvable list falls back to the default design, which `buildText`
- * reports by name.
+ * reports by name. `font-variation-settings` applies last and wins per axis (CSS Fonts 4 §7):
+ * `wght` → weight, `opsz` → opsz, other axes the bundled file declares (`wdth` also from
+ * `font-stretch`) → `axes`; a system family keeps `font-stretch`/`wdth` as `stretch`.
  */
 export function fontOf(s: Record<string, string>, families: BundledFamilies = {}): FontSpec {
   const size = round2(px(s["font-size"]));
   const spec: FontSpec = { family: { kind: "system", design: "default" }, size, weight: fontWeight(s["font-weight"]) };
+  let bundled: BundledFamily | undefined;
   for (const family of fontFamilies(s["font-family"])) {
-    const bundled = families[family];
+    bundled = families[family];
     if (bundled) {
       spec.family = bundled.wght ? { kind: "custom", name: family } : { kind: "custom", name: family, static: true };
-      if (bundled.opsz) spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], size));
       break;
     }
     const design = SYSTEM_DESIGNS[family.toLowerCase()];
@@ -64,6 +66,24 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
       break;
     }
   }
+  const fvs = variationSettings(s["font-variation-settings"]);
+  const stretch = fvs["wdth"] ?? fontStretch(s["font-stretch"]);
+  const wght = fvs["wght"];
+  if (wght !== undefined && (spec.family.kind === "system" || bundled?.wght)) {
+    const r = bundled?.wght ?? [1, 1000];
+    spec.weight = Math.min(r[1], Math.max(r[0], wght));
+  }
+  if (bundled?.opsz) {
+    const v = fvs["opsz"] ?? (s["font-optical-sizing"] === "none" ? undefined : size);
+    if (v !== undefined) spec.opsz = Math.min(bundled.opsz[1], Math.max(bundled.opsz[0], v));
+  }
+  const axes: Record<string, number> = {};
+  for (const [tag, r] of Object.entries(bundled?.axes ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const v = tag === "wdth" ? stretch : fvs[tag];
+    if (v !== undefined && (tag !== "wdth" || v !== 100)) axes[tag] = Math.min(r[1], Math.max(r[0], v));
+  }
+  if (Object.keys(axes).length) spec.axes = axes;
+  if (spec.family.kind === "system" && stretch !== 100) spec.stretch = stretch;
   const lh = s["line-height"];
   if (lh && lh !== "normal") spec.lineHeight = round2(px(lh));
   return spec;

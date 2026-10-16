@@ -306,3 +306,58 @@ describe("data: svg sources are parsed once, during analysis", () => {
     expect(view).not.toContain("Image.markswift");
   });
 });
+
+describe("052: fill-rule from computed style", () => {
+  const node = (
+    tag: string,
+    attrs: Record<string, string>,
+    styles: Record<string, string>,
+    children: LayoutNode[] = [],
+  ) => ({ tag, attrs, styles, bounds: { x: 0, y: 0, w: 10, h: 10 }, children }) as LayoutNode;
+  const DONUT = "M0 0h10v10H0zM2 2h6v6H2z";
+  const paths = (children: LayoutNode[]) => {
+    const root = node("svg", { viewbox: "0 0 10 10" }, { display: "block" }, children);
+    const screen = inferScreen(
+      {
+        version: LAYOUT_DOC_VERSION,
+        source: "fr",
+        combo: { screen: "fr", theme: "light" },
+        size: { w: 10, h: 10 },
+        viewport: { x: 0, y: 0, w: 10, h: 10 },
+        conditions: [],
+        dpr: 1,
+        canvas: "rgb(255, 255, 255)",
+        fonts: [],
+        root,
+      },
+      "fr",
+    );
+    if (screen.root.kind !== "svg") throw new Error("expected an svg root");
+    return screen.root.paths;
+  };
+  const red = { fill: "rgb(255, 0, 0)" };
+
+  test("a stylesheet evenodd with no attribute fills even-odd", () => {
+    expect(paths([node("path", { d: DONUT }, { ...red, "fill-rule": "evenodd" })])[0]!.eoFill).toBe(true);
+  });
+  test("the computed value beats the attribute", () => {
+    const p = paths([node("path", { d: DONUT, "fill-rule": "evenodd" }, { ...red, "fill-rule": "nonzero" })])[0]!;
+    expect(p.eoFill).toBeUndefined();
+  });
+  test("markup-only SVG reads the attribute", () => {
+    const p = svgFromMarkup(`<svg viewBox="0 0 10 10"><path d="${DONUT}" fill-rule="evenodd"/></svg>`, {
+      x: 0,
+      y: 0,
+      w: 10,
+      h: 10,
+    })!.paths[0]!;
+    expect(p.eoFill).toBe(true);
+  });
+  test("inside a <use> instance the attribute chain wins over the target's <defs> computed value", () => {
+    const defs = node("defs", {}, { display: "inline" }, [
+      node("path", { id: "d", d: DONUT }, { ...red, "fill-rule": "nonzero" }),
+    ]);
+    const use = node("use", { href: "#d", "fill-rule": "evenodd" }, { ...red, "fill-rule": "evenodd" });
+    expect(paths([defs, use]).at(-1)!.eoFill).toBe(true);
+  });
+});
