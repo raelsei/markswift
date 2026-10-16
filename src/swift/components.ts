@@ -6,7 +6,7 @@
  * first member's own emitted code with the differing literals read from its row, so the pixels are
  * the unrolled view's by construction. Names come from the markup (`componentNames`).
  */
-import type { GridNode, Screen, SemNode, StackNode } from "../model/semantic.ts";
+import type { CounterStyle, GridNode, Screen, SemNode, StackNode, TextRun } from "../model/semantic.ts";
 import type { ControlMembers, EmitContext, EmitOptions } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { indent, memberName, num, pascalWords, str } from "./format.ts";
@@ -37,9 +37,55 @@ interface NodeTemplate {
 /**
  * What a slot column becomes. `field`: a `Row` field; `literal`: kept as emitted; `binding`/`pass`:
  * the screen's state/action handed through; `collapse`: per-row actions as one `(Row) -> Void`;
- * `move`: per-row pressed/focused state declared in the subview.
+ * `move`: per-row pressed/focused state declared in the subview; `counter`: a list marker derived
+ * from the row's `ordinal`.
  */
-type Role = "field" | "literal" | "binding" | "pass" | "collapse" | "move";
+type Role = "field" | "literal" | "binding" | "pass" | "collapse" | "move" | "counter";
+
+/** Swift `MarkswiftCounterStyle` case of each counter style (runtime/counter.swift). */
+const SWIFT_COUNTER: Readonly<Record<CounterStyle, string>> = {
+  decimal: "decimal",
+  "decimal-leading-zero": "decimalLeadingZero",
+  "lower-alpha": "lowerAlpha",
+  "upper-alpha": "upperAlpha",
+  "lower-roman": "lowerRoman",
+  "upper-roman": "upperRoman",
+};
+
+type Counter = Omit<NonNullable<TextRun["counter"]>, "value">;
+
+/** A counter-marker column of a row type: the shared counter, and each run's first value and step. */
+interface CounterColumn {
+  counter: Counter;
+  ords: Map<Run, { first: number; step: number }>;
+}
+
+/**
+ * A string column whose every value is a counter run the browser printed (`::marker`, `counter()`) of one
+ * style/prefix/suffix, an arithmetic progression per run.
+ */
+function counterColumn(group: Run[], c: number): CounterColumn | undefined {
+  let counter: Counter | undefined;
+  const ords = new Map<Run, { first: number; step: number }>();
+  for (const run of group) {
+    const col = run.columns[c]!;
+    const values: number[] = [];
+    for (const [i, node] of col.nodes.entries()) {
+      const r = node.kind === "text" ? node.runs.find((x) => x.counter && str(x.text) === col.values[i]) : undefined;
+      if (!r?.counter) return undefined;
+      const { value, ...shape } = r.counter;
+      counter ??= shape;
+      if (shape.style !== counter.style || shape.prefix !== counter.prefix || shape.suffix !== counter.suffix)
+        return undefined;
+      values.push(value);
+    }
+    const first = values[0]!;
+    const step = values[1]! - first;
+    if (step === 0 || values.some((v, i) => v !== first + step * i)) return undefined;
+    ords.set(run, { first, step });
+  }
+  return counter && { counter, ords };
+}
 
 interface Run {
   /** The stack or grid holding the members. */
@@ -318,6 +364,8 @@ interface TypeNames {
   row: string;
   fields: Map<number, string>;
   pass: Map<number, string>;
+  /** The subview's row-index parameter of a counter marker (`ordinal`). */
+  ordinal?: string;
 }
 
 /**
@@ -328,7 +376,7 @@ export function componentNames(
   screen: Screen,
   viewName: string,
   ctx: EmitContext,
-  types: Array<{ run: Run; group: Run[]; fieldCols: number[] }>,
+  types: Array<{ run: Run; group: Run[]; fieldCols: number[]; counter?: CounterColumn }>,
   runType: number[],
   screenFields: SemNode[],
 ): { types: TypeNames[]; data: string[]; fields: Map<SemNode, string>; actions: Map<Run, Map<number, string>> } {
@@ -438,12 +486,18 @@ export function componentNames(
       if (r === "pass" || r === "move") params[strip(t.run.columns[c]!.values[0]!)] = 1;
       if (r === "collapse") params[actions.get(t.run)!.get(t.run.cls[c]!)!] = 1;
     });
+    let ordinal: string | undefined;
+    if (t.counter) {
+      ordinal = "ordinal";
+      for (let k = 2; params[ordinal]; k++) ordinal = `ordinal${k}`;
+      params[ordinal] = 1;
+    }
     const pass = new Map<number, string>();
     t.run.roles.forEach((r, c) => {
       if (r === "binding" && t.run.cls[c] === c)
         pass.set(c, fieldName([nodeAt(t.run, c, 0)], kindName(t.run, c), params));
     });
-    out.push({ type, view: `${type}View`, row, fields, pass });
+    out.push({ type, view: `${type}View`, row, fields, pass, ...(ordinal ? { ordinal } : {}) });
   }
   const data = runType.map((t) => {
     const b = lowerFirst(bases[t]!);
@@ -467,6 +521,7 @@ function headingNear(screen: Screen, run: Run): string | undefined {
   const headingIn = (n: SemNode): string | undefined => {
     if (n.kind === "text" && n.a11y?.heading) {
       const text = n.runs
+        .filter((r) => !r.image)
         .map((r) => r.text)
         .join("")
         .trim();
@@ -546,6 +601,8 @@ export function extractComponents(
     /** Field columns (one per class), in DFS order. */
     fieldCols: number[];
     binding: boolean;
+    /** A counter marker column derived from the row index (one per type, never with binding rows). */
+    counter?: CounterColumn;
   }
   // Runs with equal signatures share a type. One subview renders all of them, so a design literal
   // is a field when it differs anywhere across their members, and literal only when all agree.
@@ -566,9 +623,23 @@ export function extractComponents(
         run.cls[c] = vectors.indexOf(v);
       }
     }
+    // A string column of counter markers (`1. `, `IV. `) in an arithmetic progression: the row index renders it, so
+    // rows passed in (D-REGEN) number themselves. Binding rows keep their strings.
+    let counter: CounterColumn | undefined;
+    if (!head.roles.some((r, c) => r === "field" && !LITERAL[strip(head.columns[c]!.marker)]))
+      for (const [c, col] of head.columns.entries()) {
+        if (col.marker !== "S" || head.roles[c] !== "field" || head.cls[c] !== c) continue;
+        counter = counterColumn(group, c);
+        if (!counter) continue;
+        for (const run of group)
+          run.cls.forEach((k, x) => {
+            if (k === c && run.columns[x]!.marker === "S") run.roles[x] = "counter";
+          });
+        break;
+      }
     const fieldCols = head.roles.flatMap((r, c) => (r === "field" && head.cls[c] === c ? [c] : []));
     const binding = fieldCols.some((c) => !LITERAL[strip(head.columns[c]!.marker)]);
-    types.push({ index: types.length, run: head, group, fieldCols, binding });
+    types.push({ index: types.length, run: head, group, fieldCols, binding, ...(counter ? { counter } : {}) });
   }
   const runType = runs.map((run) => types.find((t) => t.group.includes(run))!);
   /** One column per class with `role`. */
@@ -638,19 +709,37 @@ export function extractComponents(
   const removed = new Map<string, Run>();
   runs.forEach((run, r) => {
     const t = runType[r]!;
-    const { view, row, pass } = names.types[t.index]!;
+    const { view, row, pass, ordinal } = names.types[t.index]!;
     const data = names.data[r]!;
     for (const [c, role] of run.roles.entries())
       if ((role === "field" && !LITERAL[strip(run.columns[c]!.marker)]) || role === "collapse" || role === "move")
         for (const v of run.columns[c]!.values) removed.set(strip(v), run);
-    const args = (item: string, value: string) =>
+    const ord = t.counter?.ords.get(run);
+    const args = (item: string, value: string, index = "") =>
       [
         `${row}: ${value}`,
+        ...(ord ? [`${ordinal}: ${index}`] : []),
         ...classes(run, "binding").map((c) => `${pass.get(c)}: $${nameAt(run, c)}`),
         ...classes(run, "pass").map((c) => `${nameAt(t.run, c)}: ${nameAt(run, c)}`),
         ...classes(run, "collapse").map((c) => `${actionAt(t.run, c)}: { ${actionAt(run, c)}(${item}) }`),
       ].join(", ");
-    if (run.forEach) {
+    if (run.forEach && ord) {
+      const { first, step } = ord;
+      const index =
+        step === 1
+          ? first === 0
+            ? "index"
+            : `${first} + index`
+          : step === -1
+            ? `${first} - index`
+            : `${first} + ${step} * index`;
+      calls.set(run.members[0]!, [
+        `ForEach(Array(${data}.enumerated()), id: \\.element.id) { index, ${row} in`,
+        `    ${view}(${args(row, row, index)})`,
+        "}",
+      ]);
+      for (const m of run.members.slice(1)) calls.set(m, []);
+    } else if (run.forEach) {
       calls.set(
         run.members[0]!,
         t.binding
@@ -661,7 +750,9 @@ export function extractComponents(
     } else
       run.members.forEach((m, i) => {
         const item = t.binding ? `${data}[${i}]` : `Self.${data}[${i}]`;
-        calls.set(m, [`${view}(${args(item, t.binding ? `$${item}` : item)})`]);
+        calls.set(m, [
+          `${view}(${args(item, t.binding ? `$${item}` : item, ord ? String(ord.first + ord.step * i) : "")})`,
+        ]);
       });
   });
 
@@ -772,6 +863,7 @@ export function extractComponents(
     const first = `${viewName}.${own[0]!.data}[0]`;
     const args = [
       `${n.row}: ${t.binding ? `$${n.row}` : first}`,
+      ...(t.counter ? [`${n.ordinal}: ${t.counter.ords.get(head)!.first}`] : []),
       ...classes(head, "binding").map((c) => `${n.pass.get(c)}: .constant(${seed(nameAt(head, c))})`),
     ];
     if (previews.length) previews.push("");
@@ -815,6 +907,10 @@ export function extractComponents(
           if (field) return `${dollar}${n.row}.${field}`;
           const role = run.roles[base + i];
           if (role === "collapse") return actionAt(run, cls);
+          if (role === "counter") {
+            const { style, prefix, suffix } = t.counter!.counter;
+            return `${str(prefix).slice(0, -1)}\\(markswiftCounter(${n.ordinal}, .${SWIFT_COUNTER[style]}))${str(suffix).slice(1)}`;
+          }
           const pass = role === "binding" ? n.pass.get(cls) : undefined;
           return pass ? dollar + pass : s.value;
         },
@@ -849,10 +945,12 @@ export function extractComponents(
       ? [
           `${acc}init(${[
             `${n.row}: ${t.binding ? `Binding<${n.type}>` : n.type}`,
+            ...(n.ordinal ? [`${n.ordinal}: Int`] : []),
             ...bindings.map((b) => `${b.name}: Binding<${b.type}>`),
             ...actions.map((a) => `${a}: @escaping () -> Void = {}`),
           ].join(", ")}) {`,
           `    ${t.binding ? "_" : "self."}${n.row} = ${n.row}`,
+          ...(n.ordinal ? [`    self.${n.ordinal} = ${n.ordinal}`] : []),
           ...bindings.map((b) => `    _${b.name} = ${b.name}`),
           ...actions.map((a) => `    self.${a} = ${a}`),
           "}",
@@ -862,6 +960,7 @@ export function extractComponents(
     const members = [
       ...scaled,
       t.binding ? `@Binding ${acc}var ${n.row}: ${n.type}` : `${acc}let ${n.row}: ${n.type}`,
+      ...(n.ordinal ? [`${acc}let ${n.ordinal}: Int`] : []),
       ...bindings.map((b) => `@Binding ${acc}var ${b.name}: ${b.type}`),
       ...actions.map((a) => `${acc}var ${a}: () -> Void = {}`),
       ...classes(run, "move").flatMap((c) => memberOf.get(nameAt(run, c))!.decl),
