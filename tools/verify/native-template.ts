@@ -18,7 +18,8 @@ export function canvas(result: ConversionResult) {
   return { w, h, color, dark: result.layout.combo.theme === "dark" };
 }
 
-/** `Info.plist` of the iOS render app: a scene-based simulator app (`Render.SceneDelegate`) with bundle id `com.markswift.render`. */
+/** `Info.plist` of the iOS render app: a scene-based simulator app (`Render.SceneDelegate`) with bundle id `com.markswift.render`.
+ * iPhone and iPad (full window, any orientation but upside-down: wide jobs rotate the iPad to landscape). */
 export const renderAppPlist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -31,7 +32,13 @@ export const renderAppPlist = `<?xml version="1.0" encoding="UTF-8"?>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>MinimumOSVersion</key><string>18.0</string>
     <key>CFBundleSupportedPlatforms</key><array><string>iPhoneSimulator</string></array>
-    <key>UIDeviceFamily</key><array><integer>1</integer></array>
+    <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>UILaunchScreen</key><dict/>
     <key>UIApplicationSceneManifest</key>
     <dict>
@@ -95,7 +102,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             do {
                 let jobs = try JSONDecoder().decode([RenderJob].self, from: Data(contentsOf: URL(fileURLWithPath: path)))
                 for job in jobs {
-                    guard job.h <= window.bounds.height, job.w <= window.bounds.width else {
+                    let fits = { job.w <= window.bounds.width && job.h <= window.bounds.height }
+                    // A job that fits the window only turned (a wide one on the iPad): rotate the scene, then wait for it.
+                    if !fits(), job.w <= window.bounds.height, job.h <= window.bounds.width {
+                        window.rootViewController!.setNeedsUpdateOfSupportedInterfaceOrientations()
+                        scene.requestGeometryUpdate(.iOS(interfaceOrientations: job.w > job.h || job.w > window.bounds.width ? .landscapeRight : .portrait))
+                        var waited = 0
+                        while !fits(), waited < 60 {
+                            try await Task.sleep(for: .milliseconds(50))
+                            waited += 1
+                        }
+                    }
+                    guard fits() else {
                         print("error \\(job.view): \\(job.w)x\\(job.h) exceeds the \\(window.bounds.size) window; drawHierarchy renders on-screen content only")
                         continue
                     }

@@ -127,3 +127,53 @@ swiftTest(
   },
   600_000,
 );
+
+swiftTest(
+  "macOS --reflow pilot scores a breakpoint fixture's references against its merged view",
+  async () => {
+    const parent = await mkdtemp(join(tmpdir(), "markswift-pilot-bp-"));
+    const out = join(parent, "run");
+    try {
+      const run = Bun.spawn(
+        [
+          process.execPath,
+          join(import.meta.dir, "pilot-run.ts"),
+          "--renderer",
+          "mac",
+          "--all",
+          "--reflow",
+          "--only",
+          "media-query-bands",
+          "--out",
+          out,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const [, stderr] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text()]);
+      if ((await run.exited) !== 0) throw new Error(stderr);
+      const report = await Bun.file(join(out, "run.json")).json();
+      expect(report).toMatchObject({ completed: report.expected, errors: [] });
+      // Band 1 is captured at 768, the first meta width at or past 600.
+      const tags: Record<number, string> = {};
+      for (const width of [390, 599, 600, 768, 1210]) {
+        const score = await Bun.file(join(out, `media-query-bands-${width}-light-app@bp`, "compare.json")).json();
+        expect(score.reflowSource).toBe("media-query-bands-bp-light-app");
+        expect(score.reflowDelta).toBeCloseTo(score.reflowSsim - score.ssim, 10);
+        tags[width] = score.reflowTag;
+      }
+      expect(tags).toEqual({
+        390: "breakpoint",
+        599: "breakpoint-edge",
+        600: "breakpoint-edge",
+        768: "breakpoint",
+        1210: "breakpoint-edge",
+      });
+      expect(await Bun.file(join(out, "_bp/media-query-bands-bp-light-app/typecheck.json")).json()).toMatchObject({
+        ok: true,
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  },
+  900_000,
+);
