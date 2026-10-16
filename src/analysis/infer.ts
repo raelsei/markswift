@@ -14,6 +14,7 @@ import {
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
+import { generatedAlt } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -98,19 +99,21 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   if (policy.route === "image") {
     const src = n.currentSrc ?? n.attrs[n.tag === "video" ? "poster" : "src"] ?? "";
     const svg = svgFromDataUrl(src);
+    // A pseudo's generated image: `content: url(…) / "alt"`, else decorative.
+    const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
     const node = withBase(n, ctx, {
       kind: "image",
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
-      ...(n.attrs["alt"]
+      ...(alt
         ? {
-            alt: n.attrs["alt"],
+            alt,
             font: fontOf(n.styles, ctx.bundledFamilies),
             ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
           }
-        : n.attrs["alt"] !== undefined
-          ? { alt: n.attrs["alt"] }
+        : alt !== undefined
+          ? { alt }
           : {}),
     });
     if (svg?.vector)

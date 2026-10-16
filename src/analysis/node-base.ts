@@ -9,6 +9,7 @@ import { insetsOf, relativeOffset, renders } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { textContent } from "./text-runs.ts";
+import { PSEUDO, undrawnImages } from "./generated.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
 
@@ -65,6 +66,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   padding[2] = trailingInset(n, height, padding[2]);
   const relative = relativeOffset(n, ctx.parent);
   for (const loss of relative.losses) addDiagnostic(diagnostics, "approximated", "position: relative", loss);
+  const undrawn = PSEUDO[n.tag] ? undrawnImages(n) : undefined;
+  if (undrawn) addDiagnostic(diagnostics, "approximated", undrawn.feature, undrawn.message);
   const [rx, ry] = relative.offset;
   const a11y = a11yOf(n, ctx);
   // Native controls get their action in `controlOf`; everything else the design makes activatable here.
