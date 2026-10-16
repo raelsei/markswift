@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_BAND_DEVICES, planBands } from "../../../src/analysis/bands.ts";
+import { bandNames, DEFAULT_BAND_DEVICES, planBands } from "../../../src/analysis/bands.ts";
 import type { LayoutCondition } from "../../../src/model/layout.ts";
 
 const media = (...queries: string[]): LayoutCondition[] =>
@@ -77,4 +77,15 @@ describe("planBands", () => {
     expect(plan([])).toEqual(noEdges);
     expect(plan([], { width: 320, height: 844 }).probes).toEqual([390]);
   });
+});
+
+test("bandNames: Tailwind defaults for inclusive edges, else w<capture width>; band 0 unnamed", () => {
+  expect(
+    bandNames([
+      { px: 768, inclusive: true },
+      { px: 1024, inclusive: true },
+    ]),
+  ).toEqual(["", "md", "lg"]);
+  expect(bandNames([{ px: 767, inclusive: false }])).toEqual(["", "w768"]);
+  expect(bandNames([{ px: 600, inclusive: true }])).toEqual(["", "w600"]);
 });
