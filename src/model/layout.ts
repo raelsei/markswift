@@ -85,10 +85,10 @@ export interface LayoutNode {
   /**
    * Lower-case tag name, `#text`, or a pseudo-element: `::before` / `::after` /
    * `::marker` (generated content materialised by the snapshot: styles, border
-   * box, and one `#text` child with the browser-resolved text — counters,
+   * box, and `#text` children (consecutive text parts merged) with the browser-resolved text — counters,
    * quotes, list markers). `::before`/`::after`/`::marker` also get one `img` child per image the browser laid
-   * out from `content: url()` / `list-style-image` (`attrs.src`, its box). `::after` follows the element's real
-   * children.
+   * out from `content: url()` / `list-style-image` (`attrs.src`, its box), `#text` and `img` children in layout
+   * order. `::after` follows the element's real children.
    */
   tag: string;
   /** Raw attributes. */
