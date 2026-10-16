@@ -47,6 +47,18 @@ test("placements: sheet edge, anchored popover with the trigger's anchor, hover 
   expect(native).toMatch(/\{\n +Color\.markswift\(0\.0, 0\.0, 0\.0, 0\.1\)\n +\.allowsHitTesting\(false\)\n/);
 });
 
+test("a self-aligned trigger anchors its own box: .markswiftAnchor before the alignment frame", () => {
+  const d = POPOVER("hover");
+  d.root.styles = { ...d.root.styles, display: "flex", "flex-direction": "column", "align-items": "stretch" };
+  d.root.children[0]!.styles = { ...d.root.children[0]!.styles, "align-self": "flex-start" };
+  const code = compile(d).code;
+  const anchor = code.indexOf('.markswiftAnchor("nextjs")');
+  const frame = code.indexOf(".frame(maxWidth: .infinity, alignment: .leading)", anchor - 2000);
+  expect(anchor).toBeGreaterThan(0);
+  expect(frame).toBeGreaterThan(anchor);
+  expect(code.slice(anchor, frame)).toContain(".simultaneousGesture(LongPressGesture()");
+});
+
 test("fidelity ignores presentations byte for byte; a scrolling app root keeps its presentation on the ScrollView", () => {
   for (const d of [DIALOG(), POPOVER(), NATIVE()]) {
     const without = structuredClone(d);

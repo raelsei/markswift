@@ -211,6 +211,12 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.
   // ponytail: a later sibling's own positioned descendants paint above it in CSS but below it here.
   if (n.relativeOffset) m.push(`.offset(x: ${num(n.relativeOffset[0])}, y: ${num(n.relativeOffset[1])})`, ".zIndex(1)");
+  // A drawn presentation's trigger: what its content anchors to, and the long-press that opens a hover card (D-HOVER).
+  if (n.opens?.kind === "presentation") {
+    if (n.opens.anchor) m.push(`.markswiftAnchor(${str(n.opens.layer)})`);
+    const state = ctx.control.openStates.get(n.opens.layer);
+    if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
+  }
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);
@@ -221,12 +227,6 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A `<label>` tap changes its checkbox or radio, or focuses its text field, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
   if (tap) m.push(".contentShape(Rectangle())", `.onTapGesture { ${tap} }`);
-  // A drawn presentation's trigger: what its content anchors to, and the long-press that opens a hover card (D-HOVER).
-  if (n.opens?.kind === "presentation") {
-    if (n.opens.anchor) m.push(`.markswiftAnchor(${str(n.opens.layer)})`);
-    const state = ctx.control.openStates.get(n.opens.layer);
-    if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
-  }
   const a = n.a11y;
   if (a) {
     const container = n.kind === "stack" || n.kind === "grid" || a.container;
