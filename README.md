@@ -362,7 +362,8 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
   columns; `auto`/px rows and one `grid-auto-rows` value; `justify-self`/`justify-items`) whose items overlap, use
   template line names or implicit columns, flow by column or densely, or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
-- Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
+- Tables outside the `MarkswiftTable` subset (right-to-left, `visibility: collapse`, anonymous rows or cells, a separated table whose rows paint, a row or row group with `onclick`, a `role`, `aria-*` or `tabindex`, cells off the column/row lattice): `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
+- Auto-layout tables (`MarkswiftTable`): `approximated table-layout: auto table layout → captured column widths scale with the offered width; CSS min-/max-content column sizing is not reproduced`.
 - Percentage relative offsets: `approximated position: relative: left 10% → offset pinned at 34.3px`.
 
 Absolutely and fixed-positioned boxes attach to the corner CSS anchored them to, with their
@@ -398,6 +399,7 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.
+- Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
