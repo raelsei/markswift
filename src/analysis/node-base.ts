@@ -146,5 +146,6 @@ function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
   if (role === "button" && n.tag !== "button") out.trait = "isButton";
   else if (role === "link" && n.tag !== "a") out.trait = "isLink";
   else if (role === "img") out.trait = "isImage";
+  else if (n.tag === "th" || role === "columnheader" || role === "rowheader") out.trait = "isHeader";
   return Object.keys(out).length ? out : undefined;
 }
