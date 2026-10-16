@@ -217,7 +217,9 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
   // A run's own slot key (`run2`) resolves it even when the node paints its colour twice; a
   // paint fallback colour is no enumerated slot, so it keeps the node-wide lookup.
   const fill = r.paint ? undefined : `run${i}`;
-  let e = `Text(verbatim: ${str(text)})`;
+  // A Radix select's value text shows its Picker's choice (plan 061).
+  const live = n.runs.length === 1 ? ctx.control.textState.get(n.id) : undefined;
+  let e = `Text(verbatim: ${live ?? str(text)})`;
   if (r.link) {
     // A link run takes one colour (it rides on the attributed string, `Text.markswiftLink`); a
     // gradient fill falls back to the run colour, else its first stop.

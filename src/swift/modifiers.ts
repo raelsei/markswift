@@ -17,7 +17,7 @@ import { borderSideModifiers } from "./borders.ts";
 import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "./effects.ts";
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
-import { FIELDS } from "./controls.ts";
+import { FIELDS, menuButton, menuExpr } from "./controls.ts";
 import { animated, animationModifier } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
@@ -39,8 +39,10 @@ export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
 }
 
 function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
+  // A menu trigger (plan 061) has no action member: its Button's label opens the native menu.
+  const menu = n.kind !== "control" && n.action && !n.action.gesture && n.menu && !n.menu.context ? n.menu : undefined;
   const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
-  if (!name) return [...core, ...modifiers(n, ctx)];
+  if (!name && !menu) return [...core, ...modifiers(n, ctx)];
   // An ARIA toggle (`role=checkbox|switch|radio`), a layer's trigger or a presentation's closing button: the tap changes
   // the screen's state and acts.
   const tap = ctx.control.toggleOf.get(n)?.tap ?? ctx.control.openOf.get(n)?.tap ?? ctx.control.closeOf.get(n);
@@ -52,11 +54,17 @@ function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
       `.onTapGesture { ${tap?.join("; ") ?? `${name}()`} }`,
     ];
   const press = ctx.control.pressOf.get(n);
+  const label = [...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`];
+  const style = `.buttonStyle(${press ? `MarkswiftPressStyle(isPressed: $${press})` : ".plain"})`;
   return [
-    ...(tap ? ["Button {", ...indent(tap, 1), "} label: {"] : [`Button(action: ${name}) {`]),
-    ...indent([...core, ...boxModifiers(n, ctx), `.contentShape(${shapeExpr(n.style, n.frame.w, n.frame.h)})`], 1),
-    "}",
-    `.buttonStyle(${press ? `MarkswiftPressStyle(isPressed: $${press})` : ".plain"})`,
+    ...(menu
+      ? menuButton(menu, label, style, ctx.control)
+      : [
+          ...(tap ? ["Button {", ...indent(tap, 1), "} label: {"] : [`Button(action: ${name}) {`]),
+          ...indent(label, 1),
+          "}",
+          style,
+        ]),
     ...(ctx.mode === "app" && n.a11y?.disabled ? [".disabled(true)"] : []),
     ...placementModifiers(n, ctx),
   ];
@@ -217,6 +225,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     const state = ctx.control.openStates.get(n.opens.layer);
     if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
   }
+  // A right-click menu (plan 061): the trigger keeps its view; a long-press opens the native menu.
+  if (n.menu?.context) m.push(".contextMenu {", ...indent(menuExpr(n.menu.items, ctx.control), 1), "}");
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);

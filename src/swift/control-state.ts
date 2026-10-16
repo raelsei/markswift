@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { ControlNode, Presentation, SemNode } from "../model/semantic.ts";
+import type { ControlNode, MenuItem, Presentation, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
 import { note } from "./diagnostics.ts";
@@ -70,6 +70,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   const openStates = new Map<string, string>();
   const closeOf: ControlMembers["closeOf"] = new Map();
   const dismissedOf = new Map<string, string>();
+  const menuState = new Map<string, string>();
+  const textState = new Map<string, string>();
   // Drawn presentations hang off the root (`analysis/layers.ts`): one shared object per layer id.
   const presentations = new Map<string, Presentation>();
   for (const o of root.overlays) if (o.presentation) presentations.set(o.presentation.id, o.presentation);
@@ -103,7 +105,13 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   walk(root, (n) => {
     // A handler used by several elements is one callback: the design calls the same function, or
     // links to the same place. Different keys that name alike are deduplicated `onEdit`, `onEdit2`.
-    const actions = [n.action, ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : [])];
+    // A menu trigger has no tap action of its own (a `Menu` opens instead); its items' actions are the screen's.
+    const items = n.menu ? flatItems(n.menu.items) : [];
+    const actions = [
+      n.menu && !n.menu.context ? undefined : n.action,
+      ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : []),
+      ...items.map((i) => (i.kind === "button" ? i.action : undefined)),
+    ];
     for (const a of actions) {
       if (!a || actionOf.has(a.key)) continue;
       const name = memberName("on", a.words, seen, "Action");
@@ -114,6 +122,18 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
         type: "() -> Void",
         decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
       });
+    }
+    // Checkbox items hold a Bool, a radio run (or a select's listbox) the chosen label; a select's value text shows it.
+    for (const item of items) {
+      if ((item.kind !== "toggle" && item.kind !== "radio") || menuState.has(item.id)) continue;
+      const name = uniqueName(`s_${identifier(item.id) || "menu"}`, seen);
+      const [type, seed] =
+        item.kind === "toggle"
+          ? ["Bool", String(item.checked)]
+          : ["String", str(n.menu!.select?.value ?? item.options[item.selected]?.label ?? "")];
+      menuState.set(item.id, name);
+      members.push({ name, kind: "value", type, decl: [`@State private var ${name}: ${type} = ${seed}`] });
+      if (n.menu!.select?.valueText !== undefined) textState.set(n.menu!.select.valueText, name);
     }
     const first = canon(n);
     if (first !== n) {
@@ -334,11 +354,17 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     openStates,
     closeOf,
     dismissedOf,
+    menuState,
+    textState,
     statePaint,
     pressOf,
     focusOf,
   };
 }
+
+/** A menu's items with its sections opened, in order. */
+const flatItems = (items: MenuItem[]): MenuItem[] =>
+  items.flatMap((i) => (i.kind === "section" ? flatItems(i.items) : [i]));
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */
 export function numericValue(n: ControlNode): number {

@@ -153,6 +153,10 @@ export interface ControlMembers {
   closeOf: Map<SemNode, string[]>;
   /** Presentation layer id → its `on<Layer>Dismissed` callback (Escape or an outside tap closed it). */
   dismissedOf: Map<string, string>;
+  /** Native menu toggle/radio item id → its `@State` member (plan 061). */
+  menuState: Map<string, string>;
+  /** Single-run TextNode id → the member its text shows (a Radix select's value follows its Picker). */
+  textState: Map<string, string>;
   /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
   statePaint: Map<string, StatePaint>;
   /** Pressable owner → its `@MarkswiftPressed` member. */
