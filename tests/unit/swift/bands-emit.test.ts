@@ -144,6 +144,49 @@ test("an id that names different elements in two bands (script insert) lends no 
   expect(merged.code).not.toMatch(/Text\(verbatim: "intro"\)[^\n]*\n(?: +\.[^\n]*\n)*? +\.background\(\(is\w+Pressed/);
 });
 
+/** Two-child container `#id` whose flex direction a `query` rule switches to `row` in the bands `row` lists. */
+const switched = (id: string, y: number, w: number, row: boolean, rule: number) =>
+  el(
+    id,
+    "div",
+    { x: 0, y, w, h: 40 },
+    { display: "flex", "flex-direction": row ? "row" : "column" },
+    [
+      el(`${id}/a`, "p", { x: 0, y, w: 100, h: 20 }, {}, [txt("A", 100)]),
+      el(`${id}/b`, "p", { x: row ? 100 : 0, y: row ? y : y + 20, w: 100, h: 20 }, {}, [txt("B", 100)]),
+    ],
+    { conditional: [rule] },
+  );
+const propNames = (code: string) => [...code.matchAll(/private (?:var|func) (v_\w+)/g)].map((m) => m[1]!);
+
+test("alternatives above band 0 take the band's name; other containers keep their single-capture names", () => {
+  const TW: LayoutCondition[] = [
+    { kind: "media", query: "(min-width: 768px)", matches: false },
+    { kind: "media", query: "(min-width: 1024px)", matches: false },
+  ];
+  const page = (w: number) =>
+    band(w, [switched("split", 0, w, w >= 768, 0), switched("layout", 40, w, w >= 1024, 1), plain(w)], TW);
+  const code = compile([390, 834, 1100].map(page)).code;
+  const names = propNames(code);
+  expect(names).toContain("v_split_md");
+  expect(names).toContain("v_layout_lg");
+  expect(names.filter((n) => !/_(md|lg)$/.test(n))).toEqual(propNames(compileLayout(page(390)).code));
+  const MAX: LayoutCondition[] = [{ kind: "media", query: "(max-width: 599px)", matches: false }];
+  const narrow = compile([390, 834].map((w) => band(w, [switched("split", 0, w, w >= 600, 0)], MAX))).code;
+  expect(propNames(narrow)).toContain("v_split_w600");
+});
+
+test("a breakpoint view previews each band above the first at its capture width", () => {
+  const docs = [390, 834].map((w) => band(w, [wrap(w, [coloured(w, w > 600)]), plain(w)]));
+  const code = compile(docs).code;
+  expect(code).toContain('#Preview("ConvertedView — w600") {\n    ConvertedView()\n    .frame(width: 834.0,');
+  const tw = [390, 834].map((w) =>
+    band(w, [switched("split", 0, w, w >= 768, 0)], [{ kind: "media", query: "(min-width: 768px)", matches: false }]),
+  );
+  expect(compile(tw).code).toContain('#Preview("ConvertedView — md") {');
+  expect(compileLayout(docs[0]!).code).not.toContain('#Preview("ConvertedView — ');
+});
+
 test("fidelity mode compiles a breakpoint view", () => {
   const code = compile(
     [390, 834].map((w) => band(w, [wrap(w, [coloured(w, w > 600)]), plain(w)])),

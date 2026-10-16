@@ -729,8 +729,9 @@ export interface Screen {
   canvas: Color;
   root: SemNode;
   /** Breakpoint conversions with at least one holder: `edges` in root-proposal px (the CSS edges minus the root's
-   * offset from the viewport), `cssEdges` as captured, `widths` = capture viewport width per band. */
-  breakpoints?: { edges: BandEdge[]; cssEdges: BandEdge[]; widths: number[] };
+   * offset from the viewport), `cssEdges` as captured, `widths` = capture viewport width per band, `names` = each
+   * band's name (band 0 `""`; `md`, `w600`) for property names and previews. */
+  breakpoints?: { edges: BandEdge[]; cssEdges: BandEdge[]; widths: number[]; names: string[] };
   /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
   colorScheme?: "light" | "dark";
 }
