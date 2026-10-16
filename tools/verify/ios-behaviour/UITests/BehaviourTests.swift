@@ -20,6 +20,9 @@ final class BehaviourTests: XCTestCase {
             let closers: [String]?; let buttons: [String]?; let longPress: Bool?; let outsidePoint: [Double]?
         }
         let layers: [Layer]
+        /// Native menus (061): `trigger` (long-pressed when `context`) opens a menu showing the buttons `items`.
+        struct Menu: Decodable { let trigger: String; let context: Bool; let items: [String] }
+        let menus: [Menu]
         /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
         struct Motion: Decodable { let live: Bool; let reduced: Bool }
         let motion: Motion
@@ -41,7 +44,7 @@ final class BehaviourTests: XCTestCase {
                 let tree = dump(try app.snapshot())
                 return [
                     "tree": tree, "audit": try audit(app), "rootHeight": rootHeight(app), "interactions": interact(app, item),
-                    "layers": layers(app, item),
+                    "layers": layers(app, item), "menus": menus(app, item),
                 ]
             }
             run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", rtl: true).snapshot())] }
@@ -177,8 +180,9 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
         }
         pickers.append(["current": picker.current, "next": picker.next, "reached": reached])
     }
-    // A presentation's trigger would cover the screen with its content: `layers` opens it in launches of its own.
-    let triggers = item.layers.filter { $0.kind == "presentation" }.map(\.trigger)
+    // A presentation's trigger would cover the screen with its content, a menu's opens a popup: `layers` and `menus`
+    // open them in launches of their own.
+    let triggers = item.layers.filter { $0.kind == "presentation" }.map(\.trigger) + item.menus.map(\.trigger)
     let skip = Set(item.pickers.flatMap { [$0.current, $0.next] } + item.pickerValues + triggers)
     var tapped: [String] = []
     for query in [root.buttons, root.links] {
@@ -239,6 +243,32 @@ private func layers(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[St
             }
         }
         return ["id": layer.id, "opened": opened, "closed": closed]
+    }
+}
+
+/// Each native menu item (061) in a fresh launch: open the menu (tap, or long-press a context menu's area), wait for
+/// the item, tap it, and read the log.
+@MainActor
+private func menus(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[String: Any]] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    let gone = NSPredicate(format: "exists == false")
+    return item.menus.flatMap { menu in
+        menu.items.map { label -> [String: Any] in
+            app.launch()
+            let trigger = root.descendants(matching: .any).matching(NSPredicate(format: "label == %@", menu.trigger)).firstMatch
+            var opened = false
+            if trigger.waitForExistence(timeout: 2) && trigger.isHittable {
+                if menu.context { trigger.press(forDuration: 1.0) } else { trigger.tap() }
+                let button = app.buttons[label].firstMatch
+                opened = button.waitForExistence(timeout: 2)
+                if opened {
+                    button.tap()
+                    _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: button)], timeout: 2)
+                }
+            }
+            let hits = app.staticTexts["markswift.log"].firstMatch
+            return ["trigger": menu.trigger, "label": label, "opened": opened, "log": hits.exists ? hits.label : ""]
+        }
     }
 }
 

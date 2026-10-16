@@ -256,13 +256,19 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     if (state) m.push(`.accessibilityAddTraits(${state.on} ? .isSelected : [])`);
     else if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
     // Plan 025's disclosure style and select menu already announce their own state; never add a second value there.
-    const ownsValue = n.kind === "control" && (n.control === "disclosure" || n.control === "picker");
+    // A native menu (061) announces its popup itself; a Radix select's value is its Picker's choice.
+    const ownsValue =
+      (n.kind === "control" && (n.control === "disclosure" || n.control === "picker")) ||
+      (!!n.menu && !n.menu.context && (a.value === "expanded" || a.value === "collapsed"));
+    const first = n.menu?.select ? n.menu.items[0] : undefined;
+    const chosen = first && "id" in first ? ctx.control.menuState.get(first.id) : undefined;
     const opened = ctx.control.openOf.get(n);
     // `.accessibilityValue` replaces the "1"/"0" a toggle trait derives from `.isSelected`, so it spells them out.
     if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : ${state.on} ? "1" : "0")`);
     // `aria-expanded` of a trigger whose layer the screen shows follows that state (only where the design states it).
     else if (opened && (a.value === "expanded" || a.value === "collapsed"))
       m.push(`.accessibilityValue(${opened.state} ? "expanded" : "collapsed")`);
+    else if (chosen) m.push(`.accessibilityValue(${chosen})`);
     else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
