@@ -17,6 +17,8 @@ export interface PilotCase {
   /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` metas (see `motionTag`); set by the loaders. */
   motion?: number[];
   motionReduced?: number[];
+  /** From `markswift-motion-open` (see `motionTag`): `@open:<layer>` enter frames, each `t` ms after the layer opens. */
+  motionOpen?: Array<{ layer: string; t: number }>;
   /** From `<meta name="markswift-viewport-height">` (loadFixtureSet): the capture viewport's height; absent = 2000. A
    * viewport presentation centres in it, so overlay fixtures capture at a device height iOS can render. */
   viewportHeight?: number;
@@ -35,9 +37,11 @@ export function reflowTag(html: string, id: string): RunCase["reflow"] {
 }
 
 /** `<meta name="markswift-motion" content="250,500">` (and `markswift-motion-reduced`): ascending integer ms at which
- * the 390 app capture is also frame-captured with every animation paused (`@t:<ms>`, `@reduced@t:<ms>` keys). */
-export function motionTag(html: string, id: string): Pick<RunCase, "motion" | "motionReduced"> {
-  const out: Pick<RunCase, "motion" | "motionReduced"> = {};
+ * the 390 app capture is also frame-captured with every animation paused (`@t:<ms>`, `@reduced@t:<ms>` keys).
+ * `<meta name="markswift-motion-open" content="edit-profile:50">`: `<layerId>:<ms>` pairs, the layer's open capture
+ * paused that far into its enter (`@open:<layer>@t:<ms>`, 066). */
+export function motionTag(html: string, id: string): Pick<RunCase, "motion" | "motionReduced" | "motionOpen"> {
+  const out: Pick<RunCase, "motion" | "motionReduced" | "motionOpen"> = {};
   for (const [name, key] of [
     ["markswift-motion", "motion"],
     ["markswift-motion-reduced", "motionReduced"],
@@ -48,6 +52,12 @@ export function motionTag(html: string, id: string): Pick<RunCase, "motion" | "m
     if (!times.every((t) => /^\d+$/.test(t)) || times.some((t, i) => i && Number(t) <= Number(times[i - 1])))
       throw new Error(`fixture ${id}: invalid ${name} "${tag}"`);
     out[key] = times.map(Number);
+  }
+  const open = /<meta name="markswift-motion-open" content="([^"]*)"/.exec(html)?.[1];
+  if (open !== undefined) {
+    const pairs = open.split(",").map((p) => /^\s*([^:\s]+):(\d+)\s*$/.exec(p));
+    if (pairs.some((p) => !p)) throw new Error(`fixture ${id}: invalid markswift-motion-open "${open}"`);
+    out.motionOpen = pairs.map((p) => ({ layer: p![1]!, t: Number(p![2]) }));
   }
   return out;
 }
@@ -125,6 +135,7 @@ export type RunCase = Pick<
   | "reflow"
   | "motion"
   | "motionReduced"
+  | "motionOpen"
   | "viewportHeight"
 >;
 
@@ -161,8 +172,9 @@ export interface PilotEntry {
   width: number;
   theme: "light" | "dark";
   mode: "app" | "fidelity";
-  /** Motion frame of the case's 390 app capture: every animation paused `t` ms in (`reduced`: under Reduce Motion). */
-  frame?: { t: number; reduced: boolean };
+  /** Motion frame of the case's 390 app capture: every animation paused `t` ms in (`reduced`: under Reduce Motion;
+   * `layer`: of that layer's open capture). */
+  frame?: { t: number; reduced: boolean; layer?: string };
 }
 
 /** Capture widths of a case. With --reflow a tagged case adds 768, and 390 comes first because the reflow arm reuses
@@ -171,7 +183,8 @@ export function widthsFor(item: RunCase, reflow = false): number[] {
   return reflow && item.reflow ? [390, 320, 768] : [320, 390];
 }
 /** Every capture; a motion-tagged case adds its frame entries per theme (390, `app`):
- * `<caseId>-390-<theme>-app@t:<ms>` and `<caseId>-390-<theme>-app@reduced@t:<ms>`. */
+ * `<caseId>-390-<theme>-app@t:<ms>`, `<caseId>-390-<theme>-app@reduced@t:<ms>` and
+ * `<caseId>-390-<theme>-app@open:<layer>@t:<ms>`. */
 export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
   return cases.flatMap((item) => [
     ...widthsFor(item, reflow).flatMap((width) =>
@@ -189,8 +202,9 @@ export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
       [
         ...(item.motion ?? []).map((t) => ({ t, reduced: false })),
         ...(item.motionReduced ?? []).map((t) => ({ t, reduced: true })),
-      ].map((frame) => ({
-        key: `${item.id}-390-${theme}-app${frame.reduced ? "@reduced" : ""}@t:${frame.t}`,
+        ...(item.motionOpen ?? []).map(({ layer, t }) => ({ t, reduced: false, layer })),
+      ].map((frame: { t: number; reduced: boolean; layer?: string }) => ({
+        key: `${frame.layer ? openKey(`${item.id}-390-${theme}-app`, frame.layer) : `${item.id}-390-${theme}-app`}${frame.reduced ? "@reduced" : ""}@t:${frame.t}`,
         case: item,
         width: 390,
         theme,

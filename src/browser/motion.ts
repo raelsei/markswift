@@ -9,14 +9,27 @@ import type { Anim, Motion, Transition } from "../model/layout.ts";
 /** Key: element path as `readPreferredSizes` builds it ("0/2/1", "" = root), or `<path>::before|::after`. */
 export type MotionByPath = Record<string, Motion>;
 
+declare global {
+  interface Window {
+    /** CSS animations started since `recordAnimations` (overlay enter/exit, 066). */
+    __markswiftStarted?: Animation[];
+  }
+}
+
 interface Collected {
   byPath: Record<string, Array<Anim | Transition>>;
   byTarget: Array<Array<Anim | Transition>>;
+  /** `targets` slots left empty because several of their descendants animate. */
+  ambiguous: number[];
   script: number;
   paused: number;
 }
 
-/** In-page: serialise animations of `targets` (or of `root` and its descendants), optionally finishing them. */
+/**
+ * In-page: serialise animations of `targets` (or of `root` and its descendants), optionally finishing them. A target
+ * without an animation of its own takes its single animated descendant's (a Radix popper wrapper's content); with
+ * `targets`, the animations `recordAnimations` kept are read too, finished ones included.
+ */
 const collect = (arg: {
   root?: string;
   targets?: Element[];
@@ -25,13 +38,22 @@ const collect = (arg: {
   finish: boolean;
 }): Collected => {
   const root = arg.root === undefined ? null : document.querySelector(arg.root);
-  const out: Collected = { byPath: {}, byTarget: (arg.targets ?? []).map(() => []), script: 0, paused: 0 };
+  const out: Collected = {
+    byPath: {},
+    byTarget: (arg.targets ?? []).map(() => []),
+    ambiguous: [],
+    script: 0,
+    paused: 0,
+  };
+  const inner: Array<Map<Element, Array<Anim | Transition>>> = (arg.targets ?? []).map(() => new Map());
+  const recorded = arg.targets ? (window.__markswiftStarted ?? []) : [];
   const SKIP: Record<string, true> = { offset: true, computedOffset: true, easing: true, composite: true };
-  for (const a of document.getAnimations()) {
+  for (const a of new Set([...document.getAnimations(), ...recorded])) {
     const effect = a.effect as KeyframeEffect | null;
     const target = effect?.target;
     if (!effect || !target) continue;
-    const slot = arg.targets ? arg.targets.indexOf(target) : -1;
+    let slot = arg.targets ? arg.targets.indexOf(target) : -1;
+    if (arg.targets && slot < 0) slot = arg.targets.findIndex((t) => t.contains(target));
     if (arg.targets ? slot < 0 : !root?.contains(target)) continue;
     const kind = a.constructor.name;
     if (kind === "Animation") out.script++;
@@ -89,8 +111,10 @@ const collect = (arg: {
       else if (timeline.constructor.name !== "DocumentTimeline") anim.timeline = timeline.constructor.name;
       entry = anim;
     }
-    if (arg.targets) out.byTarget[slot]!.push(entry);
-    else {
+    if (arg.targets) {
+      if (target === arg.targets[slot]) out.byTarget[slot]!.push(entry);
+      else inner[slot]!.set(target, [...(inner[slot]!.get(target) ?? []), entry]);
+    } else {
       let path = "";
       for (let el: Element = target; el !== root; el = el.parentElement!) {
         const i = Array.prototype.indexOf.call(el.parentElement!.children, el);
@@ -106,6 +130,11 @@ const collect = (arg: {
       }
     }
   }
+  inner.forEach((m, slot) => {
+    if (out.byTarget[slot]!.length || !m.size) return;
+    if (m.size === 1) out.byTarget[slot] = [...m.values()][0]!;
+    else out.ambiguous.push(slot);
+  });
   return out;
 };
 
@@ -169,12 +198,47 @@ export async function readTransitions(page: Page, root: string): Promise<Record<
   return byPath as Record<string, Transition[]>;
 }
 
-/** CSS animations on each of `targets` (overlay layer roots) under the current media; nothing is finished. */
-export async function readElementAnimations(page: Page, targets: ElementHandle[]): Promise<Anim[][]> {
-  const { byTarget } = await page.evaluate(collect, {
+/**
+ * Starts (or restarts) the page's record of the CSS animations that start from now on, so a short overlay enter or
+ * exit can be read after it finished (`readElementAnimations`). Call right before the activation or dismissal.
+ */
+export async function recordAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const fresh = !window.__markswiftStarted;
+    window.__markswiftStarted = [];
+    if (!fresh) return;
+    document.addEventListener(
+      "animationstart",
+      (e) => {
+        const list = window.__markswiftStarted!;
+        for (const a of (e.target as Element).getAnimations()) if (!list.includes(a)) list.push(a);
+      },
+      true,
+    );
+  });
+}
+
+/**
+ * CSS animations on each of `targets` (overlay layer roots) under `prefers-reduced-motion: no-preference`, so
+ * motion-safe-only animations are seen (the context runs `reduce` and is left there): the running ones and those
+ * `recordAnimations` kept. A target without its own takes its single animated descendant's; with several, none
+ * (warned). Nothing is finished.
+ */
+export async function readElementAnimations(
+  page: Page,
+  targets: ElementHandle[],
+): Promise<{ lists: Anim[][]; warnings: string[] }> {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const { byTarget, ambiguous } = await page.evaluate(collect, {
     targets: targets as ElementHandle<Element>[],
     kind: "CSSAnimation",
     finish: false,
   });
-  return byTarget as Anim[][];
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  return {
+    lists: byTarget as Anim[][],
+    warnings: ambiguous.map(
+      (i) => `layer root ${i} has no animation of its own and several animated descendants; its enter/exit is not read`,
+    ),
+  };
 }

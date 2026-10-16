@@ -48,7 +48,7 @@ type RunEntry = {
   /** Wall time of `BrowserCapture.capture` for this capture, ms; both modes of one capture share it. */
   captureMs?: number;
   /** Motion frame captures: the paused time (ms) and whether Reduce Motion was on. */
-  motion?: { t: number; reduced: boolean };
+  motion?: { t: number; reduced: boolean; layer?: string };
   /** `@open` captures: the layer shown, and the rest capture whose conversion renders it. */
   openLayer?: string;
   openSource?: string;
@@ -394,11 +394,16 @@ async function run() {
               report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
             continue;
           }
-          /** Motion frames of this 390 app capture: browser paused at `t`, native at the same time, scored like any capture. */
-          const captureFrames = async (sourceDir: string, conversion: RenderResult | undefined) => {
-            const { layout } = captured;
+          /** Motion frames of this 390 app capture: browser paused at `t`, native at the same time, scored like any capture.
+           * With `open`: that layer's `@open:<layer>@t:` enter frames, against the open render (066). */
+          const captureFrames = async (
+            sourceDir: string,
+            conversion: RenderResult | undefined,
+            open?: { layer: string; shot: OpenShots[string]; openArg: string },
+          ) => {
+            const layout = open ? { ...captured.layout, size: open.shot.size } : captured.layout;
             const clip = { x: -layout.viewport.x, y: -layout.viewport.y, width: layout.size.w, height: layout.size.h };
-            for (const entry of frames) {
+            for (const entry of frames.filter((f) => f.frame!.layer === open?.layer)) {
               const frame = entry.frame!;
               const result: RunEntry = {
                 key: entry.key,
@@ -415,20 +420,27 @@ async function run() {
               try {
                 const dir = join(out, entry.key);
                 await mkdir(dir, { recursive: true });
-                await Bun.write(join(dir, "browser.png"), await browsers.get(width)!.captureFrame(spec, frame, clip));
+                const browser = browsers.get(width)!;
+                await Bun.write(
+                  join(dir, "browser.png"),
+                  open
+                    ? await browser.captureLayerFrame(spec, open.shot.trigger, frame.t, clip)
+                    : await browser.captureFrame(spec, frame, clip),
+                );
                 // The rest capture's inputs, so artifact hashes name what the frame was rendered from.
                 for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"])
                   await copyFile(join(sourceDir, file), join(dir, file));
                 const job: Job = { entry, item, dir, layout, textMetrics: undefined, result };
                 const forced = frame.reduced ? ("reduceMotion" as const) : undefined;
-                if (!conversion) {
+                const source = conversion && open ? { ...conversion, layout, openArg: open.openArg } : conversion;
+                if (!source) {
                   report!.completed++;
                   console.log(`${entry.key}: captured (${report!.completed}/${report!.expected})`);
                 } else if (renderer === "mac") {
-                  await renderMac(conversion, join(out, "_mac-work"), join(dir, "native.png"), forced, frame.t / 1000);
+                  await renderMac(source, join(out, "_mac-work"), join(dir, "native.png"), forced, frame.t / 1000);
                   await finish(job);
                 } else {
-                  pending.push({ ...job, conversion, time: frame.t / 1000, forced });
+                  pending.push({ ...job, conversion: source, time: frame.t / 1000, forced });
                   if (pending.length === IOS_BATCH) await flush();
                 }
               } catch (error) {
@@ -515,7 +527,11 @@ async function run() {
               if (renderer === "none") {
                 report.completed++;
                 console.log(`${entry.key}: typed (${report.completed}/${report.expected})`);
-                if (entry.mode === "app") await captureFrames(dir, undefined);
+                if (entry.mode === "app") {
+                  await captureFrames(dir, undefined);
+                  for (const [layer, openArg] of Object.entries(compiled.openStates ?? {}))
+                    if (shots[layer]) await captureFrames(dir, undefined, { layer, shot: shots[layer], openArg });
+                }
               } else {
                 const conversion = {
                   ...compiled,
@@ -566,6 +582,7 @@ async function run() {
                     pending.push({ ...openJob, conversion: openConversion });
                     if (pending.length >= IOS_BATCH) await flush();
                   }
+                  if (entry.mode === "app") await captureFrames(openDir, openConversion, { layer, shot, openArg });
                 }
                 if (entry.mode === "app") await captureFrames(dir, conversion);
               }

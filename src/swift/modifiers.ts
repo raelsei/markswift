@@ -18,7 +18,7 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS, menuButton, menuExpr } from "./controls.ts";
-import { animated, animationModifier, stateAnimation } from "./motion.ts";
+import { animated, animationModifier, longestExit, stateAnimation, transitionModifiers } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
 }
@@ -343,17 +343,36 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
           : at.kind === "anchored"
             ? `.anchored(${str(p.id)}, from: ${unitPoint(at.from)}, to: ${unitPoint(at.to)}, gap: ${size(at.gap)})`
             : undefined;
+    // 066: each root leaves with its own exit; Escape and outside taps close inside the longest one.
     const body = overlays.flatMap((o) => {
       const view = ctx.renderNode(o.node);
       if (o.node.hitTesting === false)
-        return o.covers ? view : [...view, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`];
-      return [...view, `.markswiftPlaced(${(o === first && placed) || `.offset(${size(o.offset)})`})`];
+        return [
+          ...(o.covers ? view : [...view, `.offset(x: ${num(o.offset[0])}, y: ${num(o.offset[1])})`]),
+          ...transitionModifiers(o.node),
+        ];
+      return [
+        ...view,
+        `.markswiftPlaced(${(o === first && placed) || `.offset(${size(o.offset)})`})`,
+        ...transitionModifiers(o.node),
+      ];
     });
     const d = p.dismiss;
+    const exit = longestExit(overlays.map((o) => o.node));
+    const backdropExit = first && longestExit([first.node]);
     return [
-      `.markswiftPresentation(isPresented: $${state}, modal: ${p.modal}, dismissOnEscape: ${d.escape}, dismissOnOutside: ${d.outside}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
+      `.markswiftPresentation(isPresented: $${state}, modal: ${p.modal}, dismissOnEscape: ${d.escape}, dismissOnOutside: ${d.outside}${exit ? `, exit: ${exit}` : ""}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
       ...indent(
-        [...(p.backdrop ? [`Color.markswift(${colorArgs(p.backdrop)})`, ".allowsHitTesting(false)"] : []), ...body],
+        [
+          ...(p.backdrop
+            ? [
+                `Color.markswift(${colorArgs(p.backdrop)})`,
+                ".allowsHitTesting(false)",
+                ...(backdropExit ? [`.transition(.opacity.animation(${backdropExit}))`] : []),
+              ]
+            : []),
+          ...body,
+        ],
         1,
       ),
       "}",

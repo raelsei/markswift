@@ -171,6 +171,24 @@ test("motion-tagged cases add 390 app frame captures per theme", () => {
   expect(matrix.filter((entry) => !entry.frame)).toHaveLength(8);
 });
 
+test("markswift-motion-open adds @open:<layer>@t:<ms> enter frames per theme", () => {
+  const tag = motionTag('<meta name="markswift-motion-open" content="edit-profile:50, open-sheet:100">', "x");
+  expect(tag).toEqual({
+    motionOpen: [
+      { layer: "edit-profile", t: 50 },
+      { layer: "open-sheet", t: 100 },
+    ],
+  });
+  expect(() => motionTag('<meta name="markswift-motion-open" content="edit-profile">', "x")).toThrow(
+    "invalid markswift-motion-open",
+  );
+  const matrix = buildMatrix([{ id: "d", fixture: "components/d.html", themes: ["light"], ...tag }]);
+  expect(matrix.filter((e) => e.frame).map((e) => [e.key, e.frame])).toEqual([
+    ["d-390-light-app@open:edit-profile@t:50", { t: 50, reduced: false, layer: "edit-profile" }],
+    ["d-390-light-app@open:open-sheet@t:100", { t: 100, reduced: false, layer: "open-sheet" }],
+  ]);
+});
+
 test("pilot rejects expectedText on a reflow-tagged fixture", async () => {
   const entry = {
     id: "flex",

@@ -19,6 +19,7 @@ import { type InferOptions } from "./context.ts";
 import { elementAction } from "./controls.ts";
 import { buildDetached, layerOverlays } from "./infer.ts";
 import { isTooltipLayer } from "./tooltips.ts";
+import { layerMotionOf, revealOf } from "./motion.ts";
 
 const REASON = {
   container: "its container is a measured, wrapping, flex or grid layout",
@@ -79,6 +80,14 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       const have = new Set(parent.content.map((c) => c.id));
       parent.content.push(...content(layer.nodes.filter((n) => n.id === undefined || !have.has(n.id))));
       parent.opens = { layer: layer.id, kind: "inflow" };
+      // The content's height keyframes time the disclosure's own open/close (066); nothing else of them plays.
+      for (const n of layer.nodes) {
+        const r = revealOf(n, parent.diagnostics);
+        if (r.reveal && !parent.motion?.reveal) parent.motion = { ...parent.motion, reveal: r.reveal };
+        if (r.enter.length || r.exit.length)
+          report(parent, `only the height of the content shown by ${layer.id} animates; its other keyframes do not`);
+      }
+      parent.confidence = confidenceOf(parent.diagnostics);
       continue;
     }
     if (!trigger?.action) {
@@ -108,7 +117,14 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       continue;
     }
     const nodes = content(layer.nodes);
-    for (const n of nodes) n.shownBy = layer.id;
+    // 066: each content root plays its enter/exit; its height keyframes time the reveal.
+    nodes.forEach((n, i) => {
+      n.shownBy = layer.id;
+      const r = revealOf(layer.nodes[i]!, n.diagnostics);
+      layerMotionOf(layer.nodes[i]!, n, r);
+      if (r.reveal) n.motion = { ...n.motion, reveal: r.reveal };
+      n.confidence = confidenceOf(n.diagnostics);
+    });
     // One gap per inserted node from the measured open geometry; the old pred → next gap stays after the last one.
     const v = parent.axis === "v";
     const gaps =
@@ -128,15 +144,27 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     parent.children.splice(p, 0, ...nodes);
     trigger.opens = { layer: layer.id, kind: "inflow" };
   }
-  for (const layer of doc.layers)
+  for (const layer of doc.layers) {
     if (menus.has(layer)) menu(screen, layer, rest, sem);
-    else if (
-      layer.placement !== "inflow" &&
-      !isTooltipLayer(layer, doc.root) &&
-      // A menubar alone, or a menu `<details>` shows, is no drawn popup.
-      !layer.nodes.some((n) => find(n, (d) => !!MENU_ROLES[d.attrs["role"] ?? ""]))
-    )
-      present(screen, doc, layer, rest, sem, options);
+    if (layer.placement === "inflow") continue;
+    // A tooltip, a menu, a menubar alone, or a menu `<details>` shows, is no drawn popup.
+    const native = isTooltipLayer(layer, doc.root)
+      ? "tooltip"
+      : layer.nodes.some((n) => find(n, (d) => !!MENU_ROLES[d.attrs["role"] ?? ""]))
+        ? "menu"
+        : undefined;
+    if (!native) present(screen, doc, layer, rest, sem, options);
+    else if (layer.nodes.some((n) => n.motion?.enter || n.motion?.exit)) {
+      const t = sem.get(layer.trigger) ?? screen.root;
+      addDiagnostic(
+        t.diagnostics,
+        "approximated",
+        "animation-name",
+        `native ${native} presents with the system animation`,
+      );
+      t.confidence = confidenceOf(t.diagnostics);
+    }
+  }
 }
 
 const MENU_ROLES: Record<string, true> = { menu: true, menubar: true, listbox: true };
@@ -417,6 +445,13 @@ function present(
   }
   // Centred and anchored content is placed by the runtime: the translation that placed it in CSS goes.
   if (pure && (placement.kind === "center" || placement.kind === "anchored")) delete first.node.style.transform;
+  // 066: enter/exit on the placed roots (`overlays[i]` is `layer.nodes[i]`; later ones are hoisted fixed descendants).
+  layer.nodes.forEach((ln, i) => {
+    const o = overlays[i];
+    if (!o) return;
+    layerMotionOf(ln, o.node, { enter: ln.motion?.enter ?? [], exit: ln.motion?.exit ?? [] });
+    o.node.confidence = confidenceOf(o.node.diagnostics);
+  });
   const backdrop = overlays
     .map((o) => byId.get(o.node.id))
     .filter((n) => n?.styles["overlay"] === "auto")

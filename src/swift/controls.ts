@@ -20,6 +20,7 @@ import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
+import { animationExpr } from "./motion.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
 export interface ControlDeps extends ColorCtx {
@@ -373,13 +374,16 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
             )
           : l,
       );
+      // App: the content's CSS height animation opens and closes it (066).
+      const reveal = deps.mode === "app" ? n.motion?.reveal : undefined;
+      const curves = reveal ? `, open: ${animationExpr(reveal.open)}, close: ${animationExpr(reveal.close)}` : "";
       return [
         `DisclosureGroup(isExpanded: ${binding}) {`,
         ...indent(n.content.length ? stackOfNodes(n, n.content, deps) : ["EmptyView()"], 1),
         "} label: {",
         ...indent(label, 1),
         "}",
-        `.disclosureGroupStyle(MarkswiftDisclosureStyle(spacing: ${num(gap)}))`,
+        `.disclosureGroupStyle(MarkswiftDisclosureStyle(spacing: ${num(gap)}${curves}))`,
       ];
     }
   }

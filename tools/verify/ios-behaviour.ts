@@ -367,7 +367,14 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     if (trigger && buttons.length) menus.push({ trigger, context: !!n.menu.context, items: buttons });
   });
   const motion = { live: false, reduced: false };
+  // What shows at launch: a closed layer's content (066: overlay enter, in-flow reveal) does not animate there.
+  const closed = new Set<SemNode>();
   walk(screen.root, (n) => {
+    if (n.shownBy !== undefined) walk(n, (d) => closed.add(d));
+  });
+  for (const o of screen.root.overlays) if (o.presentation) walk(o.node, (d) => closed.add(d));
+  walk(screen.root, (n) => {
+    if (closed.has(n)) return;
     if (n.motion?.animations?.length) motion.live = true;
     if ((n.motion?.reduced ?? n.motion?.animations ?? []).length) motion.reduced = true;
   });

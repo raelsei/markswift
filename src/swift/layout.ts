@@ -6,6 +6,7 @@ import { fillAlignment } from "./frames.ts";
 import { decorate, overlayModifier, paddingModifiers } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
 import { wrappingExpr } from "./wrapping.ts";
+import { transitionModifiers } from "./motion.ts";
 
 /** App mode: an admitted authored template (`GridNode.template`) laid out by the runtime `MarkswiftTracks`. */
 function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: EmitContext): string[] {
@@ -185,7 +186,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
         extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
       if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
         extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
-      out.push(...indent([...lines, ...extra], 1));
+      // 066: the content's own insertion/removal (its reveal, its exit) on its one expression.
+      out.push(...indent([...lines, ...extra, ...(shown ? transitionModifiers(c) : [])], 1));
       if (around) out.push("    Spacer(minLength: 0)");
       if (shown) out.splice(start, out.length - start, `    if ${shown} {`, ...indent(out.slice(start), 1), "    }");
       if (evenly && i === kids.length - 1) out.push("    Spacer(minLength: 0)");

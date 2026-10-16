@@ -400,6 +400,15 @@ transitioned properties). Mid-flight colours use SwiftUI's interpolation (endpoi
 interrupted transition reverses the SwiftUI way; the gate checks parameters and endpoints, not mid-flight frames
 (D-MOTION). Under Reduce Motion without an author rule, scale/translate changes jump and fades remain.
 
+Drawn overlays (dialogs, sheets, popovers, hover cards) enter with their CSS keyframes — the same `MarkswiftAnimation`,
+starting when the layer is inserted — and leave with their exit keyframes as a removal transition with the exact
+curve; the gate scores the enter at ½ its duration (`<case>-390-<theme>-app@open:<layer>@t:<ms>`, times from the
+fixture's `markswift-motion-open` meta) and checks the exit's parameters, not its frames. Accordion, collapsible and
+`<details>` content grows and shrinks with its CSS `height` animation (`MarkswiftReveal`: following content moves
+with it). Native menus and tooltips use the system animation. Under Reduce Motion enter and exit drop their movement
+and keep their opacity timing (D-MOTION); author `prefers-reduced-motion` rules for overlay enter/exit are not
+captured (a capture warning says so).
+
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.

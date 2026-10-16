@@ -93,3 +93,55 @@ export function stateAnimation(cond: string, t: StateTransition | undefined, fie
   );
   return `.modifier(MarkswiftStateAnimation(isOn: ${cond}, into: ${into}, back: ${back}, reducedInto: ${reducedInto}, reducedBack: ${reducedBack}))`;
 }
+
+/** A layer root's exit as one curve: its duration, delay and first segment's easing (066). */
+function exitSpec(k: KeyframeMotion): TransitionSpec {
+  const easing = Object.values(k.tracks)[0]!.segments[0]!.easing;
+  return { duration: k.duration, delay: Math.max(0, k.delay), easing };
+}
+
+/**
+ * An overlay root's removal with its exit: the frame its keyframes end at, relative to where they start (opacity and
+ * scale as factors, offset and rotation as differences), and under Reduce Motion that frame's opacity only.
+ */
+function exitExpr(motion: Motion): string {
+  const { tracks } = motion.exit!.motion;
+  const rel: Partial<Record<MotionChannel, number>> = {};
+  for (const c of CHANNELS) {
+    const t = tracks[c];
+    if (!t) continue;
+    const end = t.segments.at(-1)?.to ?? t.from;
+    rel[c] = c === "opacity" || c === "sx" || c === "sy" ? (t.from ? end / t.from : end) : end - t.from;
+  }
+  const value = (cs: MotionChannel[]) =>
+    `MarkswiftMotionValue(${cs
+      .filter((c) => rel[c] !== undefined && rel[c] !== IDENTITY[c])
+      .map((c) => `${MEMBER[c]}: ${num(rel[c]!)}`)
+      .join(", ")})`;
+  const anchor = motion.anchor ? `, anchor: UnitPoint(x: ${num(motion.anchor[0])}, y: ${num(motion.anchor[1])})` : "";
+  return `.asymmetric(insertion: .identity, removal: .modifier(active: MarkswiftExitFrame(value: ${value(CHANNELS)}, reduced: ${value(["opacity"])}${anchor}), identity: MarkswiftExitFrame()).animation(${animationExpr(exitSpec(motion.exit!.motion))}))`;
+}
+
+/** The `Animation` of the longest exit among a layer's roots (what closing it waits for); undefined when none exits. */
+export function longestExit(roots: SemNode[]): string | undefined {
+  const exits = roots.flatMap((n) => (n.motion?.exit ? [n.motion.exit.motion] : []));
+  if (!exits.length) return undefined;
+  const end = (k: KeyframeMotion) => Math.max(0, k.delay) + k.duration;
+  return animationExpr(exitSpec(exits.reduce((a, b) => (end(b) > end(a) ? b : a))));
+}
+
+/** In-flow content's insertion/removal: the revealed height animates (`withAnimation` around the toggle times it). */
+const REVEAL = ".modifier(active: MarkswiftReveal(fraction: 0), identity: MarkswiftReveal(fraction: 1))";
+
+/** `.transition(…)` of a layer root (066): in-flow content's reveal and/or an overlay root's exit; none when neither. */
+export function transitionModifiers(n: SemNode): string[] {
+  const parts = [...(n.motion?.reveal ? [REVEAL] : []), ...(n.motion?.exit ? [exitExpr(n.motion)] : [])];
+  if (!parts.length) return [];
+  return [`.transition(${parts.length > 1 ? `${parts[0]}.combined(with: ${parts[1]})` : parts[0]})`];
+}
+
+/** An in-flow layer's toggle: `state.toggle()` inside the reveal's close or open curve, when it has one. */
+export function revealToggle(state: string, reveal: Motion["reveal"]): string {
+  if (!reveal) return `${state}.toggle()`;
+  return `withAnimation(${state} ? ${animationExpr(reveal.close)} : ${animationExpr(reveal.open)}) { ${state}.toggle() }`;
+}
