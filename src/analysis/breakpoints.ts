@@ -4,10 +4,10 @@
  * one whose inputs differ becomes a holder whose `alternatives` the emitter chooses between at layout time.
  */
 import { isDeepStrictEqual } from "node:util";
-import { bandOf, px } from "../css/index.ts";
+import { bandOf, matchesWidth, px, widthQuery } from "../css/index.ts";
 import type { LayoutDoc, LayoutNode } from "../model/layout.ts";
 import { type BandEdge, type ConversionWarning, type SemNode, type Screen, walk } from "../model/semantic.ts";
-import { planBands } from "./bands.ts";
+import { bandNames, isContainerQuery, planBands, uniqueEdges } from "./bands.ts";
 
 /** Used px: the authored intent is `preferredSize`. */
 const SKIP: Record<string, true> = { width: true, height: true };
@@ -44,7 +44,8 @@ const LEAF: Record<SemNode["kind"], boolean> = {
 const round = (n: number) => Math.round(n * 100) / 100;
 const byKey = (a: [string, unknown], b: [string, unknown]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 
-/** Root-proposal edges of a set of band captures, or the reason the root does not follow the viewport. */
+/** Root-proposal edges of a set of band captures, or the reason the root does not follow the viewport. Every band
+ * holds a capture, ascending by width; more than one only on pages with container queries (the planner's `extra`). */
 export function bandEdges(docs: LayoutDoc[]): { edges: BandEdge[]; cssEdges: BandEdge[] } | { warning: string } {
   const first = docs[0]!;
   // The capture's own planner (dedupe, range, six-band cap), so compile and capture agree on the edges.
@@ -53,7 +54,13 @@ export function bandEdges(docs: LayoutDoc[]): { edges: BandEdge[]; cssEdges: Ban
     devices: [],
     max: docs.at(-1)!.viewport.w,
   }).edges;
-  if (docs.length !== cssEdges.length + 1 || docs.some((d, i) => bandOf(d.viewport.w, cssEdges) !== i))
+  const bands = docs.map((d) => bandOf(d.viewport.w, cssEdges));
+  if (
+    bands[0] !== 0 ||
+    bands.at(-1) !== cssEdges.length ||
+    docs.some((d, i) => i > 0 && (d.viewport.w <= docs[i - 1]!.viewport.w || bands[i]! - bands[i - 1]! > 1)) ||
+    (docs.length !== cssEdges.length + 1 && !first.conditions.some(isContainerQuery))
+  )
     throw new Error("options.variants must be one capture per width band in ascending order");
   const offset = (d: LayoutDoc) =>
     d.viewport.w - (d.root.bounds.w + px(d.root.styles["margin-left"]) + px(d.root.styles["margin-right"]));
@@ -69,10 +76,23 @@ export function bandEdges(docs: LayoutDoc[]): { edges: BandEdge[]; cssEdges: Ban
 /** A member lookup missed: the band dropped, hoisted or restructured the node. The nearest ancestor becomes a holder. */
 class Unaligned extends Error {}
 
-/** Compose per-band screens into one root with holders; undefined when no element differs between bands. */
+/** One capture group of `compose`: `doc` represents the captures of `pool` (its own first) and shows as band `label`. */
+interface Entry {
+  doc: number;
+  label: number;
+  pool: number[];
+}
+
+/**
+ * Compose per-capture screens into one root with holders and query containers; undefined when no element differs
+ * between captures and nothing is reported (the root is band 0's when only warnings are). `bands`: each capture's
+ * viewport band (ascending; default one capture per band). A band's lowest
+ * capture represents it; the others are container-query captures, seen only by the query containers inside.
+ */
 export function mergeBands(
   docs: LayoutDoc[],
   screens: Screen[],
+  bands: number[] = docs.map((_, i) => i),
 ): { root: SemNode; warnings: ConversionWarning[] } | undefined {
   const layout = docs.map((d) => {
     const byId = new Map<string, LayoutNode>();
@@ -135,21 +155,21 @@ export function mergeBands(
     if (!n) throw new Unaligned();
     return n;
   };
-  /** `G` split by `key`, groups ordered by their lowest band. */
-  const group = (G: number[], key: (b: number) => string) => {
-    const out = new Map<string, number[]>();
-    for (const b of G) {
-      const k = key(b);
+  /** `G` split by `key`, groups ordered by their first entry. */
+  const group = (G: Entry[], key: (e: Entry) => string) => {
+    const out = new Map<string, Entry[]>();
+    for (const e of G) {
+      const k = key(e);
       const H = out.get(k);
-      if (H) H.push(b);
-      else out.set(k, [b]);
+      if (H) H.push(e);
+      else out.set(k, [e]);
     }
     return [...out.values()];
   };
   // ponytail: a holder copies its first alternative's size and alignment, so a parent whose layout depends on a
   // child's height kind (`hugsRowHeight`, measured frames) lays it out as that band. Upgrade: per-band parents.
-  const holder = (n: SemNode, groups: number[][], member: (H: number[]) => SemNode): SemNode => {
-    const alternatives = groups.map((H) => ({ ...member(H), bands: H }));
+  const holder = (n: SemNode, groups: Entry[][], member: (H: Entry[]) => SemNode): SemNode => {
+    const alternatives = groups.map((H) => ({ ...member(H), bands: H.map((e) => e.label) }));
     const first = alternatives[0]!;
     return {
       kind: "box",
@@ -167,19 +187,20 @@ export function mergeBands(
       alternatives,
     };
   };
-  const byDeep = (n: SemNode, G: number[]) =>
+  const byDeep = (n: SemNode, G: Entry[]) =>
     holder(
       n,
-      group(G, (b) => deep(b, n.id) ?? "\u0000"),
-      (H) => lookup(H[0]!, n.id),
+      group(G, (e) => deep(e.doc, n.id) ?? "\u0000"),
+      (H) => lookup(H[0]!.doc, n.id),
     );
   const warnings: ConversionWarning[] = [];
   const warned = new Set<string>();
   const kids = (n: SemNode) => (n.kind === "stack" || n.kind === "grid" ? n.children : []);
 
-  const structural = (n: SemNode, G: number[]): SemNode => {
-    const g = G[0]!;
-    const nodes = G.map((b) => layout[b]!.get(n.id));
+  const structural = (n: SemNode, G: Entry[]): SemNode => {
+    const g = G[0]!.doc;
+    const nodes = G.map((e) => layout[e.doc]!.get(n.id));
+    if (LEAF[n.kind] && hosts.has(n.id)) hosted(n, G); // a leaf host only reports its queries
     if (LEAF[n.kind] || !nodes[0] || kids(n).some((c) => c.id !== "" && !layout[g]!.has(c.id))) return byDeep(n, G);
     // Script-driven DOM (D-BREAKPOINTS LCA rule): CSS cannot change a child's tag or a text node's text.
     const tags = new Map<string, string>();
@@ -209,7 +230,7 @@ export function mergeBands(
     }
     // Used size and alignment follow the children too (an inline-flex link's baseline sets its list item's height):
     // a band that infers others lays the node out differently, so it is its own alternative.
-    const keyOf = (b: number) => {
+    const keyOf = ({ doc: b }: Entry) => {
       const ln = layout[b]!.get(n.id);
       const s = lookup(b, n.id);
       const overlays = s.overlays.map((o) => deep(b, o.node.id) ?? o.node.id);
@@ -217,26 +238,32 @@ export function mergeBands(
       return `${ln ? own(ln) : "\u0000"}|${overlays.join(",")}|${sized}`;
     };
     const groups = group(G, keyOf);
-    if (groups.length > 1) return holder(n, groups, (H) => compose(lookup(H[0]!, n.id), H));
+    if (groups.length > 1) return holder(n, groups, (H) => compose(lookup(H[0]!.doc, n.id), H));
     // Own inputs equal: align the children by id; a band that dropped, hoisted or restructured one cannot.
     const ids = kids(n).map((c) => c.id);
     if (
       G.some(
-        (b) =>
+        (e) =>
           !isDeepStrictEqual(
-            kids(lookup(b, n.id)).map((c) => c.id),
+            kids(lookup(e.doc, n.id)).map((c) => c.id),
             ids,
           ),
       )
     )
       throw new Unaligned();
+    return hosted(n, G) ?? descend(n, G);
+  };
+  const descend = (n: SemNode, G: Entry[]): SemNode => {
     const children = kids(n).map((c) => compose(c, G));
     return children.every((c, i) => c === kids(n)[i]) ? n : ({ ...n, children } as SemNode);
   };
-  const compose = (n: SemNode, G: number[]): SemNode => {
-    if (n.id === "" || G.length === 1) return n;
-    const keys = G.map((b) => deep(b, n.id));
+  const compose = (n: SemNode, G: Entry[]): SemNode => {
+    if (n.id === "") return n;
+    const keys = G.flatMap((e) => e.pool.map((b) => deep(b, n.id)));
     if (keys.every((k) => k === keys[0])) return n;
+    // Representatives equal: the differences lie between captures of one band, seen only by query containers.
+    const first = deep(G[0]!.doc, n.id);
+    if (G.every((e) => deep(e.doc, n.id) === first)) return hosted(n, G) ?? descend(n, G);
     try {
       return structural(n, G);
     } catch (e) {
@@ -244,9 +271,106 @@ export function mergeBands(
       throw e;
     }
   };
-  const root = compose(
-    screens[0]!.root,
-    screens.map((_, i) => i),
-  );
-  return root === screens[0]!.root ? undefined : { root, warnings };
+
+  // Query containers (D-BREAKPOINTS BP5): host id → its width `@container` queries.
+  const hosts = new Map<string, string[]>();
+  for (const d of docs)
+    for (const c of d.conditions)
+      if (isContainerQuery(c)) {
+        const queries = hosts.get(c.container!) ?? [];
+        if (!queries.includes(c.query)) hosts.set(c.container!, [...queries, c.query]);
+      }
+  const contentWidth = (ln: LayoutNode) =>
+    ln.bounds.w -
+    px(ln.styles["padding-left"]) -
+    px(ln.styles["padding-right"]) -
+    px(ln.styles["border-left-width"]) -
+    px(ln.styles["border-right-width"]);
+  const warn = (key: string, message: string) => {
+    if (warned.has(key)) return;
+    warned.add(key);
+    warnings.push({ source: "breakpoints", level: "approximated", feature: "container-query", message });
+  };
+  /**
+   * Host `n` over the captures of `G`: its children composed per container band (the lowest capture of each band
+   * represents it), inside `containerBands`; undefined when it is no host, does not cross an edge or cannot switch.
+   */
+  const hosted = (n: SemNode, G: Entry[]): SemNode | undefined => {
+    const queries = hosts.get(n.id);
+    if (!queries) return undefined;
+    const pool = G.flatMap((e) => e.pool).sort((a, b) => a - b);
+    const nodes = pool.map((b) => layout[b]!.get(n.id));
+    if (nodes.some((ln) => !ln)) return undefined;
+    const edges = uniqueEdges(
+      queries.flatMap((q) => {
+        const w = widthQuery(q)!;
+        return [w.above, w.below].filter((e) => e !== undefined);
+      }),
+    );
+    const ks = nodes.map((ln) => bandOf(contentWidth(ln!), edges));
+    if (ks.every((k) => k === ks[0])) return undefined;
+    if ((n.kind !== "stack" && n.kind !== "grid") || n.scroll) {
+      for (const q of queries)
+        warn(
+          `unsupported\u0000${n.id}\u0000${q}`,
+          `@container ${q} on ${n.id}: the container is not a stack or grid (or scrolls); the query is not reconstructed`,
+        );
+      return undefined;
+    }
+    const byBand = new Map<number, number[]>();
+    pool.forEach((b, i) => byBand.set(ks[i]!, [...(byBand.get(ks[i]!) ?? []), b]));
+    const G2 = [...byBand].sort((a, b) => a[0] - b[0]).map(([label, H]): Entry => ({ doc: H[0]!, label, pool: H }));
+    const ids = kids(n).map((c) => c.id);
+    if (
+      G2.some(
+        (e) =>
+          !isDeepStrictEqual(
+            kids(idx[e.doc]!.get(n.id) ?? n).map((c) => c.id),
+            ids,
+          ),
+      )
+    ) {
+      for (const q of queries)
+        warn(
+          `unaligned\u0000${n.id}\u0000${q}`,
+          `@container ${q} on ${n.id}: its content changes structure between container widths; the query is not reconstructed`,
+        );
+      return undefined;
+    }
+    // ponytail: inside a host, media differences at the same container band keep the lower capture's content
+    // (reported). Upgrade: split the band's pool by viewport band and nest holders.
+    if (G2.some((e) => e.pool.some((b) => deep(b, n.id) !== deep(e.doc, n.id))))
+      warn(
+        `both\u0000${n.id}`,
+        `${n.id}: container and media queries both restyle its content at the same container width; the container query is reconstructed, the media difference is not`,
+      );
+    const children = kids(n).map((c) => compose(c, G2));
+    if (children.every((c, i) => c === kids(n)[i])) return undefined;
+    return { ...n, children, containerBands: { edges, names: bandNames(edges, "cq_") } } as SemNode;
+  };
+
+  const viewport: Entry[] = [];
+  bands.forEach((band, doc) => {
+    const last = viewport.at(-1);
+    if (last?.label === band) last.pool.push(doc);
+    else viewport.push({ doc, label: band, pool: [doc] });
+  });
+  // A host that stays on one side of a query in every capture of a viewport band never shows its styles there.
+  for (const [host, queries] of hosts)
+    for (const e of viewport) {
+      const widths = e.pool.flatMap((b) => {
+        const ln = layout[b]!.get(host);
+        return ln ? [round(contentWidth(ln))] : [];
+      });
+      for (const q of widths.length ? queries : []) {
+        const w = widthQuery(q)!;
+        if (widths.some((x) => matchesWidth(w, x))) continue;
+        warn(
+          `never\u0000${host}\u0000${q}`,
+          `@container ${q} on ${host}: the container is ${Math.min(...widths)}–${Math.max(...widths)}px wide at every captured width and never crosses ${(w.above ?? w.below)!.px}px; add a device width where it does (breakpoints devices)`,
+        );
+      }
+    }
+  const root = compose(screens[0]!.root, viewport);
+  return root === screens[0]!.root && !warnings.length ? undefined : { root, warnings };
 }

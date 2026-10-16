@@ -596,8 +596,15 @@ export interface SemBase extends SizeConstraints {
   shownBy?: string;
   /** App mode: this node presents the captured menu natively (plan 061). */
   menu?: MenuSpec;
-  /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */
+  /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`;
+   * inside a `containerBands` host they are that host's container bands. */
   bands?: number[];
+  /**
+   * Breakpoint conversions, `stack`/`grid` only: a query container (`container-type`) whose width `@container` queries
+   * switch its content. The emitter nests `MarkswiftBands` inside its padding, so `edges` (content-box px) apply to the
+   * width offered to its content; `names` as `Screen.breakpoints.names` (`""`, `cq_md`, `cq_w600`).
+   */
+  containerBands?: { edges: BandEdge[]; names: string[] };
   /**
    * Breakpoint conversions: this node is a holder — kind `box`, no paint, no children — for one DOM element whose
    * authored inputs differ between bands. The emitter shows the alternative whose `bands` holds the current band.
