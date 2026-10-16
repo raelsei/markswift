@@ -177,9 +177,27 @@ function verifyAtProbe(screen: Screen, probe: LayoutDoc): void {
     if (n.kind === "grid" && n.template) {
       const t = n.template;
       const p = at && admitTracks(at);
+      // Auto-repeat placement is row-major over a width-dependent column count: compare no placements there.
       const same =
         p &&
-        isDeepStrictEqual([p.template.tracks, p.template.autoRepeat, p.stretch], [t.tracks, t.autoRepeat, t.stretch]);
+        isDeepStrictEqual(
+          [
+            p.template.tracks,
+            p.template.autoRepeat,
+            p.stretch,
+            p.rows,
+            p.autoRow,
+            p.template.autoRepeat ? [] : p.placements,
+          ],
+          [
+            t.tracks,
+            t.autoRepeat,
+            t.stretch,
+            t.rows,
+            t.autoRow,
+            t.autoRepeat ? [] : t.items.map(({ child: _c, margin: _m, ...place }) => place),
+          ],
+        );
       if (same) return;
       delete n.template;
       note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", t.fidelityNote);

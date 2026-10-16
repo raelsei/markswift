@@ -20,7 +20,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
 
   // Collect container properties depth-first so the body reads top-down.
   const contentMinWidth = new Set<SemNode>();
-  const allocated = new Map<SemNode, "width" | "both">();
+  const allocated = new Map<SemNode, "width" | "height" | "both">();
   visit(screen.root, (n) => {
     if (n.kind !== "stack" && n.kind !== "grid") return;
     props.push({ name: uniqueName(`v_${identifier(n.id) || "n" + props.length}`, seen), node: n });
@@ -32,7 +32,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     if ((!n.measured || tracks) && (n.kind === "grid" || n.axis === "h" || n.width.kind === "hug"))
       for (const c of n.children) contentMinWidth.add(c);
     if (tracks)
-      for (const [i, c] of tracks.cells.entries()) if (!tracks.fixed.includes(i)) allocated.set(n.children[c]!, "both");
+      for (const it of tracks.items)
+        if (!it.fixed) allocated.set(n.children[it.child]!, it.justify === "stretch" ? "both" : "height");
     // App mode: MarkswiftFlexRow proposes each item its allocated width; heights stay as the IR says.
     if (opts.mode === "app" && n.kind === "stack" && n.flex) for (const c of n.children) allocated.set(c, "width");
   });
