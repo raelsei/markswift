@@ -9,6 +9,7 @@ import type { LayoutNode, Rect } from "../model/layout.ts";
 import { STYLE_WHITELIST } from "../model/layout.ts";
 import type { NodeIdentity } from "../input/types.ts";
 import type { PreferredSizes, PseudoStyles } from "./sizing.ts";
+import type { MotionByPath } from "./motion.ts";
 import { cssUrls, round2 } from "../css/index.ts";
 
 /** CDP `RareStringData`: sparse per-node strings (`value[k]` belongs to node `index[k]`). */
@@ -86,6 +87,8 @@ export interface Raw {
   states?: LayoutNode["states"];
   /** See `LayoutNode.pseudoStyles`. */
   pseudoStyles?: LayoutNode["pseudoStyles"];
+  /** See `LayoutNode.motion`. */
+  motion?: LayoutNode["motion"];
   /** Pseudo-elements only: every layout entry in snapshot order (the first is the container); bounds from snapshot B when present. */
   parts?: Array<{ bounds: Rect; text: boolean }>;
   parent?: Raw;
@@ -127,6 +130,24 @@ export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoSty
     if (Object.hasOwn(sizes, path)) raw.preferredSize = sizes[path];
     if (Object.hasOwn(pseudoStyles, path)) raw.pseudoStyles = pseudoStyles[path];
     for (const [i, child] of pathChildren(raw).entries()) walk(child, path ? `${path}/${i}` : String(i));
+  };
+  walk(root, "");
+}
+
+/** Join captured motion (browser/motion.ts) by element path; `<path>::before|::after` lands on that pseudo child. */
+export function attachMotion(root: Raw, motion: MotionByPath): void {
+  const walk = (raw: Raw, path: string) => {
+    if (Object.hasOwn(motion, path)) raw.motion = motion[path];
+    let i = 0;
+    for (const child of raw.children) {
+      if (child.type !== 1) continue;
+      if (child.pseudo !== undefined) {
+        const key = path + PSEUDO_TAGS[child.pseudo];
+        if (Object.hasOwn(motion, key)) child.motion = motion[key];
+        continue;
+      }
+      walk(child, path ? `${path}/${i++}` : String(i++));
+    }
   };
   walk(root, "");
 }
@@ -442,6 +463,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
   if (raw.states) node.states = raw.states;
+  if (raw.motion) node.motion = raw.motion;
   if (raw.pseudoStyles) node.pseudoStyles = raw.pseudoStyles;
   appendChildren(raw, origin, identity, path, node.children);
   return node;
@@ -568,6 +590,7 @@ function pseudoElement(
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.states) node.states = raw.states;
+  if (raw.motion) node.motion = raw.motion;
   return node;
 }
 
