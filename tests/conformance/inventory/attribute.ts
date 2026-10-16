@@ -1217,7 +1217,8 @@ export default {
       id: "@command",
       group: "Interactive",
       class: "approximated",
-      target: "Button setting `is<Name>Presented` (`show-modal`/`show-popover`/`toggle-popover` → markswiftPresentation)",
+      target:
+        "Button setting `is<Name>Presented` (`show-modal`/`show-popover`/`toggle-popover` → markswiftPresentation)",
       ir: "SemBase.opens (presentation)",
       via: "attribute",
       impl: "partial",
