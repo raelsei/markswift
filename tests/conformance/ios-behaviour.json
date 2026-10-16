@@ -18,7 +18,8 @@
     "shadcn-breadcrumb",
     "tw-form",
     "tw-settings",
-    "_behaviour/pointer-events"
+    "_behaviour/pointer-events",
+    "overlay-tooltip"
   ],
   "known": [
     {

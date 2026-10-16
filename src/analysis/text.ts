@@ -29,6 +29,7 @@ import { textPaintOf, clipsText } from "./style-background.ts";
 import { EDGES, edgeWidth, unionRect, isFlex, mainAxis, relativeOffset } from "./geometry.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { linkAction } from "./controls.ts";
+import { addTooltip, titleOf } from "./tooltips.ts";
 import { isActivatableRole } from "../model/interactive.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
@@ -257,6 +258,8 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // background layer below — `<mark><b>x</b></mark>` paints mark's highlight behind bold text.
     for (const inline of chain) if (!painted.includes(inline) && inlineBoxHasPaint(inline)) painted.push(inline);
     reportInlineEffects(host, chain, hidden, note);
+    // ponytail: an inline title applies to the whole Text (SwiftUI has no per-run hint); split the run into its own view for per-run hints.
+    if (!hidden) for (const inline of chain) addTooltip(base, titleOf(inline));
     // `opacity` is not inherited but composites every inline box on the chain: the run's paints
     // carry the product (`<span class="opacity-60">` in prose).
     const opacity = inlineOpacity(chain);

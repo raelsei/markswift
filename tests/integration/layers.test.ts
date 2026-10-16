@@ -256,4 +256,23 @@ describe("convert", () => {
     expect(light.dismiss.escape).toBe(true);
     expect(dark.dismiss).toEqual(light.dismiss);
   });
+
+  browserTest(
+    "tooltips: two hover layers and a title become .help, never drawn",
+    async () => {
+      const html = await Bun.file(
+        new URL("../conformance/fixtures/components/overlay-tooltip.html", import.meta.url).pathname,
+      ).text();
+      const result = await convertHtml(html);
+      expect(result.layout.layers!.map((l) => [l.activation, l.relation])).toEqual([
+        ["hover", "aria-describedby"],
+        ["hover", "interestfor"],
+      ]);
+      for (const tip of ["Add to library", "More information", "Save draft"])
+        expect(result.code).toContain(`.help("${tip}")`);
+      expect(result.code).not.toContain('Text(verbatim: "Add to library")');
+      expect(result.code).not.toContain('Text(verbatim: "More information")');
+    },
+    30000,
+  );
 });

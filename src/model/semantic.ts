@@ -427,6 +427,8 @@ export interface SemBase extends SizeConstraints {
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
+  /** `title`, inline-run titles and captured tooltip layers (D-HOVER): `.help` + an accessibility hint; never drawn. */
+  tooltip?: string;
   /** `<label>`: id of the toggle/radio its tap changes, or of the text field it focuses. */
   labelFor?: string;
   /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
