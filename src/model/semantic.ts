@@ -225,6 +225,39 @@ export type StateStyle = Partial<
   Pick<Style, "fills" | "border" | "borderSides" | "outline" | "shadows" | "opacity" | "transform" | "filters">
 > & { runColors?: Array<Color | undefined> };
 
+/** A CSS easing function: `cubic-bezier()` (and its keywords), `steps(n, jump-*)`, `linear()` (outputs, inputs 0…1, completed). */
+export type Easing =
+  | { bezier: [number, number, number, number] }
+  | { steps: [number, "start" | "end" | "none" | "both"] }
+  | { points: [number[], number[]] };
+/** Animatable channels: opacity, translate x/y (px), scale x/y, rotation (deg). */
+export type MotionChannel = "opacity" | "tx" | "ty" | "sx" | "sy" | "deg";
+/** One channel's keyframes: the value at offset 0, then one eased segment per later keyframe (`until` = offset 0…1). */
+export interface MotionTrack {
+  from: number;
+  segments: Array<{ to: number; until: number; easing: Easing }>;
+}
+/** One CSS `@keyframes` animation in CSS terms. Times in ms; `delay` may be negative. */
+export interface KeyframeMotion {
+  name: string;
+  duration: number;
+  delay: number;
+  iterations: number | "infinite";
+  direction: "normal" | "reverse" | "alternate" | "alternate-reverse";
+  fill: "none" | "forwards" | "backwards" | "both";
+  tracks: Partial<Record<MotionChannel, MotionTrack>>;
+}
+export interface Motion {
+  /** Disjoint channels. */
+  animations?: KeyframeMotion[];
+  /** Under Reduce Motion: absent = same as `animations`; `[]` = the base look. */
+  reduced?: KeyframeMotion[];
+  /** `transform-origin` as fractions of the border box; absent = centre. */
+  anchor?: [number, number];
+  /** Static values of the driven channels (the settled computed look); the emitter drops their static modifiers. */
+  base?: Partial<Record<MotionChannel, number>>;
+}
+
 export interface FontSpec {
   /**
    * `system` families map to platform fonts by design; `custom` is a bundled family name.
@@ -529,6 +562,8 @@ export interface SemBase extends SizeConstraints {
    * that band.
    */
   alternatives?: SemNode[];
+  /** CSS `@keyframes` animations (app output plays them; fidelity renders the settled look). */
+  motion?: Motion;
 }
 
 export interface StackNode extends SemBase {

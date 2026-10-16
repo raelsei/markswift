@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="animation-timeline; animation-composition; animation-name">
+<meta name="markswift-themes" content="light">
+<title>motion-unmapped</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 24px; align-items: center; }
+.box { width: 24px; height: 24px; border-radius: 4px; background: var(--accent); }
+@keyframes grow { from { transform: scale(0.5); } to { transform: scale(1); } }
+@keyframes lean { from { transform: skewX(0deg); } to { transform: skewX(20deg); } }
+@keyframes shimmer { to { background-position: 200% 0; } }
+@keyframes dash { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
+@keyframes nudge { from { translate: 0px 0px; } to { translate: 20px 0px; } }
+#scroll { overflow: hidden; animation: grow linear both; animation-timeline: scroll(self); }
+#skew { animation: lean 1s ease-in-out infinite alternate; }
+#shimmer { width: 120px; background: linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.5s linear infinite; }
+#dash circle { animation: dash 2s linear infinite; }
+#compose { translate: 4px 0px; animation: nudge 1s ease infinite alternate; animation-composition: add; }
+#starting { background: #16a34a; transition: opacity 300ms; }
+@starting-style { #starting { opacity: 0; } }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="unmapped">
+  <p class="cap">scroll-driven / skew / background-position / stroke-dashoffset / composition add / @starting-style</p>
+  <div class="row">
+    <div class="box" id="scroll"></div>
+    <div class="box" id="skew"></div>
+    <div class="box" id="shimmer"></div>
+    <svg id="dash" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="60"/></svg>
+    <div class="box" id="compose"></div>
+    <div class="box" id="starting"></div>
+  </div>
+</section>
+</main>
+</body>
+</html>

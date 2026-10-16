@@ -18,6 +18,7 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS } from "./controls.ts";
+import { animated, animationModifier } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
 }
@@ -138,7 +139,11 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
     ctx.mode === "app" &&
     ((n.kind === "control" && n.disabled === true && !FIELDS[n.control]) ||
       (!!n.action && !n.action.gesture && n.a11y?.disabled === true));
-  if (paint?.opacity && !nativeDim)
+  // An animated opacity is drawn by `MarkswiftAnimation` (placementModifiers), its static value as the base.
+  const drivenOpacity = animated(n, ctx.mode) && n.motion!.base?.opacity !== undefined;
+  if (drivenOpacity) {
+    if (paint?.opacity) note(n, "approximated", ":active", "pressed opacity on an animated element is not reproduced");
+  } else if (paint?.opacity && !nativeDim)
     m.push(`.opacity(${paint.cond} ? ${num(paint.opacity.state)} : ${num(paint.opacity.rest)})`);
   else if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
   if (st.blur !== undefined) m.push(`.blur(radius: ${num(st.blur)})`);
@@ -180,6 +185,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   const paint = ctx.statePaint?.get(n.id);
   const st = paint?.style ?? n.style;
   const scale = paint?.scale;
+  // Channels `MarkswiftAnimation` draws (pairs whole: analysis puts both axes in `base`).
+  const driven = animated(n, ctx.mode) ? (n.motion!.base ?? {}) : {};
   if (st.transform) {
     const t = st.transform;
     if (t.skewX !== undefined || t.skewY !== undefined) m.push(affineModifier(t, n.frame.w, n.frame.h));
@@ -187,15 +194,19 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       const anchor = t.origin
         ? `UnitPoint(x: ${num(n.frame.w ? t.origin[0] / n.frame.w : 0.5)}, y: ${num(n.frame.h ? t.origin[1] / n.frame.h : 0.5)})`
         : ".center";
-      if (scale) {
+      if (driven.sx === undefined && scale) {
         const [[rx, ry], [sx, sy], c] = [scale.rest, scale.state, paint.cond];
         m.push(`.scaleEffect(x: ${c} ? ${num(sx)} : ${num(rx)}, y: ${c} ? ${num(sy)} : ${num(ry)}, anchor: ${anchor})`);
-      } else if (t.scaleX !== 1 || t.scaleY !== 1)
+      } else if (driven.sx === undefined && (t.scaleX !== 1 || t.scaleY !== 1))
         m.push(`.scaleEffect(x: ${num(t.scaleX)}, y: ${num(t.scaleY)}, anchor: ${anchor})`);
-      if (t.rotate !== 0) m.push(`.rotationEffect(.degrees(${num(t.rotate)}), anchor: ${anchor})`);
-      if (t.tx !== 0 || t.ty !== 0) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
+      if (t.rotate !== 0 && driven.deg === undefined)
+        m.push(`.rotationEffect(.degrees(${num(t.rotate)}), anchor: ${anchor})`);
+      if ((t.tx !== 0 || t.ty !== 0) && driven.tx === undefined) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
   }
+  if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
+  else if (n.motion && ctx.mode === "fidelity")
+    note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");
   // CSS relative positioning moves paint, not layout: outside rotation/scale, which apply about the box's own origin.
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.
   // ponytail: a later sibling's own positioned descendants paint above it in CSS but below it here.

@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 
 /// Records what iOS exposes for every generated view in `cases.json`; `tools/verify/ios-behaviour.ts` judges it.
@@ -14,6 +15,9 @@ final class BehaviourTests: XCTestCase {
         /// In-flow layers: tapping the button labelled `trigger` shows the text `shows`; a second tap hides it.
         struct Layer: Decodable { let id: String; let trigger: String; let shows: String }
         let layers: [Layer]
+        /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
+        struct Motion: Decodable { let live: Bool; let reduced: Bool }
+        let motion: Motion
     }
 
     @MainActor
@@ -40,6 +44,10 @@ final class BehaviourTests: XCTestCase {
             run("ax5") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryAccessibilityXXXL"))] }
             // `.accessibilityExtraLarge` = DynamicTypeSize.accessibility3 (`AccessibilityL` is accessibility2).
             run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityXL"))] }
+            if item.motion.live {
+                run("motion") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live"))] }
+                run("motionReduced") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live", reduce: true))] }
+            }
             let data = try JSONSerialization.data(withJSONObject: ["launches": launches, "errors": errors], options: [.sortedKeys])
             try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json"))
         }
@@ -50,13 +58,27 @@ final class BehaviourTests: XCTestCase {
 }
 
 @MainActor
-private func launch(_ view: String, _ category: String, rtl: Bool = false) -> XCUIApplication {
+private func launch(_ view: String, _ category: String, rtl: Bool = false, motion: String? = nil, reduce: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchEnvironment["MARKSWIFT_VIEW"] = view
     if rtl { app.launchEnvironment["MARKSWIFT_RTL"] = "1" }
+    if let motion { app.launchEnvironment["MARKSWIFT_MOTION"] = motion }
+    if reduce { app.launchEnvironment["MARKSWIFT_REDUCE_MOTION"] = "1" }
     app.launchArguments = ["-UIPreferredContentSizeCategoryName", category]
     app.launch()
     return app
+}
+
+/// SHA-256 of two `markswift.root` screenshots 300 ms apart (after 500 ms): equal = nothing moved.
+@MainActor
+private func frames(_ app: XCUIApplication) -> [String] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    var digests: [String] = []
+    for pause in [0.5, 0.3] {
+        Thread.sleep(forTimeInterval: pause)
+        digests.append(SHA256.hash(data: root.screenshot().pngRepresentation).map { String(format: "%02x", $0) }.joined())
+    }
+    return digests
 }
 
 @MainActor

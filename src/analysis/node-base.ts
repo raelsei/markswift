@@ -8,10 +8,11 @@ import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf, relativeOffset, renders } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
-import { textContent } from "./text-runs.ts";
+import { isInlineText, textContent } from "./text-runs.ts";
 import { PSEUDO, undrawnImages } from "./generated.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
+import { motionOf } from "./motion.ts";
 import { titleOf } from "./tooltips.ts";
 
 export function finish<T extends SemNode>(node: T): T {
@@ -62,6 +63,23 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     );
   const style = styleOf(n, diagnostics);
   const states = stateStylesOf(n, style);
+  const motion = motionOf(n, style, diagnostics);
+  // Parts that never get a view of their own: an inline pseudo-element (merged into this node's text runs) and the
+  // shapes of an svg (drawn as one vector).
+  const parts =
+    policy.route === "svg"
+      ? n.children.flatMap(function all(c): LayoutNode[] {
+          return [c, ...c.children.flatMap(all)];
+        })
+      : n.children.filter((c) => (c.tag === "::before" || c.tag === "::after") && isInlineText(c));
+  for (const c of parts)
+    if (c.motion?.animations || c.motion?.reduced)
+      addDiagnostic(
+        diagnostics,
+        "unmapped",
+        "animation-name",
+        `animated ${c.tag} ${policy.route === "svg" ? "inside an svg" : "is part of a text run"}; not animated`,
+      );
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
@@ -99,6 +117,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(field ? { field } : {}),
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
+    ...(motion ? { motion } : {}),
     ...(passesTaps(n) ? { hitTesting: false as const } : {}),
     ...(tooltip ? { tooltip } : {}),
   };

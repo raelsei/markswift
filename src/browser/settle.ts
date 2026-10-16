@@ -7,9 +7,10 @@ import type { Page } from "playwright-core";
  * `content-visibility: hidden` elements (`hidden=until-found`) are removed from
  * layout because DOMSnapshot still reports boxes for them while nothing paints. Lazy images
  * are loaded eagerly so below-the-fold pixels exist.
+ * `at` (ms): every animation is paused at that time instead of finished (motion frame captures).
  */
-export async function settle(page: Page): Promise<void> {
-  await page.evaluate(async () => {
+export async function settle(page: Page, options: { at?: number } = {}): Promise<void> {
+  await page.evaluate(async (at) => {
     for (const img of document.images) if (img.loading === "lazy") img.loading = "eager";
     await Promise.all([...document.images].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
@@ -20,6 +21,11 @@ export async function settle(page: Page): Promise<void> {
         for (const c of el.children) (c as HTMLElement).style.setProperty("display", "none", "important");
     }
     for (const a of document.getAnimations()) {
+      if (at !== null) {
+        a.pause();
+        a.currentTime = at;
+        continue;
+      }
       try {
         a.finish();
       } catch {
@@ -29,7 +35,7 @@ export async function settle(page: Page): Promise<void> {
     const frame = Promise.withResolvers<void>();
     requestAnimationFrame(() => requestAnimationFrame(() => frame.resolve()));
     await frame.promise;
-  });
+  }, options.at ?? null);
 }
 
 /** Finish (or, for infinite ones, cancel) every running animation: the settled look `settle()` leaves. */

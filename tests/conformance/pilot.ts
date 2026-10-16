@@ -14,6 +14,9 @@ export interface PilotCase {
   anchors?: string[];
   /** From the fixture's `markswift-reflow` meta (see `reflowTag`); set by the loaders, never by pilot.json. */
   reflow?: "native" | "pinned";
+  /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` metas (see `motionTag`); set by the loaders. */
+  motion?: number[];
+  motionReduced?: number[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -26,6 +29,24 @@ export function reflowTag(html: string, id: string): RunCase["reflow"] {
   if (tag === undefined) return undefined;
   if (tag !== "native" && tag !== "pinned") throw new Error(`fixture ${id}: invalid markswift-reflow "${tag}"`);
   return tag;
+}
+
+/** `<meta name="markswift-motion" content="250,500">` (and `markswift-motion-reduced`): ascending integer ms at which
+ * the 390 app capture is also frame-captured with every animation paused (`@t:<ms>`, `@reduced@t:<ms>` keys). */
+export function motionTag(html: string, id: string): Pick<RunCase, "motion" | "motionReduced"> {
+  const out: Pick<RunCase, "motion" | "motionReduced"> = {};
+  for (const [name, key] of [
+    ["markswift-motion", "motion"],
+    ["markswift-motion-reduced", "motionReduced"],
+  ] as const) {
+    const tag = new RegExp(`<meta name="${name}" content="([^"]*)"`).exec(html)?.[1];
+    if (tag === undefined) continue;
+    const times = tag.split(",").map((t) => t.trim());
+    if (!times.every((t) => /^\d+$/.test(t)) || times.some((t, i) => i && Number(t) <= Number(times[i - 1])))
+      throw new Error(`fixture ${id}: invalid ${name} "${tag}"`);
+    out[key] = times.map(Number);
+  }
+  return out;
 }
 
 export async function validatePilot(raw: unknown, fixtureRoot: string): Promise<PilotCase[]> {
@@ -74,10 +95,11 @@ export async function validatePilot(raw: unknown, fixtureRoot: string): Promise<
     const file = resolve(fixtureRoot, entry.fixture);
     if (!file.startsWith(resolve(fixtureRoot) + "/") || !(await stat(file).catch(() => undefined))?.isFile())
       throw new Error(`pilot ${entry.id}: fixture not found: ${entry.fixture}`);
-    const reflow = reflowTag(await Bun.file(file).text(), entry.id);
+    const source = await Bun.file(file).text();
+    const reflow = reflowTag(source, entry.id);
     if (reflow && entry.expectedText !== undefined)
       throw new Error(`pilot ${entry.id}: reflow-tagged cases cannot have expectedText`);
-    cases.push({ ...(entry as unknown as PilotCase), ...(reflow ? { reflow } : {}) });
+    cases.push({ ...(entry as unknown as PilotCase), ...(reflow ? { reflow } : {}), ...motionTag(source, entry.id) });
   }
   return cases;
 }
@@ -91,7 +113,7 @@ export async function loadPilot(path = join(import.meta.dir, "pilot.json")): Pro
 /** What the runner needs from a case; pilot.json cases add feature, tier and diagnostic expectations. */
 export type RunCase = Pick<
   PilotCase,
-  "id" | "fixture" | "themes" | "expectedText" | "expectedLines" | "anchors" | "reflow"
+  "id" | "fixture" | "themes" | "expectedText" | "expectedLines" | "anchors" | "reflow" | "motion" | "motionReduced"
 >;
 
 /** Every `fixtures/<domain>/*.html` (`_`-prefixed dirs excluded). Pilot cases keep their id and expectations;
@@ -111,6 +133,7 @@ export async function loadFixtureSet(pilot: PilotCase[]): Promise<RunCase[]> {
       fixture,
       themes: themes ? (themes.split(",") as RunCase["themes"]) : ["light"],
       ...(reflow ? { reflow } : {}),
+      ...motionTag(html, id),
     });
   }
   return cases;
@@ -122,6 +145,8 @@ export interface PilotEntry {
   width: number;
   theme: "light" | "dark";
   mode: "app" | "fidelity";
+  /** Motion frame of the case's 390 app capture: every animation paused `t` ms in (`reduced`: under Reduce Motion). */
+  frame?: { t: number; reduced: boolean };
 }
 
 /** Capture widths of a case. With --reflow a tagged case adds 768, and 390 comes first because the reflow arm reuses
@@ -129,9 +154,11 @@ export interface PilotEntry {
 export function widthsFor(item: RunCase, reflow = false): number[] {
   return reflow && item.reflow ? [390, 320, 768] : [320, 390];
 }
+/** Every capture; a motion-tagged case adds its frame entries per theme (390, `app`):
+ * `<caseId>-390-<theme>-app@t:<ms>` and `<caseId>-390-<theme>-app@reduced@t:<ms>`. */
 export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
-  return cases.flatMap((item) =>
-    widthsFor(item, reflow).flatMap((width) =>
+  return cases.flatMap((item) => [
+    ...widthsFor(item, reflow).flatMap((width) =>
       item.themes.flatMap((theme) =>
         (["app", "fidelity"] as const).map((mode) => ({
           key: `${item.id}-${width}-${theme}-${mode}`,
@@ -142,7 +169,20 @@ export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
         })),
       ),
     ),
-  );
+    ...item.themes.flatMap((theme) =>
+      [
+        ...(item.motion ?? []).map((t) => ({ t, reduced: false })),
+        ...(item.motionReduced ?? []).map((t) => ({ t, reduced: true })),
+      ].map((frame) => ({
+        key: `${item.id}-390-${theme}-app${frame.reduced ? "@reduced" : ""}@t:${frame.t}`,
+        case: item,
+        width: 390,
+        theme,
+        mode: "app" as const,
+        frame,
+      })),
+    ),
+  ]);
 }
 
 /** Capture key of a layer's open state: `<caseId>-<width>-<theme>-<mode>@open:<layerId>` (390, `app` only). */

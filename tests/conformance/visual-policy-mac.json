@@ -47,6 +47,9 @@
     "html@fidelity": {
       "minSsim": 0.75
     },
+    "motion@app": {
+      "minSsim": 0.93
+    },
     "svg@app": {
       "minSsim": 0.93
     },

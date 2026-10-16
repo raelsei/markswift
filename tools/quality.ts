@@ -96,8 +96,9 @@ export const exceptionOf = (policy: Record<string, unknown>, key: string, c: Rec
   ((policy.exceptions ?? {}) as Record<string, string>)[key] ??
   ((policy.exceptions ?? {}) as Record<string, string>)[`${String(c.caseId)}@${String(c.mode)}`];
 
-/** Family of a capture: `<first fixture path segment>@<mode>`. */
-const familyOf = (c: Record<string, unknown>) => `${String(c.fixture).split("/")[0]}@${String(c.mode)}`;
+/** Family of a capture: `<first fixture path segment>@<mode>`; motion frame captures are `motion@<mode>`. */
+const familyOf = (c: Record<string, unknown>) =>
+  `${c.motion ? "motion" : String(c.fixture).split("/")[0]}@${String(c.mode)}`;
 
 /** Anchor regions of a capture; absent means none. `undefined` when malformed. */
 function anchorsOf(value: Record<string, unknown>): Anchor[] | undefined {

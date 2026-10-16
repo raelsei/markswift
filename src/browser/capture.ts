@@ -7,7 +7,7 @@
  */
 import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
-import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
 import {
   snapshotToTree,
@@ -64,6 +64,38 @@ function sniffImage(b: Buffer): string | undefined {
   if (b.toString("latin1", 0, 4) === "GIF8") return "image/gif";
   if (b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") return "image/webp";
   return undefined;
+}
+
+/** Marks every transformed element and every `position: relative` one (`TRANSFORMED_MARK`, `RELATIVE_MARK`). */
+async function markTransformed(page: Page): Promise<void> {
+  await page.evaluate(
+    ([transformed, relative]) => {
+      for (const el of document.querySelectorAll("*")) {
+        const cs = getComputedStyle(el);
+        if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
+          el.setAttribute(transformed, "");
+        if (cs.position === "relative") el.setAttribute(relative, "");
+      }
+    },
+    [TRANSFORMED_MARK, RELATIVE_MARK] as const,
+  );
+}
+
+/** The reference shows the component at its layout box: ancestors' transforms and relative offsets are cancelled
+ * (keeping their containing blocks), the root's own transform stays painted. Needs `ROOT_MARK` and `markTransformed`. */
+async function cancelAncestorTransforms(page: Page): Promise<void> {
+  await page.evaluate((css) => {
+    const s = document.createElement("style");
+    s.textContent = css;
+    document.body.appendChild(s);
+  }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }\n[${RELATIVE_MARK}]:has([${ROOT_MARK}]) { inset: auto !important; }`);
+}
+
+/** `transition: none` for static captures, tagged so the captured `<style>` list skips it. */
+async function noTransitions(page: Page) {
+  const sheet = await page.addStyleTag({ content: "* { transition: none !important; }" });
+  await sheet.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
+  return sheet;
 }
 
 export interface Capture {
@@ -190,44 +222,10 @@ export class BrowserCapture {
       }
     });
     try {
-      if (spec.viewport) await page.setViewportSize(spec.viewport);
-      await page.emulateMedia({ colorScheme: spec.theme });
-      // Public pasted markup is captured as a document, but cannot reach the host's network.
-      // The exact document route below is registered last and fulfills that one request.
-      // `aborted` (net::ERR_ABORTED) cancels a navigation (meta refresh, link) without committing
-      // Chrome's error page, so the pasted document stays the one captured.
-      if (this.opts.restricted) await page.route("**/*", (route) => route.abort("aborted"));
-      if (spec.html !== undefined) {
-        const documentURL = new URL(spec.url);
-        documentURL.hash = "";
-        await page.route(
-          (url) => url.href === documentURL.href,
-          (route) =>
-            route.request().isNavigationRequest()
-              ? route.fulfill({
-                  contentType: "text/html; charset=utf-8",
-                  body: spec.html!,
-                  ...(this.opts.restricted
-                    ? {
-                        headers: {
-                          "Content-Security-Policy":
-                            "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'",
-                        },
-                      }
-                    : {}),
-                })
-              : this.opts.restricted
-                ? route.abort()
-                : route.continue(),
-        );
-      }
-      await page.goto(spec.url, { waitUntil: "load" });
-      await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
-      await spec.prepare?.(page);
+      await this.load(page, spec);
       // Static capture: transitions only interpolate towards the same end state, but a
       // running one makes computed values (and the transform:none probe) mid-flight.
-      const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
-      await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
+      const noTransition = await noTransitions(page);
       // Motion is read before settle() finishes it (a finished CSSAnimation leaves getAnimations()).
       const motion = await readMotion(page, spec.root);
       errors.push(...motion.warnings);
@@ -328,17 +326,7 @@ export class BrowserCapture {
       );
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
-      await page.evaluate(
-        ([transformed, relative]) => {
-          for (const el of document.querySelectorAll("*")) {
-            const cs = getComputedStyle(el);
-            if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
-              el.setAttribute(transformed, "");
-            if (cs.position === "relative") el.setAttribute(relative, "");
-          }
-        },
-        [TRANSFORMED_MARK, RELATIVE_MARK] as const,
-      );
+      await markTransformed(page);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
       // <style> is appended last so node indices of everything else are unchanged. The individual
       // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
@@ -408,13 +396,7 @@ export class BrowserCapture {
           throw new Error(
             `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
           );
-        // The reference shows the component at its layout box: ancestors' transforms are cancelled
-        // (keeping their containing blocks), the root's own transform stays painted.
-        await page.evaluate((css) => {
-          const s = document.createElement("style");
-          s.textContent = css;
-          document.body.appendChild(s);
-        }, `:has([${ROOT_MARK}]) { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}]:has([${ROOT_MARK}]) { will-change: transform !important; }\n[${RELATIVE_MARK}]:has([${ROOT_MARK}]) { inset: auto !important; }`);
+        await cancelAncestorTransforms(page);
         png = await page.screenshot({
           clip: { x, y, width: size.w, height: size.h },
           scale: "device",
@@ -461,6 +443,71 @@ export class BrowserCapture {
         ...(triggers ? { triggers } : {}),
         ...(opened ? { opened } : {}),
       };
+    } finally {
+      await page.close();
+    }
+  }
+
+  /** Viewport, colour scheme, routes, navigation, `waitFor` and `prepare` of one capture request. */
+  private async load(page: Page, spec: CaptureRequest): Promise<void> {
+    if (spec.viewport) await page.setViewportSize(spec.viewport);
+    await page.emulateMedia({ colorScheme: spec.theme });
+    // Public pasted markup is captured as a document, but cannot reach the host's network.
+    // The exact document route below is registered last and fulfills that one request.
+    // `aborted` (net::ERR_ABORTED) cancels a navigation (meta refresh, link) without committing
+    // Chrome's error page, so the pasted document stays the one captured.
+    if (this.opts.restricted) await page.route("**/*", (route) => route.abort("aborted"));
+    if (spec.html !== undefined) {
+      const documentURL = new URL(spec.url);
+      documentURL.hash = "";
+      await page.route(
+        (url) => url.href === documentURL.href,
+        (route) =>
+          route.request().isNavigationRequest()
+            ? route.fulfill({
+                contentType: "text/html; charset=utf-8",
+                body: spec.html!,
+                ...(this.opts.restricted
+                  ? {
+                      headers: {
+                        "Content-Security-Policy":
+                          "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'",
+                      },
+                    }
+                  : {}),
+              })
+            : this.opts.restricted
+              ? route.abort()
+              : route.continue(),
+      );
+    }
+    await page.goto(spec.url, { waitUntil: "load" });
+    await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
+    await spec.prepare?.(page);
+  }
+
+  /**
+   * Motion frame: the same page with every animation paused `frame.t` ms in (`reduced`: under
+   * `prefers-reduced-motion: reduce`, else `no-preference`), screenshotted at `clip` — the rest capture's root box.
+   */
+  async captureFrame(
+    spec: CaptureRequest,
+    frame: { t: number; reduced: boolean },
+    clip: { x: number; y: number; width: number; height: number },
+  ): Promise<Uint8Array> {
+    const page = await this.context.newPage();
+    try {
+      if (!frame.reduced) await page.emulateMedia({ reducedMotion: "no-preference" });
+      await this.load(page, spec);
+      await noTransitions(page);
+      await settle(page, { at: frame.t });
+      await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
+        sel: spec.root,
+        mark: ROOT_MARK,
+      });
+      await markTransformed(page);
+      await cancelAncestorTransforms(page);
+      return await page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" });
     } finally {
       await page.close();
     }
