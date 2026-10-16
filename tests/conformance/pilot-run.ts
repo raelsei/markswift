@@ -352,7 +352,11 @@ async function run() {
             compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
             compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
           }
-          const warnings = [...new Map(bands.flatMap((band) => band.warnings).map((w) => [w.message, w])).values()];
+          // Capture warnings of every band, then the merge's own (as `convert` reports them).
+          const warnings = [
+            ...new Map(bands.flatMap((band) => band.warnings).map((w) => [w.message, w])).values(),
+            ...compiled.warnings,
+          ];
           await mkdir(swiftDir, { recursive: true });
           for (const [file, content] of Object.entries(compiled.files)) await Bun.write(join(swiftDir, file), content);
           await Bun.write(join(dir, "diagnostics.json"), JSON.stringify(compiled.diagnostics, null, 2));
