@@ -275,14 +275,17 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
     ]
 }
 
-/// Each transitioned focus look in a fresh launch: the field's top edge (its border; never the caret or text) before
-/// and 0.4 s after its tap (longest corpus focus transition 150 ms + margin) must differ.
+/// Each transitioned focus look in a fresh launch: the screen rows from 4 pt above the field's top edge to 2 pt below it
+/// (its border and 3 pt focus ring; never the caret or text) before and 0.4 s after its tap (longest corpus focus
+/// transition 150 ms + margin) must differ. A TextEditor's element is its inner text view, whose top sits on the inside
+/// of the border (`markswiftTextEditorInsets`), so the strip reaches above the element.
 @MainActor
 private func focusLooks(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[String: Any]] {
     let root = app.otherElements["markswift.root"].firstMatch
     func edge(_ element: XCUIElement) -> Data? {
-        let image = element.screenshot().image
-        let strip = CGRect(x: 0, y: 0, width: image.size.width * image.scale, height: 2 * image.scale)
+        let image = XCUIScreen.main.screenshot().image
+        let f = element.frame
+        let strip = CGRect(x: f.minX, y: f.minY - 4, width: f.width, height: 6).applying(CGAffineTransform(scaleX: image.scale, y: image.scale))
         return image.cgImage?.cropping(to: strip).flatMap { UIImage(cgImage: $0).pngData() }
     }
     var looks: [[String: Any]] = []
