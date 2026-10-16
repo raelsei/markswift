@@ -18,6 +18,9 @@ export interface BandPlan {
   /** CSS viewport edges, ascending; `edges.length === captures.length - 1`. */
   edges: BandEdge[];
   captures: Array<{ width: number; height: number }>;
+  /** Container queries: one more capture per band at its upper bound (the band capture's height), lowest bands first,
+   * while captures + extra stay ≤ BAND_CAP; `[]` without container queries. */
+  extra: Array<{ width: number; height: number }>;
   /** Probe width per band (used only when the band's capture needs a probe). */
   probes: Array<number | undefined>;
   /** Thresholds not reconstructed, as warning messages. */
@@ -26,13 +29,42 @@ export interface BandPlan {
 
 /** Tailwind's default breakpoints by `min-width` px. */
 export const TAILWIND_BANDS: Record<number, string> = { 640: "sm", 768: "md", 1024: "lg", 1280: "xl", 1536: "2xl" };
+/** Tailwind's container scale (`@md`, …) by `min-width` px. */
+export const TAILWIND_CONTAINER_BANDS: Record<number, string> = {
+  256: "3xs",
+  288: "2xs",
+  320: "xs",
+  384: "sm",
+  448: "md",
+  512: "lg",
+  576: "xl",
+  672: "2xl",
+  768: "3xl",
+  896: "4xl",
+  1024: "5xl",
+  1152: "6xl",
+  1280: "7xl",
+};
 
-/** One name per band: band 0 `""`, band `k` its lower CSS edge — a Tailwind default name, else `w<capture width>`. */
-export function bandNames(cssEdges: BandEdge[]): string[] {
-  return ["", ...cssEdges.map((e) => (e.inclusive && TAILWIND_BANDS[e.px]) || `w${captureWidth(e)}`)];
+/** One name per band: band 0 `""`, band `k` its lower CSS edge — a Tailwind default name, else `w<capture width>`.
+ * `prefix` (`cq_`): container bands, named from Tailwind's container scale. */
+export function bandNames(cssEdges: BandEdge[], prefix = ""): string[] {
+  const named = prefix ? TAILWIND_CONTAINER_BANDS : TAILWIND_BANDS;
+  return ["", ...cssEdges.map((e) => prefix + ((e.inclusive && named[e.px]) || `w${captureWidth(e)}`))];
 }
 
-/** Band edges from the `media` width conditions, one capture and probe width per band. */
+/** A width `@container` query attributed to a host node: the conversion reconstructs it at that host. */
+export function isContainerQuery(c: LayoutCondition): boolean {
+  return c.kind === "container" && c.container !== undefined && widthQuery(c.query) !== undefined;
+}
+
+/** Edges ascending by capture width, `min-width` first on ties; one edge per capture width. */
+export function uniqueEdges(all: BandEdge[]): BandEdge[] {
+  all.sort((a, b) => captureWidth(a) - captureWidth(b) || Number(b.inclusive) - Number(a.inclusive));
+  return all.filter((e, i) => i === 0 || captureWidth(e) !== captureWidth(all[i - 1]!));
+}
+
+/** Band edges from the `media` width conditions, one capture and probe width per band (+ `extra`, container queries). */
 export function planBands(
   conditions: LayoutCondition[],
   options: {
@@ -57,8 +89,7 @@ export function planBands(
         );
     }
   }
-  all.sort((a, b) => captureWidth(a) - captureWidth(b) || Number(b.inclusive) - Number(a.inclusive));
-  let edges = all.filter((e, i) => i === 0 || captureWidth(e) !== captureWidth(all[i - 1]!));
+  let edges = uniqueEdges(all);
   if (edges.length > BAND_CAP - 1) {
     notes.set(
       "",
@@ -66,11 +97,15 @@ export function planBands(
     );
     edges = edges.slice(0, BAND_CAP - 1);
   }
-  if (!edges.length)
-    return { edges, captures: [first], probes: [first.width > BAND_MIN ? BAND_MIN : 390], notes: [...notes.values()] };
   const captures: BandPlan["captures"] = [];
   const probes: BandPlan["probes"] = [];
-  for (let i = 0; i <= edges.length; i++) {
+  const his: number[] = [];
+  if (!edges.length) {
+    captures.push(first);
+    probes.push(first.width > BAND_MIN ? BAND_MIN : 390);
+    his.push(max);
+  }
+  for (let i = 0; edges.length && i <= edges.length; i++) {
     const lo = i === 0 ? BAND_MIN : captureWidth(edges[i - 1]!);
     const hi = i === edges.length ? max : captureWidth(edges[i]!) - 1;
     const inBand = (w: number) => lo <= w && w <= hi;
@@ -78,8 +113,19 @@ export function planBands(
       ? first
       : (devices.find((d) => inBand(d.width)) ?? { width: lo, height: first.height });
     captures.push(capture);
+    his.push(hi);
     const [near, far] = i === 0 ? [BAND_MIN, hi] : [hi, lo];
     probes.push(near !== capture.width ? near : far !== capture.width ? far : undefined);
   }
-  return { edges, captures, probes, notes: [...notes.values()] };
+  // ponytail: two captures per band find a container threshold only when the host crosses it between them; a crossing
+  // between the band's lower bound and its capture is missed (reported as "never crosses" when no capture sees the
+  // other side). Upgrade: solve the host width as a linear function of the viewport from two captures and capture at
+  // the predicted crossing.
+  const extra: BandPlan["extra"] = [];
+  if (conditions.some(isContainerQuery))
+    captures.forEach((c, i) => {
+      if (his[i]! > c.width && captures.length + extra.length < BAND_CAP)
+        extra.push({ width: his[i]!, height: c.height });
+    });
+  return { edges, captures, extra, probes, notes: [...notes.values()] };
 }

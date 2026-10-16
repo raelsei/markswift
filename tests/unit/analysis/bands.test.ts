@@ -7,13 +7,15 @@ const media = (...queries: string[]): LayoutCondition[] =>
 const phone = { width: 390, height: 844 };
 const plan = (conditions: LayoutCondition[], first = phone, max = 1376) =>
   planBands(conditions, { first, devices: DEFAULT_BAND_DEVICES, max });
-const noEdges = { edges: [], captures: [phone], probes: [320], notes: [] };
+const noEdges = { edges: [], captures: [phone], extra: [], probes: [320], notes: [] };
+const container = (query: string): LayoutCondition => ({ kind: "container", query, matches: false, container: "card" });
 
 describe("planBands", () => {
   test("one min-width edge: phone band and the first device past it", () => {
     expect(plan(media("(min-width: 600px)"))).toEqual({
       edges: [{ px: 600, inclusive: true }],
       captures: [phone, { width: 834, height: 1210 }],
+      extra: [],
       probes: [320, 1376],
       notes: [],
     });
@@ -65,12 +67,31 @@ describe("planBands", () => {
     ]);
   });
 
-  test("container and unparsed media conditions are ignored without a note", () => {
+  test("unattributed container and unparsed media conditions are ignored without a note", () => {
     const conditions: LayoutCondition[] = [
-      { kind: "container", query: "(min-width: 400px)", matches: false, container: "card" },
+      { kind: "container", query: "(min-width: 400px)", matches: false },
       ...media("(orientation: landscape)"),
     ];
     expect(plan(conditions)).toEqual(noEdges);
+  });
+
+  test("container queries add one capture at the top of each band", () => {
+    const both = plan([...media("(min-width: 768px)"), container("(width >= 28rem)")]);
+    expect(both.captures).toEqual([phone, { width: 834, height: 1210 }]);
+    expect(both.extra).toEqual([
+      { width: 767, height: 844 },
+      { width: 1376, height: 1210 },
+    ]);
+    const only = plan([container("(width >= 28rem)")]);
+    expect({ ...only, extra: [] }).toEqual(noEdges);
+    expect(only.extra).toEqual([{ width: 1376, height: 844 }]);
+    expect(plan(media("(min-width: 768px)")).extra).toEqual([]);
+    const widths = (n: number) => [400, 500, 600, 700, 800].slice(0, n).map((w) => `(min-width: ${w}px)`);
+    const five = plan([...media(...widths(5)), container("(width >= 28rem)")]);
+    expect([five.captures.length, five.extra.length]).toEqual([6, 0]);
+    const four = plan([...media(...widths(4)), container("(width >= 28rem)")]);
+    expect(four.captures.length + four.extra.length).toBe(6);
+    expect(four.extra).toEqual([{ width: 399, height: 844 }]);
   });
 
   test("no conditions: today's probe rule", () => {
@@ -88,4 +109,13 @@ test("bandNames: Tailwind defaults for inclusive edges, else w<capture width>; b
   ).toEqual(["", "md", "lg"]);
   expect(bandNames([{ px: 767, inclusive: false }])).toEqual(["", "w768"]);
   expect(bandNames([{ px: 600, inclusive: true }])).toEqual(["", "w600"]);
+  expect(
+    bandNames(
+      [
+        { px: 448, inclusive: true },
+        { px: 600, inclusive: true },
+      ],
+      "cq_",
+    ),
+  ).toEqual(["", "cq_md", "cq_w600"]);
 });
