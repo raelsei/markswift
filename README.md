@@ -334,11 +334,11 @@ mapped, approximated or unmapped in `diagnostics`.
 
 - Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
   fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
-- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures in the iOS simulator, on `v*` tags,
-  weekly and on dispatch): the accessibility tree, Apple's accessibility audit (Dynamic Type, clipped text, element
-  descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
-  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
-  and every action closure is called).
+- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures and a `pointer-events: none`
+  tap-through case in the iOS simulator, on `v*` tags, weekly and on dispatch): the accessibility tree, Apple's
+  accessibility audit (Dynamic Type, clipped text, element descriptions, traits; hit regions are reported, not
+  failing), Dynamic Type at xSmall, large and AX5 plus the root height at AX3 against Chrome scaled to AX3,
+  right-to-left mirroring, and interaction (toggles, text fields, pickers and every action closure is called).
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
@@ -380,8 +380,12 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
-- An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
-  the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
+- Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
+  `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
+  fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
+  `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
+  descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
+  hit it.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.
@@ -465,7 +469,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 - Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
-- `<select multiple>`, `<datalist>`, an author `unicode-bidi`.
+- `<select multiple>`, `<datalist>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
   for single conversions; browser-response font bytes; variable-font instances.
 - Remote image download, @2x images and asset catalogs.

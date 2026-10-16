@@ -214,6 +214,10 @@ export interface FontSpec {
   weight: number;
   /** Optical size axis value when the family has one (Chrome uses font-size). */
   opsz?: number;
+  /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
+  stretch?: number;
+  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
 }
@@ -434,6 +438,11 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
+  /**
+   * `pointer-events: none` on this overlay's whole element subtree: taps reach what is painted underneath. Set on the
+   * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
+   */
+  hitTesting?: false;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
   states?: { pressed?: StateStyle; focused?: StateStyle };
 }
@@ -658,6 +667,8 @@ export interface Screen {
   /** Backdrop behind the root, from the design. */
   canvas: Color;
   root: SemNode;
+  /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
+  colorScheme?: "light" | "dark";
 }
 
 export function walk(n: SemNode, fn: (n: SemNode, depth: number) => void, depth = 0): void {

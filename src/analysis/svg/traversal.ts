@@ -206,7 +206,9 @@ function shapeToPath(c: LayoutNode, scope: SvgScope, ctx: SvgContext, decorate: 
   if (p.fill || p.gradient) {
     const fo = parseFloat(prop("fill-opacity") ?? "1");
     if (Number.isFinite(fo) && fo < 1) p.fillOpacity = fo;
-    if (attrs["fill-rule"] === "evenodd") p.eoFill = true;
+    // Inside `<use>` the target's computed style is its `<defs>` one; the instance's attribute chain wins.
+    if ((scope.depth > 0 ? (attrs["fill-rule"] ?? prop("fill-rule")) : prop("fill-rule")) === "evenodd")
+      p.eoFill = true;
   }
 
   const strokeRaw = prop("stroke");

@@ -28,7 +28,7 @@ function text(value: string, w = 60): LayoutNode {
 /** Every fixture's Swift, for the invariants at the end of the file. */
 const outputs: string[] = [];
 
-function compile(children: LayoutNode[]) {
+function compile(children: LayoutNode[], mode: "app" | "fidelity" = "app") {
   const doc: LayoutDoc = {
     version: LAYOUT_DOC_VERSION,
     source: "actions.html",
@@ -42,7 +42,7 @@ function compile(children: LayoutNode[]) {
     root: el("main", {}, children, {}, { x: 0, y: 0, w: 320, h: 400 }),
   };
   // Per-node members; repeated-sibling extraction (per-row actions) has its own tests (components.test.ts).
-  const result = compileLayout(doc, { mode: "app", extract: false });
+  const result = compileLayout(doc, { mode, extract: false });
   outputs.push(result.code);
   const diagnostics = result.diagnostics.flatMap((d) => d.diagnostics);
   return { code: result.code, diagnostics };
@@ -150,6 +150,26 @@ test("027: an inline non-link handler is reported", () => {
     el("p", {}, [text("Hi "), el("span", { onclick: "x()" }, [text("there")], { display: "inline" })]),
   ]);
   expect(diagnostics).toContainEqual(expect.objectContaining({ feature: "@onclick" }));
+});
+
+test("052: a pointer-events: none overlay ends with .allowsHitTesting(false) in app mode only", () => {
+  const veil = () =>
+    el("div", {}, [], { position: "absolute", "pointer-events": "none", "background-color": "rgb(0, 0, 255)" });
+  const app = compile([el("p", {}, [text("Under")]), veil()]).code;
+  expect(count(app, ".allowsHitTesting(false)")).toBe(1);
+  // Last on the node's own view; only the overlay's placement `.offset` follows, outside it.
+  expect(app).toMatch(/\.allowsHitTesting\(false\)\n(\s*\.offset\([^\n]*\n)?\s*\}/);
+  expect(compile([el("p", {}, [text("Under")]), veil()], "fidelity").code).not.toContain(".allowsHitTesting");
+});
+
+test("052: a pass-through overlay button gets .allowsHitTesting(false) after its placement", () => {
+  const { code } = compile([
+    el("p", {}, [text("Under")]),
+    el("button", { onclick: "go()" }, [text("Go")], { position: "absolute", "pointer-events": "none" }),
+  ]);
+  expect(count(code, ".allowsHitTesting(false)")).toBe(1);
+  expect(code.indexOf(".allowsHitTesting(false)")).toBeGreaterThan(code.indexOf(".buttonStyle("));
+  expect(code).toMatch(/\.allowsHitTesting\(false\)\n(\s*\.offset\([^\n]*\n)?\s*\}/);
 });
 
 test("027: no dead Buttons, no snake-case members, every action declared", () => {
