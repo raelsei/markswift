@@ -2,6 +2,7 @@
 import { expect, test } from "bun:test";
 import { compileLayout, compileLayouts, type LayoutDoc, type LibraryComponent } from "../../../src/compiler/index.ts";
 import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
+import { band, el, txt } from "../../helpers/bands.ts";
 
 type Node = LayoutDoc["root"];
 const box = (id: string, y: number, styles: Record<string, string>, attrs: Record<string, string> = {}): Node => ({
@@ -177,4 +178,52 @@ test("the unbound-colour warning names only the view whose node lost its token, 
   const lib = compileLayouts([a, b], { library: "Kit" }).warnings;
   expect(single.map((w) => w.message)).toEqual([expect.stringContaining("could not be bound")]);
   expect(lib).toEqual(single.map((w) => ({ ...w, component: "A" })));
+});
+
+test("a breakpoint component joins the library: band tokens in the palette, other views unchanged", () => {
+  /** `#wide` exists from 600px up, red in light and blue in dark. */
+  const bp = (w: number, theme: "light" | "dark") =>
+    band(
+      w,
+      [
+        el("s", "section", { x: 0, y: 0, w, h: 40 }, {}, [
+          el("a", "p", { x: 0, y: 0, w, h: 20 }, {}, [txt("A", w)]),
+          ...(w > 600
+            ? [
+                el(
+                  "wide",
+                  "div",
+                  { x: 0, y: 20, w, h: 20 },
+                  { "background-color": theme === "light" ? "rgb(255, 0, 0)" : "rgb(0, 0, 255)" },
+                  [txt("Only wide", w)],
+                ),
+              ]
+            : []),
+        ]),
+      ],
+      undefined,
+      theme,
+    );
+  // Colours the breakpoint component never paints: a shared pair's name follows its library-wide uses.
+  const plain = pair("Plain", "rgb(250, 250, 250)", "rgb(9, 9, 9)");
+  const breakpoint: LibraryComponent = {
+    name: "Bp",
+    layout: bp(390, "light"),
+    dark: bp(390, "dark"),
+    variants: [bp(834, "light")],
+    darkVariants: [bp(834, "dark")],
+  };
+  const lib = compileLayouts([breakpoint, plain], { library: "Kit" });
+  const without = compileLayouts([{ ...breakpoint, variants: undefined, darkVariants: undefined }, plain], {
+    library: "Kit",
+  });
+  expect(lib.files["Plain.swift"]).toBe(without.files["Plain.swift"]!);
+  expect(lib.files["Bp.swift"]).toContain("MarkswiftBands(");
+  const red =
+    /public static let (\w+) = Color\.markswift\(light: \.markswift\(1\.0, 0\.0, 0\.0\), dark: \.markswift\(0\.0, 0\.0, 1\.0\)\)/.exec(
+      palette(lib.files),
+    )?.[1];
+  expect(red).toBeDefined();
+  expect(lib.files["Bp.swift"]).toContain(`.background(Palette.${red}`);
+  expect(lib.warnings).toEqual([]);
 });
