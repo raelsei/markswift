@@ -256,6 +256,23 @@ export interface Motion {
   anchor?: [number, number];
   /** Static values of the driven channels (the settled computed look); the emitter drops their static modifiers. */
   base?: Partial<Record<MotionChannel, number>>;
+  /** Pressed/focused looks' CSS transitions (`analysis/motion.ts` `transitionsOf`). */
+  transitions?: { pressed?: StateTransition; focused?: StateTransition };
+}
+export type StateField = keyof StateStyle;
+/** One paint field's transition. Times in ms (`delay` ≥ 0). */
+export interface TransitionSpec {
+  duration: number;
+  delay: number;
+  easing: Easing;
+}
+/** Absent field = it jumps. */
+export type TransitionMap = Partial<Record<StateField, TransitionSpec>>;
+/** `in`: into the state; `out`: back to rest; `reduced`: under Reduce Motion, resolved by analysis (D-MOTION). */
+export interface StateTransition {
+  in: TransitionMap;
+  out: TransitionMap;
+  reduced: { in: TransitionMap; out: TransitionMap };
 }
 
 export interface FontSpec {
