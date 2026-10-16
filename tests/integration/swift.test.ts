@@ -177,15 +177,17 @@ nativeTest(
       );
       expect((await command(["vtool", "-show-build", join(app, "Render")])).includes("IOSSIMULATOR")).toBe(true);
       expect(await Bun.file(join(app, "Info.plist")).exists()).toBe(true);
+      // The same view twice (an `@open` capture beside its rest capture) is fine; two different files of one name are not.
+      const changed = { ...a, files: { ...a.files, "ExampleCardApp.swift": `${a.code}// changed\n` } };
       await expect(
         buildRenderApp(
           [
             { result: a, output: "/tmp/a.png" },
-            { result: a, output: "/tmp/b.png" },
+            { result: changed, output: "/tmp/b.png" },
           ],
           join(directory, "dup"),
         ),
-      ).rejects.toThrow("duplicate generated file");
+      ).rejects.toThrow("duplicate generated file ExampleCardApp.swift");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

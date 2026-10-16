@@ -1,5 +1,5 @@
 /**
- * Pressed/focused looks → what the emitter draws: the union of the resting and the state paint,
+ * Pressed/focused/open looks → what the emitter draws: the union of the resting and the state paint,
  * with every colour that differs paired so `colorExpr` writes `(cond ? state : rest)`.
  */
 import type { Color } from "../model/values.ts";
@@ -9,21 +9,26 @@ import { colorArgs } from "./format.ts";
 import { note } from "./diagnostics.ts";
 
 const IDENTITY = { rotate: 0, scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
+/** The feature a look's losses are reported under. */
+const FEATURE: Record<"pressed" | "focused" | "open", string> = {
+  pressed: ":active",
+  focused: ":focus-visible",
+  open: "@aria-*",
+};
 const clear = (c: Color): Color => ({ ...c, a: 0 });
 
-export function pairStyle(n: SemNode, state: StateStyle, cond: string): StatePaint {
+export function pairStyle(
+  n: SemNode,
+  state: StateStyle,
+  cond: string,
+  kind: "pressed" | "focused" | "open",
+): StatePaint {
   // ponytail: keyed by colour value, so two slots of one node painting the same rest colour flip together; key by slot when a design needs them apart.
   const colors: StatePaint["colors"] = new Map();
   const style: Style = { ...n.style };
   const out: StatePaint = { cond, style, colors };
-  const focused = cond.endsWith("Focused");
   const unsupported = (what: string) =>
-    note(
-      n,
-      "approximated",
-      focused ? ":focus-visible" : ":active",
-      `${what} in the ${focused ? "focused" : "pressed"} look is not reproduced`,
-    );
+    note(n, "approximated", FEATURE[kind], `${what} in the ${kind} look is not reproduced`);
   // The style carries whichever colour of the pair is visible at rest (else the state's), so the
   // emitter draws the layer at all; the map answers for that colour.
   const pair = (rest: Color, to: Color): Color => {

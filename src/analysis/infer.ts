@@ -82,6 +82,33 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   };
 }
 
+/**
+ * A node outside the captured tree (an in-flow layer's content, `layers.ts`) built as a child of `parent`. Fixed
+ * descendants are not hoisted: `fixed` counts the ones left out.
+ */
+export function buildDetached(
+  node: LayoutNode,
+  parent: LayoutNode,
+  doc: LayoutDoc,
+  options: InferOptions = {},
+): { sem: SemNode; fixed: number } {
+  const ctx: InferenceContext = {
+    root: doc.root,
+    fixed: [],
+    bundledFamilies: options.bundledFamilies ?? {},
+    viewport: doc.viewport,
+    labels: labelIndex(doc.root),
+    parent,
+    parentAxis: mainAxis(parent),
+    parentDisplay: parent.styles["display"] ?? "block",
+    parentAlign: crossAlign(parent),
+    ...(clipsText(parent) ? { textClip: parent } : {}),
+  };
+  const sem = build(node, ctx);
+  dropInvisible(sem);
+  return { sem, fixed: ctx.fixed.length };
+}
+
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   if (ctx.table?.rows === input) return tableGrid(input, ctx.table.slots, ctx);
   const t = hideEmptyCells(collapseTableBorders(input));

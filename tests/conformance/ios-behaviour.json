@@ -19,7 +19,9 @@
     "tw-form",
     "tw-settings",
     "_behaviour/pointer-events",
-    "overlay-tooltip"
+    "overlay-tooltip",
+    "overlay-collapsible",
+    "overlay-accordion"
   ],
   "known": [
     {

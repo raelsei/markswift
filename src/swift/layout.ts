@@ -168,6 +168,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     const around = n.distribution === "around",
       evenly = n.distribution === "evenly";
     kids.forEach((c, i) => {
+      // In-flow layer content: everything this child adds (spacers, gap padding) shows only with its layer.
+      const shown = c.shownBy !== undefined ? ctx.control.openStates.get(c.shownBy) : undefined;
+      const start = out.length;
       if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
       if ((i > 0 && n.distribution === "between") || around || evenly)
         out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
@@ -183,7 +186,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
         extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
       out.push(...indent([...lines, ...extra], 1));
-      if (around || (evenly && i === kids.length - 1)) out.push("    Spacer(minLength: 0)");
+      if (around) out.push("    Spacer(minLength: 0)");
+      if (shown) out.splice(start, out.length - start, `    if ${shown} {`, ...indent(out.slice(start), 1), "    }");
+      if (evenly && i === kids.length - 1) out.push("    Spacer(minLength: 0)");
       if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
     });
     out.push("}");

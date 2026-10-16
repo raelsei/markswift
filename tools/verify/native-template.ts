@@ -1,6 +1,9 @@
 import type { ConversionResult } from "../../src/index.ts";
 import { parseColor } from "../../src/css/color.ts";
 
+/** A conversion to render; `openArg` renders it with that in-flow layer's `init` label set (`V(isMoreExpanded: true)`). */
+export type RenderResult = ConversionResult & { openArg?: string };
+
 /** Size, canvas colour and theme of the render, shared by the iOS and macOS templates. */
 export function canvas(result: ConversionResult) {
   const { w, h } = result.layout.size;
@@ -49,9 +52,11 @@ export const renderAppPlist = `<?xml version="1.0" encoding="UTF-8"?>
  * key window and captures it with `drawHierarchy`, which (unlike ImageRenderer) draws UIKit-backed
  * controls. Jobs come from the JSON file passed as the first launch argument; view `i` is `results[i]`.
  */
-export function renderAppMain(results: ConversionResult[]): string {
+export function renderAppMain(results: RenderResult[]): string {
   for (const result of results) canvas(result);
-  const cases = results.map((result, i) => `    case ${i}: AnyView(${result.name}())`).join("\n");
+  const cases = results
+    .map((result, i) => `    case ${i}: AnyView(${result.name}(${result.openArg ? `${result.openArg}: true` : ""}))`)
+    .join("\n");
   return `import CoreText
 import SwiftUI
 import UIKit
@@ -136,7 +141,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
  * `forced` draws every pressed (or focused) look at once, as the browser reference forces the same pseudo-classes.
  */
 export function macRenderMain(
-  result: ConversionResult,
+  result: RenderResult,
   fontsDir: string,
   output: string,
   forced?: "pressed" | "focused",
@@ -149,7 +154,7 @@ let fonts = (try? FileManager.default.contentsOfDirectory(at: fontsURL, includin
 MarkswiftFonts.register(urls: fonts.filter { $0.pathExtension == "ttf" || $0.pathExtension == "otf" })
 MarkswiftAssets.bundle = Bundle(url: fontsURL.deletingLastPathComponent()) ?? .main
 NSApplication.shared.appearance = NSAppearance(named: .${dark ? "darkAqua" : "aqua"})
-let content = ${result.name}()
+let content = ${result.name}(${result.openArg ? `${result.openArg}: true` : ""})
     .frame(width: ${w}, height: ${h}, alignment: .topLeading)
     .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
     .environment(\\.colorScheme, .${dark ? "dark" : "light"})${forced ? `\n    .environment(\\.markswiftForcedStates, .${forced})` : ""}

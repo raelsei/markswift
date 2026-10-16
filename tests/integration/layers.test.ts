@@ -280,3 +280,16 @@ describe("convert", () => {
     30000,
   );
 });
+
+describe("in-flow layers", () => {
+  browserTest("accordion: one inflow layer and one `if` per closed item", async () => {
+    const html = await Bun.file(`${import.meta.dir}/../conformance/fixtures/components/overlay-accordion.html`).text();
+    const result = await convertHtml(html, { name: "Accordion" });
+    const inflow = result.layout.layers!.filter((l) => l.placement === "inflow");
+    expect(inflow.map((l) => l.id)).toEqual(["which-regions-are-available", "is-there-an-sla"]);
+    expect(result.code.match(/\bif is\w+Expanded \{/g)).toEqual([
+      "if isWhichRegionsAreAvailableExpanded {",
+      "if isIsThereAnSlaExpanded {",
+    ]);
+  });
+});

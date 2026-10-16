@@ -488,8 +488,13 @@ export interface SemBase extends SizeConstraints {
    * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
    */
   hitTesting?: false;
-  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
-  states?: { pressed?: StateStyle; focused?: StateStyle };
+  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
+   * open: while a layer this node or an ancestor `opens` is shown). */
+  states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
+  /** App mode: this node's tap toggles the in-flow layer `layer` (`analysis/layers.ts`). */
+  opens?: { layer: string; kind: "inflow" };
+  /** App mode: id of the in-flow layer whose open state shows this node. */
+  shownBy?: string;
   /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */
   bands?: number[];
   /**

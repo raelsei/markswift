@@ -10,8 +10,9 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { inferScreen } from "../../src/analysis/infer.ts";
+import { applyLayers } from "../../src/analysis/layers.ts";
 import { convert } from "../../src/index.ts";
-import { walk } from "../../src/model/semantic.ts";
+import { type SemNode, walk } from "../../src/model/semantic.ts";
 import { controlMembers } from "../../src/swift/control-state.ts";
 import { nearestTextStyle } from "../../src/swift/format.ts";
 import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
@@ -68,6 +69,8 @@ interface Prepared {
   labels: string[];
   /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
   actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
+  /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again. */
+  layers: Array<{ id: string; kind: "inflow"; trigger: string; shows: string }>;
   fonts: boolean;
 }
 interface El {
@@ -97,6 +100,7 @@ interface CaseLog {
         labels: Array<{ label: string; focused: boolean }>;
         log: string;
       };
+      layers?: Array<{ id: string; opened: boolean; closed: boolean }>;
     };
     rtl?: { tree: El };
     xSmall?: { audit: AuditIssue[] };
@@ -223,6 +227,35 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     },
   );
   const screen = inferScreen(result.layout, id);
+  applyLayers(screen, result.layout);
+  /** The text nodes under `n`, in order, whitespace collapsed (as iOS labels them). */
+  const texts = (n: SemNode) => {
+    const out: string[] = [];
+    walk(n, (d) => {
+      if (d.kind === "text")
+        out.push(
+          d.runs
+            .map((r) => r.text)
+            .join("")
+            .replace(/\s+/g, " ")
+            .trim(),
+        );
+    });
+    return out.filter(Boolean);
+  };
+  const layers: Prepared["layers"] = [];
+  walk(screen.root, (n) => {
+    if (!n.opens) return;
+    const opener = n.kind === "control" && n.control === "disclosure" ? n.label : n;
+    const content: SemNode[] = [];
+    walk(screen.root, (d) => {
+      if (d.shownBy === n.opens!.layer) content.push(d);
+    });
+    if (n.kind === "control" && n.control === "disclosure") content.push(...n.content);
+    const shows = content.flatMap(texts)[0];
+    const trigger = n.a11y?.label ?? (opener && texts(opener).join(" "));
+    if (trigger && shows) layers.push({ id: n.opens.layer, kind: "inflow", trigger, shows });
+  });
   const pickers: Prepared["pickers"] = [];
   const pickerValues: string[] = [];
   walk(screen.root, (n) => {
@@ -270,6 +303,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       pickerValues,
       labels,
       actions,
+      layers,
       fonts: `${view}+Fonts.swift` in result.files,
     },
     files,
@@ -348,6 +382,12 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     const hits = ix.log.split(",");
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
+    // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it.
+    for (const { id } of item.layers) {
+      const run = large.layers?.find((l) => l.id === id);
+      if (!run?.opened) fail("interaction", `layer:${id}`, "did not open");
+      else if (!run.closed) fail("interaction", `layer:${id}`, "did not close");
+    }
   }
   for (const [size, launch] of [
     ["large", large],
@@ -431,12 +471,13 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, actions }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, actions, layers }) => ({
         view,
         pickers,
         pickerValues,
         labels,
         actions: actions.map((a) => a.name),
+        layers,
       })),
     ),
   );

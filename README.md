@@ -167,12 +167,16 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   elements switch at the CSS thresholds through `MarkswiftBands`). Open states need no option: triggers
   are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native `popovertarget`/`commandfor`/`interestfor`/
   `<details>`, shadcn `data-slot`, `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
-  in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`, not yet emitted.
+  in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`. App mode emits the in-flow ones (a
+  closed `<details>`, collapsible or accordion item): the content sits behind an `is<Name>Expanded` state seeded
+  through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Other
+  layers are not yet emitted.
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
   the view does not follow, font packaging, light/dark pairing, width-band merging), `layout` and, for adaptive
   conversions, `darkLayout`;
-  with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`).
+  with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`);
+  in app mode with an in-flow layer, `openStates` (layer id → its `init` label).
 
 ## Modes
 
@@ -326,6 +330,8 @@ Read the table with these limits:
   `tests/conformance/visual-policy-{ios,mac}.json` (`families`), raised by `bun run quality --ratchet`
   on each reviewed rebaseline and never lowered. The gate also fails a capture that drops more than
   0.005 below its baseline or misses an anchor.
+- `<case>-390-<theme>-app@open:<layer>` captures check each in-flow layer open: Chrome's page with the trigger
+  clicked against the view initialised with `is<Name>Expanded: true`; they count toward their family floor.
 - Chrome renders `ui-monospace`, `ui-serif` and `ui-rounded` with other faces than iOS (SF Mono,
   New York, SF Rounded), which depresses the `font-family` scores.
 
@@ -377,8 +383,8 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - Breakpoint branching without `--breakpoints`: one viewport and one layout per capture. With it, CSS width media
   queries switch the view at the root's proposed width; height, orientation and container queries are reported, a
   fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band. Paint-only
-  pressed and focused deltas *are* captured; other states (hover only, disabled, validation, open/checked,
-  `data-state` variants) are not.
+  pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or accordion
+  item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
 - Dialogs and popovers.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.

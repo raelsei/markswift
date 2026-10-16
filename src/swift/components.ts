@@ -215,6 +215,9 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const makeRun = (parent: StackNode | GridNode, start: number, members: SemNode[]): Run | undefined => {
     if (tpl(parent).children.some((c, i, all) => members.includes(c) && all.indexOf(c) !== i)) return undefined;
     const subtrees = members.map((m) => new Set(collect(m)));
+    // ponytail: an in-flow layer's state stays on the screen, so its trigger and content stay unrolled; per-row
+    // open state (`presented<Type>: Int?`, ROverlays §4) is the upgrade path.
+    if (subtrees.some((s) => [...s].some((x) => x.opens || x.shownBy !== undefined))) return undefined;
     const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
     const columns = flats[0]!.map(({ s, n }, c) => {
       const own = tpl(n).own;
@@ -561,8 +564,9 @@ export interface ScreenMember {
 /** `public ` for a generated library's API, nothing for app output. */
 export const access = (v: EmitOptions["visibility"]) => (v === "public" ? "public " : "");
 
-/** A control member as a screen member: an action callback is an `init` parameter. */
+/** A control member as a screen member: an action callback is an `init` parameter, an open state an `init`-seeded `@State`. */
 export function asMember(m: ControlMembers["members"][number]): ScreenMember {
+  if (m.kind === "open") return { decl: [], param: { name: m.name, type: m.type, value: m.seed!, state: true } };
   return m.kind === "action"
     ? { decl: m.decl.slice(0, -1), param: { name: m.name, type: m.type, value: "{}" } }
     : { decl: m.decl };

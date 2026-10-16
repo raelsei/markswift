@@ -165,11 +165,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   members.push(...decls);
   if (decls.length) members.push("");
   members.push(...init, "", ...body);
-  const preview = (theme: Theme, title: string) => [
+  const preview = (theme: Theme, title: string, args = "") => [
     `#Preview("${title}") {`,
     ...indent(
       [
-        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}()`] : [`${viewName}()`]),
+        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}(${args})`] : [`${viewName}(${args})`]),
         `.frame(width: ${num(screen.size.w)}, height: ${num(screen.size.h)})`,
         `.background(Color.markswift(${colorArgs(theme === "dark" ? { r: 0.043, g: 0.055, b: 0.075, a: 1 } : { r: 0.957, g: 0.965, b: 0.98, a: 1 })}))`,
         `.preferredColorScheme(.${theme})`,
@@ -196,6 +196,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
+    // One preview per in-flow layer, shown open.
+    ...[...control.openStates].flatMap(([layer, state]) => [
+      "",
+      ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),
+    ]),
     ...(extraction?.previews.length ? ["", ...extraction.previews] : []),
   ];
   // After emission: `note()` may have regraded nodes for emit-time losses.
@@ -203,5 +208,6 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     if (n.confidence !== "mapped")
       report.push({ id: n.id, kind: n.kind, confidence: n.confidence, diagnostics: n.diagnostics });
   });
-  return { view: lines.join("\n") + "\n", shapes, images, report };
+  const openStates = control.openStates.size ? { openStates: Object.fromEntries(control.openStates) } : {};
+  return { view: lines.join("\n") + "\n", shapes, images, report, ...openStates };
 }
