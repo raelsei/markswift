@@ -100,6 +100,9 @@ interface Prepared {
   /** `markswift-breakpoints` widths (empty for other cases): every launch frames the view at the first; with two or more,
    * the `bands` launch switches between them. */
   widths: number[];
+  /** A root as tall as the capture viewport (`min-h-svh`) is emitted to fill the screen (`inferScreen`): the host frames
+   * it at least this tall, the screen the case models, where the scroll view alone would let it hug its content. */
+  screenHeight?: number;
 }
 interface El {
   type: string;
@@ -129,13 +132,13 @@ interface CaseLog {
         focusLooks: Array<{ label: string; changed: boolean }>;
         log: string;
       };
-      /** Presentations add: the trigger still exposed while open, closed per closer label, closed by the outside tap,
-       * and the log after tapping the content's buttons. */
+      /** Presentations add: whether the open content sat in a modal container, closed per closer label, closed by the
+       * outside tap, and the log after tapping the content's buttons. */
       layers?: Array<{
         id: string;
         opened: boolean;
         closed?: boolean;
-        triggerExposed?: boolean;
+        modal?: boolean;
         closers?: Record<string, boolean>;
         outside?: boolean;
         log?: string;
@@ -292,6 +295,9 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       prepare: scaleToAx3,
     },
   );
+  const { root: chromeRoot, viewport } = result.layout;
+  const screenHeight =
+    Math.abs(Number.parseFloat(chromeRoot.styles["min-height"] ?? "") - viewport.h) <= 0.5 ? viewport.h : undefined;
   const screen = inferScreen(result.layout, id);
   applyLayers(screen, result.layout);
   /** The text nodes under `n`, in order, whitespace collapsed (as iOS labels them). */
@@ -454,6 +460,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       fonts: `${view}+Fonts.swift` in result.files,
       motion,
       widths,
+      ...(screenHeight ? { screenHeight } : {}),
     },
     files,
   };
@@ -537,7 +544,7 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
     // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it. Presentations (060): the
-    // trigger shows it, a modal one hides the trigger from VoiceOver, its closers and (iff dismissable) an outside tap close it.
+    // trigger shows it inside a modal container iff it is modal, its closers and (iff dismissable) an outside tap close it.
     for (const layer of item.layers) {
       const { id } = layer;
       const run = large.layers?.find((l) => l.id === id);
@@ -545,7 +552,7 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       else if (layer.kind === "inflow") {
         if (!run.closed) fail("interaction", `layer:${id}`, "did not close");
       } else {
-        if (layer.modal && run.triggerExposed) fail("interaction", `layer:${id}`, "not modal");
+        if (!!run.modal !== layer.modal) fail("interaction", `layer:${id}`, layer.modal ? "not modal" : "modal");
         for (const closer of layer.closers)
           if (!run.closers?.[closer]) fail("interaction", `layer:${id}`, `closer ${closer} did not close`);
         if (run.outside !== layer.outside) fail("interaction", `layer:${id}`, "outside tap");
@@ -683,18 +690,33 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, menus, motion, widths }) => ({
-        view,
-        pickers,
-        pickerValues,
-        labels,
-        focusLooks,
-        actions: actions.map((a) => a.name),
-        layers,
-        menus,
-        motion,
-        widths,
-      })),
+      prepared.map(
+        ({
+          view,
+          pickers,
+          pickerValues,
+          labels,
+          focusLooks,
+          actions,
+          layers,
+          menus,
+          motion,
+          widths,
+          screenHeight,
+        }) => ({
+          view,
+          pickers,
+          pickerValues,
+          labels,
+          focusLooks,
+          actions: actions.map((a) => a.name),
+          layers,
+          menus,
+          motion,
+          widths,
+          screenHeight,
+        }),
+      ),
     ),
   );
 

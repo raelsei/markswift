@@ -30,6 +30,8 @@ final class BehaviourTests: XCTestCase {
         let motion: Motion
         /// `markswift-breakpoints` widths: every launch frames the view at the first; two or more add the `bands` launch.
         let widths: [Int]
+        /// A root as tall as the capture viewport: the host frames it at least this tall (the screen the case models).
+        let screenHeight: Double?
     }
 
     @MainActor
@@ -44,27 +46,27 @@ final class BehaviourTests: XCTestCase {
                 do { launches[name] = try body() } catch { errors.append("\(name): \(error)") }
             }
             run("large") {
-                let app = launch(item.view, "UICTContentSizeCategoryL", widths: item.widths)
+                let app = launch(item, "UICTContentSizeCategoryL")
                 let tree = dump(try app.snapshot())
                 return [
                     "tree": tree, "audit": try audit(app), "rootHeight": rootHeight(app), "interactions": interact(app, item),
                     "layers": layers(app, item), "menus": menus(app, item),
                 ]
             }
-            run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, rtl: true).snapshot())] }
-            run("xSmall") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryXS", widths: item.widths))] }
-            run("ax5") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryAccessibilityXXXL", widths: item.widths))] }
+            run("rtl") { ["tree": dump(try launch(item, "UICTContentSizeCategoryL", rtl: true).snapshot())] }
+            run("xSmall") { ["audit": try audit(launch(item, "UICTContentSizeCategoryXS"))] }
+            run("ax5") { ["audit": try audit(launch(item, "UICTContentSizeCategoryAccessibilityXXXL"))] }
             // `.accessibilityExtraLarge` = DynamicTypeSize.accessibility3 (`AccessibilityL` is accessibility2).
-            run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityXL", widths: item.widths))] }
+            run("ax3") { ["rootHeight": rootHeight(launch(item, "UICTContentSizeCategoryAccessibilityXL"))] }
             if item.motion.live {
-                run("motion") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, motion: "live"))] }
-                run("motionReduced") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, motion: "live", reduce: true))] }
+                run("motion") { ["frames": frames(launch(item, "UICTContentSizeCategoryL", motion: "live"))] }
+                run("motionReduced") { ["frames": frames(launch(item, "UICTContentSizeCategoryL", motion: "live", reduce: true))] }
             }
             if item.widths.count > 1 {
-                run("bands") { try bands(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths)) }
+                run("bands") { try bands(launch(item, "UICTContentSizeCategoryL")) }
             }
             if !item.focusLooks.isEmpty {
-                run("focusReduced") { ["focusLooks": focusLooks(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, reduce: true), item)] }
+                run("focusReduced") { ["focusLooks": focusLooks(launch(item, "UICTContentSizeCategoryL", reduce: true), item)] }
             }
             let data = try JSONSerialization.data(withJSONObject: ["launches": launches, "errors": errors], options: [.sortedKeys])
             try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json"))
@@ -76,10 +78,11 @@ final class BehaviourTests: XCTestCase {
 }
 
 @MainActor
-private func launch(_ view: String, _ category: String, widths: [Int], rtl: Bool = false, motion: String? = nil, reduce: Bool = false) -> XCUIApplication {
+private func launch(_ item: BehaviourTests.Case, _ category: String, rtl: Bool = false, motion: String? = nil, reduce: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchEnvironment["MARKSWIFT_VIEW"] = view
-    if !widths.isEmpty { app.launchEnvironment["MARKSWIFT_WIDTHS"] = widths.map(String.init).joined(separator: ",") }
+    app.launchEnvironment["MARKSWIFT_VIEW"] = item.view
+    if !item.widths.isEmpty { app.launchEnvironment["MARKSWIFT_WIDTHS"] = item.widths.map(String.init).joined(separator: ",") }
+    if let h = item.screenHeight { app.launchEnvironment["MARKSWIFT_SCREEN_HEIGHT"] = String(h) }
     if rtl { app.launchEnvironment["MARKSWIFT_RTL"] = "1" }
     if let motion { app.launchEnvironment["MARKSWIFT_MOTION"] = motion }
     if reduce { app.launchEnvironment["MARKSWIFT_REDUCE_MOTION"] = "1" }
@@ -354,14 +357,16 @@ private func menus(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[Str
     }
 }
 
-/// A drawn presentation (060), each probe in a fresh launch: open (tap, or long-press), whether the trigger stays
-/// exposed while it is open, each closer, an outside tap, then every other content button so its action logs.
+/// A drawn presentation (060), each probe in a fresh launch: open (tap, or long-press), whether the content sits in a
+/// modal container, each closer, an outside tap, then every other content button so its action logs (scrolled to first
+/// when it sits below the screen, as on a screen-tall root).
 @MainActor
 private func presentation(_ app: XCUIApplication, _ layer: BehaviourTests.Case.Layer) -> [String: Any] {
     let root = app.otherElements["markswift.root"].firstMatch
     let gone = NSPredicate(format: "exists == false")
     let named = NSPredicate(format: "label == %@", layer.trigger)
-    let shows = root.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", layer.shows)).firstMatch
+    let showing = NSPredicate(format: "label CONTAINS %@", layer.shows)
+    let shows = root.descendants(matching: .any).matching(showing).firstMatch
     var log: [String] = []
     func trigger() -> XCUIElement {
         let button = root.buttons.matching(named).firstMatch
@@ -382,21 +387,29 @@ private func presentation(_ app: XCUIApplication, _ layer: BehaviourTests.Case.L
         return closed
     }
     let opened = open()
-    let triggerExposed = opened && trigger().exists
+    // XCUITest reports an `.isModal` container as an alert. It keeps the page behind it in its tree either way (neither
+    // `.isModal` nor `accessibilityHidden(true)` prunes XCUITest's snapshot), so the container is what it can observe.
+    let modal = opened && root.alerts.descendants(matching: .any).matching(showing).firstMatch.exists
     var closers: [String: Bool] = [:]
     for label in layer.closers ?? [] {
         closers[label] = open() && closes { root.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch.tap() }
     }
     var outside = false
+    // The root's corner, kept on screen: a screen-tall root reaches below the scroll view's visible part.
     if let p = layer.outsidePoint, p.count == 2, open() {
-        outside = closes { root.coordinate(withNormalizedOffset: CGVector(dx: p[0], dy: p[1])).tap() }
+        let r = root.frame
+        let y = min(r.minY + r.height * p[1], app.scrollViews.firstMatch.frame.maxY - 16)
+        outside = closes { app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: r.minX + r.width * p[0], dy: y)).tap() }
     }
     for label in layer.buttons ?? [] where open() {
         let button = root.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
-        _ = closes { if button.isHittable { button.tap() } }
+        _ = closes {
+            if button.exists && !button.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            if button.isHittable { button.tap() }
+        }
     }
     return [
-        "id": layer.id, "opened": opened, "triggerExposed": triggerExposed, "closers": closers, "outside": outside,
+        "id": layer.id, "opened": opened, "modal": modal, "closers": closers, "outside": outside,
         "log": log.joined(separator: ","),
     ]
 }
