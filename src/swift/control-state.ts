@@ -1,10 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
-import type { ControlNode, Presentation, SemNode } from "../model/semantic.ts";
+import type { ControlNode, Motion, Presentation, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { colorArgs, identifier, memberName, num, str, uniqueName } from "./format.ts";
 import { pairStyle } from "./states.ts";
+import { longestExit, revealToggle } from "./motion.ts";
 /**
  * Controls whose value the user changes, and the Swift type and seed of that value. `suffix`
  * names storage that is not the control's value (a file button's presentation flag).
@@ -85,7 +86,10 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   // not in the IR).
   const ariaToggles = new Set<SemNode>();
   const ariaGroups = new Map<string, SemNode[]>();
+  // In-flow layer id → the reveal timing of its content (066), for the trigger's toggle.
+  const reveals = new Map<string, NonNullable<Motion["reveal"]>>();
   walk(root, (n) => {
+    if (n.shownBy !== undefined && n.motion?.reveal && !reveals.has(n.shownBy)) reveals.set(n.shownBy, n.motion.reveal);
     if (canon(n) !== n) return;
     if (n.a11y?.toggle && n.action && (n.kind !== "control" || (n.control === "button" && !n.files))) {
       ariaToggles.add(n);
@@ -145,7 +149,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
       opener.set(n, name);
       const action = n.action && `${actionOf.get(n.action.key)}()`;
       if (disclosure) stateOf.set(n, name);
-      else if (n.opens.kind === "inflow") openOf.set(n, { state: name, tap: [`${name}.toggle()`, action!] });
+      else if (n.opens.kind === "inflow")
+        openOf.set(n, { state: name, tap: [revealToggle(name, reveals.get(n.opens.layer)), action!] });
       else if (!n.opens.longPress) openOf.set(n, { state: name, tap: [`${name} = true`, action!] });
       const p = presentations.get(n.opens.layer);
       if (p && (p.dismiss.escape || p.dismiss.outside)) {
@@ -247,8 +252,11 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     const state = o.presentation && openStates.get(o.presentation.id);
     if (!state) continue;
     const buttons = new Set(o.presentation!.dismiss.buttons);
+    // 066: inside the layer's longest exit, so the closing transaction carries it.
+    const exit = longestExit(root.overlays.filter((x) => x.presentation === o.presentation).map((x) => x.node));
+    const close = exit ? `withAnimation(${exit}) { ${state} = false }` : `${state} = false`;
     walk(o.node, (n) => {
-      if (n.action && buttons.has(n.id)) closeOf.set(n, [`${actionOf.get(n.action.key)}()`, `${state} = false`]);
+      if (n.action && buttons.has(n.id)) closeOf.set(n, [`${actionOf.get(n.action.key)}()`, close]);
     });
   }
   // Pressed/focused looks: a delta belongs to the nearest enclosing Button (its press drives the
