@@ -24,11 +24,13 @@ export interface FoundCondition {
  * (whether or not the condition holds now) and stamps the matching elements with CONDITIONAL_MARK
  * (their query container with CONTAINER_MARK); marks elements an author rule styles through
  * `:valid`/`:invalid` with VALIDATION_MARK. Call before DOMSnapshot A so the marks land in `attrs`.
+ * `breakpoints`: the conversion reconstructs width media queries, so they are not reported as losses.
  */
 export async function readConditionalRules(
   page: Page,
   selector: string,
   viewportWidth: number,
+  breakpoints = false,
 ): Promise<{ warnings: ConversionWarning[]; found: FoundCondition[] }> {
   const { rules, found } = await page.evaluate(
     ({ selector, mark, conditionalMark, containerMark }) => {
@@ -143,7 +145,11 @@ export async function readConditionalRules(
     { selector, mark: VALIDATION_MARK, conditionalMark: CONDITIONAL_MARK, containerMark: CONTAINER_MARK },
   );
   const warnings = rules
-    .filter((c) => c.selectors.length)
+    .filter(
+      (c) =>
+        c.selectors.length &&
+        !(breakpoints && c.condition.startsWith("@media ") && widthQuery(c.condition.slice("@media ".length))),
+    )
     .map(({ condition, selectors }) => ({
       source: "capture" as const,
       level: "approximated" as const,

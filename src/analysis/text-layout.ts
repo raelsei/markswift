@@ -228,6 +228,7 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
  */
 export function markLineBreaks(built: MeasuredTextRun[]): void {
   let prev: Rect | undefined;
+  let prevBase = 0;
   let prevShift = 0;
   let explicit = false;
   for (const b of built) {
@@ -252,8 +253,10 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
     if (!first || first.h <= 0) continue;
     const breaks: number[] = [];
     const shift = b.run.baselineOffset ?? 0;
+    // A generated image sits on the baseline with its bottom edge (CSS and SwiftUI alike).
+    const lineBase = (r: Rect) => (b.run.image ? r.y + r.h : r.y + ASCENT_RATIO * r.h);
     if (prev && !explicit && !/^[ \t]*\n/.test(b.run.text)) {
-      const drop = first.y + ASCENT_RATIO * first.h + shift - (prev.y + ASCENT_RATIO * prev.h + prevShift);
+      const drop = lineBase(first) + shift - (prevBase + prevShift);
       // A collapsible space the wrap consumed becomes the newline; offset 0 would indent the line.
       const at = b.run.text.startsWith(" ") && collapseOf(b.styleOf.styles) !== "preserve" ? 1 : 0;
       if (drop >= Math.max(2, first.h * 0.05, prev.h * 0.05) && at < b.run.text.length) breaks.push(at);
@@ -265,6 +268,7 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at) breaks.push(at);
     }
     prev = starts[starts.length - 1]!.bounds;
+    prevBase = lineBase(prev);
     prevShift = shift;
     explicit = /\n[ \t]*$/.test(b.run.text);
     if (breaks.length) b.run.breaks = breaks;
@@ -293,6 +297,7 @@ export function markBaselineShifts(
     const ref = built.find(
       (o) =>
         o !== b &&
+        !o.run.image &&
         o.run.font.size === hostSize &&
         o.node.bounds.y < b.node.bounds.y + b.node.bounds.h &&
         b.node.bounds.y < o.node.bounds.y + o.node.bounds.h,
@@ -303,7 +308,9 @@ export function markBaselineShifts(
     }
     const a = ref.node.bounds;
     const s = b.node.bounds;
-    const offset = round2(a.y + ASCENT_RATIO * a.h - (s.y + ASCENT_RATIO * s.h));
+    // An image run's baseline is its bottom edge.
+    const sb = b.run.image ? s.y + s.h : s.y + ASCENT_RATIO * s.h;
+    const offset = round2(a.y + ASCENT_RATIO * a.h - sb);
     if (Math.abs(offset) >= 0.5) b.run.baselineOffset = offset;
   }
 }

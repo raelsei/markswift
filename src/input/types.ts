@@ -37,6 +37,8 @@ export interface CaptureRequest {
   open?: Trigger;
   /** Internal to the layer pass: with `open`, also probe how the layer is dismissed. */
   probeDismiss?: boolean;
+  /** The conversion reconstructs width media queries: they are not reported as losses. */
+  breakpoints?: boolean;
 }
 
 /** Stable node identity for re-sync. `path` = element-index path from the capture root ("0/2/1"); `tag` lower-case; `attrs` raw. */

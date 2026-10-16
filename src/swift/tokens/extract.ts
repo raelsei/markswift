@@ -91,18 +91,25 @@ export function extractTokens(screens: Screen[]): TokenSet {
  * The token lookup for one screen: binds the screen group and theme, so the emitters ask only
  * "which token does this node's colour name here?". A miss — an unenumerated colour, or one
  * two tokens claim on the same node — leaves the literal in place. A call site that names the
- * slot gets that slot's token only.
+ * slot gets that slot's token only. A breakpoint view passes its band screens' bases, lowest band first.
  */
-export function screenTokens(set: TokenSet, screen: Screen): ScreenTokens {
-  const prefix = `${screenBase(screen)}\u0000${screen.theme}\u0000`;
+export function screenTokens(set: TokenSet, screen: Screen, bases = [screenBase(screen)]): ScreenTokens {
+  const prefixes = bases.map((base) => `${base}\u0000${screen.theme}\u0000`);
+  // ponytail: first-hit lookup across band bases; a node with the same light colour but different dark colours in
+  // two bands takes the first band's token. Key the lookup by band if a design needs both.
+  const find = (key: string) => {
+    for (const prefix of prefixes) {
+      const token = set.index.get(prefix + key);
+      if (token !== undefined) return token;
+    }
+    return undefined;
+  };
   return {
     name: (c, id, slot) =>
-      id === undefined
-        ? undefined
-        : set.index.get(`${prefix}${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`),
+      id === undefined ? undefined : find(`${id}\u0000${colorKey(c)}${slot === undefined ? "" : `\u0000${slot}`}`),
     // A literal is the same colour in both themes (an adaptive slot always becomes a semantic token).
     opaque(c, id) {
-      const token = id === undefined ? undefined : set.index.get(`${prefix}${id}\u0000${colorKey(c)}`);
+      const token = id === undefined ? undefined : find(`${id}\u0000${colorKey(c)}`);
       const t = token === undefined ? undefined : set.tokens.find((t) => t.name === token);
       return t ? t.light.a === 1 && t.dark.a === 1 : c.a === 1;
     },

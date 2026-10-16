@@ -9,7 +9,16 @@ import {
   type DiagnosticLevel,
   addDiagnostic,
 } from "../model/semantic.ts";
-import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows, variationSettings } from "../css/index.ts";
+import {
+  parseDeclared,
+  parseColor,
+  fontFamilies,
+  round2,
+  px,
+  parseShadows,
+  variationSettings,
+  contentAlt,
+} from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
@@ -31,6 +40,8 @@ import { crossAlign, distributionOf } from "./alignment.ts";
 import { linkAction } from "./controls.ts";
 import { addTooltip, titleOf } from "./tooltips.ts";
 import { isActivatableRole } from "../model/interactive.ts";
+import { svgFromDataUrl } from "./svg/markup.ts";
+import { PSEUDO, counterOf, undrawnImages } from "./generated.ts";
 
 /** `font-variant-numeric` values SwiftUI can request; everything else is reported. */
 const NUMERIC_FEATURES: Record<string, true> = { normal: true, "tabular-nums": true };
@@ -120,8 +131,11 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   let prevRun: SourceTextRun | undefined;
   for (const r of runs) {
     const s = r.styleOf.styles;
+    // A pseudo's captured image is one object-replacement character: not collapsible whitespace, so the space logic
+    // treats it as a word, as CSS treats an atomic inline.
+    const img = r.node.tag === "img" ? r.node : undefined;
     const mode: Collapse = r.node.tag === "br" ? "preserve" : collapseOf(s);
-    const normalized = normalizeWhitespace(r.node.tag === "br" ? "\n" : (r.node.text ?? ""), mode);
+    const normalized = normalizeWhitespace(img ? "\uFFFC" : r.node.tag === "br" ? "\n" : (r.node.text ?? ""), mode);
     let text = normalized.text;
     let src = normalized.src;
     if (mode === "collapse") {
@@ -156,7 +170,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     // `<del>…</del>` and `<ins>…</ins>`. It rides inside the next run's literal when that run
     // paints nothing over it, and stands alone in the host's own style when it does.
     if (pendingSpace && !text.startsWith(" ")) {
-      if (deco && r.styleOf !== host) {
+      if ((deco || img) && r.styleOf !== host) {
         const spaceRun = hostSpace(host, ctx.bundledFamilies);
         out.push(spaceRun.run);
         built.push(spaceRun);
@@ -168,6 +182,25 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     pendingSpace = false;
     prevRun = r;
     const run: TextRun = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    if (img) {
+      // A replaced image: no font, decoration, shadow, link or opacity applies.
+      const url = img.currentSrc ?? img.attrs["src"] ?? "";
+      const svg = svgFromDataUrl(url);
+      for (const d of svg?.vector?.diagnostics ?? []) note(d.level, d.feature, d.message);
+      if (svg && !svg.vector) note("unmapped", "img", "img svg data: URL has no viewBox; layer dropped");
+      const alt = contentAlt(r.styleOf.styles["content"]);
+      run.image = {
+        src: url,
+        w: round2(img.bounds.w),
+        h: round2(img.bounds.h),
+        ...(svg?.vector ? { vector: svg.vector } : {}),
+        ...(alt !== undefined ? { alt } : {}),
+      };
+      out.push(run);
+      built.push({ run, node: r.node, styleOf: r.styleOf, src });
+      union = union ? unionRect(union, r.node.bounds) : { ...r.node.bounds };
+      continue;
+    }
     // The family the run ends up with: a design that ships a web font we do not bundle, or names
     // `cursive`/`fantasy`, silently gets SF Pro instead — the report has to say which family went.
     const families = fontFamilies(s["font-family"]);
@@ -302,7 +335,21 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (out[0] && collapseOf(runs[0]!.styleOf.styles) === "collapse") trimRun(built[0]!, /^[ \t\n\r\f]+/);
   if (built.length && collapseOf(runs[runs.length - 1]!.styleOf.styles) === "collapse")
     trimRun(built[built.length - 1]!, /[ \t\n\r\f]+$/);
+  for (const el of new Set(runs.map((r) => r.styleOf))) {
+    const u = PSEUDO[el.tag] ? undrawnImages(el) : undefined;
+    if (u) note("approximated", u.feature, u.message);
+  }
+  // Counters read the raw run text; markBidi's controls would not survive regeneration, so a wrapped one is dropped.
+  // Markers stay outside bidi controls (decision 7), so an inside marker keeps its counter.
+  const before = built.map((b) => b.run.text);
+  for (const b of built) {
+    const c = counterOf(b.styleOf, b.run.text);
+    if (c) b.run.counter = c;
+  }
   markBidi(built, host);
+  built.forEach((b, i) => {
+    if (b.run.counter && b.run.text !== before[i]) delete b.run.counter;
+  });
   const measured = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
   const dir = host.styles["direction"] === "rtl" ? "rtl" : "ltr";
@@ -544,7 +591,7 @@ const SPACE_FREE =
 function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
   if ((s["overflow-wrap"] ?? "normal") !== "normal" || /^break-(all|word)$/.test(s["word-break"] ?? "")) return false;
   const text = runs
-    .filter((r) => r.gap === undefined)
+    .filter((r) => r.gap === undefined && !r.image)
     .map((r) => r.text)
     .join("");
   return ONE_WORD.test(text) && !SPACE_FREE.test(text);

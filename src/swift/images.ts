@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Paint } from "../model/values.ts";
-import type { SemNode, ImageNode, SvgNode } from "../model/semantic.ts";
+import type { SemNode, ImageNode, SvgNode, TextRun } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { alignment, colorExpr, fontExpr, indent, num, str } from "./format.ts";
 import { svgExpr } from "./svg.ts";
@@ -187,6 +187,23 @@ function decodable(url: string): boolean {
   if (!data) return /^https?:/i.test(url) && !LOOPBACK.test(url);
   const [, mime = "", params = "", payload = ""] = data;
   return mime !== "image/svg+xml" && rasterExt(dataBytes(payload, params.split(";").includes("base64"))) !== undefined;
+}
+
+/** A generated image inside text (`TextRun.image`) as a view at its CSS size; `undefined` (noted) when it has no pixels. */
+export function inlineImageView(
+  img: NonNullable<TextRun["image"]>,
+  n: SemNode,
+  ctx: EmitContext,
+): string[] | undefined {
+  const src = img.vector
+    ? vectorSource(img.vector, ctx)
+    : decodable(img.src)
+      ? imageSource(img.src, n, "content", ctx)
+      : undefined;
+  if (src?.kind === "vector") return src.view(img.w, img.h);
+  if (src?.kind === "raster") return [src.expr(".resizable()")];
+  note(n, "unmapped", "content: url()", "generated image source cannot produce pixels; its advance is kept empty");
+  return undefined;
 }
 
 /**

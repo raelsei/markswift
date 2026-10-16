@@ -76,6 +76,18 @@ export function cssUrls(value: string | undefined): string[] {
   );
 }
 
+/** The alternative text of a computed `content` (the quoted strings after a top-level ` / `, joined); undefined without one. */
+export function contentAlt(value: string | undefined): string | undefined {
+  let alt: string | undefined;
+  for (const t of (value ?? "").matchAll(
+    /url\(\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^)]*)\s*\)|"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\/)/gs,
+  )) {
+    if (t[3]) alt = "";
+    else if (alt !== undefined && (t[1] ?? t[2]) !== undefined) alt += (t[1] ?? t[2])!.replace(/\\(.)/g, "$1");
+  }
+  return alt;
+}
+
 /**
  * One `background-image` layer: `[repeating-]{linear,radial,conic}-gradient(…)` or
  * `url(…)`; anything else → `unsupported`. Gradient centers given in px stay at the

@@ -163,6 +163,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
 
 /** Text the node lays out in flow (overlays excluded): its height follows the text's native metrics. */
 function laysOutText(n: SemNode): boolean {
+  if (n.alternatives) return n.alternatives.some(laysOutText);
   if (n.kind === "text") return true;
   if (n.kind === "stack" || n.kind === "grid") return n.children.some(laysOutText);
   if (n.kind === "control") return TEXT_CONTROLS[n.control] === true || n.content.some(laysOutText);

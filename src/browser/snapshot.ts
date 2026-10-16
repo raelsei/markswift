@@ -90,7 +90,7 @@ export interface Raw {
   /** See `LayoutNode.motion`. */
   motion?: LayoutNode["motion"];
   /** Pseudo-elements only: every layout entry in snapshot order (the first is the container); bounds from snapshot B when present. */
-  parts?: Array<{ bounds: Rect; text: boolean }>;
+  parts?: Array<{ bounds: Rect; text?: string }>;
   parent?: Raw;
   children: Raw[];
 }
@@ -231,11 +231,11 @@ export function snapshotToTree(
       if (v !== undefined && v >= 0) r.styles[STYLE_WHITELIST[k]!] = S[v]!;
     }
     const t = L.text[li];
-    // Text nodes keep their DOM value (untransformed); generated content only exists as laid-out text.
+    // Text nodes keep their DOM value (untransformed); generated content only exists as laid-out text (`parts`).
     if (r.type === 3) r.text = r.value.trim() ? r.value : t !== undefined && t >= 0 ? S[t]! : "";
-    else if (r.pseudo) r.text = t !== undefined && t >= 0 ? S[t]! : "";
     if (L.paintOrders) r.paint = L.paintOrders[li];
-    if (r.pseudo !== undefined) (r.parts ??= []).push({ bounds: { ...r.bounds }, text: t !== undefined && t >= 0 });
+    if (r.pseudo !== undefined)
+      (r.parts ??= []).push({ bounds: { ...r.bounds }, text: t !== undefined && t >= 0 ? S[t]! : undefined });
   }
   const LB = boxes?.documents[0]?.layout;
   if (LB) {
@@ -424,8 +424,9 @@ export function findByAttr(root: Raw, attr: string, value: string): Raw | undefi
  * then "0", "0/2", …) counting element children only.
  *
  * - `::before`/`::after`/`::marker` become element nodes with that tag, their
- *   computed styles, the derived border box and one `#text` child holding the
- *   generated text (counters/quotes already resolved by the browser), plus one
+ *   computed styles, the derived border box and `#text` children holding the
+ *   generated text (counters/quotes already resolved by the browser; consecutive
+ *   text parts merged into one), plus one
  *   `img` child per image the browser laid out from `content: url()` /
  *   `list-style-image` (`attrs.src`, its box), in layout order. `::after`
  *   is placed after the element's real children, the others before. They do
@@ -541,44 +542,65 @@ function pseudoElement(
 ): LayoutNode | undefined {
   const tag = PSEUDO_TAGS[raw.pseudo!];
   if (!tag || !raw.bounds) return undefined;
-  const text = raw.text?.trim() ? raw.text : undefined;
   const box = raw.box && raw.box.w > 0 && raw.box.h > 0 ? raw.box : undefined;
   const pseudoPath = parentPath === "" ? tag : `${parentPath}/${tag}`;
   // An image entry: after the container, no text, a real box, and not a wrapper around the pseudo's own text
-  // (quotes, flex counters lay out such boxes).
+  // (quotes, flex counters lay out such boxes). Consecutive text entries merge into one `#text` child
+  // (`counter(n) ". " attr(x)` lays out one entry per part); an image entry ends it; wrappers are skipped.
   // ponytail: the k-th image box takes the k-th url(); a `content` mixing gradients/image-set() with url() mis-assigns — parse image functions in order if a design needs it.
   const parts = raw.parts ?? [];
-  const texts = parts.filter((p) => p.text).map((p) => p.bounds);
+  const texts = parts.filter((p) => p.text !== undefined).map((p) => p.bounds);
   const contains = (o: Rect, i: Rect) =>
     i.x >= o.x - 0.5 && i.y >= o.y - 0.5 && i.x + i.w <= o.x + o.w + 0.5 && i.y + i.h <= o.y + o.h + 0.5;
   let urls = cssUrls(raw.styles["content"]);
   if (raw.pseudo === "marker" && !urls.length) urls = cssUrls(raw.styles["list-style-image"]);
   const children: LayoutNode[] = [];
-  let textAt = -1;
+  let open: { text: string; bounds: Rect } | undefined;
+  let images = 0;
+  const close = () => {
+    if (open)
+      children.push({
+        tag: "#text",
+        attrs: {},
+        styles: {},
+        bounds: rebase(open.bounds, origin),
+        text: open.text,
+        children: [],
+      });
+    open = undefined;
+  };
   for (const [i, p] of parts.entries()) {
-    if (p.text) {
-      if (textAt < 0) textAt = children.length;
+    if (p.text !== undefined) {
+      if (!open) open = { text: p.text, bounds: { ...p.bounds } };
+      else {
+        const a = open.bounds;
+        const x = Math.min(a.x, p.bounds.x);
+        const y = Math.min(a.y, p.bounds.y);
+        open = {
+          text: open.text + p.text,
+          bounds: {
+            x,
+            y,
+            w: Math.max(a.x + a.w, p.bounds.x + p.bounds.w) - x,
+            h: Math.max(a.y + a.h, p.bounds.y + p.bounds.h) - y,
+          },
+        };
+      }
       continue;
     }
     if (i === 0 || !(p.bounds.w > 0 && p.bounds.h > 0) || texts.some((t) => contains(p.bounds, t))) continue;
-    const k = children.length;
-    const src = urls[k];
+    const src = urls[images];
     if (src === undefined) continue;
+    close();
     const img: LayoutNode = { tag: "img", attrs: { src }, styles: {}, bounds: rebase(p.bounds, origin), children: [] };
-    const id = identity("img", img.attrs, `${pseudoPath}/${k}`);
+    const id = identity("img", img.attrs, `${pseudoPath}/${images++}`);
     if (id !== undefined) img.id = id;
     children.push(img);
   }
-  if (!text && !box && !children.length) return undefined;
-  if (text)
-    children.splice(textAt < 0 ? children.length : textAt, 0, {
-      tag: "#text",
-      attrs: {},
-      styles: {},
-      bounds: rebase(raw.bounds, origin),
-      text,
-      children: [],
-    });
+  close();
+  // LD3 filter: a lone whitespace-only text (no images) is no content; beside an image the space is real.
+  if (!images && children.length === 1 && !children[0]!.text?.trim()) children.length = 0;
+  if (!box && !children.length) return undefined;
   const node: LayoutNode = {
     tag,
     attrs: {},

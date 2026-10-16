@@ -6,20 +6,21 @@ import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
 import { classifyElement } from "../html/policy.ts";
 import { outOfFlow } from "./geometry.ts";
+import { inlineImage } from "./generated.ts";
 
 // ---------- text ----------
 
-/** Inline (non-atomic) element whose subtree is nothing but text: merged into the parent's runs. */
+/** Inline (non-atomic) element whose subtree is nothing but text (and a pseudo's captured images): merged into the parent's runs. */
 export function isInlineText(c: LayoutNode): boolean {
   if (classifyElement(c.tag, c.attrs).atomic) return false;
   if ((c.styles["display"] ?? "inline") !== "inline") return false;
   if (outOfFlow(c)) return false;
-  return c.children.every((k) => k.tag === "#text" || k.tag === "br" || isInlineText(k));
+  return c.children.every((k) => k.tag === "#text" || k.tag === "br" || inlineImage(c, k) || isInlineText(k));
 }
 
 export function collectRuns(el: LayoutNode, runs: SourceTextRun[]): void {
   for (const k of el.children) {
-    if (k.tag === "#text" || k.tag === "br") runs.push({ node: k, styleOf: el });
+    if (k.tag === "#text" || k.tag === "br" || inlineImage(el, k)) runs.push({ node: k, styleOf: el });
     else collectRuns(k, runs);
   }
 }
