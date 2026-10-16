@@ -193,8 +193,9 @@ struct MarkswiftRevealLayout: Layout {
     }
 }
 
-/// Disclosure content's insertion/removal: the revealed fraction animates, clipped while partial.
-struct MarkswiftReveal: ViewModifier, Animatable {
+/// Disclosure content's insertion/removal: the revealed fraction animates, clipped while partial. `nonisolated`: the
+/// `Animatable` conformance must not cross into main-actor code (Swift 6 without MainActor default isolation).
+nonisolated struct MarkswiftReveal: ViewModifier, Animatable {
     var fraction: Double
     var animatableData: Double { get { fraction } set { fraction = newValue } }
     func body(content: Content) -> some View {
