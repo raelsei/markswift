@@ -1,5 +1,5 @@
 import type { Color } from "../model/values.ts";
-import type { Confidence, Diagnostic, Screen, SemNode, Style } from "../model/semantic.ts";
+import type { Confidence, Diagnostic, Screen, SemNode, StateField, StateTransition, Style } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
 export interface SwiftOutput {
   /** <Name>View.generated.swift */
@@ -97,6 +97,10 @@ export interface StatePaint {
   colors: Map<string, { rest: Color; state: Color }>;
   opacity?: { rest: number; state: number };
   scale?: { rest: [number, number]; state: [number, number] };
+  /** The fields the look changes. */
+  fields: StateField[];
+  /** Pressed/focused: the look's CSS transitions (absent field = jump). */
+  transitions?: StateTransition;
 }
 
 /**

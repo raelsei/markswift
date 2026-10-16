@@ -11,6 +11,8 @@ final class BehaviourTests: XCTestCase {
         let pickerValues: [String]
         /// Texts of the `<label>`s whose tap focuses a text field.
         let labels: [String]
+        /// Labels of text fields whose focused look has a CSS transition.
+        let focusLooks: [String]
         let actions: [String]
         /// In-flow layers: tapping the button labelled `trigger` shows the text `shows`; a second tap hides it.
         /// Presentations (`kind` "presentation", 060): the trigger (long-pressed when `longPress`) shows `shows`; `closers`
@@ -55,6 +57,9 @@ final class BehaviourTests: XCTestCase {
             if item.motion.live {
                 run("motion") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live"))] }
                 run("motionReduced") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live", reduce: true))] }
+            }
+            if !item.focusLooks.isEmpty {
+                run("focusReduced") { ["focusLooks": focusLooks(launch(item.view, "UICTContentSizeCategoryL", reduce: true), item)] }
             }
             let data = try JSONSerialization.data(withJSONObject: ["launches": launches, "errors": errors], options: [.sortedKeys])
             try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json"))
@@ -207,6 +212,7 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
         }
         labels.append(["label": text, "focused": focused])
     }
+    let looks = focusLooks(app, item)
     app.launch()
     var fields: [[String: String]] = []
     for query in [root.textFields, root.secureTextFields, root.textViews] {
@@ -219,7 +225,36 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
             fields.append(["type": typeName(element.elementType), "label": element.label, "value": valueText(element.value)])
         }
     }
-    return ["switches": switches, "fields": fields, "pickers": pickers, "labels": labels, "tapped": tapped, "log": hits]
+    return [
+        "switches": switches, "fields": fields, "pickers": pickers, "labels": labels, "focusLooks": looks, "tapped": tapped,
+        "log": hits,
+    ]
+}
+
+/// Each transitioned focus look in a fresh launch: the field's top edge (its border; never the caret or text) before
+/// and 0.4 s after its tap (longest corpus focus transition 150 ms + margin) must differ.
+@MainActor
+private func focusLooks(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[String: Any]] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    func edge(_ element: XCUIElement) -> Data? {
+        let image = element.screenshot().image
+        let strip = CGRect(x: 0, y: 0, width: image.size.width * image.scale, height: 2 * image.scale)
+        return image.cgImage?.cropping(to: strip).flatMap { UIImage(cgImage: $0).pngData() }
+    }
+    var looks: [[String: Any]] = []
+    for label in item.focusLooks {
+        app.launch()
+        let field = [root.textFields, root.secureTextFields, root.textViews].map { $0[label] }.first { $0.exists }
+        var changed = false
+        if let field, field.isHittable {
+            let rest = edge(field)
+            field.tap()
+            Thread.sleep(forTimeInterval: 0.4)
+            changed = rest != nil && rest != edge(field)
+        }
+        looks.append(["label": label, "changed": changed])
+    }
+    return looks
 }
 
 /// Each in-flow layer in a fresh launch: its text is absent, the trigger's tap shows it, a second tap hides it.

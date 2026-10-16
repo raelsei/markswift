@@ -1,5 +1,14 @@
 /** IR `Motion` → the `MarkswiftAnimation` modifier (runtime/motion.swift). App output only. */
-import type { Easing, KeyframeMotion, Motion, MotionChannel, SemNode } from "../model/semantic.ts";
+import type {
+  Easing,
+  KeyframeMotion,
+  Motion,
+  MotionChannel,
+  SemNode,
+  StateField,
+  StateTransition,
+  TransitionSpec,
+} from "../model/semantic.ts";
 import type { EmitMode } from "./context.ts";
 import { num } from "./format.ts";
 
@@ -63,4 +72,24 @@ export function animationModifier(motion: Motion): string {
     args.push(`base: MarkswiftMotionValue(${base.map((c) => `${MEMBER[c]}: ${num(motion.base![c]!)}`).join(", ")})`);
   if (motion.anchor) args.push(`anchor: UnitPoint(x: ${num(motion.anchor[0])}, y: ${num(motion.anchor[1])})`);
   return `.modifier(MarkswiftAnimation(${args.join(", ")}))`;
+}
+
+/** A transition's SwiftUI `Animation` (`nil` = jump): bezier as `.timingCurve`, steps()/linear() via `MarkswiftEasing`. */
+export function animationExpr(spec?: TransitionSpec): string {
+  if (!spec) return "nil";
+  const s = num(spec.duration / 1000);
+  const e = spec.easing;
+  const base =
+    "bezier" in e
+      ? `.timingCurve(${e.bezier.map(num).join(", ")}, duration: ${s})`
+      : `Animation(MarkswiftEasing(duration: ${s}, ease: ${easeExpr(e)}))`;
+  return spec.delay > 0 ? `${base}.delay(${num(spec.delay / 1000)})` : base;
+}
+
+/** `.modifier(MarkswiftStateAnimation(…))` for one paint field of a pressed/focused look. */
+export function stateAnimation(cond: string, t: StateTransition | undefined, field: StateField): string {
+  const [into, back, reducedInto, reducedBack] = [t?.in, t?.out, t?.reduced.in, t?.reduced.out].map((m) =>
+    animationExpr(m?.[field]),
+  );
+  return `.modifier(MarkswiftStateAnimation(isOn: ${cond}, into: ${into}, back: ${back}, reducedInto: ${reducedInto}, reducedBack: ${reducedBack}))`;
 }

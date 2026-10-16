@@ -21,6 +21,7 @@ import {
 } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
+import { transitionsOf } from "./motion.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
 import {
   hostSpace,
@@ -466,6 +467,10 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   if (growth) node.lineBoxGrowth = growth;
   if (host.styles["text-wrap-style"] === "balance") node.balance = true;
   addStateRunColors(node, built, host);
+  // A run's colour transitions on its own element (an inherited colour starts a CSSTransition there too).
+  const source = [host, ...built.map((b) => b.styleOf)].find((el) => el.motion?.transitions);
+  const transitions = source && transitionsOf(source, node.states, node.diagnostics);
+  if (transitions) node.motion = { ...node.motion, transitions };
   const clamp = parseInt(host.styles["-webkit-line-clamp"] ?? "", 10);
   // No soft wrapping: one line per hard break (`pre`, `br`) — including the ones taken from the
   // browser's measured division, which are hard breaks in the emitted literal.
