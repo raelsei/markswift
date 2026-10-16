@@ -231,6 +231,15 @@ export interface TextDecoration {
   style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
 }
 
+/** CSS counter styles a list marker or `counter()` is regenerated in (`src/css/counter.ts`). */
+export type CounterStyle =
+  | "decimal"
+  | "decimal-leading-zero"
+  | "lower-alpha"
+  | "upper-alpha"
+  | "lower-roman"
+  | "upper-roman";
+
 export interface TextRun {
   text: string;
   font: FontSpec;
@@ -267,6 +276,17 @@ export interface TextRun {
   gap?: number;
   /** Inline `<a href>`: the run is a link. `action` is set for an href the app must resolve (fragment, relative path). */
   link?: { href: string; action?: Action };
+  /**
+   * A generated image (`content: url()`, an inside `list-style-image`) inside the text: drawn at its captured CSS size
+   * on the baseline, as CSS sizes and seats it. `text` is U+FFFC. `alt` from `content: … / "alt"`; none = decorative.
+   */
+  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string };
+  /**
+   * The run is a counter the browser printed (`::marker` of a counter `list-style-type`, `content: counter()`):
+   * `text === prefix + counterText(value, style) + suffix`. Only component extraction reads it (rows derive the
+   * marker from their index); emitters print `text`.
+   */
+  counter?: { style: CounterStyle; value: number; prefix: string; suffix: string };
 }
 
 /**

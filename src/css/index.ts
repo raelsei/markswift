@@ -2,7 +2,8 @@
 export { parseColor } from "./color.ts";
 export { px, parseDeclared, splitTop, resolveLength, round2 } from "./syntax.ts";
 export { parseBlendMode, parseBlendModes } from "./blend.ts";
-export { cssUrls, paintWithin, parseBackgroundImage, resolvePaint } from "./paint.ts";
+export { contentAlt, cssUrls, paintWithin, parseBackgroundImage, resolvePaint } from "./paint.ts";
+export { COUNTER_STYLES, counterText, parseCounter } from "./counter.ts";
 export { parseShadows } from "./shadows.ts";
 export { type TransformLoss, parseTransform, parseOrigin, cssTransform } from "./transforms.ts";
 export { parseFilters, parseClipPath } from "./effects.ts";
