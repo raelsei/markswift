@@ -39,6 +39,7 @@ export const renderAppPlist = `<?xml version="1.0" encoding="UTF-8"?>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>UIRequiresFullScreen</key><true/>
     <key>UILaunchScreen</key><dict/>
     <key>UIApplicationSceneManifest</key>
     <dict>
@@ -106,7 +107,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                     // A job that fits the window only turned (a wide one on the iPad): rotate the scene, then wait for it.
                     if !fits(), job.w <= window.bounds.height, job.h <= window.bounds.width {
                         window.rootViewController!.setNeedsUpdateOfSupportedInterfaceOrientations()
-                        scene.requestGeometryUpdate(.iOS(interfaceOrientations: job.w > job.h || job.w > window.bounds.width ? .landscapeRight : .portrait))
+                        scene.requestGeometryUpdate(.iOS(interfaceOrientations: job.w > job.h || job.w > window.bounds.width ? .landscapeRight : .portrait)) { error in
+                            print("rotate \\(job.view): \\(error)")
+                        }
                         var waited = 0
                         while !fits(), waited < 60 {
                             try await Task.sleep(for: .milliseconds(50))
