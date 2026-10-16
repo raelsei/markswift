@@ -63,7 +63,17 @@ function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
     ...n.children.flatMap((c, i) => {
       const s = t.slots[i]!;
       const span = `${s.colSpan > 1 ? `, columnSpan: ${s.colSpan}` : ""}${s.rowSpan > 1 ? `, rowSpan: ${s.rowSpan}` : ""}`;
-      return indent([...ctx.renderNode(c), `.markswiftGridCell(column: ${s.colStart}, row: ${s.rowStart}${span})`], 1);
+      // CSS paints collapsed borders over cell backgrounds: a band that only draws borders goes on top of the cells.
+      // ponytail: a band with both a fill and borders stays under the cells; split it if a cell background hides its rule.
+      const over = i < t.bands && !c.style.fills.length && !c.style.shadows.length;
+      return indent(
+        [
+          ...ctx.renderNode(c),
+          ...(over ? [".zIndex(1)"] : []),
+          `.markswiftGridCell(column: ${s.colStart}, row: ${s.rowStart}${span})`,
+        ],
+        1,
+      );
     }),
     "}",
   ];

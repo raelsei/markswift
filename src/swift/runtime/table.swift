@@ -3,7 +3,8 @@
 enum MarkswiftTableColumn: Sendable { case px(CGFloat), percent(CGFloat, plus: CGFloat), auto }
 
 /// A CSS table (plan 049). Every subview carries `.markswiftGridCell(column:row:columnSpan:rowSpan:)` (1-based,
-/// tracks.swift); the first `bands` subviews paint row groups and rows under the cells and are never measured.
+/// tracks.swift); the first `bands` subviews paint row groups and rows and are never measured (under the cells; a
+/// band that only draws collapsed borders carries `.zIndex(1)` and draws over them, as CSS paints borders last).
 /// `border-spacing` surrounds every column and row, outer edges included.
 // ponytail: no Layout cache, cells are measured on every pass; add one if large tables profile slow.
 struct MarkswiftTable: Layout {

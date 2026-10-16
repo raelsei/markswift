@@ -374,6 +374,31 @@ describe("MarkswiftTable emission", () => {
     const band = app.indexOf(".markswiftGridCell(column: 1, row: 2, columnSpan: 2)");
     expect(band).toBeGreaterThan(-1);
     expect(band).toBeLessThan(app.indexOf(".markswiftGridCell(column: 1, row: 1)"));
+    // A filled band stays under the cells.
+    expect(app).not.toContain(".zIndex(1)");
+  });
+
+  test("a border-only band (a collapsed row rule) draws over the cells' backgrounds", () => {
+    const rule = {
+      "border-bottom-style": "solid",
+      "border-bottom-width": "1px",
+      "border-bottom-color": "rgb(0, 0, 0)",
+    };
+    const bg = { "background-color": "rgb(219, 234, 254)" };
+    const t = table({
+      widths: [100, 100],
+      heights: [30, 30],
+      collapse: true,
+      rowStyles: { 0: rule },
+      cells: [
+        { row: 0, col: 0, tag: "th", text: "a", styles: bg },
+        { row: 0, col: 1, tag: "th", text: "b", styles: bg },
+        { row: 1, col: 0, text: "c" },
+        { row: 1, col: 1, text: "d" },
+      ],
+    });
+    for (const mode of ["app", "fidelity"] as const)
+      expect(code(t, mode)).toContain(".zIndex(1)\n            .markswiftGridCell(column: 1, row: 1, columnSpan: 2)");
   });
 
   test("app: admitted fixed columns", () => {
