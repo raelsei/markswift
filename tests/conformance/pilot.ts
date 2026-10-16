@@ -1,5 +1,7 @@
 import { resolve, join } from "node:path";
 import { stat } from "node:fs/promises";
+import { captureWidth } from "../../src/css/index.ts";
+import type { BandEdge } from "../../src/model/semantic.ts";
 
 export interface PilotCase {
   id: string;
@@ -14,6 +16,8 @@ export interface PilotCase {
   anchors?: string[];
   /** From the fixture's `markswift-reflow` meta (see `reflowTag`); set by the loaders, never by pilot.json. */
   reflow?: "native" | "pinned";
+  /** From the fixture's `markswift-breakpoints` meta (see `breakpointsTag`); set by the loaders, never by pilot.json. */
+  breakpoints?: number[];
   /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` metas (see `motionTag`); set by the loaders. */
   motion?: number[];
   motionReduced?: number[];
@@ -32,6 +36,30 @@ export function reflowTag(html: string, id: string): RunCase["reflow"] {
   if (tag === undefined) return undefined;
   if (tag !== "native" && tag !== "pinned") throw new Error(`fixture ${id}: invalid markswift-reflow "${tag}"`);
   return tag;
+}
+
+/** `<meta name="markswift-breakpoints" content="390,834">`: the device widths a breakpoint fixture plans its bands from
+ * (ascending integers in 320…1376). Such a fixture adds `@bp` captures under --reflow; exclusive with `markswift-reflow`. */
+export function breakpointsTag(html: string, id: string): number[] | undefined {
+  const tag = /<meta name="markswift-breakpoints" content="([^"]*)"/.exec(html)?.[1];
+  if (tag === undefined) return undefined;
+  if (html.includes('<meta name="markswift-reflow"'))
+    throw new Error(`fixture ${id}: markswift-reflow and markswift-breakpoints are exclusive`);
+  const widths = tag.split(",").map((t) => t.trim());
+  if (
+    !widths.every((t) => /^\d+$/.test(t) && Number(t) >= 320 && Number(t) <= 1376) ||
+    widths.some((t, i) => i && Number(t) <= Number(widths[i - 1]))
+  )
+    throw new Error(`fixture ${id}: invalid markswift-breakpoints "${tag}"`);
+  return widths.map(Number);
+}
+
+/** Reference widths of a breakpoint case: its meta widths ∪ {T−1, T} (T = `captureWidth`) of every planned edge,
+ * within 320…`max`, ascending. */
+export function bpReferences(edges: BandEdge[], devices: number[], max = 1376): number[] {
+  const widths = new Set(devices);
+  for (const edge of edges) widths.add(captureWidth(edge) - 1).add(captureWidth(edge));
+  return [...widths].filter((w) => w >= 320 && w <= max).sort((a, b) => a - b);
 }
 
 /** `<meta name="markswift-motion" content="250,500">` (and `markswift-motion-reduced`): ascending integer ms at which
@@ -102,7 +130,13 @@ export async function validatePilot(raw: unknown, fixtureRoot: string): Promise<
     const reflow = reflowTag(source, entry.id);
     if (reflow && entry.expectedText !== undefined)
       throw new Error(`pilot ${entry.id}: reflow-tagged cases cannot have expectedText`);
-    cases.push({ ...(entry as unknown as PilotCase), ...(reflow ? { reflow } : {}), ...motionTag(source, entry.id) });
+    const breakpoints = breakpointsTag(source, entry.id);
+    cases.push({
+      ...(entry as unknown as PilotCase),
+      ...(reflow ? { reflow } : {}),
+      ...(breakpoints ? { breakpoints } : {}),
+      ...motionTag(source, entry.id),
+    });
   }
   return cases;
 }
@@ -123,6 +157,7 @@ export type RunCase = Pick<
   | "expectedLines"
   | "anchors"
   | "reflow"
+  | "breakpoints"
   | "motion"
   | "motionReduced"
   | "viewportHeight"
@@ -140,6 +175,7 @@ export async function loadFixtureSet(pilot: PilotCase[]): Promise<RunCase[]> {
     const html = await Bun.file(join(FIXTURES, fixture)).text();
     const themes = /<meta name="markswift-themes" content="([^"]*)"/.exec(html)?.[1];
     const reflow = reflowTag(html, id);
+    const breakpoints = breakpointsTag(html, id);
     const height = /<meta name="markswift-viewport-height" content="([^"]*)"/.exec(html)?.[1];
     if (height !== undefined && !/^[1-9]\d*$/.test(height))
       throw new Error(`fixture ${id}: invalid markswift-viewport-height "${height}"`);
@@ -148,6 +184,7 @@ export async function loadFixtureSet(pilot: PilotCase[]): Promise<RunCase[]> {
       fixture,
       themes: themes ? (themes.split(",") as RunCase["themes"]) : ["light"],
       ...(reflow ? { reflow } : {}),
+      ...(breakpoints ? { breakpoints } : {}),
       ...motionTag(html, id),
       ...(height ? { viewportHeight: Number(height) } : {}),
     });
@@ -163,6 +200,8 @@ export interface PilotEntry {
   mode: "app" | "fidelity";
   /** Motion frame of the case's 390 app capture: every animation paused `t` ms in (`reduced`: under Reduce Motion). */
   frame?: { t: number; reduced: boolean };
+  /** Breakpoint reference (`…-app@bp`): scored for its own capture and for the case's merged breakpoint view. */
+  arm?: "bp";
 }
 
 /** Capture widths of a case. With --reflow a tagged case adds 768, and 390 comes first because the reflow arm reuses
@@ -171,8 +210,9 @@ export function widthsFor(item: RunCase, reflow = false): number[] {
   return reflow && item.reflow ? [390, 320, 768] : [320, 390];
 }
 /** Every capture; a motion-tagged case adds its frame entries per theme (390, `app`):
- * `<caseId>-390-<theme>-app@t:<ms>` and `<caseId>-390-<theme>-app@reduced@t:<ms>`. */
-export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
+ * `<caseId>-390-<theme>-app@t:<ms>` and `<caseId>-390-<theme>-app@reduced@t:<ms>`. With `reflow`, a case in
+ * `references` (breakpoint fixtures: id → `bpReferences`) adds `<caseId>-<width>-<theme>-app@bp` per width and theme. */
+export function buildMatrix(cases: RunCase[], reflow = false, references?: Map<string, number[]>): PilotEntry[] {
   return cases.flatMap((item) => [
     ...widthsFor(item, reflow).flatMap((width) =>
       item.themes.flatMap((theme) =>
@@ -196,6 +236,16 @@ export function buildMatrix(cases: RunCase[], reflow = false): PilotEntry[] {
         theme,
         mode: "app" as const,
         frame,
+      })),
+    ),
+    ...(reflow ? (references?.get(item.id) ?? []) : []).flatMap((width) =>
+      item.themes.map((theme) => ({
+        key: `${item.id}-${width}-${theme}-app@bp`,
+        case: item,
+        width,
+        theme,
+        mode: "app" as const,
+        arm: "bp" as const,
       })),
     ),
   ]);

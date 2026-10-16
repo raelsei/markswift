@@ -1,6 +1,16 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildMatrix, loadFixtureSet, loadPilot, motionTag, openKey, reflowTag, validatePilot } from "./pilot.ts";
+import {
+  bpReferences,
+  breakpointsTag,
+  buildMatrix,
+  loadFixtureSet,
+  loadPilot,
+  motionTag,
+  openKey,
+  reflowTag,
+  validatePilot,
+} from "./pilot.ts";
 import { pilotName } from "./pilot-run.ts";
 
 const fixtureRoot = join(import.meta.dir, "fixtures");
@@ -184,5 +194,60 @@ test("pilot rejects expectedText on a reflow-tagged fixture", async () => {
   };
   await expect(validatePilot({ version: 1, cases: [entry] }, fixtureRoot)).rejects.toThrow(
     "pilot flex: reflow-tagged cases cannot have expectedText",
+  );
+});
+
+test("markswift-breakpoints: ascending integer widths in 320…1376; exclusive with markswift-reflow", () => {
+  const meta = (content: string) => `<meta name="markswift-breakpoints" content="${content}">`;
+  expect(breakpointsTag(meta("390,834,1210"), "x")).toEqual([390, 834, 1210]);
+  expect(breakpointsTag("<p>", "x")).toBeUndefined();
+  for (const bad of ["834,390", "300,390", "390,1400", "", "390,390", "390.5"])
+    expect(() => breakpointsTag(meta(bad), "x")).toThrow(`fixture x: invalid markswift-breakpoints "${bad}"`);
+  expect(() => breakpointsTag(`<meta name="markswift-reflow" content="native">${meta("390")}`, "x")).toThrow(
+    "fixture x: markswift-reflow and markswift-breakpoints are exclusive",
+  );
+});
+
+test("bpReferences: meta widths plus T−1/T of every edge, ascending", () => {
+  expect(bpReferences([{ px: 600, inclusive: true }], [390, 768, 1210])).toEqual([390, 599, 600, 768, 1210]);
+  expect(bpReferences([{ px: 767, inclusive: false }], [390, 768, 1210])).toEqual([390, 767, 768, 1210]);
+  expect(bpReferences([{ px: 1376, inclusive: false }], [390])).toEqual([390, 1376]);
+});
+
+test("breakpoint fixtures carry their widths; buildMatrix with references adds widths × themes @bp app entries", async () => {
+  const cases = await loadFixtureSet(await loadPilot());
+  expect(cases.find((item) => item.id === "media-query-bands")!.breakpoints).toEqual([390, 768, 1210]);
+  expect(
+    cases
+      .filter((item) => item.breakpoints)
+      .map((item) => item.id)
+      .sort(),
+  ).toEqual([
+    "bp-dialog-footer",
+    "bp-input",
+    "bp-pagination",
+    "js-swap",
+    "maxw",
+    "media-query-bands",
+    "swap",
+    "switch",
+  ]);
+  const references = new Map([
+    ["media-query-bands", [390, 599, 600, 768, 1210]],
+    ["bp-input", [390, 767, 768, 834]],
+  ]);
+  const plain = buildMatrix(cases, true);
+  const withBp = buildMatrix(cases, true, references);
+  const bp = withBp.filter((entry) => entry.arm === "bp");
+  expect(bp).toHaveLength(5 + 4 * 2);
+  expect(
+    bp.every((entry) => entry.mode === "app" && entry.key === `${entry.case.id}-${entry.width}-${entry.theme}-app@bp`),
+  ).toBe(true);
+  expect(bp.filter((entry) => entry.case.id === "media-query-bands").map((entry) => entry.key)).toEqual(
+    [390, 599, 600, 768, 1210].map((width) => `media-query-bands-${width}-light-app@bp`),
+  );
+  expect(withBp.filter((entry) => !entry.arm).map((entry) => entry.key)).toEqual(plain.map((entry) => entry.key));
+  expect(buildMatrix(cases, false, references).map((entry) => entry.key)).toEqual(
+    buildMatrix(cases).map((entry) => entry.key),
   );
 });
