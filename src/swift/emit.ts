@@ -207,11 +207,6 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
-<<<<<<< HEAD
-    // One preview per layer (in-flow or presentation), shown open.
-||||||| 53aeb69
-    // One preview per in-flow layer, shown open.
-=======
     // One preview per width band above the first, at its capture width.
     ...(screen.breakpoints?.names.slice(1) ?? []).flatMap((band, i) => [
       "",
@@ -222,8 +217,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
         screen.breakpoints!.widths[i + 1],
       ),
     ]),
-    // One preview per in-flow layer, shown open.
->>>>>>> main
+    // One preview per layer (in-flow or presentation), shown open.
     ...[...control.openStates].flatMap(([layer, state]) => [
       "",
       ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),
