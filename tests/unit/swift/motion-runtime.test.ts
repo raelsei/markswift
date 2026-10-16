@@ -26,6 +26,8 @@ struct Probe: View {
                 .modifier(MarkswiftAnimation(motions: [MarkswiftMotion(MarkswiftTiming(duration: 0.3, delay: 0.1, fillBackwards: true, fillForwards: true), opacity: MarkswiftMotionTrack(0, [MarkswiftSegment(1, 1, .bezier(0, 0, 0.58, 1))]), y: MarkswiftMotionTrack(8, [MarkswiftSegment(0, 1, .bezier(0, 0, 0.58, 1))]))], base: MarkswiftMotionValue(opacity: 0.5), anchor: UnitPoint(x: 0, y: 0)))
             Color.blue.frame(width: 24, height: 24)
                 .modifier(MarkswiftAnimation(motions: [MarkswiftMotion(MarkswiftTiming(duration: 0.8, iterations: 2.5, direction: .alternateReverse), scaleX: MarkswiftMotionTrack(1, [MarkswiftSegment(1.15, 0.5, .steps(4, .both)), MarkswiftSegment(1, 1, .steps(1, .start))]))]))
+            Color.green.frame(width: 24, height: 24)
+                .modifier(MarkswiftStateAnimation(isOn: true, into: .timingCurve(0.4, 0, 0.2, 1, duration: 0.15).delay(0.1), back: Animation(MarkswiftEasing(duration: 0.3, ease: .steps(4, .end))), reducedInto: Animation(MarkswiftEasing(duration: 0.3, ease: .points([0, 1], [0, 1]))), reducedBack: nil))
         }
         .environment(\\.markswiftMotionTime, 0.25)
         .environment(\\.markswiftForcedStates, .reduceMotion)
