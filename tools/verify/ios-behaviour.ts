@@ -13,6 +13,7 @@ import { inferScreen } from "../../src/analysis/infer.ts";
 import { applyLayers } from "../../src/analysis/layers.ts";
 import { convert } from "../../src/index.ts";
 import { type SemNode, walk } from "../../src/model/semantic.ts";
+import { cssTransform } from "../../src/css/transforms.ts";
 import { controlMembers } from "../../src/swift/control-state.ts";
 import { nearestTextStyle } from "../../src/swift/format.ts";
 import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
@@ -69,8 +70,25 @@ interface Prepared {
   labels: string[];
   /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
   actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
-  /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again. */
-  layers: Array<{ id: string; kind: "inflow"; trigger: string; shows: string }>;
+  /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again.
+   * Drawn presentations (060): the trigger (long-pressed when `longPress`) shows `shows`; each of `closers` (the
+   * content's dismissing buttons) closes it; a tap at the root's normalised `outsidePoint` closes it iff `outside`;
+   * `buttons` are the content's other buttons, tapped so their actions log. */
+  layers: Array<
+    | { id: string; kind: "inflow"; trigger: string; shows: string }
+    | {
+        id: string;
+        kind: "presentation";
+        trigger: string;
+        shows: string;
+        closers: string[];
+        buttons: string[];
+        outside: boolean;
+        modal: boolean;
+        longPress: boolean;
+        outsidePoint: [number, number];
+      }
+  >;
   fonts: boolean;
   /** `live`: some node animates; `reduced`: some node still animates under Reduce Motion (`reduced ?? animations`). */
   motion: { live: boolean; reduced: boolean };
@@ -102,7 +120,17 @@ interface CaseLog {
         labels: Array<{ label: string; focused: boolean }>;
         log: string;
       };
-      layers?: Array<{ id: string; opened: boolean; closed: boolean }>;
+      /** Presentations add: the trigger still exposed while open, closed per closer label, closed by the outside tap,
+       * and the log after tapping the content's buttons. */
+      layers?: Array<{
+        id: string;
+        opened: boolean;
+        closed?: boolean;
+        triggerExposed?: boolean;
+        closers?: Record<string, boolean>;
+        outside?: boolean;
+        log?: string;
+      }>;
     };
     rtl?: { tree: El };
     xSmall?: { audit: AuditIssue[] };
@@ -252,13 +280,53 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   walk(screen.root, (n) => {
     if (!n.opens) return;
     const opener = n.kind === "control" && n.control === "disclosure" ? n.label : n;
+    const trigger = n.a11y?.label ?? (opener && texts(opener).join(" "));
+    if (n.opens.kind === "presentation") {
+      const id = n.opens.layer;
+      const roots = screen.root.overlays.filter((o) => o.presentation?.id === id);
+      const p = roots[0]?.presentation;
+      const shows = roots.flatMap((o) => texts(o.node))[0];
+      if (!p || !trigger || !shows) return;
+      const buttons: SemNode[] = [];
+      for (const o of roots)
+        walk(o.node, (d) => {
+          if (d.action) buttons.push(d);
+        });
+      const labels = (keep: (b: SemNode) => boolean) =>
+        buttons
+          .filter(keep)
+          .map((b) => b.a11y?.label ?? texts(b).join(" "))
+          .filter(Boolean);
+      // The root corner farthest from the content's centre where Chrome painted it.
+      const r = result.layout.root.bounds;
+      const box = result.layout.layers
+        ?.find((l) => l.id === id)
+        ?.nodes.find((c) => c.bounds.w < r.w - 1 || c.bounds.h < r.h - 1);
+      const t = box && cssTransform(box.styles, box.bounds.w, box.bounds.h).transform;
+      const [cx, cy] = box
+        ? [box.bounds.x + box.bounds.w / 2 + (t?.tx ?? 0), box.bounds.y + box.bounds.h / 2 + (t?.ty ?? 0)]
+        : [r.x + r.w / 2, r.y + r.h / 2];
+      const outsidePoint: [number, number] = [cx - r.x < r.w / 2 ? 0.98 : 0.02, cy - r.y < r.h / 2 ? 0.98 : 0.02];
+      layers.push({
+        id,
+        kind: "presentation",
+        trigger,
+        shows,
+        closers: labels((b) => p.dismiss.buttons.includes(b.id)),
+        buttons: labels((b) => !p.dismiss.buttons.includes(b.id)),
+        outside: p.dismiss.outside,
+        modal: p.modal,
+        longPress: !!n.opens.longPress,
+        outsidePoint,
+      });
+      return;
+    }
     const content: SemNode[] = [];
     walk(screen.root, (d) => {
       if (d.shownBy === n.opens!.layer) content.push(d);
     });
     if (n.kind === "control" && n.control === "disclosure") content.push(...n.content);
     const shows = content.flatMap(texts)[0];
-    const trigger = n.a11y?.label ?? (opener && texts(opener).join(" "));
     if (trigger && shows) layers.push({ id: n.opens.layer, kind: "inflow", trigger, shows });
   });
   const pickers: Prepared["pickers"] = [];
@@ -390,14 +458,24 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     // HTML: tapping a field's `<label>` focuses the field.
     for (const l of ix.labels)
       if (!l.focused) fail("interaction", `label:${l.label}`, "tapping the label did not focus its field");
-    const hits = ix.log.split(",");
+    // A presentation's content buttons are tapped in their own launches (`layers`): their log hits count too.
+    const hits = [ix.log, ...(large.layers ?? []).map((l) => l.log ?? "")].join(",").split(",");
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
-    // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it.
-    for (const { id } of item.layers) {
+    // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it. Presentations (060): the
+    // trigger shows it, a modal one hides the trigger from VoiceOver, its closers and (iff dismissable) an outside tap close it.
+    for (const layer of item.layers) {
+      const { id } = layer;
       const run = large.layers?.find((l) => l.id === id);
       if (!run?.opened) fail("interaction", `layer:${id}`, "did not open");
-      else if (!run.closed) fail("interaction", `layer:${id}`, "did not close");
+      else if (layer.kind === "inflow") {
+        if (!run.closed) fail("interaction", `layer:${id}`, "did not close");
+      } else {
+        if (layer.modal && run.triggerExposed) fail("interaction", `layer:${id}`, "not modal");
+        for (const closer of layer.closers)
+          if (!run.closers?.[closer]) fail("interaction", `layer:${id}`, `closer ${closer} did not close`);
+        if (run.outside !== layer.outside) fail("interaction", `layer:${id}`, "outside tap");
+      }
     }
   }
   for (const [size, launch] of [

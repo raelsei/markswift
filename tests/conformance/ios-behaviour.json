@@ -23,7 +23,13 @@
     "_behaviour/pointer-events",
     "overlay-tooltip",
     "overlay-collapsible",
-    "overlay-accordion"
+    "overlay-accordion",
+    "overlay-dialog",
+    "overlay-alert-dialog",
+    "overlay-sheet",
+    "overlay-popover",
+    "overlay-hover-card",
+    "overlay-native"
   ],
   "known": [
     {
