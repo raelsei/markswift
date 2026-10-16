@@ -334,7 +334,8 @@ describe("drawn presentations (060)", () => {
     "closers, long-press and the native backdrop",
     async () => {
       const dialog = (await convertHtml(await fixture("overlay-dialog"), { name: "Overlay" })).code;
-      expect(dialog.match(/\n +isEditProfilePresented = false\n/g)).toHaveLength(2);
+      // 066: the closers close inside the layer's exit curve.
+      expect(dialog.match(/\n +withAnimation\([^\n]*\) \{ isEditProfilePresented = false \}\n/g)).toHaveLength(2);
       const hover = (await convertHtml(await fixture("overlay-hover-card"), { name: "Overlay" })).code;
       expect(hover).toContain(".simultaneousGesture(LongPressGesture().onEnded { _ in isNextjsPresented = true })");
       const native = (await convertHtml(await fixture("overlay-native"), { name: "Overlay" })).code;

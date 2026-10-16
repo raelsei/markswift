@@ -527,8 +527,9 @@ export async function probeDismiss(
   return { escape: o.escape, outside, buttons };
 }
 
-/** What an `@open` capture needs: the open page's root-clipped screenshot (with `spec.screenshot`) and root size. */
-export type OpenShots = Record<string, { png?: Uint8Array; size: { w: number; h: number } }>;
+/** What an `@open` capture needs: the open page's root-clipped screenshot (with `spec.screenshot`), root size, and the
+ * trigger that opened it (its enter frames reopen it, 066). */
+export type OpenShots = Record<string, { png?: Uint8Array; size: { w: number; h: number }; trigger: Trigger }>;
 
 /**
  * Step 8: open the first 12 of `rest.triggers`, each in a fresh page (`capture`), append the layers to
@@ -565,7 +566,7 @@ export async function captureLayers(
     for (const w of open.warnings) if (!rest.warnings.some((r) => r.message === w.message)) rest.warnings.push(w);
     if (!open.opened) continue;
     layers.push(open.opened.layer);
-    shots[open.opened.layer.id] = { ...(open.png ? { png: open.png } : {}), size: open.opened.size };
+    shots[open.opened.layer.id] = { ...(open.png ? { png: open.png } : {}), size: open.opened.size, trigger };
     for (const [id, delta] of Object.entries(open.opened.openPaint)) {
       const node = byId.get(id);
       if (node) node.states = { ...node.states, open: delta };

@@ -539,4 +539,38 @@ export class BrowserCapture {
       await page.close();
     }
   }
+
+  /**
+   * `@open:<layer>@t:<ms>` enter frame (066): a fresh page opened like the `@open` capture (058's `openLayer`), the
+   * focus ring it took dropped, every animation paused `t` ms in under `no-preference`, screenshotted at `clip`.
+   */
+  async captureLayerFrame(
+    spec: CaptureRequest,
+    trigger: Trigger,
+    t: number,
+    clip: { x: number; y: number; width: number; height: number },
+  ): Promise<Uint8Array> {
+    const page = await this.context.newPage();
+    try {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await this.load(page, spec);
+      await noTransitions(page);
+      await settle(page);
+      await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
+        sel: spec.root,
+        mark: ROOT_MARK,
+      });
+      const cdp = await this.context.newCDPSession(page);
+      const opening = await openLayer(page, cdp, `[${ROOT_MARK}="1"]`, ROOT_MARK, trigger);
+      await cdp.detach();
+      if (!opening?.roots.length) throw new Error(`trigger ${trigger.id} opened nothing`);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await settle(page, { at: t });
+      await markTransformed(page);
+      await cancelAncestorTransforms(page);
+      return await page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" });
+    } finally {
+      await page.close();
+    }
+  }
 }

@@ -7,7 +7,8 @@ import type { Page } from "playwright-core";
  * `content-visibility: hidden` elements (`hidden=until-found`) are removed from
  * layout because DOMSnapshot still reports boxes for them while nothing paints. Lazy images
  * are loaded eagerly so below-the-fold pixels exist.
- * `at` (ms): every animation is paused at that time instead of finished (motion frame captures).
+ * `at` (ms): every animation is paused at that time instead of finished (motion frame captures), including the ones
+ * `recordAnimations` kept that already finished (a 100 ms overlay enter, 066).
  */
 export async function settle(page: Page, options: { at?: number } = {}): Promise<void> {
   await page.evaluate(async (at) => {
@@ -20,7 +21,8 @@ export async function settle(page: Page, options: { at?: number } = {}): Promise
       else if (cv === "hidden")
         for (const c of el.children) (c as HTMLElement).style.setProperty("display", "none", "important");
     }
-    for (const a of document.getAnimations()) {
+    const recorded = at === null ? [] : (window.__markswiftStarted ?? []).filter((a) => a.playState === "finished");
+    for (const a of new Set([...document.getAnimations(), ...recorded])) {
       if (at !== null) {
         a.pause();
         a.currentTime = at;
