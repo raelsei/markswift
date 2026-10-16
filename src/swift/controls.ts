@@ -43,6 +43,8 @@ export interface ControlDeps extends ColorCtx {
   pressOf?: Map<SemNode, string>;
   /** ARIA toggle Button → what its tap runs; built by `controlMembers`. */
   toggleOf?: ControlMembers["toggleOf"];
+  /** In-flow layer trigger → what its tap runs; built by `controlMembers`. */
+  openOf?: ControlMembers["openOf"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
@@ -86,10 +88,11 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   const out = core(n, deps);
   if (n.font) {
     out.push(`.font(${fontExpr(n.font, deps)})`);
-    // A field showing its placeholder paints it in the prompt colour, as the browser does; in app
-    // mode the live control styles its own prompt and this would colour the typed text instead.
+    // A field showing its placeholder paints it in the prompt colour — the page's `::placeholder` colour, else the
+    // platform grey — as the browser does; in app mode the live control styles its own prompt and this would
+    // colour the typed text instead.
     const prompt = deps.mode === "fidelity" && !n.value && n.placeholder !== undefined;
-    if (prompt) out.push(".foregroundStyle(Color.markswiftPlaceholderText)");
+    if (prompt) out.push(`.foregroundStyle(${promptPaint(n, deps)})`);
     else if (n.color) out.push(`.foregroundStyle(${colorExpr(n.color, deps, deps.id)})`);
     // App mode: the CSS line box of a field's text — one line centred in it, an editor's lines spaced by it and its
     // half-leading above the first line — scaling with Dynamic Type like the font; leading over the face's natural line
@@ -147,10 +150,10 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      // An ARIA toggle (`role=checkbox|switch|radio`): the tap changes the screen's state, then acts.
-      const toggle = deps.toggleOf?.get(n);
-      if (toggle)
-        return ["Button {", ...indent(toggle.tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
+      // An ARIA toggle (`role=checkbox|switch|radio`) or an in-flow layer's trigger: the tap changes the
+      // screen's state, then acts.
+      const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap;
+      if (tap) return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
       return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
     }
     case "link": {
@@ -174,7 +177,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
       return [
-        `TextField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        `TextField(${str(n.placeholder ?? "")}, text: ${binding}${promptArg(n, deps)})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...focused,
@@ -185,7 +188,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
       return [
-        `SecureField(${str(n.placeholder ?? "")}, text: ${binding})`,
+        `SecureField(${str(n.placeholder ?? "")}, text: ${binding}${promptArg(n, deps)})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...focused,
@@ -195,11 +198,11 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     case "textEditor":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".topLeading");
       // The node paints its own background; the editor's would sit on top of it, and so would iOS 26's
-      // scroll edge effect over the first line. The editor insets
-      // its text inside its frame, which the CSS padding already does. It has no prompt: the
-      // placeholder is drawn while the text is empty, where the first line starts. It is as tall as
-      // its text (or the placeholder) at the native font, so Dynamic Type grows it; the captured
-      // height stays the minimum (`frameModifier`).
+      // scroll edge effect over the first line. The editor insets its text inside its frame, which the
+      // CSS padding already does. It has no `prompt:` init: the placeholder overlay, in the prompt paint,
+      // is drawn while the text is empty, where the first line starts. It is as tall as its text (or the
+      // placeholder) at the native font, so Dynamic Type grows it; the captured height stays the minimum
+      // (`frameModifier`).
       return [
         `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
@@ -214,7 +217,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
               ".overlay(alignment: .topLeading) {",
               `    if ${state}.isEmpty {`,
               `        Text(verbatim: ${str(n.placeholder)})`,
-              "        .foregroundStyle(Color.markswiftPlaceholderText)",
+              `        .foregroundStyle(${promptPaint(n, deps)})`,
               "        .allowsHitTesting(false)",
               "    }",
               "}",
@@ -431,6 +434,18 @@ const LEVEL_TINT: Record<NonNullable<ControlNode["level"]>, string> = {
   suboptimal: "Color.markswift(1.0, 0.725, 0.0)",
   poor: "Color.markswift(0.847, 0.231, 0.004)",
 };
+
+/** A field's placeholder paint: the page's `::placeholder` colour (token slot `prompt`), else the platform's prompt grey. */
+function promptPaint(n: ControlNode, deps: ControlDeps): string {
+  return n.promptColor ? colorExpr(n.promptColor, deps, deps.id, "prompt") : "Color.markswiftPlaceholderText";
+}
+
+/** `TextField`/`SecureField` `prompt:` argument; none without an author colour, so the title stays the platform-grey prompt. */
+function promptArg(n: ControlNode, deps: ControlDeps): string {
+  return n.promptColor
+    ? `, prompt: Text(verbatim: ${str(n.placeholder ?? "")}).foregroundStyle(${promptPaint(n, deps)})`
+    : "";
+}
 
 /** Text the browser painted inside a field, for the modes that cannot host a live control. */
 function painted(text: string, alignment: string): string[] {

@@ -4,6 +4,7 @@ import {
   type Screen,
   type SemNode,
   type StackNode,
+  type GridNode,
   type SemBase,
   type Overlay,
   type Axis,
@@ -14,6 +15,7 @@ import {
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
+import { generatedAlt } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -26,20 +28,12 @@ import { buildWrapping } from "./wrapping.ts";
 import { admitFlexRow } from "./flex-row.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
-import {
-  unionRect,
-  insetsOf,
-  renders,
-  hangsLeading,
-  floating,
-  isFlex,
-  mainAxis,
-  outOfFlow,
-  edgeWidth,
-} from "./geometry.ts";
-import { collapseTableBorders } from "./table-borders.ts";
+import { unionRect, insetsOf, renders, hangsLeading, floating, isFlex, mainAxis, outOfFlow } from "./geometry.ts";
+import { collapseTableBorders, hideEmptyCells } from "./table-borders.ts";
+import { type TableSlots, tableSlots } from "./table.ts";
 import { clipsText } from "./style-background.ts";
-import { dropInvisible } from "./invisible.ts";
+import { dropInvisible, pruneHitTesting } from "./invisible.ts";
+import { applyTooltips } from "./tooltips.ts";
 
 /** A table cell's `vertical-align` as the row's cross alignment (`top`/`baseline` stay at the start). */
 const CELL_ALIGN: Record<string, CrossAlign> = { middle: "center", bottom: "end" };
@@ -69,13 +63,59 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   // The document scrolled in the browser: content past the viewport must stay reachable.
   if (doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
+  applyTooltips(root, doc);
   dropInvisible(root);
-  return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
+  pruneHitTesting(root);
+  // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
+  const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
+  const colorScheme =
+    schemes.length === 1 && (schemes[0] === "light" || schemes[0] === "dark") ? schemes[0] : undefined;
+  return {
+    version: 1,
+    name,
+    source: doc.source,
+    theme: doc.combo.theme,
+    size: doc.size,
+    canvas,
+    root,
+    ...(colorScheme ? { colorScheme } : {}),
+  };
+}
+
+/**
+ * A node outside the captured tree (an in-flow layer's content, `layers.ts`) built as a child of `parent`. Fixed
+ * descendants are not hoisted: `fixed` counts the ones left out.
+ */
+export function buildDetached(
+  node: LayoutNode,
+  parent: LayoutNode,
+  doc: LayoutDoc,
+  options: InferOptions = {},
+): { sem: SemNode; fixed: number } {
+  const ctx: InferenceContext = {
+    root: doc.root,
+    fixed: [],
+    bundledFamilies: options.bundledFamilies ?? {},
+    viewport: doc.viewport,
+    labels: labelIndex(doc.root),
+    parent,
+    parentAxis: mainAxis(parent),
+    parentDisplay: parent.styles["display"] ?? "block",
+    parentAlign: crossAlign(parent),
+    ...(clipsText(parent) ? { textClip: parent } : {}),
+  };
+  const sem = build(node, ctx);
+  dropInvisible(sem);
+  return { sem, fixed: ctx.fixed.length };
 }
 
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
-  const t = collapseTableBorders(input);
+  if (ctx.table?.rows === input) return tableGrid(input, ctx.table.slots, ctx);
+  const t = hideEmptyCells(collapseTableBorders(input));
+  const slots = tableSlots(t);
   const n = t.tag === "table" ? captionOutside(t) : t;
+  if (slots && n === t) return tableGrid(n, slots, ctx);
+  if (slots) ctx = { ...ctx, table: { rows: n.children.find((c) => c.tag !== "caption")!, slots } };
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")
     return finish(buildSvg(n, makeBase(n, ctx, parseDeclared(n.attrs["style"])), ctx.root, ctx.bundledFamilies));
@@ -84,19 +124,21 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   if (policy.route === "image") {
     const src = n.currentSrc ?? n.attrs[n.tag === "video" ? "poster" : "src"] ?? "";
     const svg = svgFromDataUrl(src);
+    // A pseudo's generated image: `content: url(…) / "alt"`, else decorative.
+    const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
     const node = withBase(n, ctx, {
       kind: "image",
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
-      ...(n.attrs["alt"]
+      ...(alt
         ? {
-            alt: n.attrs["alt"],
+            alt,
             font: fontOf(n.styles, ctx.bundledFamilies),
             ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
           }
-        : n.attrs["alt"] !== undefined
-          ? { alt: n.attrs["alt"] }
+        : alt !== undefined
+          ? { alt }
           : {}),
     });
     if (svg?.vector)
@@ -234,6 +276,8 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   }
 
   const base = makeBase(n, ctx, declared);
+  // An admitted captioned table: the grid of its rows box carries the table diagnostic.
+  if (slots) base.diagnostics = base.diagnostics.filter((d) => d.feature !== "table");
   const diagnostics = base.diagnostics;
 
   if (display === "grid" || display === "inline-grid") {
@@ -313,37 +357,108 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
 
 /**
  * Chrome's table box includes its `<caption>`, but the table's own paint (background, border,
- * radius, shadow) covers only the row groups. The rows move into an anonymous block that carries
- * that paint; the table keeps its layout and loses its paint.
+ * radius, shadow) and padding surround only the row groups. The rows move into an anonymous block
+ * that carries them, from the caption's margin edge to the far table edge; the table keeps its
+ * layout keys (`border-collapse`, `border-spacing` included) and loses its paint.
  */
-// ponytail: caption margins are not subtracted from the rows box; measure them if a design spaces its caption.
 function captionOutside(n: LayoutNode): LayoutNode {
   const first = n.children[0];
   const last = n.children[n.children.length - 1];
   const caption = first?.tag === "caption" ? first : last?.tag === "caption" ? last : undefined;
   if (!caption || n.children.length < 2) return n;
-  const paint = Object.keys(n.styles).filter((k) => /^(background|border-|box-shadow)/.test(k));
-  if (!paint.length) return n;
+  const moved = Object.keys(n.styles).filter((k) =>
+    /^(background|border-(?!collapse$|spacing$)|box-shadow|padding-)/.test(k),
+  );
   const rest = n.children.filter((c) => c !== caption);
-  // The side it is painted on (`caption-side`), not its place in the markup; the rows' box ends at
-  // the table's border, not at the caption's margin.
+  // The side it is painted on (`caption-side`), not its place in the markup.
   const top = caption.bounds.y < Math.min(...rest.map((c) => c.bounds.y));
-  const shown = rest.filter(renders);
-  if (!shown.length) return n;
-  const grid = shown.map((c) => c.bounds).reduce(unionRect);
-  const [bt, bb] = [edgeWidth(n.styles, "top"), edgeWidth(n.styles, "bottom")];
-  const bounds = { x: n.bounds.x, y: grid.y - bt, w: n.bounds.w, h: grid.h + bt + bb };
+  const m = px(caption.styles[top ? "margin-bottom" : "margin-top"]);
+  const cb = caption.bounds;
+  const y = top ? cb.y + cb.h + m : n.bounds.y;
+  const bounds = { x: n.bounds.x, y, w: n.bounds.w, h: top ? n.bounds.y + n.bounds.h - y : cb.y - m - y };
   const rows: LayoutNode = {
     tag: "div",
     attrs: {},
-    styles: { display: "block", ...Object.fromEntries(paint.map((k) => [k, n.styles[k]!])) },
+    styles: { display: "block", ...Object.fromEntries(moved.map((k) => [k, n.styles[k]!])) },
     bounds,
     children: rest,
     ...(n.id !== undefined ? { id: `${n.id}/rows` } : {}),
     ...(n.paint !== undefined ? { paint: n.paint } : {}),
   };
-  const styles = Object.fromEntries(Object.entries(n.styles).filter(([k]) => !paint.includes(k)));
+  const styles = Object.fromEntries(Object.entries(n.styles).filter(([k]) => !moved.includes(k)));
   return { ...n, styles, children: top ? [caption, rows] : [rows, caption] };
+}
+
+/** An admitted table (or its rows box): bands and cells in their slots, laid out by MarkswiftTable. */
+function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridNode {
+  const base = makeBase(box, ctx, parseDeclared(box.attrs["style"]));
+  base.diagnostics = base.diagnostics.filter((d) => d.feature !== "table");
+  addDiagnostic(
+    base.diagnostics,
+    "approximated",
+    "table",
+    "VoiceOver table navigation (row/column position, header association) is not translated",
+  );
+  if (s.fixedRequested && !s.fixed)
+    addDiagnostic(
+      base.diagnostics,
+      "approximated",
+      "table-layout",
+      "table-layout: fixed columns not reproduced by the fixed-layout solver; captured column widths scale with the offered width",
+    );
+  if (!s.fixedRequested && !s.widthFixed)
+    addDiagnostic(
+      base.diagnostics,
+      "approximated",
+      "table-layout",
+      "auto table layout → captured column widths scale with the offered width; CSS min-/max-content column sizing is not reproduced",
+    );
+  const bandCtx: InferenceContext = {
+    ...ctx,
+    parent: box,
+    parentAxis: "v",
+    parentDisplay: "table",
+    parentAlign: "stretch",
+  };
+  const bands = s.bands.map((b) => withBase(b.node, bandCtx, { kind: "box" }));
+  // The context the measured-rows path gives a row's children, so cells build as before.
+  const cells = s.cells.map((c) =>
+    build(c.node, {
+      ...ctx,
+      parent: c.parent,
+      parentAxis: mainAxis(c.parent),
+      parentDisplay: c.parent.styles["display"] ?? "table-row",
+      parentAlign: crossAlign(c.parent),
+      textClip: [c.parent, c.group, box].find((e) => e && clipsText(e)) ?? ctx.textClip,
+    }),
+  );
+  const children = [...bands, ...cells];
+  // Fidelity keeps the captured lattice; app mode allocates every slot (emit.ts) and ignores these.
+  for (const c of children) {
+    c.width = { kind: "fixed", px: round2(c.frame.w) };
+    c.height = { kind: "fixed", px: round2(c.frame.h) };
+  }
+  return finish({
+    ...base,
+    kind: "grid",
+    columns: s.widths.length,
+    hSpacing: s.hSpacing,
+    vSpacing: s.vSpacing,
+    children,
+    table: {
+      widths: s.widths,
+      heights: s.heights,
+      slots: [...s.bands, ...s.cells].map(({ rowStart, colStart, rowSpan, colSpan }) => ({
+        rowStart,
+        colStart,
+        rowSpan,
+        colSpan,
+      })),
+      bands: bands.length,
+      collapse: s.collapse,
+      ...(s.fixed ? { fixed: s.fixed } : {}),
+    },
+  });
 }
 
 /** Inline-level boxes laid out as captured rows never re-wrap natively, whether they filled one line or several. */

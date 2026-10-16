@@ -1,6 +1,7 @@
 import type { TextNode, TextRun } from "../model/semantic.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ColorCtx, ControlMembers, EmitMode } from "./context.ts";
+import type { EmitContext } from "./context.ts";
+import { inlineImageView } from "./images.ts";
 import { colorExpr, fontExpr, fontSizeExpr, nearestTextStyle, num, str } from "./format.ts";
 import { paintExpr } from "./paint.ts";
 import { note } from "./diagnostics.ts";
@@ -23,13 +24,10 @@ function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number;
   };
 }
 
-export function textExpr(
-  n: TextNode,
-  ctx: ColorCtx & { mode: EmitMode; fontMetrics: FontMetrics; control?: Pick<ControlMembers, "actionOf"> },
-): string[] {
+export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   const runs = n.runs;
   // Whole-text decisions (case, line height, shadow) come from the runs that carry glyphs.
-  const glyphs = runs.filter((r) => r.gap === undefined);
+  const glyphs = runs.filter((r) => r.gap === undefined && !r.image);
   // `.textCase` covers the whole Text: only a transform every run shares; otherwise (and for
   // `capitalize`, which has no case) the literal.
   const shared = glyphs.every((r) => r.transform === glyphs[0]?.transform) ? glyphs[0]?.transform : undefined;
@@ -40,9 +38,12 @@ export function textExpr(
   const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx));
   if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
-  // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time.
+  // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time. A multi-line
+  // part (an image run's view) indents as a block.
   const out: string[] =
-    parts.length === 1 ? [parts[0]!] : ["Text.markswiftRuns([", ...parts.map((p) => `    ${p},`), "])"];
+    parts.length === 1
+      ? parts[0]!.split("\n")
+      : ["Text.markswiftRuns([", ...parts.flatMap((p) => `${p},`.split("\n").map((l) => `    ${l}`)), "])"];
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
@@ -168,15 +169,23 @@ function nativeInlineGrowth(glyphs: TextRun[], factor: number): number {
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */
-function runExpr(
-  r: TextRun,
-  i: number,
-  n: TextNode,
-  literalTransform: boolean,
-  ctx: ColorCtx & { mode: EmitMode },
-): string {
+function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, ctx: EmitContext): string {
   // A gap run is pure advance; a named call keeps the run array cheap to typecheck.
   if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
+  if (r.image) {
+    // A generated image rendered at its CSS size: `Text` takes only an `Image`. No pixels → keep its advance.
+    const view = inlineImageView(r.image, n, ctx);
+    if (!view) return `Text.markswiftGap(${num(r.image.w)})`;
+    const label = r.image.alt !== undefined ? `, label: ${str(r.image.alt)}` : "";
+    let e = [
+      `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${label}) {`,
+      ...view.map((l) => `    ${l}`),
+      "})",
+    ].join("\n");
+    if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: "\\n") + ${e}`;
+    if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
+    return e;
+  }
   let text = r.text;
   // Fidelity bakes the browser's line division in as hard breaks; the collapsible space at a
   // break becomes the newline — also when the break opens the next run (a wrap before `<a>`).

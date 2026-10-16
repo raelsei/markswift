@@ -7,7 +7,7 @@ import { controlMembers } from "./control-state.ts";
 import type { EmitContext, EmitOptions, SwiftOutput } from "./context.ts";
 import { access, asMember, extractComponents } from "./components.ts";
 import { refOf } from "./nodes.ts";
-import { containerExpr } from "./layout.ts";
+import { bandsOpen, containerExpr } from "./layout.ts";
 import { visit } from "./traversal.ts";
 export type { EmitMode, EmitOptions, SwiftOutput } from "./context.ts";
 export { SWIFT_RUNTIME } from "./runtime.ts";
@@ -36,17 +36,61 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
         if (!it.fixed) allocated.set(n.children[it.child]!, it.justify === "stretch" ? "both" : "height");
     // App mode: MarkswiftFlexRow proposes each item its allocated width; heights stay as the IR says.
     if (opts.mode === "app" && n.kind === "stack" && n.flex) for (const c of n.children) allocated.set(c, "width");
+    // App mode: MarkswiftTable proposes every cell and band its slot; captured heights are the Layout's row floors.
+    if (opts.mode === "app" && n.kind === "grid" && n.table) for (const c of n.children) allocated.set(c, "both");
   });
+  // Breakpoint holders: an alternative is laid out by the holder's parent, so it takes the holder's flags.
+  for (const [n, v] of allocated) for (const a of n.alternatives ?? []) allocated.set(a, v);
+  for (const n of contentMinWidth) for (const a of n.alternatives ?? []) contentMinWidth.add(a);
+  // Containers whose subtree holds a holder read the band: `func v_x(_ band: Int)`. An app-mode scrolling root hosts
+  // `MarkswiftBands` inside its ScrollView (the offset survives a switch) unless a `fixed` overlay, a modifier outside
+  // the closure that binds `band`, holds a holder.
+  // ponytail: a root that is itself a holder and scrolls loses its scroll offset on a switch (each alternative has its
+  // own ScrollView). Hoist the ScrollView out of the alternatives if designs need it.
+  const bandParam = new Set<SemNode>();
+  let bandsInside: SemNode | undefined;
+  if (screen.breakpoints) {
+    const holds = new Map<SemNode, boolean>();
+    const holdsHolder = (n: SemNode): boolean => {
+      const known = holds.get(n);
+      if (known !== undefined) return known;
+      const inside = [
+        ...(n.alternatives ?? []),
+        ...n.overlays.map((o) => o.node),
+        ...(n.kind === "stack" || n.kind === "grid" ? n.children : []),
+        ...(n.kind === "control" ? [...(n.label ? [n.label] : []), ...n.content] : []),
+      ];
+      let found = !!n.alternatives;
+      for (const c of inside) found = holdsHolder(c) || found;
+      holds.set(n, found);
+      if (found && (n.kind === "stack" || n.kind === "grid")) bandParam.add(n);
+      return found;
+    };
+    const root = screen.root;
+    holdsHolder(root);
+    if (
+      opts.mode === "app" &&
+      (root.kind === "stack" || root.kind === "grid") &&
+      root.scroll &&
+      !root.alternatives &&
+      !root.overlays.some((o) => o.fixed && holdsHolder(o.node))
+    ) {
+      bandsInside = root;
+      bandParam.delete(root);
+    }
+  }
   const nameOf = new Map<SemNode, string>();
   for (const p of props) nameOf.set(p.node, p.name);
   // Control state pass: a control owns its value, so the view that holds it declares the storage.
-  const control = controlMembers(screen.root, opts.mode);
+  const control = controlMembers(screen.root, opts.mode, !!screen.breakpoints);
   const scaledFonts = new Map<string, string>();
   const ctx: EmitContext = {
     fontMetrics: opts.fontMetrics ?? {},
     nameOf,
     contentMinWidth,
     allocated,
+    bandParam,
+    bandsInside,
     shapes,
     images,
     screen,
@@ -65,13 +109,21 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
 
   const comment = (value: string) => value.replace(/[\r\n\u2028\u2029]/g, " ");
   // Body first: emitting it registers the `@ScaledMetric` font sizes declared above it.
-  const body = [`${acc}var body: some View {`, ...indent(refOf(screen.root, ctx), 1), "}"];
+  const top = refOf(screen.root, ctx);
+  const wrapped =
+    screen.breakpoints && !bandsInside
+      ? [`${bandsOpen(screen.breakpoints.edges)} { band in`, ...indent(top, 1), "}"]
+      : top;
+  const scheme = screen.colorScheme ? [`.environment(\\.colorScheme, .${screen.colorScheme})`] : [];
+  const body = [`${acc}var body: some View {`, ...indent([...wrapped, ...scheme], 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;
     body.push(
       "",
       `// ${comment(p.node.id)}`,
-      `private var ${p.name}: some View {`,
+      bandParam.has(p.node)
+        ? `private func ${p.name}(_ band: Int) -> some View {`
+        : `private var ${p.name}: some View {`,
       ...indent(containerExpr(p.node as StackNode | GridNode, ctx), 1),
       "}",
     );
@@ -113,11 +165,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   members.push(...decls);
   if (decls.length) members.push("");
   members.push(...init, "", ...body);
-  const preview = (theme: Theme, title: string) => [
+  const preview = (theme: Theme, title: string, args = "") => [
     `#Preview("${title}") {`,
     ...indent(
       [
-        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}()`] : [`${viewName}()`]),
+        ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}(${args})`] : [`${viewName}(${args})`]),
         `.frame(width: ${num(screen.size.w)}, height: ${num(screen.size.h)})`,
         `.background(Color.markswift(${colorArgs(theme === "dark" ? { r: 0.043, g: 0.055, b: 0.075, a: 1 } : { r: 0.957, g: 0.965, b: 0.98, a: 1 })}))`,
         `.preferredColorScheme(.${theme})`,
@@ -144,6 +196,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
+    // One preview per in-flow layer, shown open.
+    ...[...control.openStates].flatMap(([layer, state]) => [
+      "",
+      ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),
+    ]),
     ...(extraction?.previews.length ? ["", ...extraction.previews] : []),
   ];
   // After emission: `note()` may have regraded nodes for emit-time losses.
@@ -151,5 +208,6 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     if (n.confidence !== "mapped")
       report.push({ id: n.id, kind: n.kind, confidence: n.confidence, diagnostics: n.diagnostics });
   });
-  return { view: lines.join("\n") + "\n", shapes, images, report };
+  const openStates = control.openStates.size ? { openStates: Object.fromEntries(control.openStates) } : {};
+  return { view: lines.join("\n") + "\n", shapes, images, report, ...openStates };
 }

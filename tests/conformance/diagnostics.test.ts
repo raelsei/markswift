@@ -90,6 +90,17 @@ const animated = (extra: Partial<Anim>) => {
   return box({}, { motion: { animations: [{ ...anim, ...extra }] } });
 };
 
+/** A paragraph whose inline pseudo `tag` (styles `styles`) holds `children`, before its own text. */
+const pseudoImages = (tag: string, styles: Record<string, string>, children: LayoutNode[]): LayoutNode =>
+  box(
+    { "font-size": "16px", "line-height": "20px" },
+    {
+      tag: "p",
+      bounds: { x: 0, y: 0, w: 100, h: 20 },
+      children: [{ ...el(tag, {}, children, { display: "inline", ...styles }) }, text("Hello")],
+    },
+  );
+
 /** One row per feature the product does not reproduce: the input that loses it, and the diagnostic it must produce. */
 const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: LayoutNode }> = [
   { feature: "animation-name", level: "unmapped", node: box({ "animation-name": "spin" }) },
@@ -174,6 +185,27 @@ const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: 
     ),
   },
   { feature: "img", level: "unmapped", node: IMG },
+  {
+    feature: "content: url()",
+    level: "unmapped",
+    node: pseudoImages("::before", { content: 'url("data:text/plain,x")' }, [el("img", { src: "data:text/plain,x" })]),
+  },
+  {
+    feature: "content",
+    level: "approximated",
+    node: pseudoImages("::before", { content: 'url("data:image/png;base64,AAAA") url("data:image/png;base64,BBBB")' }, [
+      el("img", { src: "data:image/png;base64,AAAA" }),
+    ]),
+  },
+  {
+    feature: "list-style-image",
+    level: "approximated",
+    node: pseudoImages(
+      "::marker",
+      { content: "normal", "list-style-image": 'url("data:image/png;base64,AAAA")', "list-style-type": "disc" },
+      [text("• ")],
+    ),
+  },
   {
     feature: "@data-markswift-component",
     level: "approximated",

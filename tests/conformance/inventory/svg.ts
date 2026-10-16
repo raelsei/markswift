@@ -779,10 +779,10 @@ export default {
       group: "Fill",
       class: "mapped",
       target: ".fill(style: FillStyle(eoFill: true))",
-      ir: "SvgPath.eoFill (new)",
+      ir: "SvgPath.eoFill",
       via: "style",
-      impl: "no",
-      note: "`evenodd` (common in icon sets for holes) is not read, so donut icons render solid; needs a STYLE_WHITELIST entry and the FillStyle argument.",
+      impl: "yes",
+      note: "The computed value (a stylesheet rule or the presentation attribute; markup-only SVG reads the attribute chain); inside a `<use>` instance the attribute chain wins, since the target's computed style is its `<defs>` one.",
       spec: `${MDN_CSS}fill-rule`,
     },
 

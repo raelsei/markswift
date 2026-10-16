@@ -95,11 +95,12 @@ function colorSlots(n: SemNode): Slot[] {
       if (visible(t.fill)) out.push({ key: `text${i}`, role: "icon", color: t.fill });
     });
   }
-  // Text the emitter paints outside a `TextNode`: a control's own label/value colour and the
-  // alt text of a broken image. Both land in the view as a `.foregroundStyle`, so both are
-  // literals a token can replace.
+  // Text the emitter paints outside a `TextNode`: a control's own label/value colour, its
+  // placeholder prompt and the alt text of a broken image. All land in the view as a
+  // `.foregroundStyle`, so all are literals a token can replace.
   if (n.kind === "control" && visible(n.color)) out.push({ key: "control", role: "text", color: n.color });
   if (n.kind === "control" && visible(n.accent)) out.push({ key: "accent", role: "fill", color: n.accent });
+  if (n.kind === "control" && visible(n.promptColor)) out.push({ key: "prompt", role: "text", color: n.promptColor });
   if (n.kind === "image" && visible(n.color)) out.push({ key: "alt", role: "text", color: n.color });
   return out;
 }

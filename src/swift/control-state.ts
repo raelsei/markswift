@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { ControlNode, SemNode } from "../model/semantic.ts";
 import { walk } from "../model/semantic.ts";
 import type { ControlMembers, EmitMode, StatePaint } from "./context.ts";
@@ -38,15 +39,37 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
 
 /**
  * Every control's state property and every distinct action callback for one screen. Names come
- * from the node ids, so regenerating an unchanged design produces the same members.
+ * from the node ids, so regenerating an unchanged design produces the same members. `byId`
+ * (breakpoint screens): one element is a node per band alternative; its first node owns the
+ * value, toggle, pressed and focused members, every other node of that element reuses them.
  */
-export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
+export function controlMembers(root: SemNode, mode: EmitMode, byId = false): ControlMembers {
+  const firstOf = new Map<string, SemNode>();
+  const elementKey = (n: SemNode) => `${n.id}\u0000${n.kind}\u0000${n.kind === "control" ? n.control : ""}`;
+  // Ids that name different elements in different bands (script-driven DOM, reported by the merge): their id-keyed
+  // paint and label taps would land on the wrong element, so they are dropped.
+  // ponytail: the pressed look and label tap of such elements are lost; key them by element if a design needs them.
+  const keyOfId = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  if (byId)
+    walk(root, (n) => {
+      if (n.id === "" || n.alternatives) return;
+      const key = elementKey(n);
+      if (!firstOf.has(key)) firstOf.set(key, n);
+      if ((keyOfId.get(n.id) ?? key) !== key) ambiguous.add(n.id);
+      keyOfId.set(n.id, key);
+    });
+  const canon = (n: SemNode) => (byId && n.id !== "" && !n.alternatives ? firstOf.get(elementKey(n))! : n);
   const stateOf = new Map<SemNode, string>();
   const actionOf = new Map<string, string>();
   const members: ControlMembers["members"] = [];
   const activate = new Map<string, string>();
   const radioTag = new Map<SemNode, string>();
   const toggleOf: ControlMembers["toggleOf"] = new Map();
+  const openOf: ControlMembers["openOf"] = new Map();
+  const openStates = new Map<string, string>();
+  /** Node with `opens` → its shown state: the condition of the open look under it. */
+  const opener = new Map<SemNode, string>();
   const seen: Record<string, number> = {};
   // Radios sharing a form owner and a `name` hold one `String` selection, named after the `name`:
   // each radio's tag is its `value` when the group's values are unique, else its position. HTML:
@@ -58,6 +81,7 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const ariaToggles = new Set<SemNode>();
   const ariaGroups = new Map<string, SemNode[]>();
   walk(root, (n) => {
+    if (canon(n) !== n) return;
     if (n.a11y?.toggle && n.action && (n.kind !== "control" || (n.control === "button" && !n.files))) {
       ariaToggles.add(n);
       const g = n.a11y.group;
@@ -85,6 +109,31 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
         type: "() -> Void",
         decl: [`/// ${a.origin}`, `var ${name}: () -> Void = {}`],
       });
+    }
+    const first = canon(n);
+    if (first !== n) {
+      const state = stateOf.get(first);
+      const tag = radioTag.get(first);
+      const toggle = toggleOf.get(first);
+      const open = openOf.get(first);
+      if (state !== undefined) stateOf.set(n, state);
+      if (tag !== undefined) radioTag.set(n, tag);
+      if (toggle !== undefined) toggleOf.set(n, toggle);
+      if (open !== undefined) openOf.set(n, open);
+      return;
+    }
+    // An in-flow layer's shown state: the screen owns it, seeded through `init` so a preview can open it. A
+    // `<details>` binds its DisclosureGroup to it; any other trigger flips it on tap, then runs its action.
+    if (n.opens) {
+      const name = memberName("is", n.opens.layer, seen, "Layer", "Expanded");
+      const disclosure = n.kind === "control" && n.control === "disclosure";
+      const seed = disclosure && n.expanded ? "true" : "false";
+      members.push({ name, kind: "open", type: "Bool", seed, decl: [] });
+      openStates.set(n.opens.layer, name);
+      opener.set(n, name);
+      if (disclosure) stateOf.set(n, name);
+      else openOf.set(n, { state: name, tap: [`${name}.toggle()`, `${actionOf.get(n.action!.key)}()`] });
+      return;
     }
     const ax = n.a11y;
     if (ax && ariaToggles.has(n)) {
@@ -179,23 +228,35 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
   const statePaint = new Map<string, StatePaint>();
   const pressOf = new Map<SemNode, string>();
   const focusOf = new Map<SemNode, string>();
-  const visit = (n: SemNode, owner: SemNode | undefined): void => {
+  const visit = (n: SemNode, owner: SemNode | undefined, openOwner: SemNode | undefined): void => {
     const pressable =
       n.kind === "control"
         ? !n.disabled && (n.control === "button" || (n.control === "link" && !!n.action))
         : !!n.action && !n.action.gesture && !n.a11y?.disabled;
     const own = pressable ? n : owner;
+    const opens = n.opens ? n : openOwner;
     const pressed = n.states?.pressed;
     if (pressed && n.id) {
       if (own) {
-        let name = pressOf.get(own);
+        let name = pressOf.get(own) ?? pressOf.get(canon(own));
         if (name === undefined) {
           name = memberName("is", own.action?.words ?? own.id, seen, "Control", "Pressed");
           members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftPressed private var ${name}`] });
-          pressOf.set(own, name);
         }
-        statePaint.set(n.id, pairStyle(n, pressed, name));
+        pressOf.set(own, name);
+        statePaint.set(n.id, pairStyle(n, pressed, name, "pressed"));
       } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
+    }
+    // The open look follows the layer's state; without an owner (fidelity, a skipped layer) it is not drawn.
+    const open = n.states?.open;
+    const shown = opens && opener.get(opens);
+    if (open && n.id && shown) {
+      const press = statePaint.get(n.id);
+      if (press && isDeepStrictEqual(pressed, open)) press.cond = `(${press.cond} || ${shown})`;
+      else {
+        if (press) note(n, "approximated", ":active", "pressed look of an open-state trigger is not reproduced");
+        statePaint.set(n.id, pairStyle(n, open, shown, "open"));
+      }
     }
     const focused = n.states?.focused;
     const field =
@@ -205,20 +266,28 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
     if (focused && n.id && !field)
       note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
     if (field && n.id && (focused || labelled.has(n.id))) {
-      const name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
-      members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      let name = focusOf.get(canon(n));
+      if (name === undefined) {
+        name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Focused");
+        members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      }
       focusOf.set(n, name);
-      if (focused) statePaint.set(n.id, pairStyle(n, focused, name));
+      if (focused) statePaint.set(n.id, pairStyle(n, focused, name, "focused"));
       if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);
     }
-    for (const o of n.overlays) visit(o.node, own);
-    if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own);
+    for (const a of n.alternatives ?? []) visit(a, own, opens);
+    for (const o of n.overlays) visit(o.node, own, opens);
+    if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) visit(c, own, opens);
     if (n.kind === "control") {
-      if (n.label) visit(n.label, own);
-      for (const c of n.content) visit(c, own);
+      if (n.label) visit(n.label, own, opens);
+      for (const c of n.content) visit(c, own, opens);
     }
   };
-  visit(root, undefined);
+  visit(root, undefined, undefined);
+  for (const id of ambiguous) {
+    statePaint.delete(id);
+    activate.delete(id);
+  }
   return {
     decls: members.flatMap((m) => m.decl),
     members,
@@ -227,6 +296,8 @@ export function controlMembers(root: SemNode, mode: EmitMode): ControlMembers {
     activate,
     radioTag,
     toggleOf,
+    openOf,
+    openStates,
     statePaint,
     pressOf,
     focusOf,

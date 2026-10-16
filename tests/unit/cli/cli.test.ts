@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inlineRelativeUrls } from "../../../src/cli/css.ts";
+import { parseArgs, UsageError } from "../../../src/cli/args.ts";
 import { writeBundle } from "../../../src/cli/output.ts";
 import { VERSION } from "../../../src/model/version.ts";
 
@@ -157,6 +158,36 @@ test("CLI theme defaults to adaptive and passes the dark class through", async (
   const result = await invoke("convert", "card.html", "--theme", "both", "--out", "generated");
   expect(result.code).toBe(2);
   expect(result.stderr).toContain("--theme must be adaptive, light or dark");
+});
+
+test("--breakpoints takes auto or a comma list of WIDTH or WIDTHxHEIGHT", async () => {
+  const parsed = (value: string) => {
+    const command = parseArgs([
+      "convert",
+      "card.html",
+      "--out",
+      "generated",
+      "--height",
+      "900",
+      "--breakpoints",
+      value,
+    ]);
+    if (command.kind !== "convert") throw new Error("expected a conversion");
+    return command.options.breakpoints;
+  };
+  expect(parsed("auto")).toBe(true);
+  expect(parsed("390,834x1210")).toEqual({
+    devices: [
+      { width: 390, height: 900 },
+      { width: 834, height: 1210 },
+    ],
+  });
+  for (const bad of ["0", "abc"]) {
+    expect(() => parsed(bad)).toThrow(UsageError);
+    expect(() => parsed(bad)).toThrow("--breakpoints must be auto or a comma list of WIDTH or WIDTHxHEIGHT");
+  }
+  const plain = parseArgs(["convert", "card.html", "--out", "generated"]);
+  expect(plain.kind === "convert" && "breakpoints" in plain.options).toBe(false);
 });
 
 test("--css url()s relative to the CSS file are inlined as data URLs", async () => {

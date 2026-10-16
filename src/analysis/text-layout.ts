@@ -125,34 +125,45 @@ export function trimRun(b: MeasuredTextRun, edge: RegExp): void {
   else b.src.length = b.src.length - cut;
 }
 
+/** Unicode controls per computed `unicode-bidi` of an inline box: [ltr open, rtl open, close]. */
+const BIDI_CONTROLS: Record<string, [string, string, string]> = {
+  embed: ["\u202A", "\u202B", "\u202C"],
+  isolate: ["\u2066", "\u2067", "\u2069"],
+  "bidi-override": ["\u202D", "\u202E", "\u202C"],
+  "isolate-override": ["\u2066\u202D", "\u2067\u202E", "\u202C\u2069"],
+  plaintext: ["\u2068", "\u2068", "\u2069"],
+};
+
 /**
- * The UA's `unicode-bidi` of an element: `<bdo>` isolates and overrides, `<bdi>`, `<output>` and any
- * `[dir]` isolate. A text host's own `<bdo>` only overrides: isolating the whole paragraph would hide
- * its strong characters from the base-direction rule. ponytail: tag and `dir` only; an author
- * `unicode-bidi` (`span { unicode-bidi: bidi-override }`) is not captured — LayoutDoc 4.
+ * The bidi controls of an element's computed `unicode-bidi`, in its computed `direction`. Only inline boxes count:
+ * Blink's UA sheet gives every block `isolate`, which CSS ignores on a block container. A text host keeps only the
+ * override of `bidi-override`/`isolate-override` (it applies to the host's inline content); isolating the whole
+ * paragraph would hide its strong characters from the base-direction rule. ponytail: a host's `plaintext` (base
+ * direction per paragraph from its first strong character) is not mapped; Core Text takes it from the layout
+ * direction. Map it with an FSI around the host's runs if a design needs it. `::marker` boxes get nothing: their
+ * UA `isolate` would wrap list and `<summary>` markers, which stay raw (051's `counterOf`, controls.ts `MARKER`).
  */
-function bidiOf(el: LayoutNode, host: boolean): { isolate: boolean; override: boolean } | undefined {
-  if (el.tag === "bdo") return { isolate: !host, override: true };
-  if (host || (el.tag !== "bdi" && el.tag !== "output" && el.attrs["dir"] === undefined)) return undefined;
-  return { isolate: true, override: false };
+function bidiOf(el: LayoutNode, host: boolean): { open: string; close: string } | undefined {
+  if (el.tag === "::marker") return undefined;
+  const value = el.styles["unicode-bidi"] ?? "normal";
+  const c = host
+    ? value.endsWith("override")
+      ? BIDI_CONTROLS["bidi-override"]
+      : undefined
+    : el.styles["display"] === "inline"
+      ? BIDI_CONTROLS[value]
+      : undefined;
+  return c && { open: c[el.styles["direction"] === "rtl" ? 1 : 0], close: c[2] };
 }
 
 /**
- * Bidi isolation and override as Unicode controls around each element's runs: SwiftUI has no
+ * Computed `unicode-bidi` as Unicode controls around each element's runs: SwiftUI has no
  * per-run direction, and Core Text runs UAX #9 over the controls (LRI/RLI…PDI, LRO/RLO…PDF). The
  * direction is the computed one, which Chrome already resolved for `dir=auto` from the content.
  * Call after trimming and before `markLineBreaks`; the controls map to no source index.
  */
 export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
-  const marks = (el: LayoutNode, isHost: boolean) => {
-    const b = bidiOf(el, isHost)!;
-    const rtl = el.styles["direction"] === "rtl";
-    return {
-      open: (b.isolate ? (rtl ? "\u2067" : "\u2066") : "") + (b.override ? (rtl ? "\u202E" : "\u202D") : ""),
-      close: (b.override ? "\u202C" : "") + (b.isolate ? "\u2069" : ""),
-    };
-  };
-  const own = bidiOf(host, true) ? marks(host, true) : undefined;
+  const own = bidiOf(host, true);
   const edit = (b: MeasuredTextRun, s: string, end: boolean) => {
     if (!s) return;
     b.run.text = end ? b.run.text + s : s + b.run.text;
@@ -171,7 +182,7 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
         open
           .slice(keep)
           .reverse()
-          .map((el) => marks(el, false).close)
+          .map((el) => bidiOf(el, false)!.close)
           .join(""),
         true,
       );
@@ -179,7 +190,7 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
       b,
       chain
         .slice(keep)
-        .map((el) => marks(el, false).open)
+        .map((el) => bidiOf(el, false)!.open)
         .join(""),
       false,
     );
@@ -191,7 +202,7 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
     last,
     open
       .reverse()
-      .map((el) => marks(el, false).close)
+      .map((el) => bidiOf(el, false)!.close)
       .join(""),
     true,
   );
@@ -217,6 +228,7 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
  */
 export function markLineBreaks(built: MeasuredTextRun[]): void {
   let prev: Rect | undefined;
+  let prevBase = 0;
   let prevShift = 0;
   let explicit = false;
   for (const b of built) {
@@ -241,8 +253,10 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
     if (!first || first.h <= 0) continue;
     const breaks: number[] = [];
     const shift = b.run.baselineOffset ?? 0;
+    // A generated image sits on the baseline with its bottom edge (CSS and SwiftUI alike).
+    const lineBase = (r: Rect) => (b.run.image ? r.y + r.h : r.y + ASCENT_RATIO * r.h);
     if (prev && !explicit && !/^[ \t]*\n/.test(b.run.text)) {
-      const drop = first.y + ASCENT_RATIO * first.h + shift - (prev.y + ASCENT_RATIO * prev.h + prevShift);
+      const drop = lineBase(first) + shift - (prevBase + prevShift);
       // A collapsible space the wrap consumed becomes the newline; offset 0 would indent the line.
       const at = b.run.text.startsWith(" ") && collapseOf(b.styleOf.styles) !== "preserve" ? 1 : 0;
       if (drop >= Math.max(2, first.h * 0.05, prev.h * 0.05) && at < b.run.text.length) breaks.push(at);
@@ -254,6 +268,7 @@ export function markLineBreaks(built: MeasuredTextRun[]): void {
       if (at > 0 && at < b.run.text.length && breaks[breaks.length - 1] !== at) breaks.push(at);
     }
     prev = starts[starts.length - 1]!.bounds;
+    prevBase = lineBase(prev);
     prevShift = shift;
     explicit = /\n[ \t]*$/.test(b.run.text);
     if (breaks.length) b.run.breaks = breaks;
@@ -282,6 +297,7 @@ export function markBaselineShifts(
     const ref = built.find(
       (o) =>
         o !== b &&
+        !o.run.image &&
         o.run.font.size === hostSize &&
         o.node.bounds.y < b.node.bounds.y + b.node.bounds.h &&
         b.node.bounds.y < o.node.bounds.y + o.node.bounds.h,
@@ -292,7 +308,9 @@ export function markBaselineShifts(
     }
     const a = ref.node.bounds;
     const s = b.node.bounds;
-    const offset = round2(a.y + ASCENT_RATIO * a.h - (s.y + ASCENT_RATIO * s.h));
+    // An image run's baseline is its bottom edge.
+    const sb = b.run.image ? s.y + s.h : s.y + ASCENT_RATIO * s.h;
+    const offset = round2(a.y + ASCENT_RATIO * a.h - sb);
     if (Math.abs(offset) >= 0.5) b.run.baselineOffset = offset;
   }
 }

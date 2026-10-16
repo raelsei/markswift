@@ -309,7 +309,7 @@ export class BrowserCapture {
           )
         : [];
       const hiddenOnOpen = !!opening && roots.length > 0 && !opening.hidden && (await rootHidden(page, rootSel));
-      const conditional = await readConditionalRules(page, spec.root, viewport.width);
+      const conditional = await readConditionalRules(page, spec.root, viewport.width, spec.breakpoints);
       const { sizes, pseudoStyles } = await readPreferredSizes(page, spec.root);
       const layerSizes = await Promise.all(roots.map((_, i) => readPreferredSizes(page, `[${LAYER_MARK}="${i}"]`)));
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };

@@ -64,6 +64,33 @@ nativeTest(
 );
 
 nativeTest(
+  "font axes: a system font-stretch width and markswiftVariable(axes:) typecheck in both modes",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-native-axes-"));
+    try {
+      for (const mode of ["app", "fidelity"] as const) {
+        const result = await convertHtml('<main data-markswift-root><p style="font-stretch:75%">Narrow</p></main>', {
+          name: "AxesCard",
+          mode,
+        });
+        if (mode === "app") expect(result.code).toContain(".width(Font.Width(-0.1))");
+        const output = join(directory, mode);
+        for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
+        await Bun.write(
+          join(output, "Axes.swift"),
+          'import SwiftUI\nfunc axesProbe() -> Font { .markswiftVariable("Geist", size: 14, weight: 650, axes: ["wdth": 80]) }\n',
+        );
+        const check = await typecheck(output);
+        if (!check.ok) throw new Error(check.output);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
+
+nativeTest(
   "public conversion renders on macOS in both modes",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-mac-"));
@@ -150,15 +177,17 @@ nativeTest(
       );
       expect((await command(["vtool", "-show-build", join(app, "Render")])).includes("IOSSIMULATOR")).toBe(true);
       expect(await Bun.file(join(app, "Info.plist")).exists()).toBe(true);
+      // The same view twice (an `@open` capture beside its rest capture) is fine; two different files of one name are not.
+      const changed = { ...a, files: { ...a.files, "ExampleCardApp.swift": `${a.code}// changed\n` } };
       await expect(
         buildRenderApp(
           [
             { result: a, output: "/tmp/a.png" },
-            { result: a, output: "/tmp/b.png" },
+            { result: changed, output: "/tmp/b.png" },
           ],
           join(directory, "dup"),
         ),
-      ).rejects.toThrow("duplicate generated file");
+      ).rejects.toThrow("duplicate generated file ExampleCardApp.swift");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -665,7 +694,7 @@ const FAMILIES: Array<{
   {
     name: "ControlsFamily",
     html: '<input type="text" placeholder="Name"><input type="checkbox" checked><input type="radio" name="r" checked><input type="range" value="30"><input type="date" value="2026-10-10"><input type="color" value="#2563eb"><input type="file"><input type="number" value="3"><select><option>One</option><option selected>Two</option></select><textarea>Notes</textarea><textarea placeholder="Note"></textarea><input type="time" value="10:30"><input type="datetime-local" value="2026-10-10T09:15"><input type="submit" value="Send"><input type="range" value="20" style="accent-color:#e11d48"><select style="appearance:none"><option>A</option></select><progress value="40" max="100"></progress><meter value="0.6"></meter><details open><summary>More</summary><p>Body</p></details><button>Save</button><a href="https://example.com">Link</a>',
-    css: "main{display:flex;flex-direction:column;gap:6px;padding:8px}",
+    css: "main{display:flex;flex-direction:column;gap:6px;padding:8px}input::placeholder,textarea::placeholder{color:rgb(200,0,0)}",
     app: [
       "Slider(",
       "DatePicker(",
@@ -679,6 +708,7 @@ const FAMILIES: Array<{
       ".hourAndMinute",
       ".markswiftTextEditorInsets()",
       'Text(verbatim: "Send")',
+      'prompt: Text(verbatim: "Name").foregroundStyle(',
     ],
   },
   {

@@ -11,7 +11,7 @@ export interface ConversionCommand {
   palettePath?: string;
   update: boolean;
   force: boolean;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport">;
+  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints">;
 }
 
 export interface BuildCommand {
@@ -55,6 +55,7 @@ Options:
   --mode <value>    app or fidelity (default: app)
   --palette <file>  JSON map from CSS variables or hex colours to app colours
                     (e.g. {"--primary": "Color.accentColor"})
+  --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
   -h, --help        Show this help
   -v, --version     Show version
 
@@ -73,6 +74,7 @@ const valueFlags = new Set([
   "--dark-class",
   "--mode",
   "--palette",
+  "--breakpoints",
 ]);
 
 export function parseArgs(args: string[]): Command {
@@ -137,6 +139,21 @@ export function parseArgs(args: string[]): Command {
   if (darkClass !== undefined && !/^\S+$/.test(darkClass))
     throw new UsageError("--dark-class must be a single class name");
   if (mode !== "app" && mode !== "fidelity") throw new UsageError("--mode must be app or fidelity");
+  const bands = values.get("--breakpoints");
+  const breakpoints =
+    bands === undefined
+      ? undefined
+      : bands === "auto"
+        ? (true as const)
+        : {
+            devices: bands.split(",").map((device) => {
+              const m = /^(\d+)(?:x(\d+))?$/.exec(device);
+              const size = m && { width: Number(m[1]), height: m[2] === undefined ? height : Number(m[2]) };
+              if (!size || !(size.width > 0 && size.height > 0))
+                throw new UsageError("--breakpoints must be auto or a comma list of WIDTH or WIDTHxHEIGHT");
+              return size;
+            }),
+          };
   return {
     kind: "convert",
     source,
@@ -145,7 +162,15 @@ export function parseArgs(args: string[]): Command {
     palettePath: values.get("--palette"),
     update: flags.has("--update"),
     force: flags.has("--force"),
-    options: { name, root: values.get("--root"), theme, darkClass, mode, viewport: { width, height } },
+    options: {
+      name,
+      root: values.get("--root"),
+      theme,
+      darkClass,
+      mode,
+      viewport: { width, height },
+      ...(breakpoints ? { breakpoints } : {}),
+    },
   };
 }
 

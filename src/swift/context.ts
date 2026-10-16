@@ -10,6 +10,8 @@ export interface SwiftOutput {
   images: Record<string, Uint8Array>;
   /** Nodes whose confidence is not `mapped`, with what each lost. */
   report: Array<{ id: string; kind: string; confidence: Confidence; diagnostics: Diagnostic[] }>;
+  /** App mode: in-flow layer id → its `init` label; absent when nothing opens. */
+  openStates?: Record<string, string>;
 }
 
 /**
@@ -56,6 +58,10 @@ export interface EmitContext extends ColorCtx {
    * cell (MarkswiftTracks) takes the proposed height and fits its content's width.
    */
   allocated: Map<SemNode, "width" | "height" | "both">;
+  /** Breakpoint screens: containers whose subtree holds a band holder, emitted as `func v_x(_ band: Int)`. */
+  bandParam: Set<SemNode>;
+  /** Breakpoint screens: the app-mode scrolling root that hosts `MarkswiftBands` inside its `ScrollView`. */
+  bandsInside?: SemNode;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */
@@ -114,10 +120,17 @@ export interface ControlMembers {
   decls: string[];
   /**
    * Every member in emission order; `value` = design state (`@State private`), `action` =
-   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029). `decls` is
+   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029), `open` = an
+   * in-flow layer's shown state, an `init`-seeded `@State` (`seed`). `decls` is
    * `members.flatMap(m => m.decl)`.
    */
-  members: Array<{ name: string; kind: "value" | "action" | "ephemeral"; type: string; decl: string[] }>;
+  members: Array<{
+    name: string;
+    kind: "value" | "action" | "ephemeral" | "open";
+    type: string;
+    decl: string[];
+    seed?: string;
+  }>;
   stateOf: Map<SemNode, string>;
   /** `Action.key` → callback member. */
   actionOf: Map<string, string>;
@@ -131,6 +144,10 @@ export interface ControlMembers {
    * `aria-checked="mixed"` follows (`Bool?` state, `nil` = mixed).
    */
   toggleOf: Map<SemNode, { tap: string[]; on: string; mixed?: string }>;
+  /** A trigger Button of an in-flow layer → its shown state and what its tap runs (toggle, then the action). */
+  openOf: Map<SemNode, { state: string; tap: string[] }>;
+  /** In-flow layer id → its shown state (the `if` around content with that `shownBy`). */
+  openStates: Map<string, string>;
   /** Node id → its interaction-state paint (pressed under the nearest Button, focused on a text field). */
   statePaint: Map<string, StatePaint>;
   /** Pressable owner → its `@MarkswiftPressed` member. */

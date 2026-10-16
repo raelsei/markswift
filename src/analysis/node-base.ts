@@ -5,13 +5,15 @@ import { parseDeclared } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
 import { stateStylesOf, styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
-import { insetsOf, relativeOffset } from "./geometry.ts";
+import { insetsOf, relativeOffset, renders } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
 import { isInlineText, textContent } from "./text-runs.ts";
+import { PSEUDO, undrawnImages } from "./generated.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
 import { motionOf } from "./motion.ts";
+import { titleOf } from "./tooltips.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -21,6 +23,30 @@ export function finish<T extends SemNode>(node: T): T {
 export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: InferenceContext, extra: T): SemNode {
   const base = makeBase(n, ctx, parseDeclared(n.attrs["style"]));
   return finish({ ...base, ...extra } as unknown as SemNode);
+}
+
+const passing = new WeakMap<LayoutNode, boolean>();
+/**
+ * The element and every rendered element below it compute `pointer-events: none` (an `auto` descendant stays
+ * hittable in CSS). `pointer-events` inherits: a child with no key and no children (046's synthetic pseudo `img`,
+ * `styles: {}`) passes under a `none` parent.
+ */
+export function passesTaps(n: LayoutNode): boolean {
+  let v = passing.get(n);
+  if (v === undefined)
+    passing.set(
+      n,
+      (v =
+        n.styles["pointer-events"] === "none" &&
+        n.children.every(
+          (c) =>
+            c.tag === "#text" ||
+            !renders(c) ||
+            (c.styles["pointer-events"] === undefined && !c.children.length) ||
+            passesTaps(c),
+        )),
+    );
+  return v;
 }
 
 export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<string, string>): SemBase {
@@ -59,6 +85,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   padding[2] = trailingInset(n, height, padding[2]);
   const relative = relativeOffset(n, ctx.parent);
   for (const loss of relative.losses) addDiagnostic(diagnostics, "approximated", "position: relative", loss);
+  const undrawn = PSEUDO[n.tag] ? undrawnImages(n) : undefined;
+  if (undrawn) addDiagnostic(diagnostics, "approximated", undrawn.feature, undrawn.message);
   const [rx, ry] = relative.offset;
   const a11y = a11yOf(n, ctx);
   // Native controls get their action in `controlOf`; everything else the design makes activatable here.
@@ -68,6 +96,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const labelFor = ctx.labels?.activates.get(n)?.id;
   const hint = nameHintOf(n.tag, n.attrs);
   const field = fieldOf(n.attrs);
+  const tooltip = titleOf(n);
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -89,6 +118,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
     ...(motion ? { motion } : {}),
+    ...(passesTaps(n) ? { hitTesting: false as const } : {}),
+    ...(tooltip ? { tooltip } : {}),
   };
 }
 
@@ -137,5 +168,6 @@ function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
   if (role === "button" && n.tag !== "button") out.trait = "isButton";
   else if (role === "link" && n.tag !== "a") out.trait = "isLink";
   else if (role === "img") out.trait = "isImage";
+  else if (n.tag === "th" || role === "columnheader" || role === "rowheader") out.trait = "isHeader";
   return Object.keys(out).length ? out : undefined;
 }

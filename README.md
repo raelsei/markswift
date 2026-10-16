@@ -52,8 +52,10 @@ stylesheet, and `--url http://localhost:5173/card --root '#preview'` for a runni
 Options (`npx markswift convert --help`): `--out <dir>` (required), `--update`, `--force`, `--name <Name>` (default
 `ConvertedView`), `--root <selector>`, `--width`/`--height` (default 390 × 844),
 `--theme adaptive|light|dark` (default `adaptive`), `--dark-class <name>`, `--mode app|fidelity`
-(default `app`), `--css <file>`, `--url <url>`. Exit status: 0 converted, 2 invalid options or hand-edited files
-refused by `--update`, 1 conversion or file error. Warnings and diagnostics go to stderr.
+(default `app`), `--css <file>`, `--url <url>`, `--breakpoints <auto|W[xH],…>` (one capture per CSS width band — auto:
+390, 834×1210, 1210×834, 1376×1032 — and one view that switches at the CSS thresholds). Exit status: 0 converted,
+2 invalid options or hand-edited files refused by `--update`, 1 conversion or file error. Warnings and diagnostics go
+to stderr.
 
 ## What you get
 
@@ -91,6 +93,8 @@ TeamCards(onMessage: { card in print("message", card.title) }) // card: TeamCard
   buttons were named after their own captions); other actions are `() -> Void`.
 - State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
   Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
+- Extracted ordered-list rows derive their marker from the row index: the marker string field is gone from the row
+  type and the row subview takes `ordinal: Int`.
 - Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first
   non-utility class, else the nearest heading plus a tag noun (`li` → `Row`, `article` → `Card`, else `Item`). Fields use
   `data-markswift-field`, then `data-slot`/class, then their kind (`title`, `text`, `foregroundColor`, `isOn`, …).
@@ -153,19 +157,26 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   recompiles a saved `LayoutDoc` (version 4) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
   cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
   and rejects any other with an error naming both versions — recapture the source. A change to the captured style
-  list or the schema bumps the LayoutDoc version and is a breaking release.
+  list or the schema bumps the LayoutDoc version and is a breaking release. `compileLayout(layout, { variants,
+  darkVariants, variantProbes })` compiles saved width-band captures (ascending, `layout` is band 0) into one view.
 - Options: `name`, `mode` (`app` | `fidelity`), `theme` (`adaptive` | `light` | `dark`),
   `darkClass`, `css` (compiled CSS), `root` (default `[data-markswift-root]`, otherwise `body`),
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion), `breakpoints` (`true` or
-  `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`). Open states need no option: triggers
+  `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`, and emits one view whose differing
+  elements switch at the CSS thresholds through `MarkswiftBands`). Open states need no option: triggers
   are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native `popovertarget`/`commandfor`/`interestfor`/
   `<details>`, shadcn `data-slot`, `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
-  in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`, not yet emitted.
+  in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`. App mode emits the in-flow ones (a
+  closed `<details>`, collapsible or accordion item): the content sits behind an `is<Name>Expanded` state seeded
+  through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Other
+  layers are not yet emitted.
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
-  the view does not follow, font packaging, light/dark pairing), `layout` and, for adaptive conversions, `darkLayout`;
-  with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`).
+  the view does not follow, font packaging, light/dark pairing, width-band merging), `layout` and, for adaptive
+  conversions, `darkLayout`;
+  with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`);
+  in app mode with an in-flow layer, `openStates` (layer id → its `init` label).
 
 ## Modes
 
@@ -319,6 +330,8 @@ Read the table with these limits:
   `tests/conformance/visual-policy-{ios,mac}.json` (`families`), raised by `bun run quality --ratchet`
   on each reviewed rebaseline and never lowered. The gate also fails a capture that drops more than
   0.005 below its baseline or misses an anchor.
+- `<case>-390-<theme>-app@open:<layer>` captures check each in-flow layer open: Chrome's page with the trigger
+  clicked against the view initialised with `is<Name>Expanded: true`; they count toward their family floor.
 - Chrome renders `ui-monospace`, `ui-serif` and `ui-rounded` with other faces than iOS (SF Mono,
   New York, SF Rounded), which depresses the `font-family` scores.
 
@@ -334,12 +347,13 @@ mapped, approximated or unmapped in `diagnostics`.
 
 - Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
   fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
-- iOS behaviour suite (`bun run test:ios-behaviour`, 19 curated component fixtures in the iOS simulator, on `v*` tags,
-  weekly and on dispatch): the accessibility tree, Apple's accessibility audit (Dynamic Type, clipped text, element
-  descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
-  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, interaction (toggles, text fields, pickers
-  and every action closure is called), and motion: an animated view moves on its live clock, and under Reduce Motion
-  it moves only when something should still move (see Motion).
+- iOS behaviour suite (`bun run test:ios-behaviour`, 19 curated component fixtures and a `pointer-events: none`
+  tap-through case in the iOS simulator, on `v*` tags, weekly and on dispatch): the accessibility tree, Apple's
+  accessibility audit (Dynamic Type, clipped text, element descriptions, traits; hit regions are reported, not
+  failing), Dynamic Type at xSmall, large and AX5 plus the root height at AX3 against Chrome scaled to AX3,
+  right-to-left mirroring, interaction (toggles, text fields, pickers and every action closure is called), and motion:
+  an animated view moves on its live clock, and under Reduce Motion it moves only when something should still move
+  (see Motion).
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
@@ -358,7 +372,8 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
   columns; `auto`/px rows and one `grid-auto-rows` value; `justify-self`/`justify-items`) whose items overlap, use
   template line names or implicit columns, flow by column or densely, or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
-- Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
+- Tables outside the `MarkswiftTable` subset (right-to-left, `visibility: collapse`, anonymous rows or cells, a separated table whose rows paint, a row or row group with `onclick`, a `role`, `aria-*` or `tabindex`, cells off the column/row lattice): `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
+- Auto-layout tables (`MarkswiftTable`): `approximated table-layout: auto table layout → captured column widths scale with the offered width; CSS min-/max-content column sizing is not reproduced`.
 - Percentage relative offsets: `approximated position: relative: left 10% → offset pinned at 34.3px`.
 
 Absolutely and fixed-positioned boxes attach to the corner CSS anchored them to, with their
@@ -379,10 +394,14 @@ fixture's `markswift-motion` metas) and score them in the `motion@app` family.
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- Breakpoint branching: one viewport and one layout per capture, media and container queries are not reconstructed
-  (iPad and landscape layouts included). Paint-only pressed and focused deltas *are* captured; other states (hover
-  only, disabled, validation, open/checked, `data-state` variants) are not.
+- Breakpoint branching without `--breakpoints`: one viewport and one layout per capture. With it, CSS width media
+  queries switch the view at the root's proposed width; height, orientation and container queries are reported, a
+  fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band. Paint-only
+  pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or accordion
+  item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
 - Dialogs and popovers.
+- Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
+  (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - CSS transitions on pressed/focused looks (captured at their end state, reported); scroll-driven animations,
   keyframed colours/shadows/filters/layout properties, `@starting-style` and script animations (reported).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
@@ -394,12 +413,19 @@ fixture's `markswift-motion` metas) and score them in the `motion@app` family.
 
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
-- `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
-- An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
-  the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
+- Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
+  `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
+  fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
+  `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
+  descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
+  hit it.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.
+- Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
+  Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
+  offset, so such lists stay unrolled instead of a `ForEach`.
+- Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
@@ -477,10 +503,10 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants;
+- Dialogs and popovers; validation and `data-state` variants;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
-- `<select multiple>`, `<datalist>`, an author `unicode-bidi`.
+- `<select multiple>`, `<datalist>`.
 - Linux capture; a compiled binary and Homebrew; no Python dependency for fonts; a capture cache; a shared browser
   for single conversions; browser-response font bytes; variable-font instances.
 - Remote image download, @2x images and asset catalogs.

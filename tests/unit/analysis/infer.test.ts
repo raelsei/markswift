@@ -6,7 +6,8 @@ import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode, Rect } from "../../../src/model/layout.ts";
-import type { ControlNode, SemNode, StackNode, TextNode } from "../../../src/model/semantic.ts";
+import type { ControlNode, GridNode, SemNode, StackNode, TextNode } from "../../../src/model/semantic.ts";
+import { collapsed, doc as tableDoc, separated } from "../../helpers/tables.ts";
 
 const INHERITED = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
 
@@ -83,29 +84,72 @@ describe("text groups", () => {
     expect(texts[0]?.runs.map((r) => r.text)).toEqual(["hello"]);
   });
 
-  test("bdo overrides and bdi isolates their runs with Unicode bidi controls, in the computed direction", () => {
-    const inline = (tag: string, dir: string, text: string, x: number, attrs: Record<string, string> = {}) =>
-      el(
-        tag,
-        { x, y: 0, w: 40, h: 20 },
-        { display: "inline", direction: dir },
-        [textNode(text, { x, y: 3, w: 40, h: 14 })],
-        attrs,
-      );
-    const p = el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
-      textNode("a ", { x: 0, y: 3, w: 10, h: 14 }),
-      inline("bdo", "rtl", "rev", 10, { dir: "rtl" }),
-      textNode(" b ", { x: 50, y: 3, w: 10, h: 14 }),
-      inline("bdi", "ltr", "iso", 60),
-      textNode(" c ", { x: 100, y: 3, w: 10, h: 14 }),
-      inline("span", "rtl", "sp", 110, { dir: "rtl" }),
-      textNode(" d", { x: 150, y: 3, w: 10, h: 14 }),
-    ]);
+  const inline = (tag: string, dir: string, bidi: string | undefined, text: string, x: number, attrs = {}) =>
+    el(
+      tag,
+      { x, y: 0, w: 40, h: 20 },
+      { display: "inline", direction: dir, ...(bidi ? { "unicode-bidi": bidi } : {}) },
+      [textNode(text, { x, y: 3, w: 40, h: 14 })],
+      attrs,
+    );
+  const runsOf = (children: LayoutNode[], host: Record<string, string> = {}) => {
+    const p = el(
+      "p",
+      { x: 0, y: 0, w: 300, h: 20 },
+      { display: "block", "unicode-bidi": "isolate", ...host },
+      children,
+    );
     const root = el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [p]);
     const text = flatten(inferScreen(doc(root), "s").root).find((n): n is TextNode => n.kind === "text")!;
-    expect(text.runs.map((r) => r.text).join("|")).toBe(
-      "a |\u2067\u202Erev\u202C\u2069| b |\u2066iso\u2069| c |\u2067sp\u2069| d",
-    );
+    return text.runs.map((r) => r.text).join("|");
+  };
+
+  test("bdo overrides and bdi isolates their runs with Unicode bidi controls, in the computed direction", () => {
+    expect(
+      runsOf([
+        textNode("a ", { x: 0, y: 3, w: 10, h: 14 }),
+        inline("bdo", "rtl", "isolate-override", "rev", 10, { dir: "rtl" }),
+        textNode(" b ", { x: 50, y: 3, w: 10, h: 14 }),
+        inline("bdi", "ltr", "isolate", "iso", 60),
+        textNode(" c ", { x: 100, y: 3, w: 10, h: 14 }),
+        inline("span", "rtl", "isolate", "sp", 110, { dir: "rtl" }),
+        textNode(" d", { x: 150, y: 3, w: 10, h: 14 }),
+      ]),
+    ).toBe("a |\u2067\u202Erev\u202C\u2069| b |\u2066iso\u2069| c |\u2067sp\u2069| d");
+  });
+
+  test("an author unicode-bidi on an inline span maps to its controls, without a tag or dir", () => {
+    const one = (bidi: string | undefined, dir = "rtl", tag = "span", attrs = {}) =>
+      runsOf([textNode("a ", { x: 0, y: 3, w: 10, h: 14 }), inline(tag, dir, bidi, "sp", 10, attrs)]);
+    expect(one("bidi-override")).toBe("a |\u202Esp\u202C");
+    expect(one("embed")).toBe("a |\u202Bsp\u202C");
+    expect(one("plaintext")).toBe("a |\u2068sp\u2069");
+    expect(one("plaintext", "ltr")).toBe("a |\u2068sp\u2069");
+    // The tag rule is gone: a `<bdo>` reset to `normal` gets nothing.
+    expect(one("normal", "rtl", "bdo", { dir: "rtl" })).toBe("a |sp");
+    // A hand-built node without the key reads as the initial `normal`.
+    expect(one(undefined, "rtl", "span", { dir: "rtl" })).toBe("a |sp");
+  });
+
+  test("a text host keeps only the override of its own unicode-bidi", () => {
+    const hello = textNode("hello", { x: 0, y: 3, w: 40, h: 14 });
+    expect(runsOf([hello])).toBe("hello");
+    expect(runsOf([{ ...hello }], { direction: "rtl", "unicode-bidi": "isolate-override" })).toBe("\u202Ehello\u202C");
+  });
+
+  test("an inside ::marker stays outside bidi controls despite its UA isolate", () => {
+    const marker = el("::marker", { x: 0, y: 0, w: 20, h: 20 }, { display: "inline", "unicode-bidi": "isolate" }, [
+      textNode("1. ", { x: 0, y: 3, w: 20, h: 14 }),
+    ]);
+    const li = el("li", { x: 0, y: 0, w: 300, h: 20 }, { display: "list-item", "unicode-bidi": "isolate" }, [
+      marker,
+      textNode("item", { x: 20, y: 3, w: 40, h: 14 }),
+    ]);
+    const root = el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [li]);
+    const texts = flatten(inferScreen(doc(root), "s").root).filter((n): n is TextNode => n.kind === "text");
+    const joined = texts.flatMap((t) => t.runs.map((r) => r.text)).join("");
+    expect(joined).toContain("1.");
+    expect(joined).not.toMatch(/[\u202A-\u202E\u2066-\u2069]/);
   });
 });
 
@@ -209,9 +253,9 @@ describe("tables", () => {
       Object.entries(n.style.borderSides ?? {}).map(([side, edge]) => `${n.frame.y}:${side}=${edge!.width}`),
     );
 
-  test("044: collapsed-rule — a row border is centred on the grid line: half in each row, the footer's top rule drawn once", () => {
+  const collapsedRule = (styles: Record<string, string>) =>
     // Chrome's boxes: each row holds half of every collapsed line it touches.
-    const table = el("table", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "table" }, [
+    el("table", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "table", ...styles }, [
       el("tbody", { x: 0, y: 0, w: 200, h: 73.5 }, { display: "table-row-group" }, [
         row(0, 36.5, "Q1", rule("bottom")),
         row(36.5, 37, "Q2", rule("bottom")),
@@ -220,6 +264,9 @@ describe("tables", () => {
         row(73.5, 37, "Sum"),
       ]),
     ]);
+
+  test("044: collapsed-rule — a row border is centred on the grid line: half in each row, the footer's top rule drawn once", () => {
+    const table = collapsedRule({ "border-collapse": "collapse" });
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "block" }, [table])), "s");
     expect(rules(screen.root)).toEqual(["0:bottom=0.5", "36.5:top=0.5", "36.5:bottom=0.5", "73.5:top=0.5"]);
     const texts = flatten(screen.root).filter((n): n is TextNode => n.kind === "text");
@@ -236,7 +283,7 @@ describe("tables", () => {
       el("td", { x, y: 0.5, w, h: 37 }, { display: "table-cell", ...pad, ...box }, [
         textNode("Q", { x: x + 8.5, y: 9, w: 10, h: 20 }),
       ]);
-    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table" }, [
+    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table", "border-collapse": "collapse" }, [
       el("tr", { x: 0.5, y: 0.5, w: 199, h: 37 }, { display: "table-row" }, [cell(0.5, 99.5), cell(100, 99.5)]),
     ]);
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 38 }, { display: "block" }, [table])), "s");
@@ -254,6 +301,18 @@ describe("tables", () => {
     ]);
   });
 
+  test("a separated table with abutting boxes (`border-spacing: 0`) keeps its own borders", () => {
+    const screen = inferScreen(
+      doc(
+        el("main", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "block" }, [
+          collapsedRule({ "border-spacing": "0px" }),
+        ]),
+      ),
+      "s",
+    );
+    expect(rules(screen.root)).toEqual(["0:bottom=1", "36.5:bottom=1", "73.5:top=1"]);
+  });
+
   test("044: separated — cells apart by `border-spacing` keep their own borders", () => {
     const cell = (x: number) =>
       el("td", { x, y: 2, w: 97, h: 36 }, { display: "table-cell", ...pad, ...rule("bottom") }, [
@@ -266,19 +325,126 @@ describe("tables", () => {
     expect(rules(screen.root)).toEqual(["2:bottom=1", "2:bottom=1"]);
   });
 
-  test("042: cell-middle — hugging cells of a row sit where `vertical-align: middle` puts them", () => {
+  test("042: cell-middle — a table outside the MarkswiftTable subset keeps row alignment", () => {
     const cell = (x: number, kids: LayoutNode[]) =>
       el("td", { x, y: 0, w: 100, h: 38 }, { display: "table-cell", "vertical-align": "middle", padding: "8px" }, kids);
     const tr = el("tr", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row", "vertical-align": "middle" }, [
       cell(0, [textNode("Q1", { x: 8, y: 10, w: 20, h: 18 })]),
       cell(100, [el("span", { x: 108, y: 8, w: 40, h: 22 }, { display: "inline-flex", height: "22px" })]),
     ]);
-    const table = el("table", { x: 0, y: 0, w: 200, h: 38 }, { display: "table", "border-collapse": "collapse" }, [
-      el("tbody", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row-group" }, [tr]),
-    ]);
+    const table = el(
+      "table",
+      { x: 0, y: 0, w: 200, h: 38 },
+      { display: "table", "border-collapse": "collapse", direction: "rtl" },
+      [el("tbody", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row-group" }, [tr])],
+    );
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 38 }, { display: "block" }, [table])), "s");
     const rows = flatten(screen.root).filter((n): n is StackNode => n.kind === "stack" && n.axis === "h");
     expect(rows.map((r) => r.align)).toEqual(["center"]);
+  });
+
+  const tableNotes = (n: SemNode) => n.diagnostics.filter((d) => d.feature === "table" || d.feature === "table-layout");
+  const grids = (root: SemNode) => flatten(root).filter((n): n is GridNode => n.kind === "grid" && !!n.table);
+
+  test("049: a captioned admitted table — caption, then the grid of its rows box with the table's paint and padding", () => {
+    const t = separated();
+    const root = inferScreen(tableDoc(t), "s").root as StackNode;
+    const outer = root.children[0] as StackNode;
+    expect(outer.kind).toBe("stack");
+    expect(outer.children.map((c) => c.kind)).toEqual(["text", "grid"]);
+    const grid = outer.children[1] as GridNode;
+    expect(grid.frame).toEqual({ x: 0, y: 20, w: 300, h: 79 });
+    expect(grid.padding).toEqual([6, 6, 6, 6]);
+    // The trap: the layout keys stay on the table; nothing reports them.
+    expect(JSON.stringify(outer.style)).not.toMatch(/spacing|collapse/);
+    expect(outer.diagnostics.filter((d) => /border-(spacing|collapse)/.test(d.feature))).toEqual([]);
+    expect(tableNotes(outer)).toEqual([]);
+    expect(tableNotes(grid)).toEqual([
+      {
+        level: "approximated",
+        feature: "table",
+        message: "VoiceOver table navigation (row/column position, header association) is not translated",
+      },
+    ]);
+  });
+
+  test("049: an auto-width admitted table also reports the auto table layout", () => {
+    const [grid] = grids(inferScreen(tableDoc(collapsed()), "s").root);
+    expect(tableNotes(grid!).map((d) => [d.level, d.feature, d.message])).toEqual([
+      [
+        "approximated",
+        "table",
+        "VoiceOver table navigation (row/column position, header association) is not translated",
+      ],
+      [
+        "approximated",
+        "table-layout",
+        "auto table layout → captured column widths scale with the offered width; CSS min-/max-content column sizing is not reproduced",
+      ],
+    ]);
+  });
+
+  test("049: a table outside the subset (rtl) keeps the measured rows and reports `approximated table`", () => {
+    const t = collapsed();
+    t.styles["direction"] = "rtl";
+    const root = inferScreen(tableDoc(t), "s").root as StackNode;
+    expect(grids(root)).toEqual([]);
+    expect(root.children[0]!.diagnostics).toContainEqual(
+      expect.objectContaining({ level: "approximated", feature: "table" }),
+    );
+  });
+
+  test("049: rule 3b — a row with onclick keeps the measured-rows path and its action", () => {
+    const t = collapsed();
+    t.children[1]!.children[0]!.attrs["onclick"] = "go()";
+    const root = inferScreen(tableDoc(t), "s").root as StackNode;
+    expect(grids(root)).toEqual([]);
+    const row = flatten(root).find((n): n is StackNode => n.kind === "stack" && n.axis === "h" && !!n.action);
+    expect(row?.frame).toEqual({ x: 0, y: 30, w: 200, h: 30 });
+    expect(root.children[0]!.diagnostics).toContainEqual(
+      expect.objectContaining({ level: "approximated", feature: "table" }),
+    );
+  });
+
+  test("052: empty-cells: hide paints no background or border on whitespace-only cells of a separated table", () => {
+    const edge = (side: string) => ({
+      [`border-${side}-style`]: "solid",
+      [`border-${side}-width`]: "2px",
+      [`border-${side}-color`]: "rgb(0, 0, 0)",
+    });
+    const paint = (emptyCells: string) => ({
+      display: "table-cell",
+      "empty-cells": emptyCells,
+      "background-color": "rgb(255, 0, 0)",
+      ...edge("top"),
+      ...edge("right"),
+      ...edge("bottom"),
+      ...edge("left"),
+    });
+    const painted = (collapse: string, emptyCells: string) => {
+      const cell = (x: number, kids: LayoutNode[]) => el("td", { x, y: 0, w: 46, h: 24 }, paint(emptyCells), kids);
+      const row = el("tr", { x: 0, y: 0, w: 200, h: 24 }, { display: "table-row" }, [
+        cell(0, []),
+        cell(50, [textNode(" ", { x: 52, y: 2, w: 0, h: 0 })]),
+        cell(100, [el("span", { x: 102, y: 2, w: 0, h: 20 }, { display: "inline" })]),
+        cell(150, [textNode("x", { x: 152, y: 2, w: 8, h: 20 })]),
+      ]);
+      const table = el("table", { x: 0, y: 0, w: 200, h: 24 }, { display: "table", "border-collapse": collapse }, [
+        row,
+      ]);
+      const nodes = flatten(
+        inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 24 }, { display: "block" }, [table])), "s").root,
+      );
+      return {
+        fills: [...new Set(nodes.filter((n) => n.style.fills.length).map((n) => n.frame.x))].sort((a, b) => a - b),
+        borders: [...new Set(nodes.filter((n) => n.style.border || n.style.borderSides).map((n) => n.frame.x))].sort(
+          (a, b) => a - b,
+        ),
+      };
+    };
+    expect(painted("separate", "hide")).toEqual({ fills: [100, 150], borders: [100, 150] });
+    expect(painted("separate", "show")).toEqual({ fills: [0, 50, 100, 150], borders: [0, 50, 100, 150] });
+    expect(painted("collapse", "hide").fills).toEqual([0, 50, 100, 150]);
   });
 });
 
@@ -324,6 +490,39 @@ describe("paint invisible at rest", () => {
     expect(input({ type: "checkbox", "aria-hidden": "true", checked: "" }).overlays).toHaveLength(0);
     // Without aria-hidden Chrome still announces it (a visually hidden native input behind a drawn box).
     expect(input({ type: "checkbox" }).overlays).toHaveLength(1);
+  });
+});
+
+describe("pointer-events", () => {
+  const box = { x: 0, y: 0, w: 100, h: 100 };
+  const paint = { "background-color": "rgb(0, 0, 255)" };
+  const none = { position: "absolute", "pointer-events": "none", ...paint };
+  const positioned = (child: LayoutNode) =>
+    inferScreen(doc(el("main", box, { display: "block", position: "relative" }, [child])), "s").root;
+
+  test("an absolute pass-through veil is flagged", () => {
+    expect(positioned(el("div", box, none)).overlays[0]?.node.hitTesting).toBe(false);
+  });
+
+  test("an in-flow pointer-events: none node is not: it covers no sibling", () => {
+    const root = positioned(el("div", box, { display: "block", "pointer-events": "none", ...paint }));
+    expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
+  });
+
+  test("only the outermost pass-through overlay is flagged", () => {
+    const root = positioned(el("div", box, none, [el("div", { x: 10, y: 10, w: 20, h: 20 }, none)]));
+    expect(flatten(root).filter((n) => n.hitTesting === false)).toEqual([root.overlays[0]!.node]);
+  });
+
+  test("a pointer-events: auto descendant keeps the container hittable", () => {
+    const live = el("div", { x: 10, y: 10, w: 20, h: 20 }, { display: "block", "pointer-events": "auto", ...paint });
+    const root = positioned(el("div", box, none, [live]));
+    expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
+  });
+
+  test("a key-less childless child (046's pseudo img) passes under a none parent", () => {
+    const root = positioned(el("div", box, none, [el("img", { x: 10, y: 10, w: 20, h: 20 }, {})]));
+    expect(root.overlays[0]?.node.hitTesting).toBe(false);
   });
 });
 

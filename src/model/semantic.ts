@@ -37,13 +37,14 @@ export function confidenceOf(list: readonly Diagnostic[]): Confidence {
 /**
  * One per-conversion message, not tied to a node. `capture`: page errors, unreadable resources
  * and viewport-dependent CSS the view does not follow; `fonts`: font packaging; `adaptive`:
- * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034).
+ * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034);
+ * `breakpoints`: merging the width-band captures of a breakpoint conversion.
  * `level` and `feature` are set together when the message is a design loss, with the same
  * meaning as on `Diagnostic` (`feature` is an inventory row id). `component` names the
  * component a package build was converting when the message arose.
  */
 export interface ConversionWarning {
-  source: "capture" | "fonts" | "adaptive" | "build" | "palette";
+  source: "capture" | "fonts" | "adaptive" | "build" | "palette" | "breakpoints";
   level?: DiagnosticLevel;
   feature?: string;
   component?: string;
@@ -95,6 +96,28 @@ export interface GridPlacement {
 export interface GridItem extends GridPlacement {
   child: number;
   margin: [number, number];
+}
+/**
+ * A `table-layout: fixed` column: border-box px; `fraction` of the available width (content box minus every
+ * `border-spacing`) plus the first-row cell's horizontal padding and border (`plus`); or an equal share of the rest.
+ */
+export type TableColumn =
+  | { kind: "px"; px: number }
+  | { kind: "percent"; fraction: number; plus: number }
+  | { kind: "auto" };
+/**
+ * A CSS table laid out by `MarkswiftTable` (plan 049). `slots[i]` places `children[i]` (048's 1-based GridPlacement
+ * fields); the first `bands` children are row-group/row paint (spanning every column), the rest are the cells in DOM
+ * row-major order. `widths`/`heights` are the captured column border-box widths and row heights; `fixed`: admitted
+ * `table-layout: fixed` columns.
+ */
+export interface TableLayout {
+  widths: number[];
+  heights: number[];
+  slots: Array<Pick<GridPlacement, "rowStart" | "colStart" | "rowSpan" | "colSpan">>;
+  bands: number;
+  collapse: boolean;
+  fixed?: TableColumn[];
 }
 
 /**
@@ -247,6 +270,10 @@ export interface FontSpec {
   weight: number;
   /** Optical size axis value when the family has one (Chrome uses font-size). */
   opsz?: number;
+  /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
+  stretch?: number;
+  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
 }
@@ -259,6 +286,15 @@ export interface TextDecoration {
   color?: Color;
   style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
 }
+
+/** CSS counter styles a list marker or `counter()` is regenerated in (`src/css/counter.ts`). */
+export type CounterStyle =
+  | "decimal"
+  | "decimal-leading-zero"
+  | "lower-alpha"
+  | "upper-alpha"
+  | "lower-roman"
+  | "upper-roman";
 
 export interface TextRun {
   text: string;
@@ -296,6 +332,17 @@ export interface TextRun {
   gap?: number;
   /** Inline `<a href>`: the run is a link. `action` is set for an href the app must resolve (fragment, relative path). */
   link?: { href: string; action?: Action };
+  /**
+   * A generated image (`content: url()`, an inside `list-style-image`) inside the text: drawn at its captured CSS size
+   * on the baseline, as CSS sizes and seats it. `text` is U+FFFC. `alt` from `content: … / "alt"`; none = decorative.
+   */
+  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string };
+  /**
+   * The run is a counter the browser printed (`::marker` of a counter `list-style-type`, `content: counter()`):
+   * `text === prefix + counterText(value, style) + suffix`. Only component extraction reads it (rows derive the
+   * marker from their index); emitters print `text`.
+   */
+  counter?: { style: CounterStyle; value: number; prefix: string; suffix: string };
 }
 
 /**
@@ -441,8 +488,8 @@ export interface SemBase extends SizeConstraints {
     hidden?: true;
     /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
     heading?: 1 | 2 | 3 | 4 | 5 | 6;
-    /** `role` = button | link | img on an element that is not already that control. */
-    trait?: "isButton" | "isLink" | "isImage";
+    /** `role` = button | link | img on an element that is not already that control; `<th>` or role columnheader/rowheader → isHeader. */
+    trait?: "isButton" | "isLink" | "isImage" | "isHeader";
     /** `aria-valuetext`, else `aria-valuenow`; `aria-expanded` → `expanded`/`collapsed`, `aria-checked=mixed` → `mixed` when there is no value. */
     value?: string;
     /** Text of the `aria-describedby` elements, else `aria-description`. */
@@ -456,6 +503,8 @@ export interface SemBase extends SizeConstraints {
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
+  /** `title`, inline-run titles and captured tooltip layers (D-HOVER): `.help` + an accessibility hint; never drawn. */
+  tooltip?: string;
   /** `<label>`: id of the toggle/radio its tap changes, or of the text field it focuses. */
   labelFor?: string;
   /** Words a generated Swift name may use, from the element's own markup; see `analysis/naming.ts`. Never a path. */
@@ -467,8 +516,27 @@ export interface SemBase extends SizeConstraints {
    * `<form onsubmit>` (Return), and activatable non-controls.
    */
   action?: Action;
-  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
-  states?: { pressed?: StateStyle; focused?: StateStyle };
+  /**
+   * `pointer-events: none` on this overlay's whole element subtree: taps reach what is painted underneath. Set on the
+   * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
+   */
+  hitTesting?: false;
+  /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
+   * open: while a layer this node or an ancestor `opens` is shown). */
+  states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
+  /** App mode: this node's tap toggles the in-flow layer `layer` (`analysis/layers.ts`). */
+  opens?: { layer: string; kind: "inflow" };
+  /** App mode: id of the in-flow layer whose open state shows this node. */
+  shownBy?: string;
+  /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */
+  bands?: number[];
+  /**
+   * Breakpoint conversions: this node is a holder — kind `box`, no paint, no children — for one DOM element whose
+   * authored inputs differ between bands. The emitter shows the alternative whose `bands` holds the current band.
+   * `frame`, `width`, `height`, `selfAlign`, `selfAlignV` are the first alternative's, so the parent lays it out as
+   * that band.
+   */
+  alternatives?: SemNode[];
   /** CSS `@keyframes` animations (app output plays them; fidelity renders the settled look). */
   motion?: Motion;
 }
@@ -515,6 +583,8 @@ export interface GridNode extends SemBase {
     /** The grid items in DOM order (MarkswiftTracks subview order). */
     items: GridItem[];
   };
+  /** An admitted CSS table (plan 049); `hSpacing`/`vSpacing` are its used border-spacing. */
+  table?: TableLayout;
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];
@@ -625,6 +695,8 @@ export interface ControlNode extends SemBase {
   swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** The placeholder's paint from `::placeholder` (fill colour × opacity); absent for Chrome's UA grey, which keeps the platform prompt grey. */
+  promptColor?: Color;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
   inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** WHATWG autofill field name from `autocomplete`, e.g. `one-time-code`. */
@@ -691,10 +763,16 @@ export interface Screen {
   /** Backdrop behind the root, from the design. */
   canvas: Color;
   root: SemNode;
+  /** Breakpoint conversions with at least one holder: `edges` in root-proposal px (the CSS edges minus the root's
+   * offset from the viewport), `cssEdges` as captured, `widths` = capture viewport width per band. */
+  breakpoints?: { edges: BandEdge[]; cssEdges: BandEdge[]; widths: number[] };
+  /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
+  colorScheme?: "light" | "dark";
 }
 
 export function walk(n: SemNode, fn: (n: SemNode, depth: number) => void, depth = 0): void {
   fn(n, depth);
+  for (const a of n.alternatives ?? []) walk(a, fn, depth);
   for (const o of n.overlays) walk(o.node, fn, depth + 1);
   if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) walk(c, fn, depth + 1);
   if (n.kind === "control") {

@@ -181,6 +181,12 @@ browserTest(
 // shadcn-avatar: three avatar runs (`data-slot="avatar"`) differ in shape, so three types. tw-cards: the
 // nearest heading of the member cards is the following "Invite a teammate" card's (Step 2 rule order).
 const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[]; actions: string[] }> = {
+  "overlay-collapsible": {
+    types: ["Item", "Item2"],
+    views: ["ItemView", "Item2View"],
+    arrays: ["items", "items2"],
+    actions: [],
+  },
   "shadcn-avatar": {
     types: ["Avatar", "Avatar2", "Avatar3"],
     views: ["AvatarView", "Avatar2View", "Avatar3View"],
@@ -188,7 +194,6 @@ const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[
     actions: [],
   },
   "shadcn-list-24": { types: ["Item"], views: ["ItemView"], arrays: ["items"], actions: [] },
-  "shadcn-table": { types: ["TableRow"], views: ["TableRowView"], arrays: ["tableRows"], actions: [] },
   "tw-cards": {
     types: ["InviteATeammateCard"],
     views: ["InviteATeammateCardView"],

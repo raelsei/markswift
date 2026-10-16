@@ -1,4 +1,4 @@
-import type { StackNode, GridNode, GridRowTrack } from "../model/semantic.ts";
+import type { BandEdge, StackNode, GridNode, GridRowTrack, TableColumn, TableLayout } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
@@ -35,6 +35,45 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
       const extra = `${it.colSpan > 1 ? `, columnSpan: ${it.colSpan}` : ""}${it.rowSpan > 1 ? `, rowSpan: ${it.rowSpan}` : ""}${it.justify === "stretch" ? "" : `, justify: .${it.justify}`}`;
       const cell = placed ? [`.markswiftGridCell(column: ${it.colStart}, row: ${it.rowStart}${extra})`] : [];
       return indent([...ctx.renderNode(n.children[it.child]!), ...margin.filter(Boolean), ...cell], 1);
+    }),
+    "}",
+  ];
+}
+
+/** An admitted CSS table (`GridNode.table`), both modes; fidelity omits `fixed:` so the captured columns stay exact. */
+function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
+  const list = (v: number[]) => `[${v.map(num).join(", ")}]`;
+  const col = (c: TableColumn) =>
+    c.kind === "auto"
+      ? ".auto"
+      : c.kind === "px"
+        ? `.px(${num(c.px)})`
+        : `.percent(${num(c.fraction)}, plus: ${num(c.plus)})`;
+  // Argument order = the struct's property order (Swift's memberwise init requires it).
+  const args = [
+    `widths: ${list(t.widths)}`,
+    `heights: ${list(t.heights)}`,
+    ...(n.hSpacing ? [`hSpacing: ${num(n.hSpacing)}`] : []),
+    ...(n.vSpacing ? [`vSpacing: ${num(n.vSpacing)}`] : []),
+    ...(t.bands ? [`bands: ${t.bands}`] : []),
+    ...(t.fixed && ctx.mode === "app" ? [`fixed: [${t.fixed.map(col).join(", ")}]`] : []),
+  ];
+  return [
+    `MarkswiftTable(${args.join(", ")}) {`,
+    ...n.children.flatMap((c, i) => {
+      const s = t.slots[i]!;
+      const span = `${s.colSpan > 1 ? `, columnSpan: ${s.colSpan}` : ""}${s.rowSpan > 1 ? `, rowSpan: ${s.rowSpan}` : ""}`;
+      // CSS paints collapsed borders over cell backgrounds: a band that only draws borders goes on top of the cells.
+      // ponytail: a band with both a fill and borders stays under the cells; split it if a cell background hides its rule.
+      const over = i < t.bands && !c.style.fills.length && !c.style.shadows.length;
+      return indent(
+        [
+          ...ctx.renderNode(c),
+          ...(over ? [".zIndex(1)"] : []),
+          `.markswiftGridCell(column: ${s.colStart}, row: ${s.rowStart}${span})`,
+        ],
+        1,
+      );
     }),
     "}",
   ];
@@ -77,7 +116,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
   if (n.kind === "grid" && n.template && ctx.mode === "fidelity")
     note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", n.template.fidelityNote);
-  if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
+  if (n.kind === "grid" && n.table) out.push(...tableExpr(n, n.table, ctx));
+  else if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
   else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
@@ -128,6 +168,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     const around = n.distribution === "around",
       evenly = n.distribution === "evenly";
     kids.forEach((c, i) => {
+      // In-flow layer content: everything this child adds (spacers, gap padding) shows only with its layer.
+      const shown = c.shownBy !== undefined ? ctx.control.openStates.get(c.shownBy) : undefined;
+      const start = out.length;
       if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
       if ((i > 0 && n.distribution === "between") || around || evenly)
         out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
@@ -143,7 +186,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
         extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
       out.push(...indent([...lines, ...extra], 1));
-      if (around || (evenly && i === kids.length - 1)) out.push("    Spacer(minLength: 0)");
+      if (around) out.push("    Spacer(minLength: 0)");
+      if (shown) out.splice(start, out.length - start, `    if ${shown} {`, ...indent(out.slice(start), 1), "    }");
+      if (evenly && i === kids.length - 1) out.push("    Spacer(minLength: 0)");
       if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
     });
     out.push("}");
@@ -154,7 +199,7 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   // scrolls; the padding and other overlays scroll with the content, which fills a vertical ScrollView's width.
   if (n.scroll && ctx.mode === "app") {
     const scrolling = n.overlays.filter((o) => !o.fixed);
-    const content = [
+    let content = [
       ...out,
       ...paddingModifiers(n, ctx),
       ...(n.scroll === "v"
@@ -166,6 +211,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
         .flatMap((o) => overlayModifier(o, "background", ctx)),
       ...scrolling.filter((o) => o.layer === "overlay").flatMap((o) => overlayModifier(o, "overlay", ctx)),
     ];
+    // A breakpoint root switches bands inside its ScrollView, so the scroll offset survives a switch.
+    if (n === ctx.bandsInside)
+      content = [`${bandsOpen(ctx.screen.breakpoints!.edges)} { band in`, ...indent(content, 1), "}"];
     return decorate(
       n,
       [
@@ -186,4 +234,9 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       ".clipped()",
     ];
   return body;
+}
+
+/** `MarkswiftBands(edges: […])`: inclusive edges are `.atLeast`, exclusive (`max-width`) ones `.above`. */
+export function bandsOpen(edges: BandEdge[]): string {
+  return `MarkswiftBands(edges: [${edges.map((e) => `.${e.inclusive ? "atLeast" : "above"}(${num(e.px)})`).join(", ")}])`;
 }

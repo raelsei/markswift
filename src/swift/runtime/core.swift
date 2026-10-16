@@ -55,10 +55,12 @@ extension Color {
 
 extension Font {
     /// A bundled variable font at an exact `wght` (and optional `opsz`) axis value — the same
-    /// instance the browser rendered, instead of the nearest named weight.
-    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil) -> Font {
+    /// instance the browser rendered, instead of the nearest named weight — and any other axis by
+    /// its four-letter tag (`["wdth": 80]`).
+    nonisolated static func markswiftVariable(_ family: String, size: CGFloat, weight: CGFloat, opsz: CGFloat? = nil, axes extra: [String: CGFloat] = [:]) -> Font {
         var axes: [Int: CGFloat] = [0x7767_6874: weight] // 'wght'
         if let opsz { axes[0x6F70_737A] = opsz }          // 'opsz'
+        for (tag, value) in extra { axes[tag.utf8.reduce(0) { $0 << 8 | Int($1) }] = value }
 #if canImport(UIKit)
         let attrs: [UIFontDescriptor.AttributeName: Any] = [
             .family: family,
@@ -236,6 +238,17 @@ extension Image {
         MarkswiftAssets.cache.setObject(image, forKey: file as NSString)
         return Image(nsImage: image)
 #endif
+    }
+
+    /// A generated image (`content: url()`) drawn at its CSS size so it can sit inside a `Text` run, where
+    /// SwiftUI accepts only an `Image`. `label` nil = decorative.
+    // ponytail: rendered on every body evaluation; cache the CGImage by a key if a long list shows many.
+    @MainActor static func markswiftRendered<Content: View>(width: CGFloat, height: CGFloat, label: String? = nil, @ViewBuilder _ content: () -> Content) -> Image {
+        let renderer = ImageRenderer(content: content().frame(width: width, height: height))
+        renderer.scale = 3
+        guard let image = renderer.cgImage else { return Image(systemName: "photo") }
+        if let label { return Image(image, scale: 3, label: Text(verbatim: label)) }
+        return Image(decorative: image, scale: 3)
     }
 }
 

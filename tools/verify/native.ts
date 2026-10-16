@@ -2,7 +2,14 @@ import { mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { ConversionResult } from "../../src/index.ts";
 import { command } from "./process.ts";
-import { canvas, macRenderMain, renderAppMain, renderAppPlist, type ForcedState } from "./native-template.ts";
+import {
+  canvas,
+  macRenderMain,
+  type ForcedState,
+  type RenderResult,
+  renderAppMain,
+  renderAppPlist,
+} from "./native-template.ts";
 
 export interface SimulatorInventory {
   devices: Record<string, Array<{ udid: string; name: string; state: string; isAvailable: boolean }>>;
@@ -24,7 +31,7 @@ export function selectSimulator(inventory: SimulatorInventory, preferred?: strin
 }
 
 export interface RenderJob {
-  result: ConversionResult;
+  result: RenderResult;
   output: string;
   /** Seconds into every animation; absent = settled. */
   time?: number;
@@ -88,7 +95,7 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
     for (const [file, value] of Object.entries(result.files)) {
       if (!file.endsWith(".swift")) continue;
       const previous = written.get(file);
-      // Frame captures render one conversion more than once: identical files compile once.
+      // One view rendered twice (an `@open` capture and its rest capture, motion frames) brings identical files.
       if (previous !== undefined && previous !== value) throw new Error(`duplicate generated file ${file}`);
       written.set(file, value);
     }
@@ -218,7 +225,7 @@ export async function renderNative(
  */
 // ponytail: one swiftc build per capture (≈ 3–5 s); batch captures per build if the per-PR job outgrows ~20 min.
 export async function renderMac(
-  result: ConversionResult,
+  result: RenderResult,
   work: string,
   output: string,
   forced?: ForcedState,

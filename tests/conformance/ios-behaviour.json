@@ -19,7 +19,11 @@
     "shadcn-spinner",
     "shadcn-skeleton",
     "tw-form",
-    "tw-settings"
+    "tw-settings",
+    "_behaviour/pointer-events",
+    "overlay-tooltip",
+    "overlay-collapsible",
+    "overlay-accordion"
   ],
   "known": [
     {

@@ -62,3 +62,57 @@ test("043 item 11: a bundled family without a wght axis selects its static face 
   for (const f of [staticFont, variableFont])
     expect(fontExpr(f, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
 });
+
+describe("052: variation axes", () => {
+  const face = (axes: Record<string, [number, number]>): PackagedFace => ({
+    family: "Fam",
+    file: "fam.ttf",
+    style: "normal",
+    weight: [400, 400],
+    axes,
+    metrics: { upem: 1000, ascent: 800, descent: 200, lineGap: 0, useTypoMetrics: false },
+    converted: false,
+    renamed: false,
+  });
+  const families = (axes: Record<string, [number, number]>) =>
+    bundledFamilies({ faces: [face(axes)], assets: {}, plist: "", notes: [] });
+  const base = { "font-family": "Fam", "font-size": "18px", "font-weight": "400" };
+  const both = (s: Record<string, string>, fams = families({ wght: [100, 900] })) => {
+    const f = fontOf({ ...base, ...s }, fams);
+    return [fontExpr(f, { mode: "fidelity" }), fontExpr(f, { mode: "app" })];
+  };
+
+  test("a wght variation sets the weight of a variable family, not of a static one", () => {
+    expect(both({ "font-variation-settings": '"wght" 650' })).toEqual([
+      '.markswiftVariable("Fam", size: 18.0, weight: 650.0)',
+      '.custom("Fam", size: 18.0, relativeTo: .body).weight(.semibold)',
+    ]);
+    expect(fontOf({ ...base, "font-variation-settings": '"wght" 650' }, families({})).weight).toBe(400);
+  });
+
+  test("font-stretch becomes the wdth axis in both modes; a wdth variation beats it", () => {
+    const wdth = families({ wght: [100, 900], wdth: [75, 100] });
+    const expected = '.markswiftVariable("Fam", size: 18.0, weight: 400.0, axes: ["wdth": 80.0])';
+    expect(both({ "font-stretch": "80%" }, wdth)).toEqual([expected, expected]);
+    expect(fontOf({ ...base, "font-stretch": "90%", "font-variation-settings": '"wdth" 75' }, wdth).axes).toEqual({
+      wdth: 75,
+    });
+  });
+
+  test("font-optical-sizing: none sets no opsz", () => {
+    const opsz = families({ wght: [100, 900], opsz: [8, 32] });
+    expect(fontOf(base, opsz).opsz).toBe(18);
+    expect(both({ "font-optical-sizing": "none" }, opsz)[0]).toBe(
+      '.markswiftVariable("Fam", size: 18.0, weight: 400.0)',
+    );
+  });
+
+  test("a system family's font-stretch is SF's nearest width instance", () => {
+    const sys = (stretch: string) =>
+      fontExpr(fontOf({ "font-family": "system-ui", "font-size": "18px", "font-stretch": stretch }), {
+        mode: "fidelity",
+      });
+    expect(sys("75%")).toBe(".system(size: 18.0, weight: .regular, design: .default).width(Font.Width(-0.1))");
+    expect(sys("95%")).toBe(".system(size: 18.0, weight: .regular, design: .default)");
+  });
+});

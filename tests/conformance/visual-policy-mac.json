@@ -62,5 +62,8 @@
     "tailwind-v4@fidelity": {
       "minSsim": 0.86
     }
+  },
+  "exceptions": {
+    "attr-placeholder@app": "macOS ImageRenderer cannot rasterise AppKit TextField/SecureField/TextEditor; the iOS gate judges it — owner 047"
   }
 }

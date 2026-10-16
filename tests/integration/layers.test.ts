@@ -249,11 +249,47 @@ describe("dismiss probes", () => {
 });
 
 describe("convert", () => {
-  browserTest("adaptive: layers pair by id and dark copies the light dismissal", async () => {
-    const result = await convertHtml(DIALOG, { theme: "adaptive" });
-    const [light, dark] = [result.layout.layers![0]!, result.darkLayout!.layers![0]!];
-    expect(dark.id).toBe(light.id);
-    expect(light.dismiss.escape).toBe(true);
-    expect(dark.dismiss).toEqual(light.dismiss);
+  browserTest(
+    "adaptive: layers pair by id and dark copies the light dismissal",
+    async () => {
+      const result = await convertHtml(DIALOG, { theme: "adaptive" });
+      const [light, dark] = [result.layout.layers![0]!, result.darkLayout!.layers![0]!];
+      expect(dark.id).toBe(light.id);
+      expect(light.dismiss.escape).toBe(true);
+      expect(dark.dismiss).toEqual(light.dismiss);
+    },
+    30_000,
+  );
+
+  browserTest(
+    "tooltips: two hover layers and a title become .help, never drawn",
+    async () => {
+      const html = await Bun.file(
+        new URL("../conformance/fixtures/components/overlay-tooltip.html", import.meta.url).pathname,
+      ).text();
+      const result = await convertHtml(html);
+      expect(result.layout.layers!.map((l) => [l.activation, l.relation])).toEqual([
+        ["hover", "aria-describedby"],
+        ["hover", "interestfor"],
+      ]);
+      for (const tip of ["Add to library", "More information", "Save draft"])
+        expect(result.code).toContain(`.help("${tip}")`);
+      expect(result.code).not.toContain('Text(verbatim: "Add to library")');
+      expect(result.code).not.toContain('Text(verbatim: "More information")');
+    },
+    30000,
+  );
+});
+
+describe("in-flow layers", () => {
+  browserTest("accordion: one inflow layer and one `if` per closed item", async () => {
+    const html = await Bun.file(`${import.meta.dir}/../conformance/fixtures/components/overlay-accordion.html`).text();
+    const result = await convertHtml(html, { name: "Accordion" });
+    const inflow = result.layout.layers!.filter((l) => l.placement === "inflow");
+    expect(inflow.map((l) => l.id)).toEqual(["which-regions-are-available", "is-there-an-sla"]);
+    expect(result.code.match(/\bif is\w+Expanded \{/g)).toEqual([
+      "if isWhichRegionsAreAvailableExpanded {",
+      "if isIsThereAnSlaExpanded {",
+    ]);
   });
 });

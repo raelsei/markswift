@@ -12,6 +12,9 @@ final class BehaviourTests: XCTestCase {
         /// Texts of the `<label>`s whose tap focuses a text field.
         let labels: [String]
         let actions: [String]
+        /// In-flow layers: tapping the button labelled `trigger` shows the text `shows`; a second tap hides it.
+        struct Layer: Decodable { let id: String; let trigger: String; let shows: String }
+        let layers: [Layer]
         /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
         struct Motion: Decodable { let live: Bool; let reduced: Bool }
         let motion: Motion
@@ -31,7 +34,10 @@ final class BehaviourTests: XCTestCase {
             run("large") {
                 let app = launch(item.view, "UICTContentSizeCategoryL")
                 let tree = dump(try app.snapshot())
-                return ["tree": tree, "audit": try audit(app), "rootHeight": rootHeight(app), "interactions": interact(app, item)]
+                return [
+                    "tree": tree, "audit": try audit(app), "rootHeight": rootHeight(app), "interactions": interact(app, item),
+                    "layers": layers(app, item),
+                ]
             }
             run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", rtl: true).snapshot())] }
             run("xSmall") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryXS"))] }
@@ -203,4 +209,27 @@ private func interact(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [S
         }
     }
     return ["switches": switches, "fields": fields, "pickers": pickers, "labels": labels, "tapped": tapped, "log": hits]
+}
+
+/// Each in-flow layer in a fresh launch: its text is absent, the trigger's tap shows it, a second tap hides it.
+@MainActor
+private func layers(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[String: Any]] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    let gone = NSPredicate(format: "exists == false")
+    return item.layers.map { layer in
+        app.launch()
+        let shows = root.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", layer.shows)).firstMatch
+        let trigger = root.buttons.matching(NSPredicate(format: "label == %@", layer.trigger)).firstMatch
+        var opened = false
+        var closed = false
+        if !shows.exists && trigger.waitForExistence(timeout: 2) && trigger.isHittable {
+            trigger.tap()
+            opened = shows.waitForExistence(timeout: 2)
+            if opened {
+                trigger.tap()
+                closed = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: shows)], timeout: 2) == .completed
+            }
+        }
+        return ["id": layer.id, "opened": opened, "closed": closed]
+    }
 }

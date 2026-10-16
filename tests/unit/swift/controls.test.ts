@@ -114,6 +114,56 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(fidelity.view).not.toContain("markswiftFieldLineHeight");
 });
 
+test("an author ::placeholder colour paints the prompt; Chrome's UA grey keeps the platform grey byte-identical", () => {
+  const ph = (color: string, extra: Record<string, string> = {}) => ({
+    placeholder: {
+      color,
+      "-webkit-text-fill-color": color,
+      opacity: "1",
+      "font-style": "normal",
+      "font-weight": "400",
+      ...extra,
+    },
+  });
+  const fields = (p?: LayoutNode["pseudoStyles"]): LayoutNode[] =>
+    [
+      field("input", { id: "q", type: "text", placeholder: "Search" }, 0),
+      field("input", { id: "pw", type: "password", placeholder: "Password" }, 40),
+      field("textarea", { id: "note", placeholder: "Add a note" }, 80, 54),
+    ].map((n) => (p ? { ...n, pseudoStyles: p } : n));
+  const red = "Color.markswift(0.784, 0.0, 0.0)";
+  const app = swift(fields(ph("rgb(200, 0, 0)"))).view;
+  expect(app).toContain(`TextField("Search", text: $s_q, prompt: Text(verbatim: "Search").foregroundStyle(${red}))`);
+  expect(app).toContain(
+    `SecureField("Password", text: $s_pw, prompt: Text(verbatim: "Password").foregroundStyle(${red}))`,
+  );
+  // Two prompts + the TextEditor overlay.
+  expect(app.split(`.foregroundStyle(${red})`).length - 1).toBe(3);
+  expect(app).not.toContain("markswiftPlaceholderText");
+  const fidelity = swift(fields(ph("rgb(200, 0, 0)")), "fidelity").view;
+  expect(fidelity.split(`.foregroundStyle(${red})`).length - 1).toBe(3);
+  expect(fidelity).not.toContain("markswiftPlaceholderText");
+  // Chrome's UA grey (the same in both themes) is no author colour: output equals a capture without pseudo styles.
+  const ua = ph("rgb(117, 117, 117)");
+  expect(swift(fields(ua)).view).toBe(swift(fields()).view);
+  expect(swift(fields(ua), "fidelity").view).toBe(swift(fields(), "fidelity").view);
+  // What Chrome paints: -webkit-text-fill-color over color; opacity fades it.
+  const fill = {
+    ...field("input", { id: "f", placeholder: "Fill" }, 0),
+    pseudoStyles: ph("rgb(200, 0, 0)", { "-webkit-text-fill-color": "rgb(0, 128, 0)" }),
+  };
+  expect(swift([fill]).view).toContain(
+    'prompt: Text(verbatim: "Fill").foregroundStyle(Color.markswift(0.0, 0.502, 0.0))',
+  );
+  const faded = {
+    ...field("input", { id: "o", placeholder: "Faded" }, 0),
+    pseudoStyles: ph("rgb(37, 99, 235)", { opacity: "0.5" }),
+  };
+  expect(swift([faded]).view).toContain(
+    'prompt: Text(verbatim: "Faded").foregroundStyle(Color.markswift(0.145, 0.388, 0.922, 0.5))',
+  );
+});
+
 test("app mode keeps a label and trailing icon spread across a button when the icon sits a pixel higher", () => {
   const button = el(
     "button",

@@ -435,3 +435,120 @@ test("visibility public: API members public, private members private, internal u
   expect(swift).toContain("private var v_n0: some View");
   expect(swift).toContain("@ScaledMetric(relativeTo: .subheadline) private var textSize14");
 });
+
+const LI = { "font-size": "14px", "line-height": "20px", color: "rgb(17, 17, 17)" };
+/** An `<ol>` of text rows whose inside `::marker` prints `markers[i]` in `type`. */
+function markerList(markers: string[], type: string | undefined): LayoutDoc {
+  const t = (s: string, x: number, y: number, w: number): LayoutNode => ({
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x, y, w, h: 20 },
+    text: s,
+    children: [],
+  });
+  const rows = markers.map((m, i) => {
+    const y = 16 + i * 28;
+    const marker = element(
+      "::marker",
+      16,
+      y,
+      20,
+      20,
+      {
+        ...LI,
+        display: "inline",
+        content: "normal",
+        "white-space-collapse": "preserve",
+        ...(type ? { "list-style-type": type } : {}),
+      },
+      [t(m, 16, y, 20)],
+    );
+    return element("li", 16, y, 360, 20, { ...LI, display: "list-item" }, [marker, t(`Step ${i}`, 36, y, 60)]);
+  });
+  const list = element(
+    "ol",
+    16,
+    16,
+    360,
+    rows.length * 28 - 8,
+    { display: "flex", "flex-direction": "column", gap: "8px" },
+    rows,
+  );
+  return doc(
+    element("main", 0, 0, 393, 200, { display: "block", "padding-top": "16px", "padding-left": "16px" }, [list]),
+  );
+}
+
+test("counter markers in rows derive from the row index", () => {
+  const swift = emit(markerList(["1. ", "2. ", "3. "], "decimal"));
+  expect(swift).toContain("ForEach(Array(rows.enumerated()), id: \\.element.id) { index, row in");
+  expect(swift).toContain("RowView(row: row, ordinal: 1 + index)");
+  expect(swift).toContain('Text(verbatim: "\\(markswiftCounter(ordinal, .decimal)). ")');
+  expect(swift).toContain('Row(id: "0", text: "Step 0"),');
+  expect(swift).not.toContain('"1. "');
+  expect(swift).toContain("        let ordinal: Int");
+  expect(swift).toContain("List.RowView(row: List.rows[0], ordinal: 1)");
+  expect(emit(markerList(["3. ", "2. ", "1. "], "decimal"))).toContain("RowView(row: row, ordinal: 3 - index)");
+  expect(emit(markerList(["a. ", "b. ", "c. "], "lower-alpha"))).toContain("markswiftCounter(ordinal, .lowerAlpha)");
+});
+
+test("markers that are no arithmetic progression or no counter stay strings", () => {
+  const gap = emit(markerList(["1. ", "2. ", "4. "], "decimal"));
+  expect(gap).not.toContain("markswiftCounter");
+  expect(gap).toContain('"4. "');
+  const bullets = emit(markerList(["• ", "• ", "• "], "disc"));
+  expect(bullets).not.toContain("markswiftCounter");
+  expect(bullets).toContain('Text(verbatim: "• ")');
+});
+
+test("counters change only extracted output", () => {
+  const counted = markerList(["1. ", "2. ", "3. "], "decimal");
+  const plain = markerList(["1. ", "2. ", "3. "], undefined);
+  expect(emit(counted, { extract: false })).toBe(emit(plain, { extract: false }));
+  expect(emit(counted, { mode: "fidelity" })).toBe(emit(plain, { mode: "fidelity" }));
+});
+
+/** A paragraph whose inline `::before` holds one image child from `src` (10×10) before its text. */
+function iconDoc(src: string): LayoutDoc {
+  const t = (s: string, x: number, w: number): LayoutNode => ({
+    tag: "#text",
+    attrs: {},
+    styles: {},
+    bounds: { x, y: 16, w, h: 20 },
+    text: s,
+    children: [],
+  });
+  const img: LayoutNode = {
+    tag: "img",
+    attrs: { src },
+    styles: {},
+    bounds: { x: 16, y: 21, w: 10, h: 10 },
+    children: [],
+  };
+  const before = element("::before", 16, 16, 10, 20, { ...LI, display: "inline", content: `url("${src}")` }, [img]);
+  const p = element("p", 16, 16, 360, 20, { ...LI, display: "block" }, [before, t("Icon", 26, 40)]);
+  return doc(element("main", 0, 0, 393, 200, { display: "block", "padding-top": "16px", "padding-left": "16px" }, [p]));
+}
+const SVG10 =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Ccircle cx='5' cy='5' r='5' fill='%232563eb'/%3E%3C/svg%3E";
+const PNG1 =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==";
+
+test("a generated image run renders inside the text", () => {
+  const swift = emit(iconDoc(SVG10));
+  expect(swift).toContain("Text.markswiftRuns([");
+  const lines = swift.split("\n");
+  const at = lines.findIndex((l) => l.includes("Text(Image.markswiftRendered(width: 10.0, height: 10.0) {"));
+  expect(at).toBeGreaterThan(0);
+  const indentOf = (l: string) => l.length - l.trimStart().length;
+  expect(indentOf(lines[at + 1]!)).toBe(indentOf(lines[at]!) + 4);
+  const raster = emitSwift(inferScreen(iconDoc(PNG1), "list"), "List", { mode: "app" });
+  expect(raster.view).toMatch(/Image\.markswiftAsset\("[0-9a-f]{12}\.png"\)\.resizable\(\)/);
+  expect(Object.keys(raster.images)).toHaveLength(1);
+  const broken = emitSwift(inferScreen(iconDoc("data:text/plain,x"), "list"), "List", { mode: "app" });
+  expect(broken.view).toContain("Text.markswiftGap(10.0)");
+  expect(broken.report.flatMap((r) => r.diagnostics).map((d) => `${d.level} ${d.feature}`)).toContain(
+    "unmapped content: url()",
+  );
+});

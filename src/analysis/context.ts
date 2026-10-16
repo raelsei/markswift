@@ -3,6 +3,7 @@ import { type LayoutNode, type Rect } from "../model/layout.ts";
 import { type LabelIndex } from "./controls.ts";
 import { type SemNode, type Axis, type CrossAlign, type TextRun } from "../model/semantic.ts";
 import { type BundledFamilies } from "../model/fonts.ts";
+import { type TableSlots } from "./table.ts";
 
 /** A text run: one text node and the element whose computed style it inherits. */
 export interface SourceTextRun {
@@ -36,6 +37,8 @@ export interface InferenceContext {
   viewport?: Rect;
   /** `<label>` ↔ control pairs of the capture; absent in hand-built contexts. */
   labels?: LabelIndex;
+  /** The rows box `captionOutside` split off an admitted table, and its slots: `build` lays it out as the table. */
+  table?: { rows: LayoutNode; slots: TableSlots };
 }
 
 /** A run under construction: the emitted run plus, per character, its index in the raw text node. */
