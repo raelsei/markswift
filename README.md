@@ -61,7 +61,7 @@ to stderr.
 
 | File | When |
 | --- | --- |
-| `<Name>.swift` | Always: the view with an explicit `init`, a light and a dark `#Preview`, plus `extension <Name> { struct <Type>; static let <types>; struct <Type>View }` with extracted row types, data, subviews and one `#Preview` per subview when the design repeats sibling elements |
+| `<Name>.swift` | Always: the view with an explicit `init`, a light and a dark `#Preview`, plus `extension <Name> { struct <Type>; static let <types>; struct <Type>View }` with extracted row types, data, subviews and one `#Preview` per subview when the design repeats sibling elements, and one `#Preview` per width band for breakpoint conversions |
 | `<Name>+Tokens.swift` | Always: colours in `<Name>.Palette` |
 | `MarkswiftRuntime.swift` | Always: shared helpers; its header names the Markswift version, and every conversion by that version produces the identical file |
 | `<Name>+Shapes.swift` | When SVG or clip shapes exist |
@@ -244,7 +244,9 @@ font set, use [`markswift build`](#building-a-component-library-markswift-build)
 `markswift build [markswift.json] [--force]` captures every component of a config in one browser session and writes
 ONE local Swift package. Paths are relative to the config file; `serve` (default: the config's directory) is served
 over `http://127.0.0.1` so relative URLs such as `../assets/geist.woff2` resolve inside it. `root`, `viewport`,
-`theme`, `darkClass`, `mode`, `css` and `waitFor` apply to every component; a component may override any of them.
+`theme`, `darkClass`, `mode`, `css`, `waitFor` and `breakpoints` apply to every component; a component may override any
+of them. `breakpoints` is `true` or `{ devices, max }`: one view across CSS width bands, as `convert --breakpoints`
+(`false` turns a shared value off).
 `source` is a file inside `serve` or an `http(s)` URL. Names must be Swift type names that SwiftUI does not already
 use (`ButtonView`, not `Button`).
 

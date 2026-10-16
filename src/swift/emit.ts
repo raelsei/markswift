@@ -21,9 +21,20 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   // Collect container properties depth-first so the body reads top-down.
   const contentMinWidth = new Set<SemNode>();
   const allocated = new Map<SemNode, "width" | "height" | "both">();
+  // Breakpoints: a container takes the name of its nearest enclosing alternative's lowest band (`v_split_md`).
+  const bandSuffix = new Map<SemNode, string>();
+  const names = screen.breakpoints?.names;
+  if (names)
+    visit(screen.root, (a) => {
+      if (a.bands) visit(a, (n) => bandSuffix.set(n, names[a.bands![0]!]!));
+    });
   visit(screen.root, (n) => {
     if (n.kind !== "stack" && n.kind !== "grid") return;
-    props.push({ name: uniqueName(`v_${identifier(n.id) || "n" + props.length}`, seen), node: n });
+    const suffix = bandSuffix.get(n);
+    props.push({
+      name: uniqueName(`v_${identifier(n.id) || "n" + props.length}${suffix ? `_${suffix}` : ""}`, seen),
+      node: n,
+    });
     // A measured layout proposes each child its captured box, which already holds CSS's minimum.
     // App mode: MarkswiftTracks proposes each cell its column width and, with stretch, its row
     // height; without stretch it proposes no height, so a filling cell takes its content height
@@ -165,12 +176,12 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   members.push(...decls);
   if (decls.length) members.push("");
   members.push(...init, "", ...body);
-  const preview = (theme: Theme, title: string, args = "") => [
+  const preview = (theme: Theme, title: string, args = "", width = screen.size.w) => [
     `#Preview("${title}") {`,
     ...indent(
       [
         ...(opts.registerFonts ? ["BundledFonts.register()", `return ${viewName}(${args})`] : [`${viewName}(${args})`]),
-        `.frame(width: ${num(screen.size.w)}, height: ${num(screen.size.h)})`,
+        `.frame(width: ${num(width)}, height: ${num(screen.size.h)})`,
         `.background(Color.markswift(${colorArgs(theme === "dark" ? { r: 0.043, g: 0.055, b: 0.075, a: 1 } : { r: 0.957, g: 0.965, b: 0.98, a: 1 })}))`,
         `.preferredColorScheme(.${theme})`,
       ],
@@ -196,7 +207,23 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ...(opts.adaptive
       ? [...preview("light", `${viewName} — Light`), "", ...preview("dark", `${viewName} — Dark`)]
       : preview(screen.theme, viewName)),
+<<<<<<< HEAD
     // One preview per layer (in-flow or presentation), shown open.
+||||||| 53aeb69
+    // One preview per in-flow layer, shown open.
+=======
+    // One preview per width band above the first, at its capture width.
+    ...(screen.breakpoints?.names.slice(1) ?? []).flatMap((band, i) => [
+      "",
+      ...preview(
+        opts.adaptive ? "light" : screen.theme,
+        `${viewName} — ${band}`,
+        "",
+        screen.breakpoints!.widths[i + 1],
+      ),
+    ]),
+    // One preview per in-flow layer, shown open.
+>>>>>>> main
     ...[...control.openStates].flatMap(([layer, state]) => [
       "",
       ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),

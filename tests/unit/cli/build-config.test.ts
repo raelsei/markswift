@@ -112,3 +112,21 @@ test("palette maps: bad keys and multi-line values are usage errors naming the k
   const loaded = await loadBuildConfig(await config("with-palette.json", { ...valid, palette: "palette.json" }));
   expect(loaded.options.palette).toEqual(map);
 });
+
+test("breakpoints: a shared value is inherited, a component's false turns it off, a bad max names the key", async () => {
+  const loaded = await loadBuildConfig(
+    await config("breakpoints.json", {
+      ...valid,
+      breakpoints: true,
+      components: [
+        { name: "Card", source: "card.html" },
+        { name: "Plain", source: "card.html", breakpoints: false },
+        { name: "Wide", source: "card.html", breakpoints: { max: 1024 } },
+      ],
+    }),
+  );
+  expect(loaded.options.components.map((c) => c.breakpoints)).toEqual([true, undefined, { max: 1024 }]);
+  const bad = loadBuildConfig(await config("bad-breakpoints.json", { ...valid, breakpoints: { max: 100 } }));
+  await expect(bad).rejects.toBeInstanceOf(UsageError);
+  await expect(bad).rejects.toThrow("breakpoints");
+});

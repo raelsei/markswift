@@ -2,14 +2,14 @@ import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
 import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
-import { compileLayout, DEFAULT_BAND_DEVICES, needsProbe, planBands } from "../compiler/index.ts";
+import { compileLayout, needsProbe } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import type { HtmlSource } from "../input/types.ts";
 import type { FontFace, LayoutDoc } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
-import { captureBands, captureThemes } from "./bands.ts";
+import { captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -24,13 +24,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     throw new Error("viewport dimensions must be positive integers and dpr must be positive and finite");
   }
   const bp = options.breakpoints;
-  if (
-    bp !== undefined &&
-    bp !== true &&
-    (!(bp.devices ?? []).every((d) => [d.width, d.height].every((n) => Number.isInteger(n) && n > 0)) ||
-      (bp.max !== undefined && !(Number.isInteger(bp.max) && bp.max >= 320)))
-  )
-    throw new Error("breakpoints devices must be positive integer sizes and max an integer ≥ 320");
+  validateBreakpoints(bp);
   const timeoutMs = options.timeoutMs ?? 120_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be positive and finite");
   if (["html", "file", "url"].filter((key) => key in source).length !== 1)
@@ -85,13 +79,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     // The open-state pass runs on the primary captures only, never on the probe.
     const layered = { ...req, layers: true };
     const first = await captureThemes(renderer, layered, timedOut);
-    const plan = bp
-      ? planBands(first.primary.layout.conditions, {
-          first: viewport,
-          devices: (bp === true ? undefined : bp.devices) ?? DEFAULT_BAND_DEVICES,
-          max: (bp === true ? undefined : bp.max) ?? 1376,
-        })
-      : undefined;
+    const plan = bp ? planFor(bp, first.primary.layout.conditions, viewport) : undefined;
     const bands = plan ? await captureBands(renderer, layered, { viewport, captured: first }, plan, timedOut) : [first];
     const { primary: capture, dark } = bands[0]!;
     // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot

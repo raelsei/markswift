@@ -16,6 +16,13 @@ const Shared = {
   mode: z.enum(["app", "fidelity"]).optional(),
   css: z.string().min(1).optional(),
   waitFor: z.string().min(1).optional(),
+  /** `true` or `{ devices, max }`: one view across CSS width bands; `false` turns a shared setting off. */
+  breakpoints: z
+    .union([
+      z.boolean(),
+      z.object({ devices: z.array(Viewport).min(1).optional(), max: z.number().int().min(320).optional() }).strict(),
+    ])
+    .optional(),
 };
 /** `markswift.json`: one library, its output directory, shared capture settings and the components (each may override them). */
 export const BuildConfig = z
@@ -131,6 +138,7 @@ export async function loadBuildConfig(
       mode: pick("mode"),
       css: c.css === undefined ? sharedCss : await readCss(c.css, c.name),
       waitFor: pick("waitFor"),
+      breakpoints: pick("breakpoints") || undefined,
     });
   }
   return {
