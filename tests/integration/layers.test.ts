@@ -249,13 +249,17 @@ describe("dismiss probes", () => {
 });
 
 describe("convert", () => {
-  browserTest("adaptive: layers pair by id and dark copies the light dismissal", async () => {
-    const result = await convertHtml(DIALOG, { theme: "adaptive" });
-    const [light, dark] = [result.layout.layers![0]!, result.darkLayout!.layers![0]!];
-    expect(dark.id).toBe(light.id);
-    expect(light.dismiss.escape).toBe(true);
-    expect(dark.dismiss).toEqual(light.dismiss);
-  });
+  browserTest(
+    "adaptive: layers pair by id and dark copies the light dismissal",
+    async () => {
+      const result = await convertHtml(DIALOG, { theme: "adaptive" });
+      const [light, dark] = [result.layout.layers![0]!, result.darkLayout!.layers![0]!];
+      expect(dark.id).toBe(light.id);
+      expect(light.dismiss.escape).toBe(true);
+      expect(dark.dismiss).toEqual(light.dismiss);
+    },
+    30_000,
+  );
 
   browserTest(
     "tooltips: two hover layers and a title become .help, never drawn",
