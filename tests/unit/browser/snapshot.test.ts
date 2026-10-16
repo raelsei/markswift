@@ -443,4 +443,47 @@ describe("pseudo-element images", () => {
     })!;
     expect(gradient.children).toEqual([]);
   });
+
+  test("consecutive text parts of a multi-part content merge into one #text child", () => {
+    const after = pseudoOf("after", {
+      b: [21.34, 489, 32.92, 18],
+      styles: { content: 'counter(x) " / X"' },
+      parts: [
+        { b: [21.34, 489, 8.91, 18], text: "0" },
+        { b: [30.25, 489, 24.02, 18], text: " / X" },
+      ],
+    })!;
+    expect(after.children).toEqual([
+      {
+        tag: "#text",
+        attrs: {},
+        styles: {},
+        bounds: { x: 21.34, y: 489, w: 32.93, h: 18 },
+        text: "0 / X",
+        children: [],
+      },
+    ]);
+  });
+
+  test("a space before an image is kept; an image splits text children", () => {
+    const ext = pseudoOf("after", {
+      b: [30, 56, 15.2, 18],
+      styles: { content: '" " url("data:image/png;base64,AAAA")' },
+      parts: [{ b: [30, 56, 5.2, 18], text: " " }, { b: [35.2, 60, 10, 10] }],
+    })!;
+    expect(ext.children.map((c) => [c.tag, c.text])).toEqual([
+      ["#text", " "],
+      ["img", undefined],
+    ]);
+    const mid = pseudoOf("before", {
+      b: [0, 0, 40, 18],
+      styles: { content: '"a" url("data:image/png;base64,AAAA") "b"' },
+      parts: [{ b: [0, 0, 10, 18], text: "a" }, { b: [10, 4, 10, 10] }, { b: [20, 0, 10, 18], text: "b" }],
+    })!;
+    expect(mid.children.map((c) => [c.tag, c.text])).toEqual([
+      ["#text", "a"],
+      ["img", undefined],
+      ["#text", "b"],
+    ]);
+  });
 });

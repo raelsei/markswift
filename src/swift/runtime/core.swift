@@ -239,6 +239,17 @@ extension Image {
         return Image(nsImage: image)
 #endif
     }
+
+    /// A generated image (`content: url()`) drawn at its CSS size so it can sit inside a `Text` run, where
+    /// SwiftUI accepts only an `Image`. `label` nil = decorative.
+    // ponytail: rendered on every body evaluation; cache the CGImage by a key if a long list shows many.
+    @MainActor static func markswiftRendered<Content: View>(width: CGFloat, height: CGFloat, label: String? = nil, @ViewBuilder _ content: () -> Content) -> Image {
+        let renderer = ImageRenderer(content: content().frame(width: width, height: height))
+        renderer.scale = 3
+        guard let image = renderer.cgImage else { return Image(systemName: "photo") }
+        if let label { return Image(image, scale: 3, label: Text(verbatim: label)) }
+        return Image(decorative: image, scale: 3)
+    }
 }
 
 /// A straight line along the middle of its rect, parallel to `edge` — per-side dashed and
