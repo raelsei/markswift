@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { buildMatrix, loadFixtureSet, loadPilot, openKey, reflowTag, validatePilot } from "./pilot.ts";
+import { buildMatrix, loadFixtureSet, loadPilot, motionTag, openKey, reflowTag, validatePilot } from "./pilot.ts";
 
 const fixtureRoot = join(import.meta.dir, "fixtures");
 
@@ -99,6 +99,37 @@ test("--reflow adds 768 captures only for reflow-tagged cases", async () => {
 
 test("an invalid markswift-reflow tag throws", () => {
   expect(() => reflowTag('<meta name="markswift-reflow" content="maybe">', "x")).toThrow("invalid markswift-reflow");
+});
+
+test("markswift-motion metas give ascending ms lists; invalid ones throw", () => {
+  expect(
+    motionTag(
+      '<meta name="markswift-motion" content="250,500"><meta name="markswift-motion-reduced" content="250">',
+      "x",
+    ),
+  ).toEqual({ motion: [250, 500], motionReduced: [250] });
+  expect(motionTag("<p>", "x")).toEqual({});
+  expect(() => motionTag('<meta name="markswift-motion" content="500,250">', "x")).toThrow("invalid markswift-motion");
+  expect(() => motionTag('<meta name="markswift-motion-reduced" content="1.5">', "x")).toThrow(
+    "invalid markswift-motion-reduced",
+  );
+});
+
+test("motion-tagged cases add 390 app frame captures per theme", () => {
+  const item = { id: "spin", fixture: "css-misc/spin.html", themes: ["light", "dark"] as const };
+  const matrix = buildMatrix([{ ...item, themes: [...item.themes], motion: [50, 250], motionReduced: [250] }]);
+  const frames = matrix.filter((entry) => entry.frame);
+  expect(frames.map((entry) => entry.key)).toEqual([
+    "spin-390-light-app@t:50",
+    "spin-390-light-app@t:250",
+    "spin-390-light-app@reduced@t:250",
+    "spin-390-dark-app@t:50",
+    "spin-390-dark-app@t:250",
+    "spin-390-dark-app@reduced@t:250",
+  ]);
+  expect(frames.every((entry) => entry.width === 390 && entry.mode === "app")).toBe(true);
+  expect(frames[2]!.frame).toEqual({ t: 250, reduced: true });
+  expect(matrix.filter((entry) => !entry.frame)).toHaveLength(8);
 });
 
 test("pilot rejects expectedText on a reflow-tagged fixture", async () => {

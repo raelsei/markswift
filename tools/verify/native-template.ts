@@ -1,5 +1,9 @@
 import type { ConversionResult } from "../../src/index.ts";
 import { parseColor } from "../../src/css/color.ts";
+import { num } from "../../src/swift/format.ts";
+
+/** States a harness forces on every element at once (`MarkswiftForcedStates` members). */
+export type ForcedState = "pressed" | "focused" | "reduceMotion";
 
 /** Size, canvas colour and theme of the render, shared by the iOS and macOS templates. */
 export function canvas(result: ConversionResult) {
@@ -59,6 +63,8 @@ import UIKit
 struct RenderJob: Decodable {
     let view: Int, w: Double, h: Double, dark: Bool, r: Double, g: Double, b: Double, a: Double
     let assets: String, output: String
+    /// Seconds into every animation (absent = settled); MarkswiftForcedStates raw value.
+    let time: Double?, forced: Int?
 }
 
 func jobView(_ index: Int) -> AnyView {
@@ -97,7 +103,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                     let host = UIHostingController(rootView: jobView(job.view)
                         .frame(width: job.w, height: job.h, alignment: .topLeading)
                         .background(Color(.sRGB, red: job.r, green: job.g, blue: job.b, opacity: job.a))
-                        .environment(\\.colorScheme, job.dark ? .dark : .light))
+                        .environment(\\.colorScheme, job.dark ? .dark : .light)
+                        .environment(\\.markswiftMotionTime, job.time ?? .infinity)
+                        .environment(\\.markswiftForcedStates, MarkswiftForcedStates(rawValue: job.forced ?? 0)))
                     host.safeAreaRegions = []
                     host.overrideUserInterfaceStyle = job.dark ? .dark : .light
                     host.view.frame = CGRect(x: 0, y: 0, width: job.w, height: job.h)
@@ -133,13 +141,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 /**
  * `main.swift` of a macOS command-line renderer: SwiftUI `ImageRenderer`, without a simulator. Fonts register from `fontsDir`; `Images/` resolves next to it.
- * `forced` draws every pressed (or focused) look at once, as the browser reference forces the same pseudo-classes.
+ * `forced` draws every pressed (or focused) look at once, as the browser reference forces the same pseudo-classes, or
+ * Reduce Motion. `motionTime`: seconds into every animation; `Infinity` = the settled look the rest capture shows.
  */
 export function macRenderMain(
   result: ConversionResult,
   fontsDir: string,
   output: string,
-  forced?: "pressed" | "focused",
+  forced?: ForcedState,
+  motionTime = Infinity,
 ): string {
   const { w, h, color, dark } = canvas(result);
   return `import SwiftUI
@@ -152,7 +162,8 @@ NSApplication.shared.appearance = NSAppearance(named: .${dark ? "darkAqua" : "aq
 let content = ${result.name}()
     .frame(width: ${w}, height: ${h}, alignment: .topLeading)
     .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
-    .environment(\\.colorScheme, .${dark ? "dark" : "light"})${forced ? `\n    .environment(\\.markswiftForcedStates, .${forced})` : ""}
+    .environment(\\.colorScheme, .${dark ? "dark" : "light"})
+    .environment(\\.markswiftMotionTime, ${motionTime === Infinity ? ".infinity" : num(motionTime)})${forced ? `\n    .environment(\\.markswiftForcedStates, .${forced})` : ""}
 let renderer = ImageRenderer(content: content)
 renderer.scale = 2
 renderer.proposedSize = ProposedViewSize(width: ${w}, height: ${h})
