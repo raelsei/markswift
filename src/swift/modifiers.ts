@@ -1,4 +1,4 @@
-import type { SemNode, Overlay, Presentation } from "../model/semantic.ts";
+import type { SemNode, Overlay, Presentation, StateField } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import {
   colorArgs,
@@ -18,7 +18,7 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS } from "./controls.ts";
-import { animated, animationModifier } from "./motion.ts";
+import { animated, animationModifier, stateAnimation } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
 }
@@ -64,13 +64,33 @@ function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
 
 /**
  * The node's box: padding, frame, paint, borders, shadows, overlays, effects. A pressable control emits these inside its label, so they are its hit and press area.
- * A node with a pressed/focused look paints the union style of `pairStyle`, its colours as ternaries.
+ * A node with a pressed/focused look paints the union style of `pairStyle`, its colours as ternaries; app output
+ * animates them with their CSS transitions: one `MarkswiftStateAnimation` at the end when every field shares its
+ * timing, else one after each field's paint (the nearest one wins for what it wraps).
  * App: a scroll box's padding scrolls with its content (layout.ts); everything else here belongs to its ScrollView.
  */
 export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   const scrolls = ctx.mode === "app" && (n.kind === "stack" || n.kind === "grid") && n.scroll !== undefined;
-  const m = scrolls ? [] : paddingModifiers(n, ctx);
   const paint = ctx.statePaint?.get(n.id);
+  const timed = ctx.mode === "app" && paint?.transitions ? paint : undefined;
+  const timings = new Map<StateField, string>(
+    (timed?.fields ?? [])
+      .filter((f) => f !== "transform" && f !== "filters")
+      .map((f) => [f, stateAnimation(timed!.cond, timed!.transitions, f)]),
+  );
+  const uniform = new Set(timings.values()).size === 1 ? [...timings.values()][0] : undefined;
+  const m: string[] = [];
+  let last = -1;
+  // After the lines drawing `field`; an identical timing just before is covered by this one.
+  const animate = (field: StateField) => {
+    const expr = timings.get(field);
+    if (expr === undefined || uniform !== undefined) return;
+    if (m[last] === expr) m.splice(last, 1);
+    last = m.push(expr) - 1;
+  };
+  // Run colours paint the core Text this wraps.
+  animate("runColors");
+  if (!scrolls) m.push(...paddingModifiers(n, ctx));
   // A copy for the paint helpers; `frameModifier` and the overlays keep `n` (identity lookups).
   const p = paint ? ({ ...n, style: paint.style } as SemNode) : n;
   const st = p.style;
@@ -86,7 +106,9 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   ].reverse())
     m.push(...overlayModifier(o, "background", ctx));
   // Inset shadows are part of the box paint: above fills, below every child.
-  m.push(...insetShadowModifiers(p, ctx));
+  const inset = insetShadowModifiers(p, ctx);
+  m.push(...inset);
+  if (inset.length) animate("shadows");
   // Fills are bottom-most first in the IR; the same chain rule means the top-most goes first.
   // Unless a layer carries a `background-blend-mode`: blending is against the layers *below it
   // inside this node*, so the whole stack has to live in one compositing group instead of a
@@ -94,6 +116,7 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   if (st.fills.some((f) => f.kind !== "unsupported" && f.blend))
     m.push(...blendedFillModifier(st.fills, p, shape, ctx));
   else for (const f of [...st.fills].reverse()) m.push(...fillModifier(f, p, shape, ctx));
+  animate("fills");
   // backdrop-filter: over the flat canvases these designs use, blurring the backdrop changes
   // nothing visible, while SwiftUI materials add their own tint (badly in dark mode). The
   // translucent fill above already carries the "glass" look; keep the node flagged approximated.
@@ -108,6 +131,8 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
         : `.overlay(${shape}.strokeBorder(${colorExpr(b.color, ctx, n.id)}, lineWidth: ${num(b.width)}))`,
     );
   } else if (st.borderSides) m.push(...borderSideModifiers(p, ctx));
+  animate("border");
+  animate("borderSides");
   // A ring the rest leaves transparent still draws when the state paints it.
   if (
     st.outline &&
@@ -121,7 +146,10 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
       `.overlay(${shape}.inset(by: ${num(-(o.offset + o.width / 2))}).stroke(${colorExpr(o.color, ctx, n.id)}, style: ${strokeStyle(o.width, o.style)}))`,
     );
   }
-  m.push(...outerShadowModifiers(p, ctx));
+  animate("outline");
+  const outer = outerShadowModifiers(p, ctx);
+  m.push(...outer);
+  if (outer.length) animate("shadows");
   for (const o of n.overlays.filter((o) => o.layer === "overlay" && !o.presentation && (!scrolls || o.fixed)))
     m.push(...overlayModifier(o, "overlay", ctx));
   m.push(...presentationModifiers(n, ctx));
@@ -146,11 +174,13 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   } else if (paint?.opacity && !nativeDim)
     m.push(`.opacity(${paint.cond} ? ${num(paint.opacity.state)} : ${num(paint.opacity.rest)})`);
   else if (st.opacity !== undefined && !nativeDim) m.push(`.opacity(${num(st.opacity)})`);
+  animate("opacity");
   if (st.blur !== undefined) m.push(`.blur(radius: ${num(st.blur)})`);
   if (st.blend) {
     const mode = swiftBlend(st.blend);
     if (mode) m.push(`.blendMode(${mode})`);
   }
+  if (uniform !== undefined) m.push(uniform);
   // Emit-time notes on the copy land in the shared diagnostics; carry the regrade back.
   if (p !== n) n.confidence = p.confidence;
   // CSS percentage width: paint inside the fraction; margins (`placementModifiers`) outside.
@@ -197,6 +227,7 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       if (driven.sx === undefined && scale) {
         const [[rx, ry], [sx, sy], c] = [scale.rest, scale.state, paint.cond];
         m.push(`.scaleEffect(x: ${c} ? ${num(sx)} : ${num(rx)}, y: ${c} ? ${num(sy)} : ${num(ry)}, anchor: ${anchor})`);
+        if (ctx.mode === "app" && paint.transitions) m.push(stateAnimation(c, paint.transitions, "transform"));
       } else if (driven.sx === undefined && (t.scaleX !== 1 || t.scaleY !== 1))
         m.push(`.scaleEffect(x: ${num(t.scaleX)}, y: ${num(t.scaleY)}, anchor: ${anchor})`);
       if (t.rotate !== 0 && driven.deg === undefined)
@@ -205,7 +236,7 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     }
   }
   if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
-  else if (n.motion && ctx.mode === "fidelity")
+  else if ((n.motion?.animations || n.motion?.reduced) && ctx.mode === "fidelity")
     note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");
   // CSS relative positioning moves paint, not layout: outside rotation/scale, which apply about the box's own origin.
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.

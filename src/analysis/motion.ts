@@ -1,5 +1,5 @@
 /** CSS `@keyframes` animations captured by `browser/motion.ts` → IR `Motion` (D-MOTION), with per-node diagnostics. */
-import type { Anim, LayoutNode } from "../model/layout.ts";
+import type { Anim, LayoutNode, Transition } from "../model/layout.ts";
 import {
   addDiagnostic,
   type Diagnostic,
@@ -7,7 +7,11 @@ import {
   type Motion,
   type MotionChannel,
   type MotionTrack,
+  type SemBase,
+  type StateField,
+  type StateStyle,
   type Style,
+  type TransitionMap,
 } from "../model/semantic.ts";
 import { parseEasing } from "../css/easing.ts";
 import { parseOrigin, transformChannels, type TransformChannels } from "../css/transforms.ts";
@@ -33,6 +37,99 @@ const COMPOSABLE: Record<string, true> = {
 };
 /** D-MOTION: a status indicator keeps its loop under Reduce Motion. */
 const STATUS_ROLES: Record<string, true> = { status: true, progressbar: true };
+/** Transitioned CSS longhand → the state paint field it draws; key order = which property's timing a field takes. */
+const PAINT_FIELD: Record<string, StateField> = {
+  "background-color": "fills",
+  "background-image": "fills",
+  "border-top-color": "border",
+  "border-right-color": "border",
+  "border-bottom-color": "border",
+  "border-left-color": "border",
+  "outline-color": "outline",
+  "outline-style": "outline",
+  "outline-width": "outline",
+  "outline-offset": "outline",
+  "box-shadow": "shadows",
+  opacity: "opacity",
+  transform: "transform",
+  scale: "transform",
+  translate: "transform",
+  rotate: "transform",
+  filter: "filters",
+  color: "runColors",
+  "-webkit-text-fill-color": "runColors",
+  "text-decoration-color": "runColors",
+};
+const PAINT_ORDER = Object.keys(PAINT_FIELD);
+
+/**
+ * Captured pressed/focused transitions → per paint field timing, only for fields the node's look changes. `reduced`
+ * is the author's reduce lists, else D-MOTION's fallback: movement (`transform`) jumps, fades keep their timing.
+ */
+export function transitionsOf(
+  n: LayoutNode,
+  states: SemBase["states"],
+  diagnostics: Diagnostic[],
+): Motion["transitions"] {
+  const out: NonNullable<Motion["transitions"]> = {};
+  for (const key of ["pressed", "focused"] as const) {
+    const look = states?.[key];
+    const captured = n.motion?.transitions?.[key];
+    if (!look || !captured) continue;
+    const map = (list: Transition[]) => mapTransitions(list, look, diagnostics);
+    const into = map(captured.in);
+    const back = map(captured.out);
+    const reduced = captured.reduced
+      ? { in: map(captured.reduced.in), out: map(captured.reduced.out) }
+      : { in: { ...into }, out: { ...back } };
+    if (!captured.reduced) {
+      delete reduced.in.transform;
+      delete reduced.out.transform;
+    }
+    // Kept when every field jumps: the emitted nil animation stops an ancestor's transition from reaching this look.
+    out[key] = { in: into, out: back, reduced };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** One captured direction → field specs. ponytail: one spec per field (first property wins, reported); split fields if a design times border sides differently. */
+function mapTransitions(list: Transition[], look: StateStyle, diagnostics: Diagnostic[]): TransitionMap {
+  const out: TransitionMap = {};
+  const from: Partial<Record<StateField, string>> = {};
+  const ordered = list
+    .filter((t) => Object.hasOwn(PAINT_FIELD, t.property) && t.duration > 0)
+    .sort((a, b) => PAINT_ORDER.indexOf(a.property) - PAINT_ORDER.indexOf(b.property));
+  for (const t of ordered) {
+    let field = PAINT_FIELD[t.property]!;
+    if (field === "border" && !look.border && look.borderSides) field = "borderSides";
+    if (look[field] === undefined) continue;
+    const easing = parseEasing(t.easing);
+    if (!easing) {
+      addDiagnostic(diagnostics, "approximated", "transition-timing-function", `${t.easing} on ${t.property} jumps`);
+      continue;
+    }
+    if (t.delay < 0)
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        "transition-delay",
+        `negative transition-delay ${t.delay}ms on ${t.property} starts from the beginning`,
+      );
+    const spec = { duration: t.duration, delay: Math.max(0, t.delay), easing };
+    const first = out[field];
+    if (!first) {
+      out[field] = spec;
+      from[field] = t.property;
+    } else if (JSON.stringify(first) !== JSON.stringify(spec))
+      addDiagnostic(
+        diagnostics,
+        "approximated",
+        "transition-duration",
+        `${t.property} transitions on the timing of ${from[field]}`,
+      );
+  }
+  return out;
+}
 
 /** LayoutNode.motion → IR motion + per-node diagnostics. Undefined when nothing is mapped. Inference is mode-independent. */
 export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[]): Motion | undefined {

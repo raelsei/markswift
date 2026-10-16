@@ -11,10 +11,11 @@ export async function command(args: string[], cwd?: string, timeoutMs = 180_000)
       new Response(process.stderr).text(),
       process.exited,
     ]);
-    const output = stdout + stderr;
     if (timedOut) throw new Error("Process timed out. Check Xcode and Simulator state, then retry.");
+    const output = stdout + stderr;
     if (code !== 0) throw new Error(output.slice(-12_000) || `${args[0]} exited with code ${code}`);
-    return output;
+    // Callers parse stdout (simctl JSON, SDK paths, parity lines); tool chatter on stderr must not leak into it.
+    return stdout;
   } finally {
     clearTimeout(timer);
   }
