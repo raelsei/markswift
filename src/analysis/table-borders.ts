@@ -76,7 +76,8 @@ function resolve(parts: Part[], seg: Segment): Border | undefined {
 
 /** `table` with its collapsed borders rewritten into its own, its row groups', rows' and cells' styles. */
 export function collapseTableBorders(table: LayoutNode): LayoutNode {
-  if (!/^(inline-)?table$/.test(table.styles["display"] ?? "")) return table;
+  if (!/^(inline-)?table$/.test(table.styles["display"] ?? "") || table.styles["border-collapse"] !== "collapse")
+    return table;
   const rows: LayoutNode[] = [];
   const groups: LayoutNode[] = [];
   for (const c of table.children.filter(renders)) {
@@ -98,13 +99,6 @@ export function collapseTableBorders(table: LayoutNode): LayoutNode {
   );
   const cells = [...cellsOf.values()].flat();
   const grid = rows.map((r) => r.bounds).reduce(unionRect);
-  // ponytail: `border-collapse` is not captured (LayoutDoc 3), so rows and cells that abut read as
-  // collapsed: a separated table with `border-spacing: 0` is misread. Capture it with LayoutDoc 4.
-  const abut = (a: number, b: number) => Math.abs(a - b) <= EPS;
-  for (let i = 1; i < rows.length; i++)
-    if (!abut(rows[i - 1]!.bounds.y + rows[i - 1]!.bounds.h, rows[i]!.bounds.y)) return table;
-  if (!cells.every((c) => abut(c.bounds.x, grid.x) || cells.some((o) => abut(o.bounds.x + o.bounds.w, c.bounds.x))))
-    return table;
 
   const parts: Part[] = [...cells, ...rows, ...groups].map((node) => ({ node, rect: node.bounds }));
   parts.push({ node: table, rect: grid });

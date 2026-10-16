@@ -194,7 +194,6 @@ const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[
     actions: [],
   },
   "shadcn-list-24": { types: ["Item"], views: ["ItemView"], arrays: ["items"], actions: [] },
-  "shadcn-table": { types: ["TableRow"], views: ["TableRowView"], arrays: ["tableRows"], actions: [] },
   "tw-cards": {
     types: ["InviteATeammateCard"],
     views: ["InviteATeammateCardView"],
