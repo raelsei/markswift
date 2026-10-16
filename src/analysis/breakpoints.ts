@@ -318,7 +318,7 @@ export function mergeBands(
       return undefined;
     }
     const byBand = new Map<number, number[]>();
-    pool.forEach((b, i) => byBand.set(ks[i]!, [...(byBand.get(ks[i]!) ?? []), b]));
+    for (const [i, b] of pool.entries()) byBand.set(ks[i]!, [...(byBand.get(ks[i]!) ?? []), b]);
     const G2 = [...byBand].sort((a, b) => a[0] - b[0]).map(([label, H]): Entry => ({ doc: H[0]!, label, pool: H }));
     const ids = kids(n).map((c) => c.id);
     if (
