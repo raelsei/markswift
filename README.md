@@ -334,11 +334,12 @@ mapped, approximated or unmapped in `diagnostics`.
 
 - Static accessibility parity on every pull request: every node Chrome's accessibility tree names in the pilot
   fixture set keeps its role and name in the converted view, with no exceptions (`tests/conformance/ax-parity.test.ts`).
-- iOS behaviour suite (`bun run test:ios-behaviour`, 17 curated component fixtures in the iOS simulator, on `v*` tags,
+- iOS behaviour suite (`bun run test:ios-behaviour`, 19 curated component fixtures in the iOS simulator, on `v*` tags,
   weekly and on dispatch): the accessibility tree, Apple's accessibility audit (Dynamic Type, clipped text, element
   descriptions, traits; hit regions are reported, not failing), Dynamic Type at xSmall, large and AX5 plus the root
-  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, and interaction (toggles, text fields, pickers
-  and every action closure is called).
+  height at AX3 against Chrome scaled to AX3, right-to-left mirroring, interaction (toggles, text fields, pickers
+  and every action closure is called), and motion: an animated view moves on its live clock, and under Reduce Motion
+  it moves only when something should still move (see Motion).
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
@@ -363,6 +364,18 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
 Absolutely and fixed-positioned boxes attach to the corner CSS anchored them to, with their
 captured size and offset; fixed boxes stay outside the page's scroll view.
 
+## Motion
+
+CSS `@keyframes` animations play in `app` output through `MarkswiftAnimation` (`MarkswiftRuntime.swift`): opacity,
+translate (px and `%` of the box), scale and rotate, with CSS timing — delay (negative too), fractional and infinite
+iterations, direction, fill mode and per-keyframe `cubic-bezier()`/`steps()`/`linear()` easing — on a `TimelineView`
+clock that stops once every one-shot has ended. Under Reduce Motion the author's `prefers-reduced-motion` rules win;
+without them decorative loops stop at their rest look and one-shot animations lose their movement while their opacity
+keeps its timing; status indicators (`role="status"`/`progressbar`, `aria-busy="true"`) keep turning. `fidelity`
+output renders the settled look. The visual gate also seeks both sides: `<case>-390-<theme>-app@t:<ms>` captures pause
+Chrome's animations and the native view at the same time (`@reduced@t:<ms>` under Reduce Motion; times from the
+fixture's `markswift-motion` metas) and score them in the `motion@app` family.
+
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
@@ -370,7 +383,8 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
   (iPad and landscape layouts included). Paint-only pressed and focused deltas *are* captured; other states (hover
   only, disabled, validation, open/checked, `data-state` variants) are not.
 - Dialogs and popovers.
-- CSS animations and transitions (captured at their end state, reported).
+- CSS transitions on pressed/focused looks (captured at their end state, reported); scroll-driven animations,
+  keyframed colours/shadows/filters/layout properties, `@starting-style` and script animations (reported).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
 - `<select multiple>` and `<datalist>`.
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
@@ -463,7 +477,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants; CSS animations;
+- Breakpoint branching (iPad, landscape); dialogs and popovers; validation and `data-state` variants;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`, an author `unicode-bidi`.
