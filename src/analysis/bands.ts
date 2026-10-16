@@ -24,6 +24,14 @@ export interface BandPlan {
   notes: string[];
 }
 
+/** Tailwind's default breakpoints by `min-width` px. */
+export const TAILWIND_BANDS: Record<number, string> = { 640: "sm", 768: "md", 1024: "lg", 1280: "xl", 1536: "2xl" };
+
+/** One name per band: band 0 `""`, band `k` its lower CSS edge — a Tailwind default name, else `w<capture width>`. */
+export function bandNames(cssEdges: BandEdge[]): string[] {
+  return ["", ...cssEdges.map((e) => (e.inclusive && TAILWIND_BANDS[e.px]) || `w${captureWidth(e)}`)];
+}
+
 /** Band edges from the `media` width conditions, one capture and probe width per band. */
 export function planBands(
   conditions: LayoutCondition[],

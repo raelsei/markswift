@@ -8,6 +8,8 @@ import { applyLayers } from "../analysis/layers.ts";
 import { admitTracks } from "../analysis/grid-tracks.ts";
 import { admitFlexRow } from "../analysis/flex-row.ts";
 import { bandEdges, mergeBands } from "../analysis/breakpoints.ts";
+import { bandNames } from "../analysis/bands.ts";
+import { isTooltipLayer } from "../analysis/tooltips.ts";
 import { note } from "../swift/diagnostics.ts";
 import { visit } from "../swift/traversal.ts";
 import { emitSwift, SWIFT_RUNTIME, type EmitMode, type EmitOptions, type SwiftOutput } from "../swift/emit.ts";
@@ -25,7 +27,7 @@ import {
 import type { ScreenTokens } from "../swift/context.ts";
 import { indent } from "../swift/format.ts";
 import type { FaceMetrics, BundledFamily } from "../model/fonts.ts";
-import type { ConversionWarning, Screen } from "../model/semantic.ts";
+import type { ConversionWarning, Screen, SemNode } from "../model/semantic.ts";
 import type { Color } from "../model/values.ts";
 export type { Diagnostic, DiagnosticLevel, Confidence, ConversionWarning } from "../model/semantic.ts";
 
@@ -74,70 +76,116 @@ export interface CompileResult {
   openStates?: Record<string, string>;
 }
 
-/** One capture's screen; app mode adds its closed in-flow layers before probe checks and tokens see the screen. */
-function screenOf(
-  d: LayoutDoc,
-  name: string,
+type ComponentDocs = Pick<CompileOptions, "dark" | "probe" | "variants" | "darkVariants" | "variantProbes">;
+type BandScreens = Array<[Screen, Screen | undefined]>;
+
+/**
+ * One component's screen(s): merged across bands when `variants` differ, else the single capture. Screens are named
+ * `${name}-${theme}` and band `b` `${name}@${b}-${theme}`; `name` defaults to the capture's screen.
+ */
+function componentScreens(
+  name: string | undefined,
+  layout: LayoutDoc,
+  c: ComponentDocs,
   mode: EmitMode,
   bundledFamilies: CompileOptions["bundledFamilies"],
-): Screen {
-  const screen = inferScreen(d, name, { bundledFamilies });
-  if (mode === "app") applyLayers(screen, d, { bundledFamilies });
-  return screen;
+): { screen: Screen; dark?: Screen; bands?: BandScreens; warnings: ConversionWarning[] } {
+  const [doc, darkDoc, probeDoc] = parseDocs(layout, c.dark, c.probe);
+  const variants = parseVariants(doc, darkDoc, c);
+  const base = name ?? doc.combo.screen;
+  const infer = (d: LayoutDoc, band = 0) =>
+    inferScreen(d, `${base}${band ? `@${band}` : ""}-${d.combo.theme}`, { bundledFamilies });
+  // App: closed in-flow layers join the screen before probe checks and tokens see it.
+  const layered = (d: LayoutDoc) => {
+    const s = infer(d);
+    if (mode === "app") applyLayers(s, d, { bundledFamilies });
+    return s;
+  };
+  const single = (warnings: ConversionWarning[]) => {
+    const screen = layered(doc);
+    if (probeDoc) verifyAtProbe(screen, probeDoc);
+    return { screen, ...(darkDoc ? { dark: layered(darkDoc) } : {}), warnings };
+  };
+  if (!variants.length) return single([]);
+  const docs = [doc, ...variants.map((v) => v.layout)];
+  const edges = bandEdges(docs);
+  if ("warning" in edges)
+    return single([{ source: "breakpoints", level: "approximated", feature: "media-query", message: edges.warning }]);
+  const screens = docs.map((d, b) => {
+    const s = infer(d, b);
+    const probe = b ? variants[b - 1]!.probe : probeDoc;
+    if (probe) verifyAtProbe(s, probe);
+    return s;
+  });
+  const merged = mergeBands(docs, screens);
+  // No element differs between bands: band 0 compiles alone, exactly as without variants.
+  if (!merged) return single([]);
+  const dark = darkDoc && infer(darkDoc);
+  const screen: Screen = {
+    ...screens[0]!,
+    root: merged.root,
+    breakpoints: {
+      edges: edges.edges,
+      cssEdges: edges.cssEdges,
+      widths: docs.map((d) => d.viewport.w),
+      names: bandNames(edges.cssEdges),
+    },
+  };
+  const warnings = [...merged.warnings];
+  // App: band 0's layers (bands > 0 are captured without them), once on the merged screen. A layer whose trigger or
+  // parent sits in a holder alternative differs between bands, so it is reported instead.
+  if (mode === "app") {
+    const inAlt = new Set<string>();
+    visit(merged.root, (n) => {
+      if (n.alternatives) visit(n, (m) => inAlt.add(m.id));
+    });
+    const dropped = new Set<string>();
+    for (const l of doc.layers ?? [])
+      if (!isTooltipLayer(l, doc.root) && (inAlt.has(l.trigger) || (l.parent !== undefined && inAlt.has(l.parent)))) {
+        dropped.add(l.id);
+        warnings.push({
+          source: "breakpoints",
+          level: "approximated",
+          feature: "media-query",
+          message: `layer ${l.id} is not emitted inside a breakpoint alternative (its trigger or parent differs between width bands)`,
+        });
+      }
+    const kept = (d: LayoutDoc): LayoutDoc => ({ ...d, layers: d.layers?.filter((l) => !dropped.has(l.id)) });
+    applyLayers(screen, kept(doc), { bundledFamilies });
+    if (dark && darkDoc) applyLayers(dark, kept(darkDoc), { bundledFamilies });
+  }
+  // Tokens pair band 0's light screen — the merged root as band 0 shows it, layer content included — with its dark.
+  const bands: BandScreens = screens.map((s, b) => [
+    b ? s : { ...s, root: bandRoot(screen.root, 0) },
+    b ? variants[b - 1]!.dark && infer(variants[b - 1]!.dark!, b) : dark,
+  ]);
+  return { screen, ...(dark ? { dark } : {}), bands, warnings };
+}
+
+/** `n` as band `b` shows it: every holder replaced, recursively, by its member whose `bands` hold `b`. */
+function bandRoot(n: SemNode, b: number): SemNode {
+  const member = n.alternatives?.find((a) => a.bands!.includes(b));
+  if (member) return bandRoot(member, b);
+  const at = (c: SemNode) => bandRoot(c, b);
+  const overlays = n.overlays.map((o) => ({ ...o, node: at(o.node) }));
+  if (n.kind === "stack" || n.kind === "grid") return { ...n, overlays, children: n.children.map(at) };
+  if (n.kind === "control")
+    return { ...n, overlays, ...(n.label ? { label: at(n.label) } : {}), content: n.content.map(at) };
+  return { ...n, overlays };
+}
+
+/** The screens one view's tokens come from: every band pair, else the light screen and its dark. */
+function tokenScreens(screen: Screen, dark: Screen | undefined, bands: BandScreens | undefined): Screen[] {
+  return bands ? bands.flatMap(([light, d]) => (d ? [light, d] : [light])) : dark ? [screen, dark] : [screen];
 }
 
 /** Compile a captured layout. Custom fonts must be packaged by the caller and passed explicitly. */
 export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): CompileResult {
   const name = options.name ?? "ConvertedView";
   validateName(name);
-  const [doc, darkDoc, probeDoc] = parseDocs(layout, options.dark, options.probe);
   const mode = options.mode ?? "app";
-  const variants = parseVariants(doc, darkDoc, options);
-  const infer = (d: LayoutDoc, band = 0) =>
-    inferScreen(d, `${d.combo.screen}${band ? `@${band}` : ""}-${d.combo.theme}`, {
-      bundledFamilies: options.bundledFamilies,
-    });
-  // App: closed in-flow layers join the screen before probe checks and tokens see it; with width bands, once on the
-  // merged screen (band 0's layers: bands > 0 are captured without them), after the merge.
-  const layered = (s: Screen, d: LayoutDoc) => {
-    if (mode === "app") applyLayers(s, d, { bundledFamilies: options.bundledFamilies });
-    return s;
-  };
-  let screen = variants.length ? infer(doc) : layered(infer(doc), doc);
-  if (probeDoc) verifyAtProbe(screen, probeDoc);
-  const dark = darkDoc && (variants.length ? infer(darkDoc) : layered(infer(darkDoc), darkDoc));
-  const warnings: ConversionWarning[] = [];
-  let bands: Array<[Screen, Screen | undefined]> | undefined;
-  if (variants.length) {
-    const docs = [doc, ...variants.map((v) => v.layout)];
-    const edges = bandEdges(docs);
-    if ("warning" in edges)
-      warnings.push({ source: "breakpoints", level: "approximated", feature: "media-query", message: edges.warning });
-    else {
-      const screens = [screen];
-      for (const [i, v] of variants.entries()) {
-        const s = infer(v.layout, i + 1);
-        if (v.probe) verifyAtProbe(s, v.probe);
-        screens.push(s);
-      }
-      const merged = mergeBands(docs, screens);
-      // No element differs between bands: band 0 compiles alone, exactly as without variants.
-      if (merged) {
-        bands = screens.map((s, b) => [s, b === 0 ? dark : variants[b - 1]!.dark && infer(variants[b - 1]!.dark!, b)]);
-        screen = {
-          ...screen,
-          root: merged.root,
-          breakpoints: { edges: edges.edges, cssEdges: edges.cssEdges, widths: docs.map((d) => d.viewport.w) },
-        };
-        warnings.push(...merged.warnings);
-      }
-    }
-    layered(screen, doc);
-    if (dark && darkDoc) layered(dark, darkDoc);
-  }
-  const tokens = extractTokens(
-    bands ? bands.flatMap(([light, d]) => (d ? [light, d] : [light])) : dark ? [screen, dark] : [screen],
-  );
+  const { screen, dark, bands, warnings } = componentScreens(undefined, layout, options, mode, options.bundledFamilies);
+  const tokens = extractTokens(tokenScreens(screen, dark, bands));
   const result = compileView(
     screen,
     dark,
@@ -213,7 +261,7 @@ function parseDocs(
 function parseVariants(
   doc: LayoutDoc,
   darkDoc: LayoutDoc | undefined,
-  options: CompileOptions,
+  options: ComponentDocs,
 ): Array<{ layout: LayoutDoc; dark?: LayoutDoc; probe?: LayoutDoc }> {
   const variants = options.variants ?? [];
   if ((options.darkVariants?.length ?? 0) !== (darkDoc ? variants.length : 0))
@@ -360,7 +408,7 @@ function compileView(
     for (const t of tokens.tokens)
       if (t.kind === "semantic") pairName.set(`${colorKey(t.light)}|${colorKey(t.dark)}`, t.name);
     const hits = new Map<string, string[]>();
-    for (const u of pairUsages(bands ? bands.flatMap(([light, d]) => (d ? [light, d] : [light])) : [screen, dark])) {
+    for (const u of pairUsages(tokenScreens(screen, dark, bands))) {
       const light = colorKey(u.light);
       const pair = u.dark && light !== colorKey(u.dark) ? pairName.get(`${light}|${colorKey(u.dark)}`) : undefined;
       if (pair && !bound.has(`${u.nodeId}\u0000${pair}`) && missed.has(`${u.nodeId}\u0000${light}`)) {
@@ -387,6 +435,10 @@ export interface LibraryComponent {
   name: string;
   layout: LayoutDoc;
   dark?: LayoutDoc;
+  /** Breakpoint component: captures at the other width bands, as `CompileOptions.variants`. */
+  variants?: LayoutDoc[];
+  /** Dark captures of `variants`, as `CompileOptions.darkVariants`. */
+  darkVariants?: LayoutDoc[];
   mode?: EmitMode;
 }
 
@@ -438,27 +490,31 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
     options.library,
     components.map((c) => c.name),
   );
-  const infer = (d: LayoutDoc, name: string, mode: EmitMode) =>
-    screenOf(d, `${name}-${d.combo.theme}`, mode, options.bundledFamilies);
-  const screens = components.map((c) => {
-    const [doc, darkDoc] = parseDocs(c.layout, c.dark);
-    const mode = c.mode ?? "app";
-    return { c, screen: infer(doc, c.name, mode), dark: darkDoc && infer(darkDoc, c.name, mode) };
-  });
-  const tokens = extractTokens(screens.flatMap((s) => (s.dark ? [s.screen, s.dark] : [s.screen])));
+  const screens = components.map((c) => ({
+    c,
+    ...componentScreens(c.name, c.layout, c, c.mode ?? "app", options.bundledFamilies),
+  }));
+  const tokens = extractTokens(screens.flatMap((s) => tokenScreens(s.screen, s.dark, s.bands)));
   const files: Record<string, string> = {};
   const shapes: Record<string, string> = {};
   const assets: Record<string, Uint8Array> = {};
   const warnings: ConversionWarning[] = [];
   const diagnostics: LibraryResult["diagnostics"] = {};
-  for (const { c, screen, dark } of screens) {
-    const result = compileView(screen, dark, c.name, tokens, {
-      mode: c.mode ?? "app",
-      fontMetrics: options.fontMetrics,
-      visibility: "public",
-      registerFonts: options.registerFonts,
-      regenerate: "build",
-    });
+  for (const { c, screen, dark, bands, warnings: own } of screens) {
+    const result = compileView(
+      screen,
+      dark,
+      c.name,
+      tokens,
+      {
+        mode: c.mode ?? "app",
+        fontMetrics: options.fontMetrics,
+        visibility: "public",
+        registerFonts: options.registerFonts,
+        regenerate: "build",
+      },
+      bands,
+    );
     files[`${c.name}.swift`] = result.view;
     for (const [key, text] of Object.entries(result.shapes)) {
       if (shapes[key] !== undefined && shapes[key] !== text) throw new Error(`shape ${key} has two definitions`);
@@ -470,7 +526,7 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
         throw new Error(`image ${path} has two different contents`);
       assets[path] = bytes;
     }
-    warnings.push(...result.warnings.map((w) => ({ ...w, component: c.name })));
+    warnings.push(...[...own, ...result.warnings].map((w) => ({ ...w, component: c.name })));
     diagnostics[c.name] = result.report;
   }
   files["MarkswiftPalette.swift"] = emitDesignTokens(tokens, undefined, {

@@ -91,3 +91,31 @@ browserTest(
   },
   180000,
 );
+
+browserTest(
+  "layers: band 0's disclosure joins the merged view once; band captures carry no layers",
+  async () => {
+    const result = await convertHtml(
+      `<style>.side{display:none} @media (min-width:768px){.side{display:block}}</style><main data-markswift-root><div class="wrap"><aside class="side">Side</aside><p>Text</p></div><details><summary>More</summary><p>Answer</p></details></main>`,
+      { breakpoints: true, theme: "light" },
+    );
+    expect(result.layout.layers).toHaveLength(1);
+    expect(result.bands![1]!.layout.layers).toBeUndefined();
+    expect(result.code.match(/@State private var isMoreExpanded\b/g)).toHaveLength(1);
+    await typechecks(result);
+  },
+  180000,
+);
+
+browserTest(
+  "swap: the breakpoint view's init is the single capture's",
+  async () => {
+    const init = (code: string) => code.split("\n").find((l) => l.startsWith("    init("));
+    const bands = await convertHtml(SWAP, { theme: "light", breakpoints: true });
+    const single = await convertHtml(SWAP, { theme: "light" });
+    expect(init(bands.code)).toBeDefined();
+    expect(init(bands.code)).toBe(init(single.code)!);
+    expect(bands.code.match(/@State private var s_note\b/g)).toHaveLength(1);
+  },
+  180000,
+);
