@@ -242,6 +242,7 @@ test("breakpoint fixtures carry their widths; buildMatrix with references adds w
       .sort(),
   ).toEqual([
     "bp-dialog-footer",
+    "bp-field-responsive",
     "bp-input",
     "bp-pagination",
     "js-swap",

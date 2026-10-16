@@ -99,21 +99,31 @@ export async function captureThemes(
   return { primary, dark };
 }
 
-/** The capture of every band of `plan`, reusing `first` for the band it belongs to; one browser, in order. Only band 0
- * runs the open-state pass (`req.layers`): its layers are applied once on the merged screen. */
+/** One capture of a breakpoint conversion; `extra`: a container-query capture (`BandPlan.extra`). */
+export interface BandCapture {
+  primary: Capture;
+  dark?: Capture;
+  extra?: true;
+}
+
+/** The capture of every band of `plan`, reusing `first` for the band it belongs to, then its `extra` captures; one
+ * browser, in order, returned ascending by width (`extra: true` on the extras). Only band 0 runs the open-state pass
+ * (`req.layers`): its layers are applied once on the merged screen. */
 export async function captureBands(
   renderer: BrowserCapture,
   req: Parameters<typeof captureThemes>[1],
   first: { viewport: { width: number; height: number }; captured: { primary: Capture; dark?: Capture } },
   plan: BandPlan,
   timedOut: Promise<never>,
-): Promise<Array<{ primary: Capture; dark?: Capture }>> {
-  const bands: Array<{ primary: Capture; dark?: Capture }> = [];
+): Promise<BandCapture[]> {
+  const bands: BandCapture[] = [];
   for (const [i, capture] of plan.captures.entries())
     bands.push(
       capture.width === first.viewport.width && capture.height === first.viewport.height
         ? first.captured
         : await captureThemes(renderer, { ...req, viewport: capture, ...(i > 0 ? { layers: false } : {}) }, timedOut),
     );
-  return bands;
+  for (const viewport of plan.extra)
+    bands.push({ ...(await captureThemes(renderer, { ...req, viewport, layers: false }, timedOut)), extra: true });
+  return bands.sort((a, b) => a.primary.layout.viewport.w - b.primary.layout.viewport.w);
 }

@@ -48,7 +48,8 @@ export interface CompileOptions {
    */
   probe?: LayoutDoc;
   /** Breakpoint conversion: captures of the same screen and theme at the other width bands, ascending by viewport
-   * width; `layout` is band 0. Their shared `conditions` define the band edges. */
+   * width; `layout` is band 0. Their shared `conditions` define the band edges. A page with width `@container` queries
+   * may hold more than one capture per band (`BandPlan.extra`); the lowest of a band represents it. */
   variants?: LayoutDoc[];
   /** Dark captures of `variants`, same order; required when `dark` is set with `variants`. */
   darkVariants?: LayoutDoc[];
@@ -117,9 +118,11 @@ function componentScreens(
     if (probe) verifyAtProbe(s, probe);
     return s;
   });
-  const merged = mergeBands(docs, screens);
-  // No element differs between bands: band 0 compiles alone, exactly as without variants.
-  if (!merged) return single([]);
+  // Each capture's viewport band; a band's lowest capture represents it (the others are container-query captures).
+  const { bands } = edges;
+  const merged = mergeBands(docs, screens, bands);
+  // No element differs between bands: band 0 compiles alone, exactly as without variants (with any merge warnings).
+  if (!merged || merged.root === screens[0]!.root) return single(merged?.warnings ?? []);
   const dark = darkDoc && infer(darkDoc);
   const screen: Screen = {
     ...screens[0]!,
@@ -127,7 +130,7 @@ function componentScreens(
     breakpoints: {
       edges: edges.edges,
       cssEdges: edges.cssEdges,
-      widths: docs.map((d) => d.viewport.w),
+      widths: docs.filter((_, i) => bands[i] !== bands[i - 1]).map((d) => d.viewport.w),
       names: bandNames(edges.cssEdges),
     },
   };
@@ -155,11 +158,11 @@ function componentScreens(
     if (dark && darkDoc) applyLayers(dark, kept(darkDoc), { bundledFamilies });
   }
   // Tokens pair band 0's light screen — the merged root as band 0 shows it, layer content included — with its dark.
-  const bands: BandScreens = screens.map((s, b) => [
+  const bandScreens: BandScreens = screens.map((s, b) => [
     b ? s : { ...s, root: bandRoot(screen.root, 0) },
     b ? variants[b - 1]!.dark && infer(variants[b - 1]!.dark!, b) : dark,
   ]);
-  return { screen, ...(dark ? { dark } : {}), bands, warnings };
+  return { screen, ...(dark ? { dark } : {}), bands: bandScreens, warnings };
 }
 
 /** `n` as band `b` shows it: every holder replaced, recursively, by its member whose `bands` hold `b`. */

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>field (responsive) — shadcn/ui</title>
+    <meta name="markswift-breakpoints" content="390,479,480,834,1210" />
+    <meta name="markswift-themes" content="light,dark" />
+    <!-- tailwind-v4 globals.css -->
+  </head>
+  <body class="bg-background text-foreground">
+    <main data-markswift-root class="p-4"><div class="grid gap-6 md:grid-cols-[1fr_280px]">
+    <div data-slot="field-group" class="group/field-group @container/field-group flex w-full flex-col gap-5">
+    <div role="group" data-slot="field" class="group/field flex w-full gap-2 flex-col *:w-full @md/field-group:flex-row @md/field-group:items-center @md/field-group:*:w-auto [&>.sr-only]:w-auto">
+    <label for="email" class="flex-auto text-sm font-medium">Email</label><input id="email" class="h-9 rounded-md border px-3 text-sm" value="ada@example.com"></div>
+    <div role="group" data-slot="field" class="group/field flex w-full gap-2 flex-col *:w-full @md/field-group:flex-row @md/field-group:items-center @md/field-group:*:w-auto [&>.sr-only]:w-auto">
+    <label for="name" class="flex-auto text-sm font-medium">Name</label><input id="name" class="h-9 rounded-md border px-3 text-sm" value="Ada"></div></div>
+    <aside data-slot="field-group" class="group/field-group @container/field-group flex w-full flex-col gap-5">
+    <div role="group" data-slot="field" class="group/field flex w-full gap-2 flex-col *:w-full @md/field-group:flex-row @md/field-group:items-center @md/field-group:*:w-auto [&>.sr-only]:w-auto">
+    <label for="plan" class="flex-auto text-sm font-medium">Plan</label><input id="plan" class="h-9 rounded-md border px-3 text-sm" value="Pro"></div></aside>
+    </div></main>
+  </body>
+</html>

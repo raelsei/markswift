@@ -325,7 +325,8 @@ async function run() {
         const key = `${item.id}-bp-${theme}-app`;
         try {
           const bands: Capture[] = [];
-          for (const viewport of plan!.captures)
+          // Band captures and container-query extras, ascending (as `convert({ breakpoints })` passes them).
+          for (const viewport of [...plan!.captures, ...plan!.extra].sort((a, b) => a.width - b.width))
             bands.push(
               await bpBrowser!.capture(
                 { ...specFor(item, theme, viewport), screenshot: false, breakpoints: true },
@@ -351,7 +352,11 @@ async function run() {
             compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
             compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
           }
-          const warnings = [...new Map(bands.flatMap((band) => band.warnings).map((w) => [w.message, w])).values()];
+          // Capture warnings of every band, then the merge's own (as `convert` reports them).
+          const warnings = [
+            ...new Map(bands.flatMap((band) => band.warnings).map((w) => [w.message, w])).values(),
+            ...compiled.warnings,
+          ];
           await mkdir(swiftDir, { recursive: true });
           for (const [file, content] of Object.entries(compiled.files)) await Bun.write(join(swiftDir, file), content);
           await Bun.write(join(dir, "diagnostics.json"), JSON.stringify(compiled.diagnostics, null, 2));
@@ -408,7 +413,7 @@ async function run() {
             : `${item.id}-390-${entry.theme}-${entry.mode}`;
           const reflowTag = !entry.arm
             ? item.reflow!
-            : bpPlans.get(item.id)!.captures.some((c) => c.width === entry.width)
+            : [...bpPlans.get(item.id)!.captures, ...bpPlans.get(item.id)!.extra].some((c) => c.width === entry.width)
               ? "breakpoint"
               : "breakpoint-edge";
           if (!source) throw new Error(`reflow source ${reflowSource} missing`);

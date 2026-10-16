@@ -4,7 +4,7 @@ import { bandEdges, mergeBands } from "../../../src/analysis/breakpoints.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
 import type { SemNode } from "../../../src/model/semantic.ts";
-import { band, el, txt } from "../../helpers/bands.ts";
+import { band, el, fieldGroupDocs, txt } from "../../helpers/bands.ts";
 
 const merge = (docs: LayoutDoc[]) =>
   mergeBands(
@@ -197,11 +197,13 @@ test("9: bandEdges subtracts the root's offset from the viewport, refuses fixed 
   expect(bandEdges(centred)).toEqual({
     edges: [{ px: 600, inclusive: true }],
     cssEdges: [{ px: 600, inclusive: true }],
+    bands: [0, 1],
   });
   const padded = [390, 834].map((w) => at(w, { bounds: { x: 16, y: 0, w: w - 32, h: 100 } }));
   expect(bandEdges(padded)).toEqual({
     edges: [{ px: 568, inclusive: true }],
     cssEdges: [{ px: 600, inclusive: true }],
+    bands: [0, 1],
   });
   const fixed = [390, 834].map((w) => at(w, { bounds: { x: 0, y: 0, w: 393, h: 100 } }));
   const r = bandEdges(fixed);
@@ -255,4 +257,117 @@ test("11: equal authored inputs but a band-dependent used height (bp-pagination'
   expect(screens.map((s) => kids(s.root)[0]!.height)).toEqual([{ kind: "fixed", px: 35 }, { kind: "hug" }]);
   const li = kids(mergeBands(docs, screens)!.root)[0]!;
   expect(li.alternatives!.map((a) => a.height)).toEqual([{ kind: "fixed", px: 35 }, { kind: "hug" }]);
+});
+
+// Plan 057: query containers. Captures 390/767/834/1376 sit in viewport bands 0, 0, 1, 1.
+const VIEWPORT = [0, 0, 1, 1];
+const mergeAt = (docs: LayoutDoc[], bands = VIEWPORT) =>
+  mergeBands(
+    docs,
+    docs.map((d, i) => inferScreen(d, `bp${i ? `@${i}` : ""}-light`)),
+    bands,
+  );
+const find = (n: SemNode, id: string): SemNode | undefined =>
+  n.id === id ? n : [...kids(n), ...(n.alternatives ?? [])].map((c) => find(c, id)).find(Boolean);
+const hosts = (n: SemNode, out: string[] = []): string[] => {
+  if (n.containerBands) out.push(n.id);
+  for (const c of [...kids(n), ...(n.alternatives ?? [])]) hosts(c, out);
+  return out;
+};
+
+test("057/1: a field switching at its group's 448px content width → a holder inside the host, container bands", () => {
+  const merged = mergeAt(fieldGroupDocs())!;
+  expect(hosts(merged.root)).toEqual(["group"]);
+  expect(holders(merged.root)).toEqual(["field"]);
+  const group = find(merged.root, "group")!;
+  expect(group.containerBands).toEqual({ edges: [{ px: 448, inclusive: true }], names: ["", "cq_md"] });
+  const field = kids(group)[0]!;
+  expect(field.alternatives!.map((a) => a.bands)).toEqual([[0], [1]]);
+  expect(field.alternatives!.map((a) => a.kind === "stack" && a.axis)).toEqual(["v", "h"]);
+  expect(merged.warnings).toEqual([]);
+});
+
+test("057/2: a host 280px wide at every capture → no container bands, one 'never crosses' warning", () => {
+  const merged = mergeAt(fieldGroupDocs({ side: true }))!;
+  expect(hosts(merged.root)).toEqual(["group"]);
+  expect(merged.warnings).toEqual([
+    {
+      source: "breakpoints",
+      level: "approximated",
+      feature: "container-query",
+      message:
+        "@container (width >= 28rem) on side: the container is 280–280px wide at every captured width and never crosses 448px; add a device width where it does (breakpoints devices)",
+    },
+  ]);
+});
+
+test("057/3: a media-only difference at one container band → 'both restyle', the lower capture's content kept", () => {
+  const merged = mergeAt(fieldGroupDocs({ wideColor: "rgb(255, 0, 0)" }))!;
+  expect(hosts(merged.root)).toEqual(["group"]);
+  const row = find(merged.root, "field")!.alternatives![1]!;
+  const label = kids(row)[0]!;
+  expect(label.kind === "text" && label.runs.map((r) => r.color)).toEqual([{ r: 0, g: 0, b: 0, a: 1 }]);
+  expect(merged.warnings.map((w) => w.message)).toEqual([
+    "group: container and media queries both restyle its content at the same container width; the container query is reconstructed, the media difference is not",
+  ]);
+});
+
+test("057/4: a query container that is a text node → reported, not reconstructed", () => {
+  const docs = [390, 767].map((w) =>
+    band(
+      w,
+      [
+        el("t", "p", { x: 0, y: 0, w: w - 32, h: 20 }, {}, [
+          el(
+            "t/s",
+            "span",
+            { x: 0, y: 0, w: 40, h: 20 },
+            { display: "inline", color: w > 600 ? "rgb(255, 0, 0)" : "rgb(0, 0, 0)" },
+            [txt("hi", 40)],
+            { conditional: [0] },
+          ),
+        ]),
+      ],
+      [{ kind: "container", query: "(width >= 28rem)", container: "t", matches: w > 600 }],
+    ),
+  );
+  const screens = docs.map((d, i) => inferScreen(d, `bp${i ? `@${i}` : ""}-light`));
+  expect(screens[0]!.root.kind === "stack" && screens[0]!.root.children[0]!.kind).toBe("text");
+  const merged = mergeBands(docs, screens, [0, 0])!;
+  expect(merged.root).toBe(screens[0]!.root);
+  expect(merged.warnings.map((w) => w.message)).toEqual([
+    "@container (width >= 28rem) on t: the container is not a stack or grid (or scrolls); the query is not reconstructed",
+  ]);
+});
+
+test("057/5: media-only docs merge exactly as without explicit bands", () => {
+  const docs = W.map((w) =>
+    band(w, [
+      el(
+        "row",
+        "div",
+        { x: 0, y: 0, w, h: 40 },
+        { display: "flex", "flex-direction": w > 600 ? "row" : "column" },
+        [el("x", "div", { x: 0, y: 0, w: 20, h: 20 }, {}, [txt("X", 20)])],
+        { conditional: [0] },
+      ),
+    ]),
+  );
+  const screens = docs.map((d, i) => inferScreen(d, `bp${i ? `@${i}` : ""}-light`));
+  const merged = mergeBands(docs, screens, [0, 1])!;
+  expect(merged).toEqual(mergeBands(docs, screens)!);
+  expect(hosts(merged.root)).toEqual([]);
+  expect(merged.warnings).toEqual([]);
+});
+
+test("057/6: bandEdges takes two captures in one band only with container queries", () => {
+  const docs = fieldGroupDocs();
+  expect(bandEdges(docs)).toEqual({
+    edges: [{ px: 768, inclusive: true }],
+    cssEdges: [{ px: 768, inclusive: true }],
+    bands: [0, 0, 1, 1],
+  });
+  const media = docs.map((d) => ({ ...d, conditions: d.conditions.filter((c) => c.kind === "media") }));
+  expect(() => bandEdges(media)).toThrow("options.variants must be one capture per width band in ascending order");
+  expect(() => bandEdges([docs[0]!, docs[2]!, docs[1]!])).toThrow("one capture per width band");
 });

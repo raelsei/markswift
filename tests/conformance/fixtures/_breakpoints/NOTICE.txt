@@ -4,6 +4,9 @@ Breakpoint fixture sources (compiled into ../breakpoints/ by tests/conformance/t
   markup of shadcn/ui "radix-nova" components, neutral theme, built in research/corpora/shadcn) with a
   `markswift-breakpoints` meta.
 - bp-dialog-footer.html: the static header and footer markup of the same build's dialog, without the overlay.
+- bp-field-responsive.html: shadcn/ui `FieldGroup` and `Field` markup with the `responsive` orientation classes of
+  research/corpora/shadcn/src/components/ui/field.tsx (`@container/field-group`, `@md/field-group:`), in a grid whose
+  280px aside column starts at 768px.
 - globals.css: a copy of ../_components/globals.css (the shadcn/ui theme and Tailwind entry sheet, with the Geist font
   and dark mode rewritten for offline capture).
 

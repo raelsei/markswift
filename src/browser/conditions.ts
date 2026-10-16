@@ -86,7 +86,7 @@ export async function readConditionalRules(
           if (!marks.includes(String(i))) el.setAttribute(conditionalMark, [...marks, i].join(" "));
         }
       };
-      const conditions = new Map<string, Set<string>>();
+      const conditions = new Map<string, { query: string; selectors: Set<string> }>();
       const walk = (rules: CSSRuleList, parent: string | undefined, condition: Cond | undefined) => {
         for (const rule of Array.from(rules)) {
           let sel = parent;
@@ -100,7 +100,7 @@ export async function readConditionalRules(
                   ? rule.selectorText.replaceAll("&", `:is(${parent})`)
                   : `:is(${parent}) ${rule.selectorText}`;
             if (cond && hits(sel)) {
-              conditions.get(cond.key)!.add(rule.selectorText);
+              conditions.get(cond.key)!.selectors.add(rule.selectorText);
               stamp(cond, sel);
             }
             if (VALIDATION.test(sel))
@@ -123,10 +123,10 @@ export async function readConditionalRules(
                     query: rule.containerQuery,
                     name: rule.containerName,
                   };
-            if (!conditions.has(cond.key)) conditions.set(cond.key, new Set());
+            if (!conditions.has(cond.key)) conditions.set(cond.key, { query: cond.query, selectors: new Set() });
             // Tailwind v4 nests the query inside the utility's own rule.
             if (parent && hits(parent)) {
-              conditions.get(cond.key)!.add(parent);
+              conditions.get(cond.key)!.selectors.add(parent);
               stamp(cond, parent);
             }
           }
@@ -140,16 +140,16 @@ export async function readConditionalRules(
           /* cross-origin: unreadable, already reported */
         }
       }
-      return { rules: [...conditions].map(([condition, sels]) => ({ condition, selectors: [...sels] })), found };
+      return {
+        rules: [...conditions].map(([condition, c]) => ({ condition, query: c.query, selectors: [...c.selectors] })),
+        found,
+      };
     },
     { selector, mark: VALIDATION_MARK, conditionalMark: CONDITIONAL_MARK, containerMark: CONTAINER_MARK },
   );
+  // Width media and container queries are reconstructed with `breakpoints`; the compile reports what stays lost.
   const warnings = rules
-    .filter(
-      (c) =>
-        c.selectors.length &&
-        !(breakpoints && c.condition.startsWith("@media ") && widthQuery(c.condition.slice("@media ".length))),
-    )
+    .filter((c) => c.selectors.length && !(breakpoints && widthQuery(c.query)))
     .map(({ condition, selectors }) => ({
       source: "capture" as const,
       level: "approximated" as const,

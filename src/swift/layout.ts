@@ -227,7 +227,12 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
       ctx,
     );
   }
-  const body = decorate(n, out, ctx);
+  // A query container switches its layout lines inside its padding, frame and paint: the proposal is its content box.
+  const body = decorate(
+    n,
+    n.containerBands ? [`${bandsOpen(n.containerBands.edges)} { band in`, ...indent(out, 1), "}"] : out,
+    ctx,
+  );
   // Fidelity: the first viewport as a fixed, clipped stack (ImageRenderer cannot render ScrollView).
   if (n.scroll)
     return [

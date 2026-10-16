@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { convert, convertHtml } from "../../src/index.ts";
 import { matchesWidth, widthQuery } from "../../src/css/index.ts";
+import { CSS, HTML } from "../helpers/silent-pins.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
@@ -140,4 +141,15 @@ browserTest(
     );
   },
   60000,
+);
+
+browserTest(
+  "container queries add a capture at the top of each band and drop their capture warning",
+  async () => {
+    const result = await convertHtml(HTML, { css: CSS, theme: "light", breakpoints: true });
+    expect(result.bands!.map((b) => b.layout.viewport.w)).toEqual([390, 599, 834, 1376]);
+    expect(result.layout).toBe(result.bands![0]!.layout);
+    expect(result.warnings.filter((w) => w.source === "capture" && w.feature === "container-query")).toEqual([]);
+  },
+  120000,
 );
