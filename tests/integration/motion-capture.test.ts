@@ -133,3 +133,40 @@ browserTest(
   },
   240000,
 );
+
+browserTest(
+  "064: every unmapped animation in motion-unmapped.html is reported on its node; @starting-style warns",
+  async () => {
+    const result = await capture("css-misc/motion-unmapped.html");
+    const diagnostics = (id: string) => {
+      const node = byId(result.layout.root, id);
+      return result.diagnostics.find((r) => r.id === node.id)?.diagnostics ?? [];
+    };
+    const expected: Array<[string, string, RegExp]> = [
+      ["scroll", "animation-timeline", /scroll-driven animation grow/],
+      ["skew", "animation-name", /transform list skewX/],
+      ["shimmer", "animation-name", /keyframed background-position-x is not animated/],
+      ["dash", "animation-name", /animated circle inside an svg/],
+      ["compose", "animation-composition", /composites with add/],
+    ];
+    for (const [id, feature, message] of expected)
+      expect(diagnostics(id)).toContainEqual({ level: "unmapped", feature, message: expect.stringMatching(message) });
+    expect(result.warnings.some((w) => /@starting-style/.test(w.message))).toBe(true);
+    // Nothing mapped: no node animates in app output.
+    expect(result.files["Motion.swift"]).not.toContain("MarkswiftAnimation");
+  },
+  120000,
+);
+
+browserTest(
+  "064: app output animates the fixtures' keyframes; Reduce Motion follows D-MOTION",
+  async () => {
+    const swift = (await capture("css-misc/animation-name.html")).files["Motion.swift"]!;
+    // spin (decorative loop: stops), fade (one-shot: movement removed, opacity kept, so `reduced` differs), pulse.
+    expect(swift.match(/MarkswiftAnimation\(/g)).toHaveLength(3);
+    expect(swift).toContain("degrees: MarkswiftMotionTrack(0.0, [MarkswiftSegment(360.0, 1.0,");
+    const spinner = (await capture("components/shadcn-spinner.html")).files["Motion.swift"]!;
+    expect(spinner).toContain("MarkswiftAnimation(");
+  },
+  240000,
+);

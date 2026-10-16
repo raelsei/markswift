@@ -72,6 +72,8 @@ interface Prepared {
   /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again. */
   layers: Array<{ id: string; kind: "inflow"; trigger: string; shows: string }>;
   fonts: boolean;
+  /** `live`: some node animates; `reduced`: some node still animates under Reduce Motion (`reduced ?? animations`). */
+  motion: { live: boolean; reduced: boolean };
 }
 interface El {
   type: string;
@@ -106,6 +108,9 @@ interface CaseLog {
     xSmall?: { audit: AuditIssue[] };
     ax5?: { audit: AuditIssue[] };
     ax3?: { rootHeight: number };
+    /** Live clock: SHA-256 of two root screenshots 300 ms apart (Reduce Motion forced in `motionReduced`). */
+    motion?: { frames: string[] };
+    motionReduced?: { frames: string[] };
   };
   errors: string[];
 }
@@ -266,6 +271,11 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     const next = n.options?.find((o) => !o.disabled && o.label !== current)?.label;
     if (current && next) pickers.push({ current, next });
   });
+  const motion = { live: false, reduced: false };
+  walk(screen.root, (n) => {
+    if (n.motion?.animations?.length) motion.live = true;
+    if ((n.motion?.reduced ?? n.motion?.animations ?? []).length) motion.reduced = true;
+  });
   const code = result.files[`${view}.swift`] ?? "";
   // Callbacks only disabled elements call cannot fire: `controlMembers` is the emitter's own key → member naming.
   const { actionOf, activate, focusOf } = controlMembers(screen.root, "app");
@@ -305,6 +315,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       actions,
       layers,
       fonts: `${view}+Fonts.swift` in result.files,
+      motion,
     },
     files,
   };
@@ -437,6 +448,21 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       }
     }
   }
+  if (item.motion.live) {
+    const live = log?.launches.motion;
+    const reduced = log?.launches.motionReduced;
+    if (log && (!live || !reduced)) errors.push(`${item.id}: motion launches missing`);
+    if (live && live.frames[0] === live.frames[1]) fail("motion", "live", "two frames 300 ms apart are identical");
+    // Equal frames under Reduce Motion are expected exactly when nothing survives it (D-MOTION).
+    if (reduced && (reduced.frames[0] === reduced.frames[1]) === item.motion.reduced)
+      fail(
+        "motion",
+        "reduced",
+        item.motion.reduced
+          ? "two frames 300 ms apart are identical under Reduce Motion"
+          : "frames change under Reduce Motion although nothing should move",
+      );
+  }
   return { failures, hitRegion, errors };
 }
 
@@ -471,13 +497,14 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, actions, layers }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, actions, layers, motion }) => ({
         view,
         pickers,
         pickerValues,
         labels,
         actions: actions.map((a) => a.name),
         layers,
+        motion,
       })),
     ),
   );

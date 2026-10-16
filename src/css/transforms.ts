@@ -51,13 +51,111 @@ export interface TransformLoss {
 }
 
 /** One `translate` component: `±Npx`/`±N%` terms, optionally in `calc(…)`; `%` of `ref`. */
-function translateLength(t: string, ref: number): number | undefined {
+export function translateLength(t: string, ref: number): number | undefined {
   const body = t.replace(/^calc\((.*)\)$/, "$1").replace(/\s+/g, "");
   if (!/^([+-]?[\d.]+(?:e[+-]?\d+)?(?:px|%))+$/i.test(body)) return undefined;
   let v = 0;
   for (const [, n, unit] of body.matchAll(/([+-]?[\d.]+(?:e[+-]?\d+)?)(px|%)/gi))
     v += unit === "%" ? (+n! * ref) / 100 : +n!;
   return v;
+}
+
+/** Animatable 2D channels of one transform value; `order` = its function kinds (`T`ranslate, `R`otate, `S`cale) in list order, runs merged. */
+export interface TransformChannels {
+  tx: number;
+  ty: number;
+  sx: number;
+  sy: number;
+  deg: number;
+  order: string;
+}
+
+/**
+ * A keyframe's `transform` / `translate` / `scale` / `rotate` value → channels (`w`/`h` = border box for `%`).
+ * Only translate*, scale*, rotate/rotateZ (z parts ignored: no perspective); anything else → undefined.
+ * A list is composed T·R·S only when `order` is a subsequence of `TRS` — the caller checks.
+ */
+export function transformChannels(
+  property: "transform" | "translate" | "scale" | "rotate",
+  value: string,
+  w: number,
+  h: number,
+): TransformChannels | undefined {
+  const c: TransformChannels = { tx: 0, ty: 0, sx: 1, sy: 1, deg: 0, order: "" };
+  const v = value.trim();
+  if (v === "none") return c;
+  const kind = (k: string) => {
+    if (!c.order.endsWith(k)) c.order += k;
+  };
+  const translate = (x: string, y = "0px") => {
+    // Unitless 0 is the one length CSS allows without a unit.
+    const dx = translateLength(x === "0" ? "0px" : x, w),
+      dy = translateLength(y === "0" ? "0px" : y, h);
+    if (dx === undefined || dy === undefined) return false;
+    c.tx += dx;
+    c.ty += dy;
+    kind("T");
+    return true;
+  };
+  const scale = (x: string, y = x) => {
+    const fx = x.endsWith("%") ? parseFloat(x) / 100 : Number(x),
+      fy = y.endsWith("%") ? parseFloat(y) / 100 : Number(y);
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
+    c.sx *= fx;
+    c.sy *= fy;
+    kind("S");
+    return true;
+  };
+  const rotate = (a: string) => {
+    const deg = hue(a);
+    if (deg === undefined || a === "none") return false;
+    c.deg += deg;
+    kind("R");
+    return true;
+  };
+  if (property === "translate") {
+    const [x, y, z] = v.split(/\s+(?![^(]*\))/);
+    return z === undefined || translateLength(z, 0) !== undefined ? (translate(x!, y) ? c : undefined) : undefined;
+  }
+  if (property === "scale") {
+    const [x, y] = v.split(/\s+/);
+    return scale(x!, y) ? c : undefined;
+  }
+  if (property === "rotate") return /\s/.test(v) ? undefined : rotate(v) ? c : undefined;
+  // Top-level `name(args)` functions; args may nest `calc(…)`.
+  let depth = 0,
+    start = 0;
+  const fns: Array<[string, string[]]> = [];
+  for (let i = 0; i < v.length; i++) {
+    if (v[i] === "(") depth++;
+    else if (v[i] === ")" && --depth === 0) {
+      const text = v.slice(start, i + 1).trim();
+      const open = text.indexOf("(");
+      fns.push([
+        text.slice(0, open),
+        text
+          .slice(open + 1, -1)
+          .split(/,(?![^(]*\))/)
+          .map((a) => a.trim()),
+      ]);
+      start = i + 1;
+    }
+  }
+  if (depth !== 0 || v.slice(start).trim()) return undefined;
+  const FUNCTIONS: Record<string, (a: string[]) => boolean> = {
+    translate: (a) => translate(a[0]!, a[1]),
+    translate3d: (a) => translate(a[0]!, a[1]),
+    translateX: (a) => translate(a[0]!),
+    translateY: (a) => translate("0px", a[0]!),
+    scale: (a) => scale(a[0]!, a[1]),
+    scale3d: (a) => scale(a[0]!, a[1]),
+    scaleX: (a) => scale(a[0]!, "1"),
+    scaleY: (a) => scale("1", a[0]!),
+    rotate: (a) => rotate(a[0]!),
+    rotateZ: (a) => rotate(a[0]!),
+  };
+  for (const [name, a] of fns) if (!Object.hasOwn(FUNCTIONS, name) || !FUNCTIONS[name]!(a)) return undefined;
+  return c;
 }
 
 /**

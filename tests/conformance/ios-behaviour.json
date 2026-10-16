@@ -16,6 +16,8 @@
     "shadcn-progress",
     "shadcn-accordion",
     "shadcn-breadcrumb",
+    "shadcn-spinner",
+    "shadcn-skeleton",
     "tw-form",
     "tw-settings",
     "_behaviour/pointer-events",

@@ -2,7 +2,14 @@ import { mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { ConversionResult } from "../../src/index.ts";
 import { command } from "./process.ts";
-import { canvas, macRenderMain, type RenderResult, renderAppMain, renderAppPlist } from "./native-template.ts";
+import {
+  canvas,
+  macRenderMain,
+  type ForcedState,
+  type RenderResult,
+  renderAppMain,
+  renderAppPlist,
+} from "./native-template.ts";
 
 export interface SimulatorInventory {
   devices: Record<string, Array<{ udid: string; name: string; state: string; isAvailable: boolean }>>;
@@ -26,7 +33,12 @@ export function selectSimulator(inventory: SimulatorInventory, preferred?: strin
 export interface RenderJob {
   result: RenderResult;
   output: string;
+  /** Seconds into every animation; absent = settled. */
+  time?: number;
+  forced?: ForcedState;
 }
+
+const FORCED_RAW: Record<ForcedState, number> = { pressed: 1, focused: 2, reduceMotion: 4 };
 
 /**
  * Boot the pinned simulator (`preferred`: name or UDID), creating a device of that name on the newest
@@ -83,7 +95,7 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
     for (const [file, value] of Object.entries(result.files)) {
       if (!file.endsWith(".swift")) continue;
       const previous = written.get(file);
-      // One view rendered twice (an `@open` capture and its rest capture) brings identical files.
+      // One view rendered twice (an `@open` capture and its rest capture, motion frames) brings identical files.
       if (previous !== undefined && previous !== value) throw new Error(`duplicate generated file ${file}`);
       written.set(file, value);
     }
@@ -105,9 +117,19 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
   await Bun.write(
     join(work, "jobs.json"),
     JSON.stringify(
-      jobs.map(({ result, output }, i) => {
+      jobs.map(({ result, output, time, forced }, i) => {
         const { w, h, dark, color } = canvas(result);
-        return { view: i, w, h, dark, ...color, assets: join(work, "jobs", String(i)), output: resolve(output) };
+        return {
+          view: i,
+          w,
+          h,
+          dark,
+          ...color,
+          assets: join(work, "jobs", String(i)),
+          output: resolve(output),
+          ...(time !== undefined && Number.isFinite(time) ? { time } : {}),
+          ...(forced ? { forced: FORCED_RAW[forced] } : {}),
+        };
       }),
     ),
   );
@@ -206,7 +228,8 @@ export async function renderMac(
   result: RenderResult,
   work: string,
   output: string,
-  forced?: "pressed" | "focused",
+  forced?: ForcedState,
+  motionTime?: number,
 ): Promise<void> {
   await rm(work, { recursive: true, force: true });
   await mkdir(work, { recursive: true });
@@ -217,7 +240,7 @@ export async function renderMac(
     sources.push(join(work, file));
   }
   for (const [file, value] of Object.entries(result.assets)) await Bun.write(join(work, file), value);
-  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output, forced));
+  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output, forced, motionTime));
   sources.push(join(work, "main.swift"));
   const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
   await command(
