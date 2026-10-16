@@ -89,8 +89,6 @@ function mapAnimations(
   const out: KeyframeMotion[] = [];
   const driven = new Set<string>();
   for (const a of list) {
-    // CSS shows the end state of a zero-length animation: the settled look already.
-    if (a.duration <= 0) continue;
     if (a.timeline) {
       addDiagnostic(
         diagnostics,
@@ -100,6 +98,8 @@ function mapAnimations(
       );
       continue;
     }
+    // CSS shows the end state of a zero-length animation: the settled look already.
+    if (a.duration <= 0) continue;
     if (a.composite) {
       addDiagnostic(
         diagnostics,

@@ -38,10 +38,22 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const style = styleOf(n, diagnostics);
   const states = stateStylesOf(n, style);
   const motion = motionOf(n, style, diagnostics);
-  // An inline pseudo-element is merged into this node's text runs: nothing of it is a view to animate.
-  for (const c of n.children)
-    if ((c.tag === "::before" || c.tag === "::after") && (c.motion?.animations || c.motion?.reduced) && isInlineText(c))
-      addDiagnostic(diagnostics, "unmapped", "animation-name", `animated ${c.tag} is part of a text run; not animated`);
+  // Parts that never get a view of their own: an inline pseudo-element (merged into this node's text runs) and the
+  // shapes of an svg (drawn as one vector).
+  const parts =
+    policy.route === "svg"
+      ? n.children.flatMap(function all(c): LayoutNode[] {
+          return [c, ...c.children.flatMap(all)];
+        })
+      : n.children.filter((c) => (c.tag === "::before" || c.tag === "::after") && isInlineText(c));
+  for (const c of parts)
+    if (c.motion?.animations || c.motion?.reduced)
+      addDiagnostic(
+        diagnostics,
+        "unmapped",
+        "animation-name",
+        `animated ${c.tag} ${policy.route === "svg" ? "inside an svg" : "is part of a text run"}; not animated`,
+      );
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
