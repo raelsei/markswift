@@ -353,7 +353,7 @@ mapped, approximated or unmapped in `diagnostics`.
   failing), Dynamic Type at xSmall, large and AX5 plus the root height at AX3 against Chrome scaled to AX3,
   right-to-left mirroring, interaction (toggles, text fields, pickers and every action closure is called), and motion:
   an animated view moves on its live clock, and under Reduce Motion it moves only when something should still move
-  (see Motion).
+  (see Motion); a text field's transitioned focused look arrives, with and without Reduce Motion.
 - 2 known audit issues are accepted and listed with their reasons in `tests/conformance/ios-behaviour.json`, both
   outside the converter's reach: a text field whose value the audit reports as clipped in any stock `TextField`, and one
   e-mail address whose label is the address itself (the design gives no other description).
@@ -391,6 +391,11 @@ output renders the settled look. The visual gate also seeks both sides: `<case>-
 Chrome's animations and the native view at the same time (`@reduced@t:<ms>` under Reduce Motion; times from the
 fixture's `markswift-motion` metas) and score them in the `motion@app` family.
 
+Pressed and focused looks animate with the browser's own per-direction transition (duration, delay, easing; only the
+transitioned properties). Mid-flight colours use SwiftUI's interpolation (endpoints exact), and an
+interrupted transition reverses the SwiftUI way; the gate checks parameters and endpoints, not mid-flight frames
+(D-MOTION). Under Reduce Motion without an author rule, scale/translate changes jump and fades remain.
+
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
@@ -402,8 +407,8 @@ fixture's `markswift-motion` metas) and score them in the `motion@app` family.
 - Dialogs and popovers.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
-- CSS transitions on pressed/focused looks (captured at their end state, reported); scroll-driven animations,
-  keyframed colours/shadows/filters/layout properties, `@starting-style` and script animations (reported).
+- Scroll-driven animations, keyframed colours/shadows/filters/layout properties, `@starting-style` and script
+  animations (reported).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
 - `<select multiple>` and `<datalist>`.
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
