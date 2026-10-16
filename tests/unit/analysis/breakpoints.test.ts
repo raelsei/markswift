@@ -313,6 +313,25 @@ test("057/3: a media-only difference at one container band → 'both restyle', t
   ]);
 });
 
+test("057/3b: 'both restyle' ignores a size-following transform-origin, not a media grid-template-columns", () => {
+  const withField = (styles: (w: number, field: LayoutNode) => Record<string, string>) =>
+    fieldGroupDocs().map((d) => {
+      const set = (n: LayoutNode): LayoutNode =>
+        n.id === "field"
+          ? { ...n, styles: { ...n.styles, ...styles(d.viewport.w, n) } }
+          : { ...n, children: n.children.map(set) };
+      return { ...d, root: set(d.root) };
+    });
+  // The default 50% 50% origin resolves to half the field's used width: 767/834/1376 share container band 1.
+  const origin = mergeAt(withField((_, field) => ({ "transform-origin": `${field.bounds.w / 2}px 18px` })))!;
+  expect(hosts(origin.root)).toEqual(["group"]);
+  expect(origin.warnings).toEqual([]);
+  const columns = mergeAt(withField((w) => ({ "grid-template-columns": w >= 768 ? "100px 200px" : "none" })))!;
+  expect(columns.warnings.map((w) => w.message)).toEqual([
+    "group: container and media queries both restyle its content at the same container width; the container query is reconstructed, the media difference is not",
+  ]);
+});
+
 test("057/4: a query container that is a text node → reported, not reconstructed", () => {
   const docs = [390, 767].map((w) =>
     band(
