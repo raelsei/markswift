@@ -53,11 +53,12 @@ extension View {
                 if isPresented.wrappedValue {
                     let dismiss = { isPresented.wrappedValue = false; onDismiss() }
                     ZStack(alignment: .topLeading) {
-                        if modal || dismissOnOutside {
-                            Color.clear.contentShape(Rectangle())
-                                .onTapGesture { if dismissOnOutside { dismiss() } }
-                                .accessibilityHidden(true)
-                        }
+                        // Always present: the full-size base the placements align to (a ZStack aligns its children to
+                        // one another). It takes the taps outside the content only when they must not reach the page.
+                        Color.clear.contentShape(Rectangle())
+                            .onTapGesture { if dismissOnOutside { dismiss() } }
+                            .allowsHitTesting(modal || dismissOnOutside)
+                            .accessibilityHidden(true)
                         content()
                     }
                     .environment(\.markswiftAnchors, anchors.mapValues { proxy[$0] })
