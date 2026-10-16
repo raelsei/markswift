@@ -23,6 +23,8 @@ final class BehaviourTests: XCTestCase {
         /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
         struct Motion: Decodable { let live: Bool; let reduced: Bool }
         let motion: Motion
+        /// `markswift-breakpoints` widths: every launch frames the view at the first; two or more add the `bands` launch.
+        let widths: [Int]
     }
 
     @MainActor
@@ -37,21 +39,24 @@ final class BehaviourTests: XCTestCase {
                 do { launches[name] = try body() } catch { errors.append("\(name): \(error)") }
             }
             run("large") {
-                let app = launch(item.view, "UICTContentSizeCategoryL")
+                let app = launch(item.view, "UICTContentSizeCategoryL", widths: item.widths)
                 let tree = dump(try app.snapshot())
                 return [
                     "tree": tree, "audit": try audit(app), "rootHeight": rootHeight(app), "interactions": interact(app, item),
                     "layers": layers(app, item),
                 ]
             }
-            run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", rtl: true).snapshot())] }
-            run("xSmall") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryXS"))] }
-            run("ax5") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryAccessibilityXXXL"))] }
+            run("rtl") { ["tree": dump(try launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, rtl: true).snapshot())] }
+            run("xSmall") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryXS", widths: item.widths))] }
+            run("ax5") { ["audit": try audit(launch(item.view, "UICTContentSizeCategoryAccessibilityXXXL", widths: item.widths))] }
             // `.accessibilityExtraLarge` = DynamicTypeSize.accessibility3 (`AccessibilityL` is accessibility2).
-            run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityXL"))] }
+            run("ax3") { ["rootHeight": rootHeight(launch(item.view, "UICTContentSizeCategoryAccessibilityXL", widths: item.widths))] }
             if item.motion.live {
-                run("motion") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live"))] }
-                run("motionReduced") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", motion: "live", reduce: true))] }
+                run("motion") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, motion: "live"))] }
+                run("motionReduced") { ["frames": frames(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths, motion: "live", reduce: true))] }
+            }
+            if item.widths.count > 1 {
+                run("bands") { try bands(launch(item.view, "UICTContentSizeCategoryL", widths: item.widths)) }
             }
             let data = try JSONSerialization.data(withJSONObject: ["launches": launches, "errors": errors], options: [.sortedKeys])
             try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json"))
@@ -63,15 +68,53 @@ final class BehaviourTests: XCTestCase {
 }
 
 @MainActor
-private func launch(_ view: String, _ category: String, rtl: Bool = false, motion: String? = nil, reduce: Bool = false) -> XCUIApplication {
+private func launch(_ view: String, _ category: String, widths: [Int], rtl: Bool = false, motion: String? = nil, reduce: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchEnvironment["MARKSWIFT_VIEW"] = view
+    if !widths.isEmpty { app.launchEnvironment["MARKSWIFT_WIDTHS"] = widths.map(String.init).joined(separator: ",") }
     if rtl { app.launchEnvironment["MARKSWIFT_RTL"] = "1" }
     if let motion { app.launchEnvironment["MARKSWIFT_MOTION"] = motion }
     if reduce { app.launchEnvironment["MARKSWIFT_REDUCE_MOTION"] = "1" }
     app.launchArguments = ["-UIPreferredContentSizeCategoryName", category]
     app.launch()
     return app
+}
+
+/// Band switch (056, D-STATE-OWNERSHIP): type into the first text field and toggle the first switch, then switch the
+/// host's width twice (`markswift.width`). Each snapshot records every text field's and switch's value and how many
+/// elements of its type carry its label; the audit runs after the first switch.
+@MainActor
+private func bands(_ app: XCUIApplication) throws -> [String: Any] {
+    let root = app.otherElements["markswift.root"].firstMatch
+    let field = root.textFields.firstMatch
+    if field.waitForExistence(timeout: 2) && field.isHittable {
+        field.tap()
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        if XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: focused, object: field)], timeout: 2) == .completed {
+            field.typeText("mk")
+        }
+    }
+    let toggle = root.switches.firstMatch
+    if toggle.exists && toggle.isHittable { toggle.tap() }
+    func snapshot() -> [String: Any] {
+        var values: [String: String] = [:]
+        var counts: [String: Int] = [:]
+        for query in [root.textFields, root.switches] {
+            for element in query.allElementsBoundByIndex {
+                values[element.label] = valueText(element.value)
+                counts[element.label] = query.matching(NSPredicate(format: "label == %@", element.label)).count
+            }
+        }
+        return ["values": values, "counts": counts]
+    }
+    let width = app.buttons["markswift.width"].firstMatch
+    var snapshots = [snapshot()]
+    width.tap()
+    snapshots.append(snapshot())
+    let issues = try audit(app)
+    width.tap()
+    snapshots.append(snapshot())
+    return ["snapshots": snapshots, "audit": issues]
 }
 
 /// SHA-256 of two `markswift.root` screenshots 300 ms apart (after 500 ms): equal = nothing moved.

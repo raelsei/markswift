@@ -4,22 +4,36 @@ import SwiftUI
 struct HostApp: App {
     init() { BehaviourRegistry.registerFonts() }
     var body: some Scene {
-        WindowGroup {
-            let env = ProcessInfo.processInfo.environment
-            VStack(spacing: 0) {
-                ScrollView {
-                    BehaviourRegistry.view(named: env["MARKSWIFT_VIEW"] ?? "")
-                        .frame(width: 390, alignment: .topLeading)
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("markswift.root")
-                }
+        WindowGroup { HostRoot() }
+    }
+}
+
+/// The hosted view framed at `MARKSWIFT_WIDTHS[widthIndex]` (390 when unset); with two or more widths, the
+/// `markswift.width` button next to the log cycles them (a breakpoint view switching bands in place).
+struct HostRoot: View {
+    let env = ProcessInfo.processInfo.environment
+    @State private var widthIndex = 0
+    var body: some View {
+        let widths = (env["MARKSWIFT_WIDTHS"] ?? "").split(separator: ",").compactMap { Double($0) }
+        VStack(spacing: 0) {
+            ScrollView {
+                BehaviourRegistry.view(named: env["MARKSWIFT_VIEW"] ?? "")
+                    .frame(width: widths.isEmpty ? 390 : widths[widthIndex], alignment: .topLeading)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("markswift.root")
+            }
+            HStack {
                 Text(BehaviourLog.shared.hits.joined(separator: ",")).font(.caption)
                     .accessibilityIdentifier("markswift.log")
+                if widths.count > 1 {
+                    Button("Width") { widthIndex = (widthIndex + 1) % widths.count }
+                        .accessibilityIdentifier("markswift.width")
+                }
             }
-            .environment(\.layoutDirection, env["MARKSWIFT_RTL"] == "1" ? .rightToLeft : .leftToRight)
-            // Animations rest at the settled look unless a motion launch asks for the live clock.
-            .environment(\.markswiftMotionTime, env["MARKSWIFT_MOTION"] == "live" ? nil : Double.infinity)
-            .environment(\.markswiftForcedStates, env["MARKSWIFT_REDUCE_MOTION"] == "1" ? .reduceMotion : [])
         }
+        .environment(\.layoutDirection, env["MARKSWIFT_RTL"] == "1" ? .rightToLeft : .leftToRight)
+        // Animations rest at the settled look unless a motion launch asks for the live clock.
+        .environment(\.markswiftMotionTime, env["MARKSWIFT_MOTION"] == "live" ? nil : Double.infinity)
+        .environment(\.markswiftForcedStates, env["MARKSWIFT_REDUCE_MOTION"] == "1" ? .reduceMotion : [])
     }
 }

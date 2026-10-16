@@ -29,7 +29,8 @@
     "overlay-sheet",
     "overlay-popover",
     "overlay-hover-card",
-    "overlay-native"
+    "overlay-native",
+    "breakpoints/switch"
   ],
   "known": [
     {
