@@ -469,6 +469,26 @@ export interface Presentation {
   dismiss: { escape: boolean; outside: boolean; buttons: string[] };
 }
 
+/** One entry of a native menu (plan 061); `id` is the item's LayoutNode id. */
+export type MenuItem =
+  | { kind: "button"; id: string; label: string; action?: Action; disabled?: true; destructive?: true }
+  | { kind: "toggle"; id: string; label: string; checked: boolean; disabled?: true }
+  /** `selected`: index into `options`, −1 when none is checked. */
+  | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
+  | { kind: "divider" }
+  | { kind: "section"; label: string; items: MenuItem[] }
+  | { kind: "submenu"; id: string; label: string };
+/** A captured menu layer the trigger presents natively (plan 061, D-MENUS). */
+export interface MenuSpec {
+  layer: string;
+  /** Opened by a right click: `.contextMenu` on the trigger instead of `Menu`. */
+  context?: true;
+  items: MenuItem[];
+  /** Radix select: the inline Picker's seed (`value`), shown live in the trigger's single-run TextNode `valueText`
+   * (absent: the trigger's text stays static, reported). */
+  select?: { valueText?: string; value: string };
+}
+
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
 export interface SizeConstraints {
   minWidth?: number;
@@ -570,6 +590,8 @@ export interface SemBase extends SizeConstraints {
   opens?: { layer: string; kind: "inflow" } | { layer: string; kind: "presentation"; longPress?: true; anchor?: true };
   /** App mode: id of the in-flow layer whose open state shows this node. */
   shownBy?: string;
+  /** App mode: this node presents the captured menu natively (plan 061). */
+  menu?: MenuSpec;
   /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */
   bands?: number[];
   /**

@@ -3,6 +3,7 @@ import { BrowserCapture } from "../../src/browser/capture.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import { convertHtml } from "../../src/index.ts";
 import type { CaptureRequest } from "../../src/input/types.ts";
+import type { LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 const browser = new BrowserCapture({ dpr: 1, viewport: { width: 390, height: 844 } });
@@ -344,4 +345,31 @@ describe("drawn presentations (060)", () => {
     },
     60_000,
   );
+});
+
+describe("native menus (061)", () => {
+  /** Fixture → its layer ids, the role its content lists, and whether it opens on a right click. */
+  const CASES: Record<string, [string[], "menu" | "listbox", boolean]> = {
+    "overlay-dropdown-menu": [["open"], "menu", false],
+    "overlay-context-menu": [["right-click-here"], "menu", true],
+    "overlay-menubar": [["file", "edit", "view"], "menu", false],
+    "overlay-select": [["select-a-fruit"], "listbox", false],
+  };
+  const has = (n: LayoutNode, role: string): boolean =>
+    n.attrs["role"] === role || n.children.some((c) => has(c, role));
+  for (const [name, [ids, role, context]] of Object.entries(CASES))
+    browserTest(
+      `${name}: ${ids.join(", ")}`,
+      async () => {
+        const html = await Bun.file(`${import.meta.dir}/../conformance/fixtures/components/${name}.html`).text();
+        const result = await convertHtml(html, { name: "Overlay" });
+        expect(result.layout.layers!.map((l) => l.id)).toEqual(ids);
+        for (const l of result.layout.layers!) expect(l.nodes.some((n) => has(n, role))).toBe(true);
+        // One native popup per layer (a submenu's disabled `Menu` is no popup: it has no `.menuOrder`).
+        expect(result.code.split(context ? ".contextMenu {" : ".menuOrder(.fixed)").length - 1).toBe(ids.length);
+        expect(result.code).not.toContain(".markswiftPresentation(");
+        expect(result.openStates).toBeUndefined();
+      },
+      30_000,
+    );
 });

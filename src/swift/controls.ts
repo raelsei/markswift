@@ -15,7 +15,7 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ControlNode, PickerOption, SemNode } from "../model/semantic.ts";
+import type { ControlNode, MenuItem, MenuSpec, PickerOption, SemNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
@@ -47,6 +47,8 @@ export interface ControlDeps extends ColorCtx {
   openOf?: ControlMembers["openOf"];
   /** A presentation's closing button → what its tap runs; built by `controlMembers`. */
   closeOf?: ControlMembers["closeOf"];
+  /** Native menu toggle/radio item → its `@State` member; built by `controlMembers`. */
+  menuState?: ControlMembers["menuState"];
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
@@ -152,6 +154,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
+      // A menu trigger (plan 061): the same label opens the native menu instead.
+      if (n.menu && !n.menu.context) return menuButton(n.menu, pressable(n, deps), buttonStyle, deps);
       // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
       // changes the screen's state and acts.
       const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap ?? deps.closeOf?.get(n);
@@ -299,31 +303,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)",
           ...arrow,
         ];
-      const options: PickerOption[] = n.options?.length ? n.options : n.value !== undefined ? [{ label: n.value }] : [];
-      // Consecutive options of one `<optgroup>` are a Section headed by its label; disabled ones stay listed, greyed.
-      const runs: PickerOption[][] = [];
-      for (const o of options) {
-        const run = runs.at(-1);
-        if (run && run[0]!.group === o.group) run.push(o);
-        else runs.push([o]);
-      }
-      const rows = (runs.length ? runs : [[]]).flatMap((run) => {
-        const off = run.filter((o) => o.disabled).map((o) => str(o.label));
-        const each = [
-          `ForEach(${run.length ? `[${run.map((o) => str(o.label)).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
-          "    Text(option)",
-          ...(!off.length
-            ? []
-            : off.length === run.length
-              ? ["        .disabled(true)"]
-              : [`        .disabled([${off.join(", ")}].contains(option))`]),
-          "}",
-        ];
-        const group = run[0]?.group;
-        return group === undefined
-          ? each
-          : ["Section {", ...indent(each, 1), "} header: {", `    Text(verbatim: ${str(group)})`, "}"];
-      });
+      const rows = pickerRows(n.options?.length ? n.options : n.value !== undefined ? [{ label: n.value }] : []);
       return [
         "Menu {",
         `    Picker(selection: ${binding}) {`,
@@ -507,6 +487,89 @@ function pressable(n: ControlNode, deps: ControlDeps): string[] {
 
 function wrap(open: string, inner: string[], close: string[]): string[] {
   return [open, ...indent(inner, 1), ...close];
+}
+
+/** An inline Picker's rows: consecutive options of one group are a Section headed by its label; disabled ones stay listed, greyed. */
+function pickerRows(options: PickerOption[]): string[] {
+  const runs: PickerOption[][] = [];
+  for (const o of options) {
+    const run = runs.at(-1);
+    if (run && run[0]!.group === o.group) run.push(o);
+    else runs.push([o]);
+  }
+  return (runs.length ? runs : [[]]).flatMap((run) => {
+    const off = run.filter((o) => o.disabled).map((o) => str(o.label));
+    const each = [
+      `ForEach(${run.length ? `[${run.map((o) => str(o.label)).join(", ")}]` : "[String]()"}, id: \\.self) { option in`,
+      "    Text(option)",
+      ...(!off.length
+        ? []
+        : off.length === run.length
+          ? ["        .disabled(true)"]
+          : [`        .disabled([${off.join(", ")}].contains(option))`]),
+      "}",
+    ];
+    const group = run[0]?.group;
+    return group === undefined
+      ? each
+      : ["Section {", ...indent(each, 1), "} header: {", `    Text(verbatim: ${str(group)})`, "}"];
+  });
+}
+
+/**
+ * A captured menu's items as native menu content (plan 061): buttons on the screen's action members, checkbox items as
+ * Toggles, a radio run as an inline Picker, separators, labelled sections.
+ */
+// ponytail: a submenu is a disabled label (its items are not captured); opening nested triggers is the upgrade path.
+export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" | "menuState">): string[] {
+  return items.flatMap((i): string[] => {
+    const label = "label" in i ? [`    Text(verbatim: ${str(i.label)})`] : [];
+    const off = "disabled" in i && i.disabled ? [".disabled(true)"] : [];
+    const state = "id" in i ? deps.menuState?.get(i.id) : undefined;
+    switch (i.kind) {
+      case "button": {
+        const action = (i.action && deps.actionOf.get(i.action.key)) ?? "{}";
+        return [`Button(${i.destructive ? "role: .destructive, " : ""}action: ${action}) {`, ...label, "}", ...off];
+      }
+      case "toggle":
+        return [`Toggle(isOn: ${state ? `$${state}` : ".constant(false)"}) {`, ...label, "}", ...off];
+      case "radio":
+        return [
+          `Picker(selection: ${state ? `$${state}` : '.constant("")'}) {`,
+          ...indent(pickerRows(i.options), 1),
+          "} label: {",
+          "    EmptyView()",
+          "}",
+          ".pickerStyle(.inline)",
+        ];
+      case "divider":
+        return ["Divider()"];
+      case "section":
+        return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...label, "}"];
+      default: // submenu
+        return ["Menu {", "} label: {", ...label, "}", ".disabled(true)"];
+    }
+  });
+}
+
+/** A menu trigger: its Button's label and style around a native `Menu` of the captured items. */
+export function menuButton(
+  menu: MenuSpec,
+  label: string[],
+  buttonStyle: string,
+  deps: Pick<ControlDeps, "actionOf" | "menuState">,
+): string[] {
+  return [
+    "Menu {",
+    ...indent(menuExpr(menu.items, deps), 1),
+    "} label: {",
+    ...indent(label, 1),
+    "}",
+    ".menuStyle(.button)",
+    buttonStyle,
+    ".menuIndicator(.hidden)",
+    ".menuOrder(.fixed)",
+  ];
 }
 
 /**

@@ -215,9 +215,9 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const makeRun = (parent: StackNode | GridNode, start: number, members: SemNode[]): Run | undefined => {
     if (tpl(parent).children.some((c, i, all) => members.includes(c) && all.indexOf(c) !== i)) return undefined;
     const subtrees = members.map((m) => new Set(collect(m)));
-    // ponytail: an in-flow layer's state stays on the screen, so its trigger and content stay unrolled; per-row
-    // open state (`presented<Type>: Int?`, ROverlays §4) is the upgrade path.
-    if (subtrees.some((s) => [...s].some((x) => x.opens || x.shownBy !== undefined))) return undefined;
+    // ponytail: an in-flow layer's state stays on the screen, so its trigger and content stay unrolled (a menu's item
+    // members too); per-row open state (`presented<Type>: Int?`, ROverlays §4) is the upgrade path.
+    if (subtrees.some((s) => [...s].some((x) => x.opens || x.shownBy !== undefined || x.menu))) return undefined;
     const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
     const columns = flats[0]!.map(({ s, n }, c) => {
       const own = tpl(n).own;

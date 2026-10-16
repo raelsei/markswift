@@ -1,11 +1,22 @@
 /**
  * App mode: closed in-flow layers (`<details>`, collapsibles, accordion items) become content behind the screen's state;
- * dialogs, sheets, popovers and hover cards become drawn presentations (plan 060, D-PRESENT).
+ * dialogs, sheets, popovers and hover cards become drawn presentations (plan 060, D-PRESENT); menus and listboxes
+ * become the trigger's native `Menu` (plan 061, D-MENUS).
  */
 import { type Layer, type LayoutDoc, type LayoutNode } from "../model/layout.ts";
-import { type Presentation, type Screen, type SemNode, addDiagnostic, confidenceOf, walk } from "../model/semantic.ts";
+import {
+  type MenuItem,
+  type PickerOption,
+  type Presentation,
+  type Screen,
+  type SemNode,
+  addDiagnostic,
+  confidenceOf,
+  walk,
+} from "../model/semantic.ts";
 import { parseColor, round2 } from "../css/index.ts";
 import { type InferOptions } from "./context.ts";
+import { elementAction } from "./controls.ts";
 import { buildDetached, layerOverlays } from "./infer.ts";
 import { isTooltipLayer } from "./tooltips.ts";
 
@@ -18,13 +29,15 @@ const REASON = {
 
 /**
  * Each `inflow` layer of `doc`: a `<details>` gets the content and `opens`; anything else inserts the content into its
- * plain parent stack after its rest predecessor (`shownBy`), and the trigger Button `opens` it. Each other layer that
- * is not a tooltip (062) or a menu (061) becomes a drawn presentation on the root (`present`). Skips are reported.
+ * plain parent stack after its rest predecessor (`shownBy`), and the trigger Button `opens` it. A menu or listbox layer
+ * becomes its trigger's native menu (`menu`); each other layer that is not a tooltip (062) becomes a drawn presentation
+ * on the root (`present`). Skips are reported.
  */
 // ponytail: content goes into plain stacks only; measured/flex/grid parents report and keep today's output.
 export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOptions = {}): void {
   if (!doc.layers?.length) return;
-  const layers = doc.layers.filter((l) => l.placement === "inflow");
+  const menus = new Set(doc.layers.filter((l) => l.relation !== "details" && menuOf(l)));
+  const layers = doc.layers.filter((l) => l.placement === "inflow" && !menus.has(l));
   const rest = new Map<string, LayoutNode>();
   const index = (n: LayoutNode) => {
     if (n.id !== undefined) rest.set(n.id, n);
@@ -116,16 +129,172 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     trigger.opens = { layer: layer.id, kind: "inflow" };
   }
   for (const layer of doc.layers)
-    if (
+    if (menus.has(layer)) menu(screen, layer, rest, sem);
+    else if (
       layer.placement !== "inflow" &&
       !isTooltipLayer(layer, doc.root) &&
-      // Menus, listboxes and selects are left to 061.
+      // A menubar alone, or a menu `<details>` shows, is no drawn popup.
       !layer.nodes.some((n) => find(n, (d) => !!MENU_ROLES[d.attrs["role"] ?? ""]))
     )
       present(screen, doc, layer, rest, sem, options);
 }
 
 const MENU_ROLES: Record<string, true> = { menu: true, menubar: true, listbox: true };
+
+/** The `role=menu|listbox` element of a layer: what a native menu lists. */
+const menuOf = (layer: Layer): LayoutNode | undefined =>
+  layer.nodes.reduce<LayoutNode | undefined>(
+    (hit, n) => hit ?? find(n, (d) => d.attrs["role"] === "menu" || d.attrs["role"] === "listbox"),
+    undefined,
+  );
+
+/** An item's text without its `[data-slot$=shortcut]` hint, whitespace collapsed. */
+const itemText = (n: LayoutNode): string => {
+  const of = (d: LayoutNode): string =>
+    d.tag === "#text"
+      ? (d.text ?? "")
+      : (d.attrs["data-slot"] ?? "").endsWith("shortcut")
+        ? ""
+        : d.children.map(of).join("");
+  return of(n).replace(/\s+/g, " ").trim();
+};
+const disabled = (n: LayoutNode) => n.attrs["aria-disabled"] === "true" || n.attrs["data-disabled"] !== undefined;
+/** Radix marks the current item `data-state=checked` (a select option's `aria-selected` follows focus). */
+const checked = (n: LayoutNode, aria: string) => n.attrs[aria] === "true" || n.attrs["data-state"] === "checked";
+
+/**
+ * A menu or listbox layer as its trigger's native popup (D-MENUS): the items in DOM order — a listbox is one inline
+ * Picker of its options — under a `Menu` on the trigger, or `.contextMenu` for a right-click layer. The trigger keeps
+ * its CSS look; the open list is not drawn and has no `@open` capture.
+ */
+function menu(screen: Screen, layer: Layer, rest: Map<string, LayoutNode>, sem: Map<string, SemNode>): void {
+  const trigger = sem.get(layer.trigger);
+  const report = (n: SemNode, message: string) => {
+    addDiagnostic(n.diagnostics, "approximated", "@role", message);
+    n.confidence = confidenceOf(n.diagnostics);
+  };
+  const context = layer.activation === "contextmenu";
+  const button =
+    trigger &&
+    (trigger.kind === "control"
+      ? trigger.control === "button" && !trigger.files
+      : !!trigger.action && !trigger.action.gesture);
+  if (!trigger || (!context && !button)) {
+    const why = trigger ? "the trigger is not a button" : "its trigger is not in the screen";
+    report(trigger ?? screen.root, `menu ${layer.id} is not translated: ${why}`);
+    return;
+  }
+  const list = menuOf(layer)!;
+  // `aria-labelledby` targets: a group's heading.
+  const byDomId = new Map<string, LayoutNode>();
+  const index = (d: LayoutNode): void => {
+    if (d.attrs["id"]) byDomId.set(d.attrs["id"], d);
+    d.children.forEach(index);
+  };
+  layer.nodes.forEach(index);
+  const items: MenuItem[] = [];
+  const notes = new Set<string>();
+  if (list.attrs["role"] === "listbox") {
+    const options: PickerOption[] = [];
+    let selected = -1;
+    const collect = (n: LayoutNode, group: string | undefined): void => {
+      if (n.attrs["role"] === "option") {
+        const o: PickerOption = { label: itemText(n) };
+        if (disabled(n)) o.disabled = true;
+        if (group) o.group = group;
+        if (checked(n, "aria-selected")) selected = options.length;
+        options.push(o);
+        return;
+      }
+      const label =
+        n.attrs["role"] === "group"
+          ? (byDomId.get(n.attrs["aria-labelledby"] ?? "") ??
+            find(n, (d) => (d.attrs["data-slot"] ?? "").endsWith("-label")))
+          : undefined;
+      for (const c of n.children) collect(c, label ? itemText(label) || undefined : group);
+    };
+    collect(list, undefined);
+    items.push({ kind: "radio", id: list.id!, options, selected });
+  } else {
+    // Items go into the open section (a label heads one until the next separator or label), else the top level; a run
+    // of `menuitemradio` (one group, or consecutive) is one Picker.
+    let into = items;
+    let radio: Extract<MenuItem, { kind: "radio" }> | undefined;
+    const push = (item: MenuItem) => {
+      into.push(item);
+      radio = undefined;
+    };
+    const open = (label: string) => {
+      const section: MenuItem = { kind: "section", label, items: [] };
+      items.push(section);
+      into = section.items;
+      radio = undefined;
+    };
+    const visit = (n: LayoutNode): void => {
+      const role = n.attrs["role"] ?? "";
+      const label = role.startsWith("menuitem") ? itemText(n) : "";
+      if (role.startsWith("menuitem")) {
+        if (find(n, (d) => (d.attrs["data-slot"] ?? "").endsWith("shortcut")))
+          notes.add("menu shortcut text is dropped");
+        // A checkbox/radio item's indicator is its native checkmark; a plain item's icon has no counterpart.
+        if (role === "menuitem" && find(n, (d) => d.tag === "svg" || d.tag === "img"))
+          notes.add("menu item icons are dropped");
+      }
+      const off = disabled(n) ? { disabled: true as const } : {};
+      if (role === "separator") {
+        into = items;
+        push({ kind: "divider" });
+      } else if ((n.attrs["data-slot"] ?? "").endsWith("-label")) open(itemText(n));
+      else if (role === "menuitem" && (n.attrs["aria-haspopup"] ?? "false") !== "false") {
+        push({ kind: "submenu", id: n.id!, label });
+        notes.add(`submenu ${label} items are not captured`);
+      } else if (role === "menuitem")
+        push({
+          kind: "button",
+          id: n.id!,
+          label,
+          action: elementAction(n, label),
+          ...off,
+          ...(n.attrs["data-variant"] === "destructive" ? { destructive: true as const } : {}),
+        });
+      else if (role === "menuitemcheckbox")
+        push({ kind: "toggle", id: n.id!, label, checked: checked(n, "aria-checked"), ...off });
+      else if (role === "menuitemradio") {
+        if (!radio) {
+          radio = { kind: "radio", id: n.id!, options: [], selected: -1 };
+          into.push(radio);
+        }
+        if (checked(n, "aria-checked")) radio.selected = radio.options.length;
+        radio.options.push({ label, ...off });
+      } else {
+        const heading = role === "group" ? byDomId.get(n.attrs["aria-labelledby"] ?? "") : undefined;
+        if (heading && !(heading.attrs["data-slot"] ?? "").endsWith("-label")) open(itemText(heading));
+        if (role === "group") radio = undefined;
+        n.children.forEach(visit);
+        if (role === "group") radio = undefined;
+      }
+    };
+    list.children.forEach(visit);
+  }
+  trigger.menu = { layer: layer.id, ...(context ? { context: true as const } : {}), items };
+  if (list.attrs["role"] === "listbox") {
+    const at = rest.get(layer.trigger);
+    const shown = at && find(at, (d) => d.attrs["data-slot"] === "select-value");
+    const radio = items[0] as Extract<MenuItem, { kind: "radio" }>;
+    const value = radio.options[radio.selected]?.label ?? (at ? itemText(shown ?? at) : "");
+    let valueText: string | undefined;
+    const target = shown && itemText(shown);
+    if (target)
+      walk(trigger, (n) => {
+        if (valueText === undefined && n.kind === "text" && n.runs.length === 1 && n.runs[0]!.text.trim() === target)
+          valueText = n.id;
+      });
+    if (valueText === undefined) notes.add("the select's value text does not follow the choice");
+    trigger.menu.select = { value, ...(valueText !== undefined ? { valueText } : {}) };
+  }
+  report(trigger, "native menu popup: the CSS look of the open list is not drawn");
+  for (const note of notes) report(trigger, note);
+}
 
 const find = (n: LayoutNode, test: (n: LayoutNode) => boolean): LayoutNode | undefined =>
   test(n) ? n : n.children.reduce<LayoutNode | undefined>((hit, c) => hit ?? find(c, test), undefined);

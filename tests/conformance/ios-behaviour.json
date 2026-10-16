@@ -29,7 +29,11 @@
     "overlay-sheet",
     "overlay-popover",
     "overlay-hover-card",
-    "overlay-native"
+    "overlay-native",
+    "overlay-dropdown-menu",
+    "overlay-context-menu",
+    "overlay-menubar",
+    "overlay-select"
   ],
   "known": [
     {

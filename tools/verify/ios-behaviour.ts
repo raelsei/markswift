@@ -14,7 +14,7 @@ import { applyLayers } from "../../src/analysis/layers.ts";
 import { convert } from "../../src/index.ts";
 import { type SemNode, walk } from "../../src/model/semantic.ts";
 import { cssTransform } from "../../src/css/transforms.ts";
-import { controlMembers } from "../../src/swift/control-state.ts";
+import { controlMembers, flatItems } from "../../src/swift/control-state.ts";
 import { nearestTextStyle } from "../../src/swift/format.ts";
 import { browserAxNodes, normalizeName, type AxNamed } from "./ax.ts";
 import { ensureSimulator } from "./native.ts";
@@ -91,6 +91,9 @@ interface Prepared {
         outsidePoint: [number, number];
       }
   >;
+  /** Native menus (061): `trigger` (long-pressed when `context`) opens a menu; each of `items` (its enabled buttons) is
+   * tapped in its own launch so its action logs. */
+  menus: Array<{ trigger: string; context: boolean; items: string[] }>;
   fonts: boolean;
   /** `live`: some node animates; `reduced`: some node still animates under Reduce Motion (`reduced ?? animations`). */
   motion: { live: boolean; reduced: boolean };
@@ -134,6 +137,8 @@ interface CaseLog {
         outside?: boolean;
         log?: string;
       }>;
+      /** Per menu item: whether the open menu showed it, and the log after tapping it. */
+      menus?: Array<{ trigger: string; label: string; opened: boolean; log: string }>;
     };
     rtl?: { tree: El };
     xSmall?: { audit: AuditIssue[] };
@@ -344,6 +349,23 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     const next = n.options?.find((o) => !o.disabled && o.label !== current)?.label;
     if (current && next) pickers.push({ current, next });
   });
+  // A Radix select is a picker whose value is its trigger's; every other menu is opened and each enabled button tapped.
+  const menus: Prepared["menus"] = [];
+  walk(screen.root, (n) => {
+    if (!n.menu) return;
+    const items = flatItems(n.menu.items);
+    const choice = n.menu.select && items[0]?.kind === "radio" ? items[0] : undefined;
+    if (choice) {
+      pickerValues.push(...choice.options.map((o) => o.label));
+      const current = n.menu.select!.value;
+      const next = choice.options.find((o) => !o.disabled && o.label !== current)?.label;
+      if (next) pickers.push({ current, next });
+      return;
+    }
+    const trigger = n.a11y?.label ?? texts(n).join(" ");
+    const buttons = items.flatMap((i) => (i.kind === "button" && !i.disabled ? [i.label] : []));
+    if (trigger && buttons.length) menus.push({ trigger, context: !!n.menu.context, items: buttons });
+  });
   const motion = { live: false, reduced: false };
   walk(screen.root, (n) => {
     if (n.motion?.animations?.length) motion.live = true;
@@ -368,7 +390,11 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   const live: Record<string, true> = {};
   walk(screen.root, (n) => {
     if ((n.kind === "control" && n.disabled) || n.a11y?.disabled) return;
-    for (const a of [n.action, ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : [])]) {
+    // A menu trigger's own action is no member; its enabled button items' are.
+    const items = n.menu
+      ? flatItems(n.menu.items).flatMap((i) => (i.kind === "button" && !i.disabled ? [i.action] : []))
+      : [];
+    for (const a of [n.action, ...(n.kind === "text" ? n.runs.map((r) => r.link?.action) : []), ...items]) {
       const name = a && actionOf.get(a.key);
       if (name) live[name] = true;
     }
@@ -394,6 +420,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       focusLooks,
       actions,
       layers,
+      menus,
       fonts: `${view}+Fonts.swift` in result.files,
       motion,
     },
@@ -472,8 +499,10 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       if (!l.focused) fail("interaction", `label:${l.label}`, "tapping the label did not focus its field");
     for (const f of ix.focusLooks)
       if (!f.changed) fail("interaction", `focusLook:${f.label}`, "focused look never appeared after its transition");
-    // A presentation's content buttons are tapped in their own launches (`layers`): their log hits count too.
-    const hits = [ix.log, ...(large.layers ?? []).map((l) => l.log ?? "")].join(",").split(",");
+    // A presentation's content buttons and menu items are tapped in their own launches: their log hits count too.
+    const hits = [ix.log, ...(large.layers ?? []).map((l) => l.log ?? ""), ...(large.menus ?? []).map((m) => m.log)]
+      .join(",")
+      .split(",");
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
     // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it. Presentations (060): the
@@ -491,6 +520,11 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         if (run.outside !== layer.outside) fail("interaction", `layer:${id}`, "outside tap");
       }
     }
+    // Native menus (061): each enabled item showed when its menu opened (its action is checked above).
+    for (const menu of item.menus)
+      for (const label of menu.items)
+        if (!large.menus?.find((m) => m.trigger === menu.trigger && m.label === label)?.opened)
+          fail("interaction", `menu:${menu.trigger}`, `did not open to "${label}"`);
   }
   for (const [size, launch] of [
     ["large", large],
@@ -596,7 +630,7 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, motion }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, menus, motion }) => ({
         view,
         pickers,
         pickerValues,
@@ -604,6 +638,7 @@ async function main() {
         focusLooks,
         actions: actions.map((a) => a.name),
         layers,
+        menus,
         motion,
       })),
     ),

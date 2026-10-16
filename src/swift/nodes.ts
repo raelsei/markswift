@@ -65,6 +65,7 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
         toggleOf: ctx.control.toggleOf,
         openOf: ctx.control.openOf,
         closeOf: ctx.control.closeOf,
+        menuState: ctx.control.menuState,
         focusOf: ctx.control.focusOf,
         fontMetrics: ctx.fontMetrics,
         id: n.id,
