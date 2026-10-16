@@ -194,10 +194,11 @@ private func audit(_ app: XCUIApplication) throws -> [[String: String]] {
     return issues
 }
 
+/// The hosted view's height (the log's value): the `markswift.root` container's frame leaves out the root's padding.
 @MainActor
 private func rootHeight(_ app: XCUIApplication) -> Double {
-    let root = app.otherElements["markswift.root"].firstMatch
-    return root.exists ? Double(root.frame.height) : -1
+    let log = app.staticTexts["markswift.log"].firstMatch
+    return log.waitForExistence(timeout: 2) ? Double(valueText(log.value)) ?? -1 : -1
 }
 
 /// Interactions inside `markswift.root` (never the keyboard or system chrome). Disabled elements are skipped: the design
