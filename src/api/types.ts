@@ -40,7 +40,8 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
    * equal in all bands once and switches the others at the CSS thresholds (`MarkswiftBands`, at the width offered to
    * the view); a root that does not follow the viewport width keeps the first band's layout, with a warning. A query
    * container (`container-type`) that is a stack or grid switches its content at the width offered to its content box
-   * on width `@container` queries; such pages add one capture at the top of each band (within the six).
+   * on width `@container` queries; such pages add one capture at the top of each band, then capture each band but
+   * band 0 and the configured `viewport`'s at its lower bound, keeping its device as one more capture (within the six).
    */
   breakpoints?: true | { devices?: Array<{ width: number; height: number }>; max?: number };
 }
@@ -53,6 +54,6 @@ export interface ConversionResult extends CompileResult {
   /** The dark capture of an `adaptive` conversion. */
   darkLayout?: LayoutDoc;
   /** Every capture (`breakpoints`), ascending by width: one per width band plus, on pages with width `@container`
-   * queries, one at the top of each band; `bands[0].layout` is `layout`. */
+   * queries, the extra captures of each band (its top, its device); `bands[0].layout` is `layout`. */
   bands?: Array<{ layout: LayoutDoc; darkLayout?: LayoutDoc }>;
 }
