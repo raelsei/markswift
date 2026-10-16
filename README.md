@@ -171,7 +171,7 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   closed `<details>`, collapsible or accordion item): the content sits behind an `is<Name>Expanded` state seeded
   through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Dialogs,
   alert dialogs, sheets, popovers and hover cards are drawn presentations (`.markswiftPresentation`) behind an
-  init-seeded `is<Name>Presented`; menus are not yet emitted.
+  init-seeded `is<Name>Presented`; menus, menubars and selects open native `Menu`/`.contextMenu` popups.
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
   the view does not follow, font packaging, light/dark pairing, width-band merging), `layout` and, for adaptive
@@ -334,7 +334,8 @@ Read the table with these limits:
   on each reviewed rebaseline and never lowered. The gate also fails a capture that drops more than
   0.005 below its baseline or misses an anchor.
 - `<case>-390-<theme>-app@open:<layer>` captures check each in-flow layer open: Chrome's page with the trigger
-  clicked against the view initialised with `is<Name>Expanded: true`; they count toward their family floor.
+  clicked against the view initialised with `is<Name>Expanded: true`; they count toward their family floor. Menus
+  have no `@open` capture: their popup is native, so only the closed trigger is compared.
 - Chrome renders `ui-monospace`, `ui-serif` and `ui-rounded` with other faces than iOS (SF Mono,
   New York, SF Rounded), which depresses the `font-family` scores.
 
@@ -403,8 +404,10 @@ fixture's `markswift-motion` metas) and score them in the `motion@app` family.
   pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or accordion
   item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
 - Dialogs and popovers are drawn inside the component's frame (app mode): no swipe-to-dismiss, collision flip, scroll
-  lock or focus trap beyond VoiceOver's modal containment, and placed as captured at the primary viewport. Menus and
-  selects opened by a trigger are not drawn; tooltips are described below.
+  lock or focus trap beyond VoiceOver's modal containment, and placed as captured at the primary viewport. Menus,
+  menubars and selects open native popups with their captured items (app mode): the CSS look of the open list,
+  shortcut text, item icons and submenu items are not drawn (a submenu is a disabled entry), and a menu trigger has no
+  tap action of its own; tooltips are described below.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - CSS transitions on pressed/focused looks (captured at their end state, reported); scroll-driven animations,
