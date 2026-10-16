@@ -47,15 +47,26 @@ browserTest(
     expect(grids).toHaveLength(4);
     const [sep, fix, col, emp] = grids as [GridNode, GridNode, GridNode, GridNode];
     expect([sep.columns, sep.hSpacing, sep.vSpacing, sep.table!.collapse]).toEqual([3, 3, 5, false]);
-    near(sep.table!.widths, [88.688, 93.641, 93.672]);
-    expect(sep.table!.heights).toEqual([26, 26]);
+    // Columns and rows are the captured lattice (the plan's probe read 88.688 / 93.641 / 93.672 and rows of 26 under
+    // another font; this page's capture differs by a few tenths, so the live boxes are the reference).
+    const sepTable = byId.get("sep")!;
+    const [caption, tbody] = sepTable.children as [LayoutNode, LayoutNode];
+    const [tr1, tr2] = tbody.children as [LayoutNode, LayoutNode];
+    const [c, d] = tr2.children as [LayoutNode, LayoutNode];
+    near(sep.table!.widths, [c.bounds.w, d.bounds.w, tr1.children[1]!.bounds.w]);
+    near(sep.table!.heights, [tr1.bounds.h, tr2.bounds.h]);
     expect(sep.table!.slots).toEqual([
       { rowStart: 1, colStart: 1, rowSpan: 1, colSpan: 2 },
       { rowStart: 1, colStart: 3, rowSpan: 2, colSpan: 1 },
       { rowStart: 2, colStart: 1, rowSpan: 1, colSpan: 1 },
       { rowStart: 2, colStart: 2, rowSpan: 1, colSpan: 1 },
     ]);
-    expect(sep.frame).toEqual({ x: 0, y: 20, w: 300, h: 79 });
+    expect(sep.frame).toEqual({
+      x: 0,
+      y: caption.bounds.h,
+      w: 300,
+      h: sepTable.bounds.h - caption.bounds.h,
+    });
     expect(sep.padding).toEqual([6, 6, 6, 6]);
     expect(fix.table!.fixed).toEqual([
       { kind: "px", px: 100 },

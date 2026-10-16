@@ -1,4 +1,4 @@
-import type { BandEdge, StackNode, GridNode, GridRowTrack } from "../model/semantic.ts";
+import type { BandEdge, StackNode, GridNode, GridRowTrack, TableColumn, TableLayout } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
@@ -35,6 +35,35 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
       const extra = `${it.colSpan > 1 ? `, columnSpan: ${it.colSpan}` : ""}${it.rowSpan > 1 ? `, rowSpan: ${it.rowSpan}` : ""}${it.justify === "stretch" ? "" : `, justify: .${it.justify}`}`;
       const cell = placed ? [`.markswiftGridCell(column: ${it.colStart}, row: ${it.rowStart}${extra})`] : [];
       return indent([...ctx.renderNode(n.children[it.child]!), ...margin.filter(Boolean), ...cell], 1);
+    }),
+    "}",
+  ];
+}
+
+/** An admitted CSS table (`GridNode.table`), both modes; fidelity omits `fixed:` so the captured columns stay exact. */
+function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
+  const list = (v: number[]) => `[${v.map(num).join(", ")}]`;
+  const col = (c: TableColumn) =>
+    c.kind === "auto"
+      ? ".auto"
+      : c.kind === "px"
+        ? `.px(${num(c.px)})`
+        : `.percent(${num(c.fraction)}, plus: ${num(c.plus)})`;
+  // Argument order = the struct's property order (Swift's memberwise init requires it).
+  const args = [
+    `widths: ${list(t.widths)}`,
+    `heights: ${list(t.heights)}`,
+    ...(n.hSpacing ? [`hSpacing: ${num(n.hSpacing)}`] : []),
+    ...(n.vSpacing ? [`vSpacing: ${num(n.vSpacing)}`] : []),
+    ...(t.bands ? [`bands: ${t.bands}`] : []),
+    ...(t.fixed && ctx.mode === "app" ? [`fixed: [${t.fixed.map(col).join(", ")}]`] : []),
+  ];
+  return [
+    `MarkswiftTable(${args.join(", ")}) {`,
+    ...n.children.flatMap((c, i) => {
+      const s = t.slots[i]!;
+      const span = `${s.colSpan > 1 ? `, columnSpan: ${s.colSpan}` : ""}${s.rowSpan > 1 ? `, rowSpan: ${s.rowSpan}` : ""}`;
+      return indent([...ctx.renderNode(c), `.markswiftGridCell(column: ${s.colStart}, row: ${s.rowStart}${span})`], 1);
     }),
     "}",
   ];
@@ -77,7 +106,8 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
   // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
   if (n.kind === "grid" && n.template && ctx.mode === "fidelity")
     note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", n.template.fidelityNote);
-  if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
+  if (n.kind === "grid" && n.table) out.push(...tableExpr(n, n.table, ctx));
+  else if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
   else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
