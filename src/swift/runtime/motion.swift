@@ -1,8 +1,8 @@
 /// CSS `steps()` jump positions.
-nonisolated enum MarkswiftStepPosition: Sendable { case start, end, none, both }
+nonisolated enum MarkswiftStepPosition: Sendable, Hashable { case start, end, none, both }
 
 /// A CSS easing function evaluated exactly: cubic-bezier (and its keywords), steps(), linear() points.
-nonisolated enum MarkswiftEase: Sendable {
+nonisolated enum MarkswiftEase: Sendable, Hashable {
     case bezier(Double, Double, Double, Double)
     case steps(Int, MarkswiftStepPosition)
     /// linear(): output values at input positions (0…1, ascending).
@@ -156,5 +156,28 @@ struct MarkswiftAnimation: ViewModifier {
             .scaleEffect(x: v.scaleX, y: v.scaleY, anchor: anchor)
             .rotationEffect(.degrees(v.degrees), anchor: anchor)
             .offset(x: v.x, y: v.y)
+    }
+}
+
+/// CSS steps()/linear() timing for a SwiftUI transition (cubic-bezier uses `Animation.timingCurve`).
+nonisolated struct MarkswiftEasing: CustomAnimation {
+    let duration: Double
+    let ease: MarkswiftEase
+    func animate<V: VectorArithmetic>(value: V, time: TimeInterval, context: inout AnimationContext<V>) -> V? {
+        time < duration ? value.scaled(by: ease(time / duration)) : nil
+    }
+}
+
+/// A pressed/focused look's CSS transition: the new state's timing (CSS uses the new style's transition); under
+/// Reduce Motion (system or harness-forced) the reduced pair, which analysis already resolved (D-MOTION).
+struct MarkswiftStateAnimation: ViewModifier {
+    let isOn: Bool
+    let into: Animation?, back: Animation?, reducedInto: Animation?, reducedBack: Animation?
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.markswiftForcedStates) private var forced
+
+    func body(content: Content) -> some View {
+        let reduce = systemReduce || forced.contains(.reduceMotion)
+        content.animation(isOn ? (reduce ? reducedInto : into) : (reduce ? reducedBack : back), value: isOn)
     }
 }

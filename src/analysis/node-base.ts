@@ -12,7 +12,7 @@ import { isInlineText, textContent } from "./text-runs.ts";
 import { PSEUDO, undrawnImages } from "./generated.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
-import { motionOf } from "./motion.ts";
+import { motionOf, transitionsOf } from "./motion.ts";
 import { titleOf } from "./tooltips.ts";
 
 export function finish<T extends SemNode>(node: T): T {
@@ -63,7 +63,8 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     );
   const style = styleOf(n, diagnostics);
   const states = stateStylesOf(n, style);
-  const motion = motionOf(n, style, diagnostics);
+  const transitions = transitionsOf(n, states, diagnostics);
+  const motion = transitions ? { ...motionOf(n, style, diagnostics), transitions } : motionOf(n, style, diagnostics);
   // Parts that never get a view of their own: an inline pseudo-element (merged into this node's text runs) and the
   // shapes of an svg (drawn as one vector).
   const parts =

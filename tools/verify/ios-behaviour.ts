@@ -68,6 +68,8 @@ interface Prepared {
   pickerValues: string[];
   /** Texts of the `<label>`s whose tap focuses a text field. */
   labels: string[];
+  /** Labels of text fields whose focused look has a CSS transition: the look must still arrive (also under Reduce Motion). */
+  focusLooks: string[];
   /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
   actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
   /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again.
@@ -118,6 +120,7 @@ interface CaseLog {
         fields: Array<{ type: string; label: string; value: string }>;
         pickers: Array<{ current: string; next: string; reached: boolean }>;
         labels: Array<{ label: string; focused: boolean }>;
+        focusLooks: Array<{ label: string; changed: boolean }>;
         log: string;
       };
       /** Presentations add: the trigger still exposed while open, closed per closer label, closed by the outside tap,
@@ -139,6 +142,8 @@ interface CaseLog {
     /** Live clock: SHA-256 of two root screenshots 300 ms apart (Reduce Motion forced in `motionReduced`). */
     motion?: { frames: string[] };
     motionReduced?: { frames: string[] };
+    /** `interactions.focusLooks` again with Reduce Motion forced. */
+    focusReduced?: { focusLooks: Array<{ label: string; changed: boolean }> };
   };
   errors: string[];
 }
@@ -354,6 +359,12 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     if (n.kind === "text" && n.labelFor && focusable.has(n.labelFor) && activate.has(n.labelFor))
       labels.push(n.runs.map((r) => r.text).join(""));
   });
+  const focusLooks: string[] = [];
+  walk(screen.root, (n) => {
+    const t = n.motion?.transitions?.focused;
+    if (n.kind === "control" && focusOf.has(n) && t && Object.keys(t.in).length)
+      focusLooks.push(n.a11y?.label ?? n.placeholder ?? "");
+  });
   const live: Record<string, true> = {};
   walk(screen.root, (n) => {
     if ((n.kind === "control" && n.disabled) || n.a11y?.disabled) return;
@@ -380,6 +391,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       pickers,
       pickerValues,
       labels,
+      focusLooks,
       actions,
       layers,
       fonts: `${view}+Fonts.swift` in result.files,
@@ -458,6 +470,8 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     // HTML: tapping a field's `<label>` focuses the field.
     for (const l of ix.labels)
       if (!l.focused) fail("interaction", `label:${l.label}`, "tapping the label did not focus its field");
+    for (const f of ix.focusLooks)
+      if (!f.changed) fail("interaction", `focusLook:${f.label}`, "focused look never appeared after its transition");
     // A presentation's content buttons are tapped in their own launches (`layers`): their log hits count too.
     const hits = [ix.log, ...(large.layers ?? []).map((l) => l.log ?? "")].join(",").split(",");
     for (const { name, live } of item.actions)
@@ -526,6 +540,13 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       }
     }
   }
+  if (item.focusLooks.length) {
+    const reduced = log?.launches.focusReduced;
+    if (log && !reduced) errors.push(`${item.id}: focusReduced launch missing`);
+    for (const f of reduced?.focusLooks ?? [])
+      if (!f.changed)
+        fail("interaction", `focusLookReduced:${f.label}`, "focused look never appeared under Reduce Motion");
+  }
   if (item.motion.live) {
     const live = log?.launches.motion;
     const reduced = log?.launches.motionReduced;
@@ -575,11 +596,12 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, actions, layers, motion }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, motion }) => ({
         view,
         pickers,
         pickerValues,
         labels,
+        focusLooks,
         actions: actions.map((a) => a.name),
         layers,
         motion,
