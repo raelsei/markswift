@@ -426,6 +426,30 @@ export interface Overlay {
   fixed?: true;
   /** App-mode attachment when CSS anchored the right and/or bottom edge: the host corner kept, and the node's offset from it. `offset` (top-left) stays the exact capture placement used by fidelity. */
   anchor?: { corner: "topTrailing" | "bottomLeading" | "bottomTrailing"; offset: [number, number] };
+  /** App mode: a root of a drawn presentation (dialog, sheet, popover, hover card); every root of one layer shares one
+   * object, and such overlays are always `fixed` (`analysis/layers.ts`, plan 060). */
+  presentation?: Presentation;
+}
+
+/** A layer drawn over the component while the screen's `is<Layer>Presented` is true (D-PRESENT). */
+export interface Presentation {
+  /** Layer id (`edit-profile`): joins light/dark and names the `@open:<id>` capture. */
+  id: string;
+  /** SemNode id of the trigger. */
+  trigger: string;
+  style: "dialog" | "alertdialog" | "sheet" | "popover" | "hovercard";
+  placement:
+    | { kind: "center" }
+    | { kind: "edge"; edge: "top" | "bottom" | "leading" | "trailing" }
+    /** `from`: unit point on the trigger, `to`: unit point on the content, `gap`: content `to` − trigger `from` (px). */
+    | { kind: "anchored"; from: [number, number]; to: [number, number]; gap: [number, number] }
+    /** Unclassified: the captured top-left offset (`Overlay.offset`). */
+    | { kind: "offset" };
+  /** Native `::backdrop` colour (top-layer dialogs); a Radix scrim stays its own root node. */
+  backdrop?: Color;
+  modal: boolean;
+  /** `buttons`: SemNode ids of the content's own buttons that close it. */
+  dismiss: { escape: boolean; outside: boolean; buttons: string[] };
 }
 
 /** CSS min/max constraints expressed on the painted border box, in captured CSS pixels. */
@@ -524,8 +548,9 @@ export interface SemBase extends SizeConstraints {
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
   states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
-  /** App mode: this node's tap toggles the in-flow layer `layer` (`analysis/layers.ts`). */
-  opens?: { layer: string; kind: "inflow" };
+  /** App mode: this node's tap toggles the in-flow layer `layer`, or presents the drawn presentation `layer`
+   * (`longPress`: a hover/context-menu layer opens on long-press; `anchor`: the content is anchored to this node). */
+  opens?: { layer: string; kind: "inflow" } | { layer: string; kind: "presentation"; longPress?: true; anchor?: true };
   /** App mode: id of the in-flow layer whose open state shows this node. */
   shownBy?: string;
   /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */

@@ -77,7 +77,7 @@ export const HTML_ELEMENTS: Readonly<Record<string, ElementPolicy>> = Object.fre
     "dialog",
     "flow",
     "approximated",
-    "→ captured visibility; modal presentation and lifecycle are not translated",
+    "→ drawn presentation when a captured trigger opens it (app mode); otherwise its captured visibility",
   ),
   ...family(
     "map",

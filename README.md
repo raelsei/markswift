@@ -169,14 +169,15 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   `<details>`, shadcn `data-slot`, `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
   in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`. App mode emits the in-flow ones (a
   closed `<details>`, collapsible or accordion item): the content sits behind an `is<Name>Expanded` state seeded
-  through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Other
-  layers are not yet emitted.
+  through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Dialogs,
+  alert dialogs, sheets, popovers and hover cards are drawn presentations (`.markswiftPresentation`) behind an
+  init-seeded `is<Name>Presented`; menus are not yet emitted.
 - Result: `code`, `files` (every Swift source), `assets` (fonts and images), `diagnostics`,
   `warnings` (`{ source, level?, feature?, component?, message }[]`: page and resource errors, viewport-dependent CSS
   the view does not follow, font packaging, light/dark pairing, width-band merging), `layout` and, for adaptive
   conversions, `darkLayout`;
   with `breakpoints`, `bands` (one `{ layout, darkLayout? }` per width band, ascending; `bands[0].layout` is `layout`);
-  in app mode with an in-flow layer, `openStates` (layer id → its `init` label).
+  in app mode with an in-flow layer or a presentation, `openStates` (layer id → its `init` label).
 
 ## Modes
 
@@ -401,7 +402,9 @@ fixture's `markswift-motion` metas) and score them in the `motion@app` family.
   fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band. Paint-only
   pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or accordion
   item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
-- Dialogs and popovers.
+- Dialogs and popovers are drawn inside the component's frame (app mode): no swipe-to-dismiss, collision flip, scroll
+  lock or focus trap beyond VoiceOver's modal containment, and placed as captured at the primary viewport. Menus and
+  selects opened by a trigger are not drawn; tooltips are described below.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - CSS transitions on pressed/focused looks (captured at their end state, reported); scroll-driven animations,
@@ -505,7 +508,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
-- Dialogs and popovers; validation and `data-state` variants;
+- Menus opened by a trigger; validation and `data-state` variants;
   iPad hover and keyboard.
 - The full flex algorithm (wrap with grow, `min-width: auto` as min-content).
 - `<select multiple>`, `<datalist>`.

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=393, initial-scale=1" />
+    <title>popover — shadcn/ui</title>
+    <meta name="markswift-themes" content="light,dark" />
+    <meta name="markswift-viewport-height" content="844" />
+    <meta name="markswift-rows" content="@popover; @aria-*" />
+    <!-- tailwind-v4 globals.css -->
+  </head>
+  <body class="bg-background text-foreground">
+    <div data-markswift-root class="w-[393px] min-h-svh p-4 bg-background text-foreground"><div class="flex flex-col gap-5"><button data-slot="popover-trigger" data-variant="outline" data-size="default" class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="open-popover-layer" data-state="closed" data-fixture-opens="open-popover-layer">Open popover</button></div></div>
+    <div id="open-popover-layer" data-radix-popper-content-wrapper="" data-fixture-popper hidden style="position: fixed; left: 0px; top: 0px; transform: translate(0px, 0px); min-width: max-content; z-index: 50;"><div data-side="bottom" data-align="center" data-state="closed" role="dialog" data-slot="popover-content" class="z-50 flex flex-col gap-2.5 rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-72" tabindex="-1"><div data-slot="popover-header" class="flex flex-col gap-0.5 text-sm"><div data-slot="popover-title" class="font-medium">Share this deployment</div><p data-slot="popover-description" class="text-muted-foreground">Anyone with the link can view the build log.</p></div><div class="flex items-center gap-2 pt-1"><input data-slot="input" class="w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 h-7 text-xs" readonly="" value="atlas.example.com/d/4f2a"><button data-slot="button" data-variant="outline" data-size="icon-sm" class="group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg" aria-label="Copy"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button></div></div></div>
+<script>
+// Fixture stand-in for Radix portals. data-fixture-opens="<layer element id>" on a trigger; [data-fixture-close]
+// closes; [data-fixture-scrim] or (non-modal) any outside click closes; Escape closes; hover triggers open after 300 ms.
+// [data-fixture-popper] content is placed like Radix's popper: fixed 0,0, translated under the trigger, centred.
+const root = document.querySelector("[data-markswift-root]");
+let current;
+const set = (t, el, open) => {
+  for (const x of [t, el]) {
+    x.setAttribute("data-state", open ? "open" : "closed");
+    x.toggleAttribute("data-open", open);
+    x.toggleAttribute("data-closed", !open);
+  }
+  t.setAttribute("aria-expanded", String(open));
+  el.hidden = !open;
+  if (open && el.dataset.fixturePopper !== undefined) {
+    const r = t.getBoundingClientRect();
+    const x = Math.min(Math.max(r.left + (r.width - el.offsetWidth) / 2, 0), innerWidth - el.offsetWidth);
+    el.style.transform = `translate(${Math.round(x)}px, ${Math.round(r.bottom + 4)}px)`;
+  }
+  if (el.dataset.fixtureModal !== undefined) root.toggleAttribute("aria-hidden", open);
+  current = open ? { t, el } : undefined;
+  if (open) el.querySelector("input, button")?.focus();
+};
+const close = () => current && set(current.t, current.el, false);
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-fixture-opens]:not([data-fixture-hover])");
+  if (t) return set(t, document.getElementById(t.dataset.fixtureOpens), true);
+  if (!current) return;
+  if (e.target.closest("[data-fixture-close], [data-fixture-scrim]")) return close();
+  if (current.el.dataset.fixtureModal === undefined && !current.el.contains(e.target)) close();
+});
+document.addEventListener("keydown", (e) => e.key === "Escape" && close());
+for (const t of document.querySelectorAll("[data-fixture-hover]"))
+  t.addEventListener("mouseenter", () => setTimeout(() => set(t, document.getElementById(t.dataset.fixtureOpens), true), 300));
+</script>
+  </body>
+</html>

@@ -3,6 +3,7 @@ import { inferScreen } from "../../../src/analysis/infer.ts";
 import { applyLayers } from "../../../src/analysis/layers.ts";
 import { LAYOUT_DOC_VERSION, type Layer, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 import type { ControlNode, SemNode, StackNode } from "../../../src/model/semantic.ts";
+import { ALERT, DIALOG, MENU, NATIVE, POPOVER, SHEET, TOOLTIP, presentationDoc } from "../../helpers/presentations.ts";
 
 const FONT = { "font-family": "system-ui", "font-size": "15px", "line-height": "20px", color: "rgb(17, 24, 39)" };
 
@@ -163,4 +164,74 @@ test("a dark doc without the layer leaves the dark screen unchanged", () => {
   const before = JSON.stringify(screen);
   applyLayers(screen, dark);
   expect(JSON.stringify(screen)).toBe(before);
+});
+
+const presented = (d: LayoutDoc) => {
+  const screen = inferScreen(d, "s");
+  applyLayers(screen, d);
+  const overlays = screen.root.overlays.filter((o) => o.presentation);
+  return { screen, overlays, p: overlays[0]?.presentation, trigger: find(screen.root, "trigger")! };
+};
+
+test("presentation: a Radix dialog is two fixed roots sharing one centred, modal presentation", () => {
+  const { overlays, p, trigger } = presented(DIALOG());
+  expect(overlays.map((o) => o.node.id)).toEqual(["scrim", "card"]);
+  expect(overlays.every((o) => o.fixed && o.presentation === p)).toBe(true);
+  expect(p).toMatchObject({ id: "edit-profile", trigger: "trigger", style: "dialog", placement: { kind: "center" } });
+  expect(p!.modal).toBe(true);
+  expect(p!.dismiss).toEqual({ escape: true, outside: true, buttons: ["cancel", "x"] });
+  expect(overlays[1]!.node.style.transform).toBeUndefined();
+  expect(trigger.opens).toEqual({ layer: "edit-profile", kind: "presentation" });
+  expect(messages(overlays[1]!.node)).toContain(
+    "dialog: drawn inside the component's frame: no swipe-to-dismiss, no collision flip; captured at the primary viewport",
+  );
+});
+
+test("presentation: a right sheet sits on the trailing edge", () => {
+  const { p } = presented(SHEET());
+  expect(p).toMatchObject({ style: "sheet", placement: { kind: "edge", edge: "trailing" } });
+});
+
+test("presentation: a popper 4 px under the trigger is anchored bottom-start, its translate stripped", () => {
+  const { overlays, p, trigger } = presented(POPOVER());
+  expect(p).toMatchObject({ style: "popover", placement: { kind: "anchored", from: [0, 1], to: [0, 0], gap: [0, 4] } });
+  expect(overlays[0]!.node.style.transform).toBeUndefined();
+  expect(trigger.opens).toEqual({ layer: "open-popover", kind: "presentation", anchor: true });
+  // Radix `data-side` wins over the measured side.
+  expect(presented(POPOVER("click", "top")).p!.placement).toMatchObject({ from: [0, 0], to: [0, 1] });
+});
+
+test("presentation: alertdialog never dismisses outside; hover is a long-press hover card", () => {
+  expect(presented(ALERT()).p).toMatchObject({
+    style: "alertdialog",
+    dismiss: { outside: false, buttons: ["cancel"] },
+  });
+  const hover = presented(POPOVER("hover"));
+  expect(hover.p!.style).toBe("hovercard");
+  expect(hover.trigger.opens).toEqual({ layer: "nextjs", kind: "presentation", longPress: true, anchor: true });
+});
+
+test("presentation: a native modal dialog is centred by its auto margins and keeps its ::backdrop colour", () => {
+  const { p } = presented(NATIVE());
+  expect(p).toMatchObject({ style: "dialog", placement: { kind: "center" }, backdrop: { r: 0, g: 0, b: 0, a: 0.1 } });
+});
+
+test("presentation: menu and tooltip layers are left alone; an action-less tap trigger is reported", () => {
+  for (const d of [MENU(), TOOLTIP()]) {
+    const { screen, overlays, trigger } = presented(d);
+    expect(overlays).toEqual([]);
+    expect(trigger.opens).toBeUndefined();
+    expect(screen.root.overlays).toEqual([]);
+  }
+  const span = presentationDoc({ id: "edit-profile", nodes: DIALOG().layers![0]!.nodes }, "span");
+  const { overlays, trigger } = presented(span);
+  expect(overlays).toEqual([]);
+  expect(messages(trigger)).toContain("dialog: edit-profile is not presented: the trigger is not a button");
+});
+
+test("presentation: an unplaced box keeps its captured offset", () => {
+  const d = SHEET();
+  d.layers![0]!.nodes[1]!.preferredSize!.insets = { top: "20px", right: "auto", bottom: "auto", left: "20px" };
+  d.layers![0]!.nodes[1]!.bounds = { x: 20, y: 20, w: 200, h: 200 };
+  expect(presented(d).p!.placement).toEqual({ kind: "offset" });
 });
