@@ -5,6 +5,8 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 ## [Unreleased]
 
 ### Added
+- App-mode grids keep CSS placement: `grid-column`/`grid-row` lines and spans, named areas, holes, explicit and implicit (`grid-auto-rows`) auto/px rows with CSS's row-span distribution, `justify-self`/`justify-items`, and a single implicit `auto` column now lay out through `MarkswiftTracks` (`.markswiftGridCell`) when the solvers reproduce the capture within 1 px; shadcn CardHeader actions and Alert icons reflow instead of pinning their cells.
+- Placeholders paint in the page's `::placeholder` colour (its `-webkit-text-fill-color`, faded by `opacity`): the `TextField`/`SecureField` `prompt:` and the `TextEditor` placeholder overlay in app mode, the painted placeholder in fidelity; a colour that differs in dark becomes an adaptive token. Chrome's default grey keeps the platform placeholder grey (output unchanged); `::placeholder` font style and weight are not drawn. Needs LayoutDoc 4.
 - `position: relative` offsets are drawn with `.offset(x:y:)` from the authored insets (px, `%`, `calc`, rtl), and the box keeps its flow slot, so siblings no longer shift (irregular stack gaps and `children overlap` reports are gone). Percentage offsets are pins at the captured width and are reported; `position: sticky` stays at its rest position.
 - `markswift convert --breakpoints` (API `breakpoints`): one view across CSS width bands. Elements whose authored inputs differ between bands become alternatives chosen at layout time by `MarkswiftBands` at the width offered to the view (no first-frame flash); everything else is emitted once and reflows natively. One `@State` per control across bands; a fixed-width root or script-driven DOM differences are reported.
 
@@ -17,6 +19,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 ### Added
 - LayoutDoc 4 records the page's size conditions (`conditions`: `@media`/`@container` query, whether it holds, the query container) and marks the elements their rules match (`conditional`). `convert({ breakpoints })` captures one layout per CSS width band (devices 390/834/1210/1376 px up to 1376 px; uncovered bands at their lower bound) and returns them as `bands`.
 - Capture: open-state pass — each discovered trigger is opened in a fresh page; LayoutDoc 4 records `layers` (new content, placement, modality, dismissal), the trigger's `states.open` paint and `pseudoStyles.backdrop`.
+
+### Changed
+- LayoutDoc 4: `LayoutNode.motion` records CSS animations (both `prefers-reduced-motion` branches) and pressed/focused transitions (per direction) from Chrome's Web Animations objects; capture warns about script animations and `@starting-style`. No output change yet.
 
 ## [1.1.0] — 2026-10-15
 

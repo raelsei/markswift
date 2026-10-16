@@ -9,8 +9,17 @@ import { settle } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
-import { snapshotToTree, findByAttr, toLayout, attachPreferredSizes, rawAt, type DomSnapshot } from "./snapshot.ts";
+import {
+  snapshotToTree,
+  findByAttr,
+  toLayout,
+  attachPreferredSizes,
+  attachMotion,
+  rawAt,
+  type DomSnapshot,
+} from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
+import { readMotion } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
@@ -219,6 +228,9 @@ export class BrowserCapture {
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await page.addStyleTag({ content: "* { transition: none !important; }" });
       await noTransition.evaluate((s) => (s as Element).setAttribute("data-markswift-harness", ""));
+      // Motion is read before settle() finishes it (a finished CSSAnimation leaves getAnimations()).
+      const motion = await readMotion(page, spec.root);
+      errors.push(...motion.warnings);
       await settle(page);
       const cdp = await this.context.newCDPSession(page);
       await Promise.all(sheetReads);
@@ -305,9 +317,15 @@ export class BrowserCapture {
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
-      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs).
+      // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs), plus the
+      // CSSTransitions each state starts (rest page only: transitions are keyed by paths under `spec.root`).
       // In an open page, the layer's own buttons and fields.
-      const states = await captureStates(cdp, spec.open ? `[${LAYER_MARK}]` : rootSel, snapA);
+      const states = await captureStates(
+        cdp,
+        spec.open ? `[${LAYER_MARK}]` : rootSel,
+        snapA,
+        spec.open ? undefined : { page, sheet: noTransition, root: spec.root, authorReduce: motion.authorReduce },
+      );
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
       await page.evaluate(
@@ -340,6 +358,9 @@ export class BrowserCapture {
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);
+      for (const [path, transitions] of Object.entries(states.transitions))
+        motion.motion[path] = { ...motion.motion[path], transitions };
+      attachMotion(rootRaw, motion.motion);
       delete rootRaw.attrs[ROOT_MARK];
       // Origin, size and screenshot come from the root's untransformed (snapshot B) box, the same
       // space as every child's bounds; `rootRect` would include an ancestor's transform.

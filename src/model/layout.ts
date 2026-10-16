@@ -22,6 +22,58 @@ export const PreferredSize = z.object({
 });
 export type PreferredSize = z.infer<typeof PreferredSize>;
 
+/** One computed keyframe (`getKeyframes()`): offset, the easing of the segment it starts, CSS property → value. */
+export const Keyframe = z.object({ offset: z.number(), easing: z.string(), values: z.record(z.string(), z.string()) });
+/** One CSS animation as Chrome's `CSSAnimation` reports it (`var()`-resolved, per element). Times in ms. */
+export const Anim = z.object({
+  /** `animation-name` ("spin", "enter", "accordion-down"). */
+  name: z.string(),
+  pseudo: z.enum(["::before", "::after"]).optional(),
+  duration: z.number(),
+  /** May be negative. */
+  delay: z.number(),
+  iterations: z.union([z.number(), z.literal("infinite")]),
+  direction: z.enum(["normal", "reverse", "alternate", "alternate-reverse"]),
+  fill: z.enum(["none", "forwards", "backwards", "both"]),
+  /** Absent = replace. */
+  composite: z.enum(["add", "accumulate"]).optional(),
+  /** Absent = document timeline; else "ScrollTimeline" | "ViewTimeline" | "none". */
+  timeline: z.string().optional(),
+  /** Computed offsets, implicit 0%/100% filled, per-segment easing. */
+  keyframes: z.array(Keyframe),
+});
+export type Anim = z.infer<typeof Anim>;
+/** One `CSSTransition` a forced state started (or ended). Times in ms. */
+export const Transition = z.object({
+  property: z.string(),
+  duration: z.number(),
+  delay: z.number(),
+  easing: z.string(),
+  from: z.string(),
+  to: z.string(),
+});
+export type Transition = z.infer<typeof Transition>;
+const TransitionPair = z.object({ in: z.array(Transition), out: z.array(Transition) });
+/** `reduced`: the same pair under `prefers-reduced-motion: reduce`, by the reduced rule (see `Motion.reduced`). */
+const StateTransitions = TransitionPair.extend({ reduced: TransitionPair.optional() });
+/**
+ * The reduced rule: a `reduced` list is present when the page has a `prefers-reduced-motion` media rule (the
+ * author decided) or when it differs from the `no-preference` list; absent = no author decision, `[]` = none run.
+ */
+export const Motion = z.object({
+  /** Under `prefers-reduced-motion: no-preference`. */
+  animations: z.array(Anim).optional(),
+  /** Under `reduce`, by the reduced rule. */
+  reduced: z.array(Anim).optional(),
+  /** `in`: forcing the state; `out`: releasing it. */
+  transitions: z.object({ pressed: StateTransitions.optional(), focused: StateTransitions.optional() }).optional(),
+  /** Layer roots only. */
+  enter: z.array(Anim).optional(),
+  /** Layer roots only. */
+  exit: z.array(Anim).optional(),
+});
+export type Motion = z.infer<typeof Motion>;
+
 /**
  * One laid-out DOM node. `display: contents` elements are not here — their
  * children are spliced into the parent's `children` (the wrapper's attrs/id
@@ -70,6 +122,8 @@ export interface LayoutNode {
   conditional?: number[];
   /** Pseudo-element styles DOMSnapshot does not report, read with getComputedStyle(el, "::<name>"). `placeholder`: inputs and textareas with a `placeholder` attribute (color, -webkit-text-fill-color, opacity, font-style, font-weight). `backdrop`: `::backdrop` of a top-layer element (`overlay: auto`) — background-color, background-image, opacity, filter; its box is the viewport. */
   pseudoStyles?: { placeholder?: Record<string, string>; backdrop?: Record<string, string> };
+  /** CSS animations and state transitions read from Chrome's Web Animations objects before settle (browser/motion.ts). */
+  motion?: Motion;
   children: LayoutNode[];
 }
 
@@ -99,6 +153,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
       })
       .optional(),
     conditional: z.array(z.number().int().nonnegative()).optional(),
+    motion: Motion.optional(),
     children: z.array(LayoutNode),
   }),
 );

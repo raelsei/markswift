@@ -37,3 +37,49 @@ browserTest(
   },
   60_000,
 );
+
+const count = (code: string, needle: string) => code.split(needle).length - 1;
+const gridNotes = (r: Awaited<ReturnType<typeof convertHtml>>) =>
+  r.diagnostics.flatMap((d) => d.diagnostics).filter((d) => d.feature === "display: grid");
+
+browserTest(
+  "the grid-placement fixture admits all five placed grids",
+  async () => {
+    const result = await convertHtml(
+      await Bun.file("tests/conformance/fixtures/css-layout/grid-placement.html").text(),
+      { name: "GridPlacement", mode: "app", theme: "light", viewport: { width: 390, height: 800 } },
+    );
+    expect(count(result.code, "MarkswiftTracks(")).toBe(5);
+    for (const s of [
+      ".markswiftGridCell(column: 1, row: 1, columnSpan: 2)",
+      "justify: .end",
+      "justify: .center",
+      "autoRow: .px(36.0)",
+    ])
+      expect(result.code).toContain(s);
+    expect(result.code).not.toContain("MarkswiftMeasuredLayout(");
+    expect(gridNotes(result)).toEqual([]);
+  },
+  60_000,
+);
+
+browserTest(
+  "shadcn CardHeader actions and Alert icons lay out through MarkswiftTracks",
+  async () => {
+    const convert = async (file: string, name: string) =>
+      convertHtml(await Bun.file(`tests/conformance/fixtures/components/${file}`).text(), {
+        name,
+        mode: "app",
+        theme: "light",
+        viewport: { width: 390, height: 800 },
+      });
+    const card = await convert("shadcn-card.html", "CardView");
+    expect(count(card.code, "MarkswiftTracks(tracks: [.fr(1.0), .auto]")).toBe(1);
+    expect(card.code).toContain(".markswiftGridCell(column: 2, row: 1, rowSpan: 2, justify: .end)");
+    expect(gridNotes(card)).toEqual([]);
+    const alert = await convert("shadcn-alert.html", "AlertView");
+    expect(count(alert.code, "MarkswiftTracks(tracks: [.fr(1.0)]")).toBe(3);
+    expect(gridNotes(alert)).toEqual([]);
+  },
+  60_000,
+);

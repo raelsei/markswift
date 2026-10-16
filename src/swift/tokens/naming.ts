@@ -127,8 +127,9 @@ const side =
 /**
  * Slots a role-qualified class hint may name, by utility prefix (`bg:white` → a solid fill).
  * A prefix missing here names nothing: `divide-` colours the children's borders, `ring-offset-`
- * shares the shadow slots with `ring-`, `accent-`/`caret-`/`placeholder-` paint nothing the IR
- * records, and an svg's `text-` colour reaches only the paths that use `currentColor`.
+ * shares the shadow slots with `ring-`, `accent-`/`caret-`/`placeholder-` name nothing here (an
+ * accent or prompt colour joins its group by value), and an svg's `text-` colour reaches only the
+ * paths that use `currentColor`.
  */
 const HINT_SLOTS: Record<string, (u: Usage) => boolean> = {
   bg: (u) => /^fill\d+$/.test(u.slot),

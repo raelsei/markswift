@@ -357,8 +357,10 @@ In `app` mode these patterns keep the captured pixel geometry instead of reflowi
 - Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/%/content bases and shrink with CSS's
   freeze loop and px min/max-width clamps, admitted when its solver reproduces Chrome; a second capture at 320 px
   confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
-- Grids outside the `MarkswiftTracks` subset (`fr`, `minmax(px, fr)`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`) whose
-  items span, leave holes, overlap or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
+- Grids outside the `MarkswiftTracks` subset (`fr`, `minmax(px, fr)`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`
+  or one implicit `auto` column; line, negative-line, `span <n>` and named-area placement inside the explicit
+  columns; `auto`/px rows and one `grid-auto-rows` value; `justify-self`/`justify-items`) whose items overlap, use
+  template line names or implicit columns, flow by column or densely, or run right-to-left: `approximated display: grid: captured grid placement preserves holes, spans and alignment; responsive track recalculation is not reconstructed`.
 - Inline-block rows: `approximated display: inline-block: inline-block items → rows of the captured line division; they do not re-wrap at another width`.
 - Tables: `approximated table: <table> → measured rows/cells; shared column resizing, spanning semantics and table accessibility are not translated`.
 - Percentage relative offsets: `approximated position: relative: left 10% → offset pinned at 34.3px`.
@@ -385,7 +387,6 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
-- `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
 - An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
   the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block

@@ -52,9 +52,10 @@ export interface EmitContext extends ColorCtx {
   contentMinWidth: Set<SemNode>;
   /**
    * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells, MarkswiftFlexRow items).
-   * "width": accept the proposed width; "both": also the proposed height (grid stretch).
+   * "width": accept the proposed width; "both": also the proposed height (grid stretch); "height": a justified grid
+   * cell (MarkswiftTracks) takes the proposed height and fits its content's width.
    */
-  allocated: Map<SemNode, "width" | "both">;
+  allocated: Map<SemNode, "width" | "height" | "both">;
   /** Breakpoint screens: containers whose subtree holds a band holder, emitted as `func v_x(_ band: Int)`. */
   bandParam: Set<SemNode>;
   /** Breakpoint screens: the app-mode scrolling root that hosts `MarkswiftBands` inside its `ScrollView`. */

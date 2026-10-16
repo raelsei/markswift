@@ -1,4 +1,4 @@
-import type { BandEdge, StackNode, GridNode } from "../model/semantic.ts";
+import type { BandEdge, StackNode, GridNode, GridRowTrack } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
@@ -12,13 +12,29 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
   const layout = t.autoRepeat
     ? `autoRepeat: .${t.autoRepeat.mode}(min: ${num(t.autoRepeat.min)})`
     : `tracks: [${t.tracks.map((k) => (k.kind === "auto" ? ".auto" : k.kind === "px" ? `.px(${num(k.px)})` : `.fr(${num(k.fr)}${k.min === undefined ? "" : `, min: ${num(k.min)}`})`)).join(", ")}]`;
+  const row = (r: GridRowTrack) => (r.kind === "px" ? `.px(${num(r.px)})` : ".auto");
+  const rows = `${t.rows ? `, rows: [${t.rows.map(row).join(", ")}]` : ""}${t.autoRow ? `, autoRow: ${row(t.autoRow)}` : ""}`;
   const stretch = t.stretch ? "" : ", stretch: false";
+  // Row-major cells need no placement: the runtime fills them in subview order.
+  const k = t.tracks.length;
+  const placed =
+    !t.autoRepeat &&
+    t.items.some(
+      (it, i) =>
+        it.colSpan > 1 ||
+        it.rowSpan > 1 ||
+        it.justify !== "stretch" ||
+        it.colStart !== (i % k) + 1 ||
+        it.rowStart !== Math.floor(i / k) + 1,
+    );
   return [
-    `MarkswiftTracks(${layout}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
-    ...t.cells.flatMap((c, i) => {
-      const [top, bottom] = t.margins[i]!;
+    `MarkswiftTracks(${layout}${rows}, hSpacing: ${num(n.hSpacing)}, vSpacing: ${num(n.vSpacing)}${stretch}) {`,
+    ...t.items.flatMap((it) => {
+      const [top, bottom] = it.margin;
       const margin = [top ? `.padding(.top, ${num(top)})` : "", bottom ? `.padding(.bottom, ${num(bottom)})` : ""];
-      return indent([...ctx.renderNode(n.children[c]!), ...margin.filter(Boolean)], 1);
+      const extra = `${it.colSpan > 1 ? `, columnSpan: ${it.colSpan}` : ""}${it.rowSpan > 1 ? `, rowSpan: ${it.rowSpan}` : ""}${it.justify === "stretch" ? "" : `, justify: .${it.justify}`}`;
+      const cell = placed ? [`.markswiftGridCell(column: ${it.colStart}, row: ${it.rowStart}${extra})`] : [];
+      return indent([...ctx.renderNode(n.children[it.child]!), ...margin.filter(Boolean), ...cell], 1);
     }),
     "}",
   ];

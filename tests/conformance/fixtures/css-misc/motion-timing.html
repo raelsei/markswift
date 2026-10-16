@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="animation-direction; animation-delay; animation-iteration-count; animation-timing-function; animation-fill-mode">
+<meta name="markswift-themes" content="light">
+<title>motion-timing</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0e13; --fg: #e5e7eb; --muted: #9ca3af; --card: #161b24; --line: #2a3140; --accent: #60a5fa; --accent-fg: #0b0e13; --soft: #1e3a8a; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 24px; align-items: center; margin: 0 0 8px; }
+.row:last-child { margin-bottom: 0; }
+.box { width: 24px; height: 24px; border-radius: 4px; background: var(--accent); color: var(--accent); }
+@keyframes slide { to { transform: translateX(40px); } }
+@keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+@keyframes turn { to { rotate: 360deg; } }
+#alternate { animation: slide 1s ease-in-out infinite alternate; }
+#reverse { background: #16a34a; animation: slide 1s linear 2 reverse both; }
+#dot-1, #dot-2, #dot-3 { background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite; }
+#dot-1 { animation-delay: 0s; }
+#dot-2 { animation-delay: -0.4s; }
+#dot-3 { animation-delay: -0.8s; }
+#steps { background: #dc2626; animation: turn 800ms steps(8, end) infinite; }
+#linear-fn { background: #9333ea; animation: slide 1s linear(0, 0.25 75%, 1) both; }
+#partial { background: #ea580c; animation: slide 400ms ease 2.5 forwards; }
+#backwards { background: #0891b2; transform: translateX(10px); animation: slide 400ms ease 300ms backwards; }
+.pseudo::after { content: ""; display: block; width: 8px; height: 8px; background: currentColor; animation: blink 1s infinite; }
+#pseudo { background: transparent; border: 1px solid var(--line); box-sizing: border-box; padding: 7px; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="direction">
+  <p class="cap">alternate infinite / reverse twice, fill both</p>
+  <div class="row"><div class="box" id="alternate"></div></div>
+  <div class="row"><div class="box" id="reverse"></div></div>
+</section>
+<section class="v" id="delay">
+  <p class="cap">typing dots: negative delays 0s, -0.4s, -0.8s</p>
+  <div class="row"><div class="box" id="dot-1"></div><div class="box" id="dot-2"></div><div class="box" id="dot-3"></div></div>
+</section>
+<section class="v" id="timing">
+  <p class="cap">steps(8, end) / linear() easing</p>
+  <div class="row"><div class="box" id="steps"></div></div>
+  <div class="row"><div class="box" id="linear-fn"></div></div>
+</section>
+<section class="v" id="fill">
+  <p class="cap">2.5 iterations forwards / 300ms delay backwards over a translated base</p>
+  <div class="row"><div class="box" id="partial"></div></div>
+  <div class="row"><div class="box" id="backwards"></div></div>
+</section>
+<section class="v" id="pseudo-element">
+  <p class="cap">animated ::after</p>
+  <div class="row"><div class="box pseudo" id="pseudo"></div></div>
+</section>
+</main>
+</body>
+</html>

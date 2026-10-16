@@ -97,6 +97,7 @@ export interface ControlSpec {
   value?: string;
   swatch?: Color;
   placeholder?: string;
+  promptColor?: Color;
   inputType?: ControlNode["inputType"];
   autofill?: string;
   inputMode?: string;
@@ -191,7 +192,11 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
       // `@value`: the live text when the page's script changed it (`browser/snapshot.ts`).
       const text = (a["value"] ?? textContent(n)).trim();
       if (text) spec.value = text;
-      if (a["placeholder"]) spec.placeholder = a["placeholder"];
+      if (a["placeholder"]) {
+        spec.placeholder = a["placeholder"];
+        const prompt = promptColorOf(n);
+        if (prompt) spec.promptColor = prompt;
+      }
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -308,7 +313,12 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         const step = num(a["step"]);
         if (step !== undefined && step > 0) spec.range.step = step;
       }
-      if (a["placeholder"]) spec.placeholder = a["placeholder"];
+      if (a["placeholder"]) {
+        spec.placeholder = a["placeholder"];
+        // Chrome draws no placeholder on the other input kinds.
+        const prompt = control === "textField" || control === "secureField" ? promptColorOf(n) : undefined;
+        if (prompt) spec.promptColor = prompt;
+      }
       if (type === "file") {
         const accept = (a["accept"] ?? "")
           .split(",")
@@ -530,6 +540,24 @@ function meterLevel(
   if (opt < lo) return v <= lo ? "optimum" : v <= hi ? "suboptimal" : "poor"; // lower is better
   if (opt > hi) return v >= hi ? "optimum" : v >= lo ? "suboptimal" : "poor"; // higher is better
   return v >= lo && v <= hi ? "optimum" : "suboptimal";
+}
+
+/** Chrome's UA `::placeholder` colour, the same in light and dark (Chrome 155 and the gates' Chromium 153): no author colour. */
+const UA_PROMPT = parseColor("rgb(117, 117, 117)")!;
+
+/**
+ * What Chrome paints a field's placeholder in, from the captured `::placeholder` style:
+ * `-webkit-text-fill-color` (it computes to `color` unless set), faded by `opacity`. Undefined for
+ * the UA grey, so an unstyled field keeps the platform's prompt grey.
+ */
+function promptColorOf(n: LayoutNode): Color | undefined {
+  const ph = n.pseudoStyles?.placeholder;
+  const c = parseColor(ph?.["-webkit-text-fill-color"]) ?? parseColor(ph?.["color"]);
+  if (!c) return undefined;
+  const opacity = Number.parseFloat(ph?.["opacity"] ?? "");
+  const out = opacity >= 0 && opacity < 1 ? { ...c, a: c.a * opacity } : c;
+  const ua = out.r === UA_PROMPT.r && out.g === UA_PROMPT.g && out.b === UA_PROMPT.b && out.a === UA_PROMPT.a;
+  return ua ? undefined : out;
 }
 
 /** Controls that paint text of their own (from `value`/`placeholder`) rather than child nodes. */
