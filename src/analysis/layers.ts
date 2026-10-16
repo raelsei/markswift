@@ -236,7 +236,9 @@ function menu(screen: Screen, layer: Layer, rest: Map<string, LayoutNode>, sem: 
       if (role.startsWith("menuitem")) {
         if (find(n, (d) => (d.attrs["data-slot"] ?? "").endsWith("shortcut")))
           notes.add("menu shortcut text is dropped");
-        if (find(n, (d) => d.tag === "svg" || d.tag === "img")) notes.add("menu item icons are dropped");
+        // A checkbox/radio item's indicator is its native checkmark; a plain item's icon has no counterpart.
+        if (role === "menuitem" && find(n, (d) => d.tag === "svg" || d.tag === "img"))
+          notes.add("menu item icons are dropped");
       }
       const off = disabled(n) ? { disabled: true as const } : {};
       if (role === "separator") {
