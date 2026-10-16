@@ -1,6 +1,7 @@
 /** Plan 037: a probe capture at another width keeps admitted runtime layouts only when it reproduces them. */
 import { expect, test } from "bun:test";
 import { type CompileResult, compileLayout, needsProbe } from "../../../src/compiler/index.ts";
+import { admitTracks } from "../../../src/analysis/grid-tracks.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 
 const BOX = { display: "block", "box-sizing": "border-box", "background-color": "rgb(220, 80, 60)" };
@@ -121,4 +122,111 @@ test("a probe of another screen is rejected", () => {
   expect(() => app(P1, flexRow(290, [94, 188], "other"))).toThrow(
     "options.probe must be a capture of the same screen and theme at another width",
   );
+});
+
+/** A grid root (gaps 10, no padding) with an authored `template`; `items`: box plus extra styles and a one-line label. */
+function placedGrid(
+  width: number,
+  template: string,
+  items: Array<{ box: [number, number, number, number]; styles?: Record<string, string>; label?: boolean }>,
+  root: Record<string, string> = {},
+  rows?: string,
+): LayoutDoc {
+  const children: LayoutNode[] = items.map(({ box: [x, y, w, h], styles = {}, label }, i) => ({
+    id: `cell${i}`,
+    tag: "div",
+    attrs: {},
+    preferredSize: { width: "auto", height: "auto" },
+    bounds: { x, y, w, h },
+    styles: { ...BOX, ...styles },
+    children: label
+      ? [
+          {
+            tag: "#text",
+            attrs: {},
+            styles: {},
+            text: "Label",
+            bounds: { x, y, w, h },
+            lines: [{ bounds: { x, y, w, h: 10 }, start: 0, length: 5 }],
+            children: [],
+          },
+        ]
+      : [],
+  }));
+  return doc({
+    id: "root",
+    tag: "main",
+    attrs: {},
+    preferredSize: { width: `${width}px`, height: "200px", gridTemplateColumns: template, gridTemplateRows: rows },
+    bounds: { x: 0, y: 0, w: width, h: 200 },
+    children,
+    styles: { display: "grid", "column-gap": "10px", "row-gap": "10px", ...root },
+  });
+}
+
+/** The "auto rows + row span" grid: `1fr auto`, rows `auto auto`, `grid-auto-rows: 36px`, the Action spanning rows 1-2. */
+function rowSpanGrid(width: number, actionRowEnd = "span 2"): LayoutDoc {
+  const fr = width - 70;
+  const span = actionRowEnd === "span 2";
+  const action = {
+    "grid-column-start": "2",
+    "grid-row-start": "1",
+    "grid-row-end": actionRowEnd,
+    "justify-self": "end",
+  };
+  return placedGrid(
+    width,
+    "1fr auto",
+    [
+      { box: [0, 0, fr, span ? 20 : 50] },
+      { box: [0, span ? 30 : 60, fr, 20] },
+      { box: [fr + 10, 0, 60, 50], styles: action, label: true },
+      // Without the span, auto-placement puts the last item beside the Description.
+      span ? { box: [0, 60, fr, 36] } : { box: [fr + 10, 60, 60, 20], label: true },
+    ],
+    {
+      "grid-template-columns": `${fr}px 60px`,
+      "grid-template-rows": span ? "20px 20px 36px" : "50px 20px",
+      "grid-auto-rows": "36px",
+    },
+    "auto auto",
+  );
+}
+
+test("a placed grid keeps MarkswiftTracks when the probe reproduces its placement, else it is pinned", () => {
+  const grid = rowSpanGrid(360);
+  expect(app(grid, rowSpanGrid(300)).code).toContain("MarkswiftTracks(");
+  // The probe itself admits; only its placement (the Action's row span) differs.
+  expect(admitTracks(rowSpanGrid(300, "span 1").root)?.placements[2]).toMatchObject({ rowStart: 1, rowSpan: 1 });
+  expect(admitTracks(rowSpanGrid(300, "span 1").root)?.placements[3]).toMatchObject({ colStart: 2, rowStart: 2 });
+  const pinned = app(grid, rowSpanGrid(300, "span 1"));
+  expect(pinned.code).not.toContain("MarkswiftTracks(");
+  expect(features(pinned, "root")).toContain("display: grid");
+});
+
+test("an auto-fit grid stays admitted when the probe holds another column count", () => {
+  const fit = (width: number, boxes: Array<[number, number, number, number]>) =>
+    placedGrid(
+      width,
+      "repeat(auto-fit, minmax(100px, 1fr))",
+      boxes.map((box) => ({ box })),
+      {
+        "grid-template-columns": boxes
+          .filter((b) => b[1] === 0)
+          .map((b) => `${b[2]}px`)
+          .join(" "),
+        "grid-template-rows": [...new Set(boxes.map((b) => b[1]))].map(() => "20px").join(" "),
+      },
+    );
+  const grid = fit(360, [
+    [0, 0, 113.333, 20],
+    [123.333, 0, 113.333, 20],
+    [246.667, 0, 113.333, 20],
+  ]);
+  const probe = fit(300, [
+    [0, 0, 145, 20],
+    [155, 0, 145, 20],
+    [0, 30, 145, 20],
+  ]);
+  expect(app(grid, probe).code).toContain("MarkswiftTracks(");
 });
