@@ -37,13 +37,14 @@ export function confidenceOf(list: readonly Diagnostic[]): Confidence {
 /**
  * One per-conversion message, not tied to a node. `capture`: page errors, unreadable resources
  * and viewport-dependent CSS the view does not follow; `fonts`: font packaging; `adaptive`:
- * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034).
+ * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034);
+ * `breakpoints`: merging the width-band captures of a breakpoint conversion.
  * `level` and `feature` are set together when the message is a design loss, with the same
  * meaning as on `Diagnostic` (`feature` is an inventory row id). `component` names the
  * component a package build was converting when the message arose.
  */
 export interface ConversionWarning {
-  source: "capture" | "fonts" | "adaptive" | "build" | "palette";
+  source: "capture" | "fonts" | "adaptive" | "build" | "palette" | "breakpoints";
   level?: DiagnosticLevel;
   feature?: string;
   component?: string;
@@ -447,6 +448,15 @@ export interface SemBase extends SizeConstraints {
   hitTesting?: false;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`). */
   states?: { pressed?: StateStyle; focused?: StateStyle };
+  /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`. */
+  bands?: number[];
+  /**
+   * Breakpoint conversions: this node is a holder — kind `box`, no paint, no children — for one DOM element whose
+   * authored inputs differ between bands. The emitter shows the alternative whose `bands` holds the current band.
+   * `frame`, `width`, `height`, `selfAlign`, `selfAlignV` are the first alternative's, so the parent lays it out as
+   * that band.
+   */
+  alternatives?: SemNode[];
 }
 
 export interface StackNode extends SemBase {
@@ -669,12 +679,16 @@ export interface Screen {
   /** Backdrop behind the root, from the design. */
   canvas: Color;
   root: SemNode;
+  /** Breakpoint conversions with at least one holder: `edges` in root-proposal px (the CSS edges minus the root's
+   * offset from the viewport), `cssEdges` as captured, `widths` = capture viewport width per band. */
+  breakpoints?: { edges: BandEdge[]; cssEdges: BandEdge[]; widths: number[] };
   /** The root's computed `color-scheme` when it names exactly one scheme: the view forces that appearance. */
   colorScheme?: "light" | "dark";
 }
 
 export function walk(n: SemNode, fn: (n: SemNode, depth: number) => void, depth = 0): void {
   fn(n, depth);
+  for (const a of n.alternatives ?? []) walk(a, fn, depth);
   for (const o of n.overlays) walk(o.node, fn, depth + 1);
   if (n.kind === "stack" || n.kind === "grid") for (const c of n.children) walk(c, fn, depth + 1);
   if (n.kind === "control") {

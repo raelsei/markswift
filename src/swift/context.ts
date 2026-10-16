@@ -56,6 +56,10 @@ export interface EmitContext extends ColorCtx {
    * cell (MarkswiftTracks) takes the proposed height and fits its content's width.
    */
   allocated: Map<SemNode, "width" | "height" | "both">;
+  /** Breakpoint screens: containers whose subtree holds a band holder, emitted as `func v_x(_ band: Int)`. */
+  bandParam: Set<SemNode>;
+  /** Breakpoint screens: the app-mode scrolling root that hosts `MarkswiftBands` inside its `ScrollView`. */
+  bandsInside?: SemNode;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */

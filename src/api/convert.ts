@@ -7,7 +7,7 @@ import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import type { HtmlSource } from "../input/types.ts";
-import type { FontFace } from "../model/layout.ts";
+import type { FontFace, LayoutDoc } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
 import { captureBands, captureThemes } from "./bands.ts";
 
@@ -79,6 +79,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       darkClass: options.darkClass,
       waitFor: options.waitFor,
       prepare: options.prepare,
+      // Width media queries are reconstructed: the captures do not report them as losses.
+      ...(bp ? { breakpoints: true } : {}),
     };
     // The open-state pass runs on the primary captures only, never on the probe.
     const layered = { ...req, layers: true };
@@ -109,6 +111,27 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
             )
           ).primary.layout
         : undefined;
+    // Band captures and their probes skip the open-state pass: band 0's layers apply once on the merged screen.
+    const variantProbes: Array<LayoutDoc | undefined> = [];
+    for (let i = 1; i < bands.length; i++) {
+      const layout = bands[i]!.primary.layout;
+      const width = plan!.probes[i];
+      const probed =
+        options.probe !== false && width !== undefined && needsProbe(layout)
+          ? (
+              await captureThemes(
+                renderer,
+                {
+                  ...req,
+                  theme: layout.combo.theme,
+                  viewport: { width, height: plan!.captures[i]!.height },
+                },
+                timedOut,
+              )
+            ).primary.layout
+          : undefined;
+      variantProbes.push(probed && probed.size.w !== layout.size.w ? probed : undefined);
+    }
     const captures = bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary]));
     const sources = new Map(captures.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
@@ -126,6 +149,13 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       dark: dark?.layout,
       probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
       palette: options.palette,
+      ...(bands.length > 1
+        ? {
+            variants: bands.slice(1).map((b) => b.primary.layout),
+            ...(dark ? { darkVariants: bands.slice(1).map((b) => b.dark!.layout) } : {}),
+            variantProbes,
+          }
+        : {}),
     });
     const assets: Record<string, Uint8Array> = { ...compiled.assets, ...fonts.assets };
     if (fonts.faces.length) {
