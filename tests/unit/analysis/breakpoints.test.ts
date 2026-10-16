@@ -197,11 +197,13 @@ test("9: bandEdges subtracts the root's offset from the viewport, refuses fixed 
   expect(bandEdges(centred)).toEqual({
     edges: [{ px: 600, inclusive: true }],
     cssEdges: [{ px: 600, inclusive: true }],
+    bands: [0, 1],
   });
   const padded = [390, 834].map((w) => at(w, { bounds: { x: 16, y: 0, w: w - 32, h: 100 } }));
   expect(bandEdges(padded)).toEqual({
     edges: [{ px: 568, inclusive: true }],
     cssEdges: [{ px: 600, inclusive: true }],
+    bands: [0, 1],
   });
   const fixed = [390, 834].map((w) => at(w, { bounds: { x: 0, y: 0, w: 393, h: 100 } }));
   const r = bandEdges(fixed);
@@ -360,7 +362,11 @@ test("057/5: media-only docs merge exactly as without explicit bands", () => {
 
 test("057/6: bandEdges takes two captures in one band only with container queries", () => {
   const docs = fieldGroupDocs();
-  expect(bandEdges(docs)).toEqual({ edges: [{ px: 768, inclusive: true }], cssEdges: [{ px: 768, inclusive: true }] });
+  expect(bandEdges(docs)).toEqual({
+    edges: [{ px: 768, inclusive: true }],
+    cssEdges: [{ px: 768, inclusive: true }],
+    bands: [0, 0, 1, 1],
+  });
   const media = docs.map((d) => ({ ...d, conditions: d.conditions.filter((c) => c.kind === "media") }));
   expect(() => bandEdges(media)).toThrow("options.variants must be one capture per width band in ascending order");
   expect(() => bandEdges([docs[0]!, docs[2]!, docs[1]!])).toThrow("one capture per width band");

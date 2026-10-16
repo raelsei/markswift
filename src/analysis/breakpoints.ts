@@ -44,9 +44,12 @@ const LEAF: Record<SemNode["kind"], boolean> = {
 const round = (n: number) => Math.round(n * 100) / 100;
 const byKey = (a: [string, unknown], b: [string, unknown]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 
-/** Root-proposal edges of a set of band captures, or the reason the root does not follow the viewport. Every band
- * holds a capture, ascending by width; more than one only on pages with container queries (the planner's `extra`). */
-export function bandEdges(docs: LayoutDoc[]): { edges: BandEdge[]; cssEdges: BandEdge[] } | { warning: string } {
+/** Root-proposal edges of a set of band captures (and each capture's band), or the reason the root does not follow
+ * the viewport. Every band holds a capture, ascending by width; more than one only on pages with container queries
+ * (the planner's `extra`). */
+export function bandEdges(
+  docs: LayoutDoc[],
+): { edges: BandEdge[]; cssEdges: BandEdge[]; bands: number[] } | { warning: string } {
   const first = docs[0]!;
   // The capture's own planner (dedupe, range, six-band cap), so compile and capture agree on the edges.
   const cssEdges = planBands(first.conditions, {
@@ -70,7 +73,7 @@ export function bandEdges(docs: LayoutDoc[]): { edges: BandEdge[]; cssEdges: Ban
     return {
       warning: `the root does not follow the viewport width (viewport minus root width: ${round(base)}px at ${first.viewport.w}px, ${round(offset(off))}px at ${off.viewport.w}px); breakpoints are not reconstructed and the view keeps the ${first.viewport.w}px layout`,
     };
-  return { edges: cssEdges.map((e) => ({ ...e, px: round(e.px - base) })), cssEdges };
+  return { edges: cssEdges.map((e) => ({ ...e, px: round(e.px - base) })), cssEdges, bands };
 }
 
 /** A member lookup missed: the band dropped, hoisted or restructured the node. The nearest ancestor becomes a holder. */

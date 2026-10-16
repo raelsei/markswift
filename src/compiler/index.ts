@@ -9,7 +9,6 @@ import { admitTracks } from "../analysis/grid-tracks.ts";
 import { admitFlexRow } from "../analysis/flex-row.ts";
 import { bandEdges, mergeBands } from "../analysis/breakpoints.ts";
 import { bandNames } from "../analysis/bands.ts";
-import { bandOf } from "../css/index.ts";
 import { isTooltipLayer } from "../analysis/tooltips.ts";
 import { note } from "../swift/diagnostics.ts";
 import { visit } from "../swift/traversal.ts";
@@ -120,7 +119,7 @@ function componentScreens(
     return s;
   });
   // Each capture's viewport band; a band's lowest capture represents it (the others are container-query captures).
-  const bands = docs.map((d) => bandOf(d.viewport.w, edges.cssEdges));
+  const { bands } = edges;
   const merged = mergeBands(docs, screens, bands);
   // No element differs between bands: band 0 compiles alone, exactly as without variants (with any merge warnings).
   if (!merged || merged.root === screens[0]!.root) return single(merged?.warnings ?? []);
