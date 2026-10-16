@@ -420,6 +420,23 @@ test("reflow fields are all or none, with reflowDelta = reflowSsim − ssim", ()
   expect(reflowCodes(reflowed(0.78, { reflowDelta: 0 }))).toEqual(["invalid"]);
 });
 
+test("breakpointMaxLoss gates `breakpoint` captures; `breakpoint-edge` captures use reflowMaxLoss", () => {
+  const policy = { reflowMaxLoss: 0.03, breakpointMaxLoss: 0.01 };
+  const bp = (reflowSsim: number, reflowTag: string) => reflowed(reflowSsim, { reflowTag });
+  expect(reflowCodes(bp(0.78, "breakpoint"), policy)).toEqual(["reflow"]);
+  expect(reflowCodes(bp(0.795, "breakpoint"), policy)).toEqual([]);
+  expect(reflowCodes(bp(0.76, "breakpoint-edge"), policy)).toEqual(["reflow"]);
+  expect(reflowCodes(bp(0.78, "breakpoint-edge"), policy)).toEqual([]);
+  expect(reflowCodes(bp(0.78, "breakpoint-maybe"), policy)).toEqual(["invalid"]);
+  expect(reflowCodes(bp(0.5, "breakpoint"), { reflowMaxLoss: 0.03 })).toEqual([]);
+  expect(reflowCodes(bp(0.5, "breakpoint-edge"), {})).toEqual([]);
+  expect(reflowCodes(bp(0.8, "breakpoint"), { breakpointMaxLoss: 2 })).toEqual(["policy"]);
+  const issue = assessQuality({ a: reflowed(0.8) }, { a: bp(0.78, "breakpoint") }, policy).issues[0]!;
+  expect(issue.message).toBe(
+    "merged breakpoint view at this width scores 0.78 vs 0.8 for its own capture; allowed loss 0.01.",
+  );
+});
+
 test("strict evidence requires the reflow render with reflowSsim", () => {
   const missing = reflowed(0.8, { _files: { ...files, "reflow.png": false, "reflow-diff.png": true } });
   expect(reflowCodes(missing, { requireEvidence: true })).toEqual(["artifact"]);

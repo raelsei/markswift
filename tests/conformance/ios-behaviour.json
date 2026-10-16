@@ -33,7 +33,8 @@
     "overlay-dropdown-menu",
     "overlay-context-menu",
     "overlay-menubar",
-    "overlay-select"
+    "overlay-select",
+    "breakpoints/switch"
   ],
   "known": [
     {

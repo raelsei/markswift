@@ -97,6 +97,9 @@ interface Prepared {
   fonts: boolean;
   /** `live`: some node animates; `reduced`: some node still animates under Reduce Motion (`reduced ?? animations`). */
   motion: { live: boolean; reduced: boolean };
+  /** `markswift-breakpoints` widths (empty for other cases): every launch frames the view at the first; with two or more,
+   * the `bands` launch switches between them. */
+  widths: number[];
 }
 interface El {
   type: string;
@@ -147,6 +150,12 @@ interface CaseLog {
     /** Live clock: SHA-256 of two root screenshots 300 ms apart (Reduce Motion forced in `motionReduced`). */
     motion?: { frames: string[] };
     motionReduced?: { frames: string[] };
+    /** Band switch (cases with ≥ 2 widths): text fields' and switches' values and the root's element count per control
+     * label, before the first width switch, after it and after switching back; `audit` after the first switch. */
+    bands?: {
+      snapshots: Array<{ values: Record<string, string>; counts: Record<string, number> }>;
+      audit: AuditIssue[];
+    };
     /** `interactions.focusLooks` again with Reduce Motion forced. */
     focusReduced?: { focusLooks: Array<{ label: string; changed: boolean }> };
   };
@@ -244,6 +253,18 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   const fixture = join(FIXTURES, id.includes("/") ? `${id}.html` : join("components", `${id}.html`));
   const view = `Behaviour${basename(id).replace(/(^|-+)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
   let ax: AxNamed[] = [];
+  // A breakpoint fixture converts across its bands (054), its first capture at its first width.
+  const widths =
+    /<meta name="markswift-breakpoints" content="([^"]*)"/
+      .exec(await Bun.file(fixture).text())?.[1]
+      ?.split(",")
+      .map(Number) ?? [];
+  const bands = widths.length
+    ? {
+        viewport: { width: widths[0]!, height: 844 },
+        breakpoints: { devices: widths.map((width) => ({ width, height: 844 })) },
+      }
+    : {};
   const result = await convert(
     { file: fixture },
     {
@@ -251,6 +272,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       mode: "app",
       theme: "light",
       browserChannel: "chromium",
+      ...bands,
       // `prepare` collects this capture's AX nodes; a probe capture's second `prepare` would overwrite them.
       probe: false,
       prepare: async (page) => {
@@ -265,6 +287,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       mode: "app",
       theme: "light",
       browserChannel: "chromium",
+      ...bands,
       probe: false,
       prepare: scaleToAx3,
     },
@@ -430,6 +453,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
       menus,
       fonts: `${view}+Fonts.swift` in result.files,
       motion,
+      widths,
     },
     files,
   };
@@ -533,10 +557,32 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         if (!large.menus?.find((m) => m.trigger === menu.trigger && m.label === label)?.opened)
           fail("interaction", `menu:${menu.trigger}`, `did not open to "${label}"`);
   }
+  // D-STATE-OWNERSHIP: a band switch keeps every typed value and toggle, and each control stays one element.
+  const bands = log?.launches.bands;
+  if (log && item.widths.length > 1 && !bands) errors.push(`${item.id}: bands launch missing`);
+  if (bands) {
+    const [first, ...rest] = bands.snapshots;
+    for (const [label, value] of Object.entries(first?.values ?? {}))
+      if (rest.some((s) => s.values[label] !== value))
+        fail(
+          "band-switch",
+          label,
+          `values across the switch: ${bands.snapshots.map((s) => s.values[label]).join(" → ")}`,
+        );
+    const labels = new Set(bands.snapshots.flatMap((s) => Object.keys(s.counts)));
+    for (const label of labels)
+      if (bands.snapshots.some((s) => s.counts[label] !== 1))
+        fail(
+          "band-switch",
+          `count ${label}`,
+          `elements per snapshot: ${bands.snapshots.map((s) => s.counts[label] ?? 0).join(", ")}`,
+        );
+  }
   for (const [size, launch] of [
     ["large", large],
     ["xSmall", log?.launches.xSmall],
     ["ax5", log?.launches.ax5],
+    ...(item.widths.length > 1 ? ([["bands", bands]] as const) : []),
   ] as const) {
     if (log && !launch) errors.push(`${item.id}: ${size} launch missing`);
     for (const issue of launch?.audit ?? []) {
@@ -637,7 +683,7 @@ async function main() {
   await Bun.write(
     join(out, "cases.json"),
     JSON.stringify(
-      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, menus, motion }) => ({
+      prepared.map(({ view, pickers, pickerValues, labels, focusLooks, actions, layers, menus, motion, widths }) => ({
         view,
         pickers,
         pickerValues,
@@ -647,6 +693,7 @@ async function main() {
         layers,
         menus,
         motion,
+        widths,
       })),
     ),
   );

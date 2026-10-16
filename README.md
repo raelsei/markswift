@@ -341,8 +341,11 @@ Read the table with these limits:
 
 Every pull request also runs the macOS gate (`tests/conformance/baselines/visual-{pilot,all}-mac.json`, rendered
 with `ImageRenderer` on macOS): the same per-capture 0.005 drop rule, anchors and family floors, plus the same-code
-resize check (390-compiled code rendered at 320 and 768 px against fresh Chrome captures, `reflowMaxLoss`). macOS
-draws text at different heights than iOS, so its absolute numbers are a regression signal, not the support claim.
+resize check (390-compiled code rendered at 320 and 768 px against fresh Chrome captures, `reflowMaxLoss`). Over all
+fixtures (`--all --reflow`), each `fixtures/breakpoints/` page's merged breakpoint view is also rendered at its band
+widths and at T−1/T of every CSS width threshold (`<case>-<width>-<theme>-app@bp`, `breakpointMaxLoss` 0.01 at band
+capture widths, `reflowMaxLoss` at the others). macOS draws text at different heights than iOS, so its absolute
+numbers are a regression signal, not the support claim.
 
 Features outside this table may work but are not claimed; every captured feature is reported as
 mapped, approximated or unmapped in `diagnostics`.
@@ -490,6 +493,9 @@ bun run test:ios-behaviour   # iOS simulator: accessibility audit, Dynamic Type,
 bun run pilot --renderer mac --out tests/conformance/out/<dir>   # add --all for every fixture, --reflow for 320/768
 bun run quality tests/conformance/baselines/visual-pilot-mac.json tests/conformance/out/<dir> tests/conformance/visual-policy-mac.json
 MARKSWIFT_SIMULATOR='iPhone 17' bun run pilot --renderer ios --all --out tests/conformance/out/<dir>   # iOS renderer
+# iOS breakpoint evidence: `@bp` captures render on an iPad simulator (create it once with
+# `xcrun simctl create "iPad Pro 13-inch (M5)" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB <iOS runtime>`)
+MARKSWIFT_SIMULATOR='iPhone 17' MARKSWIFT_SIMULATOR_IPAD='iPad Pro 13-inch (M5)' bun run pilot --renderer ios --all --reflow --group breakpoints --out tests/conformance/out/<dir>
 ```
 
 Baselines change only through `bun run quality --write-baseline <run-dir> <manifest.json>`,

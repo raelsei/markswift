@@ -9,6 +9,9 @@ import type { CaptureRequest } from "../../src/input/types.ts";
 import { serveDir } from "../../src/input/server.ts";
 import { htmlIdentity } from "../../src/input/identity.ts";
 import { compileLayout } from "../../src/compiler/index.ts";
+import { type BandPlan, planBands } from "../../src/analysis/bands.ts";
+import { unionFaces } from "../../src/api/convert.ts";
+import { matchesWidth, widthQuery } from "../../src/css/index.ts";
 import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
@@ -18,17 +21,28 @@ import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
-import { buildMatrix, loadFixtureSet, loadPilot, openKey, type PilotEntry, type RunCase, widthsFor } from "./pilot.ts";
+import {
+  bpReferences,
+  buildMatrix,
+  loadFixtureSet,
+  loadPilot,
+  openKey,
+  type PilotEntry,
+  type RunCase,
+  widthsFor,
+} from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
-const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text] [--renderer none|mac|ios] [--reflow] [--out <dir>]
+const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text|breakpoints] [--renderer none|mac|ios] [--reflow] [--out <dir>]
   --all       every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
   --only      one case id
-  --group     text: only cases with expected text
+  --group     text: only cases with expected text; breakpoints: only markswift-breakpoints fixtures
   --renderer  mac (default): macOS ImageRenderer, the per-PR gate;
-              ios: iOS Simulator (UIHostingController + drawHierarchy, batched builds), the release gate;
+              ios: iOS Simulator (UIHostingController + drawHierarchy, batched builds), the release gate; \`@bp\`
+              captures render on MARKSWIFT_SIMULATOR_IPAD (default "iPad Pro 13-inch (M5)") after the iPhone batches;
               none: capture, compile and typecheck only, no render or comparison
-  --reflow    reflow-tagged fixtures also capture 768; their 320/768 captures also render the 390-compiled code (reflow.png, reflowSsim, reflowDelta in compare.json)
+  --reflow    reflow-tagged fixtures also capture 768; their 320/768 captures also render the 390-compiled code (reflow.png, reflowSsim, reflowDelta in compare.json);
+              breakpoint-tagged fixtures add \`@bp\` entries: references at their widths and at T−1/T of every CSS width threshold, each scored for its own capture and for the one merged breakpoint view
   --out       fresh output directory (default tests/conformance/out/<timestamp>)
 Captures use Playwright's pinned Chromium: ./node_modules/.bin/playwright-core install --no-shell chromium`;
 type Renderer = "none" | "mac" | "ios";
@@ -53,7 +67,8 @@ type RunEntry = {
   openLayer?: string;
   openSource?: string;
 };
-/** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid` stays in `run.json` only. */
+/** Provenance written to `run.json` and into every `compare.json`; `simulatorUdid`/`ipadUdid` stay in `run.json` only.
+ * `ipadRenderer` (iOS runs with `@bp` entries) names the device those entries render on. */
 interface RunEnvironment {
   sourceRevision: string;
   fixtureHashes: Record<string, string>;
@@ -62,6 +77,8 @@ interface RunEnvironment {
   xcode: string;
   renderer: string;
   simulatorUdid: string | null;
+  ipadRenderer: string | null;
+  ipadUdid: string | null;
   capturedAt: string;
   dpr: number;
   viewportHeight: number;
@@ -82,6 +99,8 @@ interface Job {
   layout: LayoutDoc;
   textMetrics: ReturnType<typeof browserTextMetrics> | undefined;
   result: RunEntry;
+  /** iOS `@bp` job: the merged breakpoint view framed at this capture's size, rendered in the same batch as `reflow.png`. */
+  reflow?: RenderResult;
 }
 // ponytail: fixed batch of 48 captures per app build (6 cases × 8 captures); tune if one batch build exceeds ~3 min.
 const IOS_BATCH = 48;
@@ -168,6 +187,8 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
     xcode,
     renderer: rendererName,
     simulatorUdid: selected?.udid ?? null,
+    ipadRenderer: null,
+    ipadUdid: null,
     capturedAt: new Date().toISOString(),
     dpr: 2,
     viewportHeight: 2000,
@@ -217,13 +238,14 @@ async function run() {
   const pilot = await loadPilot();
   const cases = flags.all ? await loadFixtureSet(pilot) : pilot;
   if (only && !cases.some((item) => item.id === only)) throw new Error(`unknown pilot case: ${only}`);
-  if (group && group !== "text") throw new Error(`unknown pilot group: ${group}`);
+  if (group && group !== "text" && group !== "breakpoints") throw new Error(`unknown pilot group: ${group}`);
   const selected = only
     ? cases.filter((item) => item.id === only)
     : group === "text"
       ? cases.filter((item) => item.expectedText !== undefined)
-      : cases;
-  const matrix = buildMatrix(selected, reflow);
+      : group === "breakpoints"
+        ? cases.filter((item) => item.breakpoints)
+        : cases;
   await mkdir(dirname(out), { recursive: true });
   try {
     await mkdir(out);
@@ -234,7 +256,22 @@ async function run() {
   }
   const server = await serveDir(join(import.meta.dir, "fixtures"));
   const browsers = new Map<number, BrowserCapture>();
+  let bpBrowser: BrowserCapture | undefined;
   let report: RunReport | undefined;
+  const specFor = (item: RunCase, theme: "light" | "dark", viewport?: CaptureRequest["viewport"]): CaptureRequest => ({
+    screen: item.id,
+    theme,
+    url: `${server.origin}/${item.fixture}`,
+    root: "[data-markswift-root]",
+    screenshot: true,
+    ...(viewport ? { viewport } : {}),
+    async prepare(page) {
+      const style = await page.addStyleTag({
+        content: "[data-markswift-root] { width: 100% !important; }",
+      });
+      await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
+    },
+  });
   try {
     for (const width of new Set(selected.flatMap((item) => widthsFor(item, reflow)))) {
       // Lockfile-pinned Chromium, never the auto-updating Chrome channel, so references reproduce on any machine.
@@ -242,19 +279,104 @@ async function run() {
       await browser.start();
       browsers.set(width, browser);
     }
+    /** Breakpoint cases (--reflow): bands planned from one 390 capture, as `convert({ breakpoints })` plans them. */
+    const bpCases = reflow ? selected.filter((item) => item.breakpoints) : [];
+    const bpPlans = new Map<string, BandPlan>();
+    const references = new Map<string, number[]>();
+    const bpErrors: string[] = [];
+    if (bpCases.length) {
+      bpBrowser = new BrowserCapture({ dpr: 2, viewport: { width: 390, height: 2000 }, channel: "chromium" });
+      await bpBrowser.start();
+    }
+    for (const item of bpCases) {
+      try {
+        const { layout } = await bpBrowser!.capture(
+          { ...specFor(item, "light"), screenshot: false },
+          htmlIdentity,
+          `pilot:${item.fixture}`,
+        );
+        const plan = planBands(layout.conditions, {
+          first: { width: 390, height: 2000 },
+          devices: item.breakpoints!.map((width) => ({ width, height: 2000 })),
+          max: 1376,
+        });
+        if (!plan.edges.length) throw new Error("markswift-breakpoints fixture has no width threshold");
+        bpPlans.set(item.id, plan);
+        references.set(item.id, bpReferences(plan.edges, item.breakpoints!));
+      } catch (error) {
+        bpErrors.push(`${item.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    const matrix = buildMatrix(selected, reflow, references);
     const env = await environment(cases, renderer, `Chromium ${browsers.values().next().value!.version}`);
-    report = { expected: matrix.length, completed: 0, errors: [], environment: env, entries: [] };
+    report = { expected: matrix.length, completed: 0, errors: [...bpErrors], environment: env, entries: [] };
+    for (const error of bpErrors) console.error(error);
     console.log(
       `expected ${matrix.length} ${renderer === "none" ? "capture/typecheck" : `${env.renderer} comparison`} outputs`,
     );
     /** 390 conversions of reflow-tagged cases by `<id>/<theme>/<mode>`; their 320/768 captures re-render them. */
     const reflowSources = new Map<string, ConversionResult>();
+    /** The merged breakpoint view of each breakpoint case by `<id>/<theme>`: every band capture, compiled once
+     * (`<out>/_bp/<id>-bp-<theme>-app/`); its `@bp` references re-render it at their sizes. */
+    const bpSources = new Map<string, ConversionResult>();
+    for (const item of bpCases) {
+      const plan = bpPlans.get(item.id);
+      for (const theme of plan ? item.themes : []) {
+        const key = `${item.id}-bp-${theme}-app`;
+        try {
+          const bands: Capture[] = [];
+          for (const viewport of plan!.captures)
+            bands.push(
+              await bpBrowser!.capture(
+                { ...specFor(item, theme, viewport), screenshot: false, breakpoints: true },
+                htmlIdentity,
+                `pilot:${item.fixture}`,
+              ),
+            );
+          const dir = join(out, "_bp", key);
+          const swiftDir = join(dir, "swift");
+          const name = pilotName(key);
+          const fonts = await packageFonts(
+            unionFaces(bands.map((band) => band.layout.fonts)),
+            new Map(bands.flatMap((band) => band.fontFiles).map((f) => [f.file, f.bytes])),
+          );
+          const compiled = compileLayout(bands[0]!.layout, {
+            name,
+            mode: "app",
+            variants: bands.slice(1).map((band) => band.layout),
+            bundledFamilies: bundledFamilies(fonts),
+            fontMetrics: metricsForFonts(fonts),
+          });
+          if (fonts.faces.length) {
+            compiled.files[`${name}+Fonts.swift`] = registrationSwift(fonts.faces, name);
+            compiled.files[`${name}+UIAppFonts.plist.fragment`] = fonts.plist;
+          }
+          const warnings = [...new Map(bands.flatMap((band) => band.warnings).map((w) => [w.message, w])).values()];
+          await mkdir(swiftDir, { recursive: true });
+          for (const [file, content] of Object.entries(compiled.files)) await Bun.write(join(swiftDir, file), content);
+          await Bun.write(join(dir, "diagnostics.json"), JSON.stringify(compiled.diagnostics, null, 2));
+          await Bun.write(join(dir, "warnings.json"), JSON.stringify(warnings, null, 2));
+          const check = await typecheck(swiftDir);
+          await Bun.write(join(dir, "typecheck.json"), JSON.stringify(check, null, 2));
+          if (!check.ok) throw new Error(`Swift typecheck failed: ${check.output.slice(0, 500)}`);
+          bpSources.set(`${item.id}/${theme}`, {
+            ...compiled,
+            layout: bands[0]!.layout,
+            assets: { ...compiled.assets, ...fonts.assets },
+            warnings: [...warnings, ...fonts.notes],
+          });
+        } catch (error) {
+          report.errors.push(`${key}: ${String(error)}`);
+          console.error(`${key}: ${String(error)}`);
+        }
+      }
+    }
     const render = (conversion: ConversionResult, png: string) =>
       renderer === "mac"
         ? renderMac(conversion, join(out, "_mac-work"), png)
         : renderNative(conversion, join(out, "_native-work"), png, () => {}, env.simulatorUdid ?? undefined);
     /** Score a rendered capture: text ink, compare, anchors, artifact hashes, `compare.json`, status line. */
-    const finish = async ({ entry, item, dir, layout, textMetrics, result }: Job) => {
+    const finish = async ({ entry, item, dir, layout, textMetrics, result, reflow: queued }: Job) => {
       try {
         const browserPng = join(dir, "browser.png"),
           nativePng = join(dir, "native.png");
@@ -277,16 +399,26 @@ async function run() {
         let reflowFields:
           | { reflowTag: string; reflowSource: string; reflowSsim: number; reflowMismatch: number; reflowDelta: number }
           | undefined;
-        if (reflow && item.reflow && entry.width !== 390) {
-          const source = reflowSources.get(`${item.id}/${entry.theme}/${entry.mode}`);
-          const reflowSource = `${item.id}-390-${entry.theme}-${entry.mode}`;
+        if (entry.arm || (reflow && item.reflow && entry.width !== 390)) {
+          const source = entry.arm
+            ? bpSources.get(`${item.id}/${entry.theme}`)
+            : reflowSources.get(`${item.id}/${entry.theme}/${entry.mode}`);
+          const reflowSource = entry.arm
+            ? `${item.id}-bp-${entry.theme}-app`
+            : `${item.id}-390-${entry.theme}-${entry.mode}`;
+          const reflowTag = !entry.arm
+            ? item.reflow!
+            : bpPlans.get(item.id)!.captures.some((c) => c.width === entry.width)
+              ? "breakpoint"
+              : "breakpoint-edge";
           if (!source) throw new Error(`reflow source ${reflowSource} missing`);
           const reflowPng = join(dir, "reflow.png");
-          // Same 390-compiled Swift, framed at this capture's size: only the proposal width changes.
-          await render({ ...source, layout: { ...source.layout, size: layout.size } }, reflowPng);
+          // Same compiled Swift (390, or the merged breakpoint view), framed at this capture's size: only the proposal
+          // width changes. An iOS `@bp` job rendered it in its batch already.
+          if (!queued) await render({ ...source, layout: { ...source.layout, size: layout.size } }, reflowPng);
           const r = await compare(browserPng, reflowPng, join(dir, "reflow-diff.png"), layout.dpr);
           reflowFields = {
-            reflowTag: item.reflow,
+            reflowTag,
             reflowSource,
             reflowSsim: r.ssim,
             reflowMismatch: r.mismatch,
@@ -315,7 +447,7 @@ async function run() {
               capturedAt: env.capturedAt,
               chrome: env.chrome,
               xcode: env.xcode,
-              renderer: env.renderer,
+              renderer: entry.arm && env.ipadRenderer ? env.ipadRenderer : env.renderer,
               dpr: env.dpr,
               viewportHeight: item.viewportHeight ?? env.viewportHeight,
               rootWidthOverride: env.rootWidthOverride,
@@ -334,58 +466,64 @@ async function run() {
       }
     };
     const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
-    /** Render every pending iOS capture in one app build and launch, then score each. */
-    const flush = async () => {
-      const jobs = pending.splice(0);
-      if (!jobs.length) return;
-      const errors = await renderIos(
-        jobs.map((j) => ({ result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced })),
-        join(out, "_ios-work"),
-        env.simulatorUdid!,
-      ).catch((error) => new Map(jobs.map((j) => [join(j.dir, "native.png"), String(error)])));
-      for (const j of jobs) {
-        const failed = errors.get(join(j.dir, "native.png"));
-        if (failed) {
-          report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
-          console.error(`${j.entry.key}: iOS render failed: ${failed}`);
-        } else await finish(j);
+    /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
+    const ipadPending: typeof pending = [];
+    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of IOS_BATCH, then score each. */
+    const flush = async (queue = pending, udid = env.simulatorUdid!, work = "_ios-work") => {
+      while (queue.length) {
+        const jobs = queue.splice(0, IOS_BATCH);
+        const outputs = jobs.flatMap((j) => [
+          { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
+          ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
+        ]);
+        const errors = await renderIos(outputs, join(out, work), udid).catch(
+          (error) => new Map(outputs.map((o) => [o.output, String(error)])),
+        );
+        for (const j of jobs) {
+          const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
+          if (failed) {
+            report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
+            console.error(`${j.entry.key}: iOS render failed: ${failed}`);
+          } else await finish(j);
+        }
       }
     };
     for (const item of selected) {
-      for (const width of widthsFor(item, reflow)) {
+      // Rest captures, then the case's `@bp` references (bpBrowser, viewport per width).
+      const slots = [
+        ...widthsFor(item, reflow).map((width) => ({ width, bp: false })),
+        ...(references.get(item.id) ?? []).map((width) => ({ width, bp: true })),
+      ];
+      for (const { width, bp } of slots) {
         for (const theme of item.themes) {
           const pair = matrix.filter(
-            (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme && !entry.frame,
+            (entry) =>
+              entry.case.id === item.id &&
+              entry.width === width &&
+              entry.theme === theme &&
+              !entry.frame &&
+              (entry.arm === "bp") === bp,
           );
           const frames =
-            width === 390
+            width === 390 && !bp
               ? matrix.filter((entry) => entry.case.id === item.id && entry.theme === theme && entry.frame)
               : [];
-          const spec: CaptureRequest = {
-            screen: item.id,
+          const spec = specFor(
+            item,
             theme,
-            url: `${server.origin}/${item.fixture}`,
-            root: "[data-markswift-root]",
-            screenshot: true,
-            ...(item.viewportHeight ? { viewport: { width, height: item.viewportHeight } } : {}),
-            async prepare(page) {
-              const style = await page.addStyleTag({
-                content: "[data-markswift-root] { width: 100% !important; }",
-              });
-              await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
-            },
-          };
+            bp || item.viewportHeight ? { width, height: item.viewportHeight ?? 2000 } : undefined,
+          );
           let captured: Capture;
           let captureMs = 0;
           // 390 captures also open each in-flow layer: its shot is the browser side of an `@open` capture.
           let shots: OpenShots = {};
           try {
             const t0 = performance.now();
-            const browser = browsers.get(width)!;
+            const browser = bp ? bpBrowser! : browsers.get(width)!;
             const label = `pilot:${item.fixture}`;
             captured = await browser.capture(spec, htmlIdentity, label);
             captureMs = performance.now() - t0;
-            if (width === 390)
+            if (width === 390 && !bp)
               shots = await captureLayers((s) => browser.capture(s, htmlIdentity, label), spec, captured, {
                 probeDismiss: false,
               });
@@ -463,6 +601,14 @@ async function run() {
             };
             report.entries.push(result);
             try {
+              // RBreakpoints §5: the threshold parser must agree with Chrome at every reference width.
+              const off = entry.arm
+                ? captured.layout.conditions.find((c) => {
+                    const q = c.kind === "media" ? widthQuery(c.query) : undefined;
+                    return q !== undefined && matchesWidth(q, width) !== c.matches;
+                  })
+                : undefined;
+              if (off) throw new Error(`threshold parser disagrees with Chrome at ${width}px: ${off.query}`);
               const dir = await saveSource(entry, captured, out);
               const name = pilotName(entry.key);
               const swiftDir = join(dir, "swift");
@@ -544,6 +690,13 @@ async function run() {
                 if (renderer === "mac") {
                   await renderMac(conversion, join(out, "_mac-work"), join(dir, "native.png"));
                   await finish(job);
+                } else if (entry.arm) {
+                  const merged = bpSources.get(`${item.id}/${theme}`);
+                  ipadPending.push({
+                    ...job,
+                    conversion,
+                    reflow: merged && { ...merged, layout: { ...merged.layout, size: captured.layout.size } },
+                  });
                 } else {
                   pending.push({ ...job, conversion });
                   if (pending.length >= IOS_BATCH) await flush();
@@ -597,8 +750,15 @@ async function run() {
       }
     }
     await flush();
+    if (ipadPending.length) {
+      // Wide `@bp` references need a window wider than the iPhone's: the iPad, booted only now (K5: one at a time).
+      const ipad = await ensureSimulator(process.env.MARKSWIFT_SIMULATOR_IPAD ?? "iPad Pro 13-inch (M5)");
+      env.ipadRenderer = `${ipad.name} ${ipad.runtime}`;
+      env.ipadUdid = ipad.udid;
+      await flush(ipadPending, ipad.udid, "_ipad-work");
+    }
   } finally {
-    await Promise.all([...browsers.values()].map((browser) => browser.stop()));
+    await Promise.all([...browsers.values(), ...(bpBrowser ? [bpBrowser] : [])].map((browser) => browser.stop()));
     server.stop();
     // A failure before the environment is known (no browser, dirty src/, no simulator) leaves no run.json.
     if (report) await Bun.write(join(out, "run.json"), JSON.stringify(report, null, 2));

@@ -15,13 +15,16 @@ export interface SimulatorInventory {
   devices: Record<string, Array<{ udid: string; name: string; state: string; isAvailable: boolean }>>;
 }
 
-/** Select one concrete iOS device; callers can record the returned runtime and UDID. */
+/** Select one concrete iOS device; callers can record the returned runtime and UDID. Without `preferred` only iPhones
+ * qualify; a named or UDID-pinned `preferred` may also be an iPad (the pilot's wide `@bp` renderer). */
 export function selectSimulator(inventory: SimulatorInventory, preferred?: string) {
   const candidates = Object.entries(inventory.devices)
     .filter(([runtime]) => /iOS-(\d+)/.test(runtime) && Number(runtime.match(/iOS-(\d+)/)?.[1]) >= 18)
     .sort(([a], [b]) => b.localeCompare(a, undefined, { numeric: true }))
     .flatMap(([runtime, devices]) =>
-      devices.filter((d) => d.isAvailable && d.name.startsWith("iPhone")).map((device) => ({ ...device, runtime })),
+      devices
+        .filter((d) => d.isAvailable && (d.name.startsWith("iPhone") || (preferred && d.name.startsWith("iPad"))))
+        .map((device) => ({ ...device, runtime })),
     );
   const device = preferred
     ? candidates.find((d) => d.udid === preferred || d.name === preferred)
