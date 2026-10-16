@@ -9,7 +9,7 @@ import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
 import type { HtmlSource } from "../input/types.ts";
 import type { FontFace, LayoutDoc } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
-import { captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
+import { type BandCapture, captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -80,7 +80,9 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     const layered = { ...req, layers: true };
     const first = await captureThemes(renderer, layered, timedOut);
     const plan = bp ? planFor(bp, first.primary.layout.conditions, viewport) : undefined;
-    const bands = plan ? await captureBands(renderer, layered, { viewport, captured: first }, plan, timedOut) : [first];
+    const bands: BandCapture[] = plan
+      ? await captureBands(renderer, layered, { viewport, captured: first }, plan, timedOut)
+      : [first];
     const { primary: capture, dark } = bands[0]!;
     // Probe warnings are not reported: the reference capture's are. A root that keeps its width (a px width) cannot
     // show another allocation, so its probe proves nothing and is not compiled.
@@ -99,11 +101,13 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
             )
           ).primary.layout
         : undefined;
-    // Band captures and their probes skip the open-state pass: band 0's layers apply once on the merged screen.
+    // Band captures and their probes skip the open-state pass: band 0's layers apply once on the merged screen. Extra
+    // (container-query) captures are not probed.
     const variantProbes: Array<LayoutDoc | undefined> = [];
+    let band = 0;
     for (let i = 1; i < bands.length; i++) {
       const layout = bands[i]!.primary.layout;
-      const width = plan!.probes[i];
+      const width = bands[i]!.extra ? undefined : plan!.probes[++band];
       const probed =
         options.probe !== false && width !== undefined && needsProbe(layout)
           ? (
@@ -112,7 +116,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
                 {
                   ...req,
                   theme: layout.combo.theme,
-                  viewport: { width, height: plan!.captures[i]!.height },
+                  viewport: { width, height: plan!.captures[band]!.height },
                 },
                 timedOut,
               )
