@@ -177,7 +177,8 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion), `breakpoints` (`true` or
   `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`, and emits one view whose differing
   elements switch at the CSS thresholds through `MarkswiftBands`; a stack or grid query container switches its
-  content on width `@container` queries at its own width, from one more capture at the top of each band). Open states
+  content on width `@container` queries at its own width, from extra captures of each band: its top and, past the
+  first band, its lower bound). Open states
   need no option: triggers are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native
   `popovertarget`/`commandfor`/`interestfor`/`<details>`, shadcn `data-slot`,
   `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
