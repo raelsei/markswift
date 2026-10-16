@@ -14,6 +14,7 @@ import { px, round2 } from "../css/index.ts";
 import { type AnalyzedChild } from "./context.ts";
 import { floating, lineTops, renders, hangsLeading, fillsWidthInside } from "./geometry.ts";
 import { finish } from "./node-base.ts";
+import { BIDI_CLOSER, openBidi } from "./text-layout.ts";
 
 /** Horizontal overlap of more than 1px: a float over a box it shortens the line boxes of. */
 function overlapsX(a: Rect, b: Rect): boolean {
@@ -66,12 +67,23 @@ function liftClearedText(
     const [pt, pr, pb, pl] = sem.padding;
     const split = sem.runs[ri]!;
     // The break consumed the collapsible space at the boundary — `runExpr` drops it the same way.
-    const head: TextRun = { ...split, text: split.text.slice(0, split.text[at - 1] === " " ? at - 1 : at) };
+    // Bidi controls open at the split close on the head and reopen on the tail: each Text is its own paragraph.
+    const open = openBidi([...sem.runs.slice(0, ri).map((r) => r.text), split.text.slice(0, at)].join(""));
+    const reopen = open.join("");
+    const head: TextRun = {
+      ...split,
+      text:
+        split.text.slice(0, split.text[at - 1] === " " ? at - 1 : at) +
+        open
+          .map((o) => BIDI_CLOSER[o])
+          .reverse()
+          .join(""),
+    };
     const inHead = (split.breaks ?? []).filter((b) => b < at);
     if (inHead.length) head.breaks = inHead;
     else delete head.breaks;
-    const tail: TextRun = { ...split, text: split.text.slice(at) };
-    const inTail = (split.breaks ?? []).filter((b) => b > at).map((b) => b - at);
+    const tail: TextRun = { ...split, text: reopen + split.text.slice(at) };
+    const inTail = (split.breaks ?? []).filter((b) => b > at).map((b) => b - at + reopen.length);
     if (inTail.length) tail.breaks = inTail;
     else delete tail.breaks;
     const headRuns = [...sem.runs.slice(0, ri), head];
