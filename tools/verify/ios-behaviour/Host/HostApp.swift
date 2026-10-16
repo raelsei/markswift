@@ -11,6 +11,7 @@ struct HostApp: App {
 /// The hosted view framed at `MARKSWIFT_WIDTHS[widthIndex]` (390 when unset); with two or more widths, the
 /// `markswift.width` button next to the log cycles them (a breakpoint view switching bands in place). The log's value is
 /// the view's height: the `markswift.root` container's own frame is only its children's union (no root padding).
+/// `MARKSWIFT_SCREEN_HEIGHT` gives a screen-filling root the height a window would (the scroll view offers none).
 struct HostRoot: View {
     let env = ProcessInfo.processInfo.environment
     @State private var widthIndex = 0
@@ -21,6 +22,7 @@ struct HostRoot: View {
             ScrollView {
                 BehaviourRegistry.view(named: env["MARKSWIFT_VIEW"] ?? "")
                     .frame(width: widths.isEmpty ? 390 : widths[widthIndex], alignment: .topLeading)
+                    .frame(minHeight: env["MARKSWIFT_SCREEN_HEIGHT"].flatMap { Double($0) }.map { CGFloat($0) }, alignment: .topLeading)
                     .onGeometryChange(for: Double.self) { $0.size.height } action: { height = $0 }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("markswift.root")
