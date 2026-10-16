@@ -120,39 +120,48 @@ export function mergeBands(
     return k;
   };
   // `states.open` and `doc.layers` exist on band 0 only (band captures skip the layer pass): never compared.
-  const ownMemo = new Map<LayoutNode, string>();
-  const own = (n: LayoutNode): string => {
-    let key = ownMemo.get(n);
-    if (key !== undefined) return key;
-    const fluid = !n.conditional?.length;
-    const { open: _, ...states } = n.states ?? {};
-    key = intern(
-      JSON.stringify([
-        n.tag,
-        n.text ?? "",
-        Object.entries(n.attrs).sort(byKey),
-        n.currentSrc ?? "",
-        Object.entries(n.styles)
-          .filter(([k]) => !SKIP[k] && !(fluid && FLUID[k]))
-          .sort(byKey),
-        n.preferredSize ?? null,
-        Object.keys(states).length ? states : null,
-        n.children.map((c) => (c.tag === "#text" ? `#text:${c.text ?? ""}` : (c.id ?? ""))),
-      ]),
-    );
-    ownMemo.set(n, key);
-    return key;
+  /** Content keys of a node (`own`) and of its subtree in capture `b` (`deep`), leaving out the styles in `drop`. */
+  const contentKeys = (drop: Record<string, true>) => {
+    const ownMemo = new Map<LayoutNode, string>();
+    const own = (n: LayoutNode): string => {
+      let key = ownMemo.get(n);
+      if (key !== undefined) return key;
+      const fluid = !n.conditional?.length;
+      const { open: _, ...states } = n.states ?? {};
+      key = intern(
+        JSON.stringify([
+          n.tag,
+          n.text ?? "",
+          Object.entries(n.attrs).sort(byKey),
+          n.currentSrc ?? "",
+          Object.entries(n.styles)
+            .filter(([k]) => !SKIP[k] && !drop[k] && !(fluid && FLUID[k]))
+            .sort(byKey),
+          n.preferredSize ?? null,
+          Object.keys(states).length ? states : null,
+          n.children.map((c) => (c.tag === "#text" ? `#text:${c.text ?? ""}` : (c.id ?? ""))),
+        ]),
+      );
+      ownMemo.set(n, key);
+      return key;
+    };
+    const deepMemo = new Map<LayoutNode, string>();
+    const deepOf = (n: LayoutNode): string => {
+      let key = deepMemo.get(n);
+      if (key === undefined) deepMemo.set(n, (key = intern(`${own(n)}[${n.children.map(deepOf).join(",")}]`)));
+      return key;
+    };
+    const deep = (b: number, id: string) => {
+      const n = layout[b]!.get(id);
+      return n && deepOf(n);
+    };
+    return { own, deep };
   };
-  const deepMemo = new Map<LayoutNode, string>();
-  const deepOf = (n: LayoutNode): string => {
-    let key = deepMemo.get(n);
-    if (key === undefined) deepMemo.set(n, (key = intern(`${own(n)}[${n.children.map(deepOf).join(",")}]`)));
-    return key;
-  };
-  const deep = (b: number, id: string) => {
-    const n = layout[b]!.get(id);
-    return n && deepOf(n);
-  };
+  const { own, deep } = contentKeys({});
+  // ponytail: the 'both restyle' check ignores `transform-origin`: its default (50% 50%) resolves to px that follow
+  // the used size, so captures of one container band differ there without any media rule; an authored media change
+  // of it alone is not reported. Upgrade: compare it as a fraction of the node's captured size.
+  const restyled = contentKeys({ "transform-origin": true }).deep;
   const lookup = (b: number, id: string) => {
     const n = idx[b]!.get(id);
     if (!n) throw new Unaligned();
@@ -342,7 +351,7 @@ export function mergeBands(
     }
     // ponytail: inside a host, media differences at the same container band keep the lower capture's content
     // (reported). Upgrade: split the band's pool by viewport band and nest holders.
-    if (G2.some((e) => e.pool.some((b) => deep(b, n.id) !== deep(e.doc, n.id))))
+    if (G2.some((e) => e.pool.some((b) => restyled(b, n.id) !== restyled(e.doc, n.id))))
       warn(
         `both\u0000${n.id}`,
         `${n.id}: container and media queries both restyle its content at the same container width; the container query is reconstructed, the media difference is not`,

@@ -1,5 +1,6 @@
 /** Plan 054: per-band screens compose into one tree; only elements whose authored inputs differ become holders. */
 import { expect, test } from "bun:test";
+import { planBands } from "../../../src/analysis/bands.ts";
 import { bandEdges, mergeBands } from "../../../src/analysis/breakpoints.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import type { LayoutDoc, LayoutNode } from "../../../src/model/layout.ts";
@@ -312,6 +313,25 @@ test("057/3: a media-only difference at one container band → 'both restyle', t
   ]);
 });
 
+test("057/3b: 'both restyle' ignores a size-following transform-origin, not a media grid-template-columns", () => {
+  const withField = (styles: (w: number, field: LayoutNode) => Record<string, string>) =>
+    fieldGroupDocs().map((d) => {
+      const set = (n: LayoutNode): LayoutNode =>
+        n.id === "field"
+          ? { ...n, styles: { ...n.styles, ...styles(d.viewport.w, n) } }
+          : { ...n, children: n.children.map(set) };
+      return { ...d, root: set(d.root) };
+    });
+  // The default 50% 50% origin resolves to half the field's used width: 767/834/1376 share container band 1.
+  const origin = mergeAt(withField((_, field) => ({ "transform-origin": `${field.bounds.w / 2}px 18px` })))!;
+  expect(hosts(origin.root)).toEqual(["group"]);
+  expect(origin.warnings).toEqual([]);
+  const columns = mergeAt(withField((w) => ({ "grid-template-columns": w >= 768 ? "100px 200px" : "none" })))!;
+  expect(columns.warnings.map((w) => w.message)).toEqual([
+    "group: container and media queries both restyle its content at the same container width; the container query is reconstructed, the media difference is not",
+  ]);
+});
+
 test("057/4: a query container that is a text node → reported, not reconstructed", () => {
   const docs = [390, 767].map((w) =>
     band(
@@ -370,4 +390,43 @@ test("057/6: bandEdges takes two captures in one band only with container querie
   const media = docs.map((d) => ({ ...d, conditions: d.conditions.filter((c) => c.kind === "media") }));
   expect(() => bandEdges(media)).toThrow("options.variants must be one capture per width band in ascending order");
   expect(() => bandEdges([docs[0]!, docs[2]!, docs[1]!])).toThrow("one capture per width band");
+});
+
+test("057/7: a host crossing just above a band's lower bound (bp-field-responsive at 768) → container bands there", () => {
+  // The planner's captures: the group is 432px wide at 768 but 498px at band 1's device capture (834).
+  const plan = planBands(fieldGroupDocs()[0]!.conditions, {
+    first: { width: 390, height: 844 },
+    devices: [{ width: 834, height: 844 }],
+    max: 1376,
+  });
+  const widths = [...plan.captures, ...plan.extra].map((c) => c.width).sort((a, b) => a - b);
+  expect(widths).toEqual([390, 767, 768, 834, 1376]);
+  // A parent restyled at 768px (bp-field-responsive's grid columns) composes the host per viewport band.
+  const docs = fieldGroupDocs({ widths }).map((d) => ({
+    ...d,
+    root: {
+      ...d.root,
+      children: [
+        el(
+          "grid",
+          "div",
+          { x: 0, y: 0, w: d.viewport.w, h: d.root.children[0]!.bounds.h },
+          { "padding-top": d.viewport.w >= 768 ? "4px" : "0px" },
+          d.root.children,
+          { conditional: [0] },
+        ),
+      ],
+    },
+  }));
+  const edges = bandEdges(docs);
+  if (!("bands" in edges)) throw new Error(edges.warning);
+  const merged = mergeAt(docs, edges.bands)!;
+  const grid = find(merged.root, "grid")!;
+  expect(grid.alternatives!.map((a) => a.bands)).toEqual([[0], [1]]);
+  for (const alt of grid.alternatives!) {
+    const group = find(alt, "group")!;
+    expect(group.containerBands).toEqual({ edges: [{ px: 448, inclusive: true }], names: ["", "cq_md"] });
+    expect(kids(group)[0]!.alternatives!.map((a) => a.kind === "stack" && a.axis)).toEqual(["v", "h"]);
+  }
+  expect(merged.warnings).toEqual([]);
 });

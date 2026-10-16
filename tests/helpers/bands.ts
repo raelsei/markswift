@@ -48,16 +48,16 @@ export function band(
   };
 }
 
-/** Plan 057: a viewport capture's content width of the `group` query container (bands 0, 0, 1, 1). */
-export const GROUP_WIDTHS: Record<number, number> = { 390: 358, 767: 735, 834: 498, 1376: 874 };
+/** Plan 057: a viewport capture's content width of the `group` query container (bands 0, 0, 1, 1, 1). */
+export const GROUP_WIDTHS: Record<number, number> = { 390: 358, 767: 735, 768: 432, 834: 498, 1376: 874 };
 
 /**
- * Plan 057: captures at 390/767/834/1376 of a `group` query container whose `field` turns into a row at a 448px
- * content width (`@container (width >= 28rem)`); `side`: a second, 280px host; `wideColor`: the label colour from
- * 768px (a media-only difference inside the host).
+ * Plan 057: captures at `widths` (default 390/767/834/1376) of a `group` query container whose `field` turns into a
+ * row at a 448px content width (`@container (width >= 28rem)`); `side`: a second, 280px host; `wideColor`: the label
+ * colour from 768px (a media-only difference inside the host).
  */
-export function fieldGroupDocs(options: { side?: boolean; wideColor?: string } = {}): LayoutDoc[] {
-  return [390, 767, 834, 1376].map((w) => {
+export function fieldGroupDocs(options: { side?: boolean; wideColor?: string; widths?: number[] } = {}): LayoutDoc[] {
+  return (options.widths ?? [390, 767, 834, 1376]).map((w) => {
     const gw = GROUP_WIDTHS[w]!;
     const conditions: LayoutCondition[] = [
       { kind: "media", query: "(min-width: 768px)", matches: w >= 768 },
