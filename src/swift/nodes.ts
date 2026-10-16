@@ -4,7 +4,7 @@ import { textExpr } from "./text.ts";
 import { svgExpr } from "./svg.ts";
 import { imageNodeExpr } from "./images.ts";
 import { controlExpr } from "./controls.ts";
-import { boxModifiers, decorate, placementModifiers } from "./modifiers.ts";
+import { boxModifiers, decorate, hitTestingModifier, placementModifiers } from "./modifiers.ts";
 import { indent } from "./format.ts";
 /** Lines for a node: container → property reference; leaf → inline expression (with modifiers); holder → band chain. */
 export function refOf(n: SemNode, ctx: EmitContext): string[] {
@@ -68,7 +68,7 @@ function leafExpr(n: SemNode, ctx: EmitContext): string[] {
         id: n.id,
         ...(pressable ? { box: boxModifiers(n, ctx) } : {}),
       });
-      if (pressable) return [...core, ...placementModifiers(n, ctx)];
+      if (pressable) return [...core, ...placementModifiers(n, ctx), ...hitTestingModifier(n, ctx)];
       break;
     }
     case "box":

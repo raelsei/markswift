@@ -296,6 +296,7 @@ function compileView(
   options: Omit<EmitOptions, "tokens" | "adaptive">,
   bands?: Array<[Screen, Screen | undefined]>,
 ): SwiftOutput & { warnings: ConversionWarning[] } {
+  if (dark && dark.colorScheme !== screen.colorScheme) delete screen.colorScheme; // an adaptive pair forces a scheme only when both captures do
   const lookup = screenTokens(
     tokens,
     screen,

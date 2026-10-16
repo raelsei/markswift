@@ -112,7 +112,8 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     screen.breakpoints && !bandsInside
       ? [`${bandsOpen(screen.breakpoints.edges)} { band in`, ...indent(top, 1), "}"]
       : top;
-  const body = [`${acc}var body: some View {`, ...indent(wrapped, 1), "}"];
+  const scheme = screen.colorScheme ? [`.environment(\\.colorScheme, .${screen.colorScheme})`] : [];
+  const body = [`${acc}var body: some View {`, ...indent([...wrapped, ...scheme], 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;
     body.push(

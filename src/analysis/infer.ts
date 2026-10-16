@@ -37,9 +37,9 @@ import {
   outOfFlow,
   edgeWidth,
 } from "./geometry.ts";
-import { collapseTableBorders } from "./table-borders.ts";
+import { collapseTableBorders, hideEmptyCells } from "./table-borders.ts";
 import { clipsText } from "./style-background.ts";
-import { dropInvisible } from "./invisible.ts";
+import { dropInvisible, pruneHitTesting } from "./invisible.ts";
 
 /** A table cell's `vertical-align` as the row's cross alignment (`top`/`baseline` stay at the start). */
 const CELL_ALIGN: Record<string, CrossAlign> = { middle: "center", bottom: "end" };
@@ -70,11 +70,25 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   dropInvisible(root);
-  return { version: 1, name, source: doc.source, theme: doc.combo.theme, size: doc.size, canvas, root };
+  pruneHitTesting(root);
+  // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
+  const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
+  const colorScheme =
+    schemes.length === 1 && (schemes[0] === "light" || schemes[0] === "dark") ? schemes[0] : undefined;
+  return {
+    version: 1,
+    name,
+    source: doc.source,
+    theme: doc.combo.theme,
+    size: doc.size,
+    canvas,
+    root,
+    ...(colorScheme ? { colorScheme } : {}),
+  };
 }
 
 function build(input: LayoutNode, ctx: InferenceContext): SemNode {
-  const t = collapseTableBorders(input);
+  const t = hideEmptyCells(collapseTableBorders(input));
   const n = t.tag === "table" ? captionOutside(t) : t;
   const policy = classifyElement(n.tag, n.attrs);
   if (policy.route === "svg")

@@ -9,7 +9,7 @@ import {
   type DiagnosticLevel,
   addDiagnostic,
 } from "../model/semantic.ts";
-import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows } from "../css/index.ts";
+import { parseDeclared, parseColor, fontFamilies, round2, px, parseShadows, variationSettings } from "../css/index.ts";
 import { type SourceTextRun, type InferenceContext, type MeasuredTextRun } from "./context.ts";
 import { makeBase, finish } from "./node-base.ts";
 import { type Collapse, collapseOf, normalizeWhitespace, decorationOf, textColorOf } from "./text-runs.ts";
@@ -209,6 +209,20 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         );
       }
     }
+    if (run.font.stretch !== undefined)
+      note(
+        "approximated",
+        "font-stretch",
+        `font-stretch ${run.font.stretch}% → SF's nearest width instance; glyph advances differ from the reference`,
+      );
+    if (run.font.family.kind === "system")
+      for (const tag of Object.keys(variationSettings(s["font-variation-settings"])))
+        if (tag !== "wght" && tag !== "wdth" && tag !== "opsz")
+          note(
+            "approximated",
+            "font-variation-settings",
+            `font-variation-settings axis ${tag} has no system-font mapping → dropped`,
+          );
     const ls = s["letter-spacing"];
     if (ls && ls !== "normal") run.kerning = round2(px(ls));
     const tt = s["text-transform"];

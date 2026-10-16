@@ -193,8 +193,9 @@ export async function scaleToAx3(page: Page) {
 }
 
 async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Record<string, Uint8Array> }> {
-  const fixture = join(FIXTURES, "components", `${id}.html`);
-  const view = `Behaviour${id.replace(/(^|-)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
+  // `<dir>/<name>` names a fixture outside components/ (a test-only `_behaviour/` case).
+  const fixture = join(FIXTURES, id.includes("/") ? `${id}.html` : join("components", `${id}.html`));
+  const view = `Behaviour${basename(id).replace(/(^|-+)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
   let ax: AxNamed[] = [];
   const result = await convert(
     { file: fixture },

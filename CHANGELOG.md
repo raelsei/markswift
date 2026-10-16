@@ -19,6 +19,14 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 ### Added
 - LayoutDoc 4 records the page's size conditions (`conditions`: `@media`/`@container` query, whether it holds, the query container) and marks the elements their rules match (`conditional`). `convert({ breakpoints })` captures one layout per CSS width band (devices 390/834/1210/1376 px up to 1376 px; uncovered bands at their lower bound) and returns them as `bands`.
 - Capture: open-state pass — each discovered trigger is opened in a fresh page; LayoutDoc 4 records `layers` (new content, placement, modality, dismissal), the trigger's `states.open` paint and `pseudoStyles.backdrop`.
+- An author `unicode-bidi` (`embed`, `isolate`, `bidi-override`, `isolate-override`, `plaintext`) on inline elements maps to Unicode bidi controls from the captured computed value; `<bdo>`/`<bdi>`/`[dir]` now come from the same value.
+- `font-variation-settings`, `font-stretch` and `font-optical-sizing` are read: `wght`/`opsz` set the weight and optical size, other axes a bundled variable font declares (incl. `wdth` from `font-stretch`) render exactly through `.markswiftVariable(…, axes:)` in both modes (app keeps Dynamic Type), `font-optical-sizing: none` drops the automatic `opsz`; on system fonts `font-stretch` approximates to SF's nearest width (`.width(Font.Width(…))`, reported).
+- A root `color-scheme` that names one scheme (`dark`, `dark only`, `light`, `light only`) forces the view's appearance with `.environment(\.colorScheme, …)` in both modes; an adaptive conversion does so only when both captures agree.
+- `pointer-events: none` overlays pass taps through (`.allowsHitTesting(false)`, app mode).
+- `empty-cells: hide` on separated tables: a cell holding only collapsible whitespace paints no background, border or shadow.
+
+### Fixed
+- A stylesheet `fill-rule: evenodd` on SVG shapes is honoured (only the attribute was read).
 
 ### Changed
 - LayoutDoc 4: `LayoutNode.motion` records CSS animations (both `prefers-reduced-motion` branches) and pressed/focused transitions (per direction) from Chrome's Web Animations objects; capture warns about script animations and `@starting-style`. No output change yet.
