@@ -9,21 +9,25 @@ struct HostApp: App {
 }
 
 /// The hosted view framed at `MARKSWIFT_WIDTHS[widthIndex]` (390 when unset); with two or more widths, the
-/// `markswift.width` button next to the log cycles them (a breakpoint view switching bands in place).
+/// `markswift.width` button next to the log cycles them (a breakpoint view switching bands in place). The log's value is
+/// the view's height: the `markswift.root` container's own frame is only its children's union (no root padding).
 struct HostRoot: View {
     let env = ProcessInfo.processInfo.environment
     @State private var widthIndex = 0
+    @State private var height = 0.0
     var body: some View {
         let widths = (env["MARKSWIFT_WIDTHS"] ?? "").split(separator: ",").compactMap { Double($0) }
         VStack(spacing: 0) {
             ScrollView {
                 BehaviourRegistry.view(named: env["MARKSWIFT_VIEW"] ?? "")
                     .frame(width: widths.isEmpty ? 390 : widths[widthIndex], alignment: .topLeading)
+                    .onGeometryChange(for: Double.self) { $0.size.height } action: { height = $0 }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("markswift.root")
             }
             HStack {
                 Text(BehaviourLog.shared.hits.joined(separator: ",")).font(.caption)
+                    .accessibilityValue(String(height))
                     .accessibilityIdentifier("markswift.log")
                 if widths.count > 1 {
                     Button("Width") { widthIndex = (widthIndex + 1) % widths.count }
