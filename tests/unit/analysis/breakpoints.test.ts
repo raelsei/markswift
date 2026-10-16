@@ -239,3 +239,20 @@ test("10: layers and open states (band 0 only) are ignored", () => {
   expect(merge(docs(false))).toBeUndefined();
   expect(merge(docs(true))).toBeUndefined();
 });
+
+test("11: equal authored inputs but a band-dependent used height (bp-pagination's Next item) → that node is a holder", () => {
+  // Band 0's item is 35 tall around a 32 pt child (an inline-flex baseline strut), band 1's hugs it.
+  const docs = W.map((w) =>
+    band(w, [
+      el("li", "div", { x: 0, y: 0, w: 80, h: w > 600 ? 32 : 35 }, { display: "flex", "align-items": "flex-start" }, [
+        el("a", "div", { x: 0, y: 0, w: 80, h: 32 }, { "padding-left": w > 600 ? "11px" : "7px" }, [txt("Next", 60)], {
+          conditional: [0],
+        }),
+      ]),
+    ]),
+  );
+  const screens = docs.map((d, i) => inferScreen(d, `bp${i ? `@${i}` : ""}-light`));
+  expect(screens.map((s) => kids(s.root)[0]!.height)).toEqual([{ kind: "fixed", px: 35 }, { kind: "hug" }]);
+  const li = kids(mergeBands(docs, screens)!.root)[0]!;
+  expect(li.alternatives!.map((a) => a.height)).toEqual([{ kind: "fixed", px: 35 }, { kind: "hug" }]);
+});
