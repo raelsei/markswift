@@ -56,3 +56,48 @@ nativeTest(
   },
   180000,
 );
+
+nativeTest(
+  "an 80-card product list with a 768px two-column breakpoint converts within its budget",
+  async () => {
+    const t0 = performance.now();
+    // Adaptive: 2 bands × 2 themes.
+    const result = await convertHtml(bigPageHtml(), {
+      name: "BigListBands",
+      css: "main{width:auto!important} @media (min-width:768px){main{display:grid!important;grid-template-columns:1fr 1fr}}",
+      breakpoints: {
+        devices: [
+          { width: 390, height: 844 },
+          { width: 834, height: 1210 },
+        ],
+      },
+    });
+    const convertMs = performance.now() - t0;
+    const dir = await mkdtemp(join(tmpdir(), "markswift-perf-bands-"));
+    try {
+      for (const [file, content] of Object.entries({ ...result.files, ...result.assets }))
+        await Bun.write(join(dir, file), content);
+      const check = await typecheck(dir);
+      if (!check.ok) throw new Error(check.output);
+      const files = (await readdir(dir)).filter((f) => f.endsWith(".swift")).map((f) => join(dir, f));
+      const b0 = performance.now();
+      const build =
+        await $`xcrun --sdk iphonesimulator swiftc -emit-library -Onone -parse-as-library -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete -default-isolation MainActor -module-name BigListBands ${files} -o ${join(dir, "libBigListBands.dylib")}`
+          .nothrow()
+          .quiet();
+      const buildMs = performance.now() - b0;
+      expect(build.exitCode).toBe(0);
+      const code = result.files["BigListBands.swift"]!;
+      const bytes = Buffer.byteLength(code);
+      console.log(JSON.stringify({ convertMs, typecheckMs: check.ms, buildMs, bytes }));
+      expect(code).toContain("MarkswiftBands(");
+      expect(convertMs).toBeLessThanOrEqual(12000);
+      expect(check.ms).toBeLessThanOrEqual(12000);
+      expect(buildMs).toBeLessThanOrEqual(30000);
+      expect(bytes).toBeLessThanOrEqual(600 * 1024);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  180000,
+);

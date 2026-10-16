@@ -17,6 +17,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - Native tables: admitted tables (separated or collapsed, colspan/rowspan, `border-spacing`, `table-layout: fixed` from `<col>`/first-row widths) are laid out by the runtime `MarkswiftTable` with shared columns; `<th>` announces as a header.
 - `markswift build`: `breakpoints` in `markswift.json` (shared or per component) builds breakpoint views into the package; band tokens join the library `Palette`.
 - Breakpoint views name band alternatives after the CSS breakpoint (`v_split_md`, Tailwind `sm`…`2xl`, else `w<px>`) and add one preview per band.
+- Visual gate: breakpoint fixtures are scored at every band width and at T−1/T of each threshold for the merged view (`…@bp` captures, `breakpointMaxLoss` 0.01 / `reflowMaxLoss` 0.03); the iOS renderer uses an iPad simulator, rotated to landscape, for wide captures; the behaviour harness switches bands and checks that text and toggles keep their values.
 
 ### Changed
 - `ConversionWarning.source` may be `breakpoints`.
