@@ -3,7 +3,7 @@
  * with every colour that differs paired so `colorExpr` writes `(cond ? state : rest)`.
  */
 import type { Color } from "../model/values.ts";
-import type { Edge, SemNode, StateStyle, Style } from "../model/semantic.ts";
+import type { Edge, SemNode, StateField, StateStyle, Style } from "../model/semantic.ts";
 import type { StatePaint } from "./context.ts";
 import { colorArgs } from "./format.ts";
 import { note } from "./diagnostics.ts";
@@ -26,7 +26,14 @@ export function pairStyle(
   // ponytail: keyed by colour value, so two slots of one node painting the same rest colour flip together; key by slot when a design needs them apart.
   const colors: StatePaint["colors"] = new Map();
   const style: Style = { ...n.style };
-  const out: StatePaint = { cond, style, colors };
+  const transitions = kind === "open" ? undefined : n.motion?.transitions?.[kind];
+  const out: StatePaint = {
+    cond,
+    style,
+    colors,
+    fields: Object.keys(state) as StateField[],
+    ...(transitions ? { transitions } : {}),
+  };
   const unsupported = (what: string) =>
     note(n, "approximated", FEATURE[kind], `${what} in the ${kind} look is not reproduced`);
   // The style carries whichever colour of the pair is visible at rest (else the state's), so the
