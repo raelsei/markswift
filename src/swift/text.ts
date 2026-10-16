@@ -174,13 +174,15 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
   if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
   if (r.image) {
     // A generated image rendered at its CSS size: `Text` takes only an `Image`. No pixels → keep its advance.
+    // It carries its inline box's font like any run: without one it takes the environment's `.body` (17 pt
+    // on iOS), whose taller line grows every line that holds the image.
     const view = inlineImageView(r.image, n, ctx);
     if (!view) return `Text.markswiftGap(${num(r.image.w)})`;
     const label = r.image.alt !== undefined ? `, label: ${str(r.image.alt)}` : "";
     let e = [
       `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${label}) {`,
       ...view.map((l) => `    ${l}`),
-      "})",
+      `}).font(${fontExpr(r.font, ctx)})`,
     ].join("\n");
     if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: "\\n") + ${e}`;
     if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;

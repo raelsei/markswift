@@ -543,6 +543,11 @@ test("a generated image run renders inside the text", () => {
   expect(at).toBeGreaterThan(0);
   const indentOf = (l: string) => l.length - l.trimStart().length;
   expect(indentOf(lines[at + 1]!)).toBe(indentOf(lines[at]!) + 4);
+  // The image run takes its inline box's font: without one it gets `.body`, which grows the line on iOS.
+  const close = lines.slice(at).find((l) => l.trimStart().startsWith("})"))!;
+  const textFont = swift.match(/Text\(verbatim: "Icon"\)(\.font\(.*?\))\./)?.[1];
+  expect(textFont).toBeDefined();
+  expect(close.trim()).toBe(`})${textFont},`);
   const raster = emitSwift(inferScreen(iconDoc(PNG1), "list"), "List", { mode: "app" });
   expect(raster.view).toMatch(/Image\.markswiftAsset\("[0-9a-f]{12}\.png"\)\.resizable\(\)/);
   expect(Object.keys(raster.images)).toHaveLength(1);
