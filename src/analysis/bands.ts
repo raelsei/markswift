@@ -17,9 +17,11 @@ export const DEFAULT_BAND_DEVICES: ReadonlyArray<{ width: number; height: number
 export interface BandPlan {
   /** CSS viewport edges, ascending; `edges.length === captures.length - 1`. */
   edges: BandEdge[];
+  /** One per band, ascending; the band's lowest capture, which represents it. */
   captures: Array<{ width: number; height: number }>;
-  /** Container queries: one more capture per band at its upper bound (the band capture's height), lowest bands first,
-   * while captures + extra stay ≤ BAND_CAP; `[]` without container queries. */
+  /** Container queries: one more capture per band at its upper bound (the band capture's height), lowest bands first;
+   * then, lowest bands first, a band other than band 0 and `first`'s is captured at its lower bound instead and its
+   * device capture moves here; while captures + extra stay ≤ BAND_CAP. `[]` without container queries. */
   extra: Array<{ width: number; height: number }>;
   /** Probe width per band (used only when the band's capture needs a probe). */
   probes: Array<number | undefined>;
@@ -117,15 +119,26 @@ export function planBands(
     const [near, far] = i === 0 ? [BAND_MIN, hi] : [hi, lo];
     probes.push(near !== capture.width ? near : far !== capture.width ? far : undefined);
   }
-  // ponytail: two captures per band find a container threshold only when the host crosses it between them; a crossing
-  // between the band's lower bound and its capture is missed (reported as "never crosses" when no capture sees the
-  // other side). Upgrade: solve the host width as a linear function of the viewport from two captures and capture at
-  // the predicted crossing.
+  // ponytail: a band's captures find a container threshold only when the host crosses it between two of them: with
+  // both bounds captured that is any monotonic crossing, except below the capture of band 0 (it carries the open-state
+  // layers) and of `first`'s band, and in bands the BAND_CAP budget leaves without a bound (reported as "never
+  // crosses" when no capture sees the other side). Upgrade: solve the host width as a linear function of the
+  // viewport from two captures and capture at the predicted crossing.
   const extra: BandPlan["extra"] = [];
-  if (conditions.some(isContainerQuery))
+  if (conditions.some(isContainerQuery)) {
     captures.forEach((c, i) => {
       if (his[i]! > c.width && captures.length + extra.length < BAND_CAP)
         extra.push({ width: his[i]!, height: c.height });
     });
+    edges.forEach((e, k) => {
+      const c = captures[k + 1]!;
+      const lo = captureWidth(e);
+      if (lo < c.width && c !== first && captures.length + extra.length < BAND_CAP) {
+        extra.push(c);
+        captures[k + 1] = { width: lo, height: c.height };
+        probes[k + 1] = his[k + 1];
+      }
+    });
+  }
   return { edges, captures, extra, probes, notes: [...notes.values()] };
 }

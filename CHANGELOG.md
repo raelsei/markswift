@@ -21,7 +21,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 - `markswift build`: `breakpoints` in `markswift.json` (shared or per component) builds breakpoint views into the package; band tokens join the library `Palette`.
 - Breakpoint views name band alternatives after the CSS breakpoint (`v_split_md`, Tailwind `sm`…`2xl`, else `w<px>`) and add one preview per band.
 - Visual gate: breakpoint fixtures are scored at every band width and at T−1/T of each threshold for the merged view (`…@bp` captures, `breakpointMaxLoss` 0.01 / `reflowMaxLoss` 0.03); the iOS renderer uses an iPad simulator, rotated to landscape, for wide captures; the behaviour harness switches bands and checks that text and toggles keep their values.
-- `--breakpoints` reconstructs width `@container` queries: a query container (`container-type`) that is a stack or grid nests `MarkswiftBands` and switches its content at the width SwiftUI offers its content box; the planner adds one capture at the top of each band when the page has container queries.
+- `--breakpoints` reconstructs width `@container` queries: a query container (`container-type`) that is a stack or grid nests `MarkswiftBands` and switches its content at the width SwiftUI offers its content box; when the page has container queries the planner adds one capture at the top of each band, then captures each band past the first at its lower bound (its device becomes one more capture), so a container that crosses its query just above a media breakpoint switches there too.
 
 ### Changed
 - `ConversionWarning.source` may be `breakpoints`.

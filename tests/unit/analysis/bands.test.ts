@@ -75,10 +75,24 @@ describe("planBands", () => {
     expect(plan(conditions)).toEqual(noEdges);
   });
 
-  test("container queries add one capture at the top of each band", () => {
+  test("container queries add captures at the top of each band, then at the bottom of each band past band 0", () => {
     const both = plan([...media("(min-width: 768px)"), container("(width >= 28rem)")]);
-    expect(both.captures).toEqual([phone, { width: 834, height: 1210 }]);
+    // Band 1's lowest capture (its lower bound) represents it; its device moves to `extra`, the probe to the top.
+    expect(both.captures).toEqual([phone, { width: 768, height: 1210 }]);
     expect(both.extra).toEqual([
+      { width: 767, height: 844 },
+      { width: 1376, height: 1210 },
+      { width: 834, height: 1210 },
+    ]);
+    expect(both.probes).toEqual([320, 1376]);
+    // A band captured at its lower bound needs no second capture there; `first`'s band keeps `first`.
+    expect(plan([...media("(min-width: 834px)"), container("(width >= 28rem)")]).extra).toEqual([
+      { width: 833, height: 844 },
+      { width: 1376, height: 1210 },
+    ]);
+    const ipad = plan([...media("(min-width: 768px)"), container("(width >= 28rem)")], { width: 834, height: 1210 });
+    expect(ipad.captures).toEqual([phone, { width: 834, height: 1210 }]);
+    expect(ipad.extra).toEqual([
       { width: 767, height: 844 },
       { width: 1376, height: 1210 },
     ]);
@@ -92,6 +106,14 @@ describe("planBands", () => {
     const four = plan([...media(...widths(4)), container("(width >= 28rem)")]);
     expect(four.captures.length + four.extra.length).toBe(6);
     expect(four.extra).toEqual([{ width: 399, height: 844 }]);
+    // Upper bounds first; the budget left goes to the lower bounds, lowest bands first.
+    const three = plan(
+      [...media("(min-width: 500px)", "(min-width: 900px)"), container("(width >= 28rem)")],
+      phone,
+      1210,
+    );
+    expect(three.captures.map((c) => c.width)).toEqual([390, 500, 1210]);
+    expect(three.extra.map((c) => c.width)).toEqual([499, 899, 834]);
   });
 
   test("no conditions: today's probe rule", () => {
