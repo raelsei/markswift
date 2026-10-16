@@ -665,7 +665,7 @@ const FAMILIES: Array<{
   {
     name: "ControlsFamily",
     html: '<input type="text" placeholder="Name"><input type="checkbox" checked><input type="radio" name="r" checked><input type="range" value="30"><input type="date" value="2026-10-10"><input type="color" value="#2563eb"><input type="file"><input type="number" value="3"><select><option>One</option><option selected>Two</option></select><textarea>Notes</textarea><textarea placeholder="Note"></textarea><input type="time" value="10:30"><input type="datetime-local" value="2026-10-10T09:15"><input type="submit" value="Send"><input type="range" value="20" style="accent-color:#e11d48"><select style="appearance:none"><option>A</option></select><progress value="40" max="100"></progress><meter value="0.6"></meter><details open><summary>More</summary><p>Body</p></details><button>Save</button><a href="https://example.com">Link</a>',
-    css: "main{display:flex;flex-direction:column;gap:6px;padding:8px}",
+    css: "main{display:flex;flex-direction:column;gap:6px;padding:8px}input::placeholder,textarea::placeholder{color:rgb(200,0,0)}",
     app: [
       "Slider(",
       "DatePicker(",
@@ -679,6 +679,7 @@ const FAMILIES: Array<{
       ".hourAndMinute",
       ".markswiftTextEditorInsets()",
       'Text(verbatim: "Send")',
+      'prompt: Text(verbatim: "Name").foregroundStyle(',
     ],
   },
   {

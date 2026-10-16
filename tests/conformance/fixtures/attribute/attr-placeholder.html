@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="@placeholder; input; input: password; textarea">
+<meta name="markswift-themes" content="light,dark">
+<title>attr-placeholder</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b0f14; --fg: #f3f4f6; --muted: #9ca3af; --card: #111827; --line: #374151; } }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 12px; }
+.v:last-child { margin-bottom: 0; }
+input, textarea { display: block; box-sizing: border-box; width: 100%; margin: 0; padding: 8px 10px; font: 15px/20px system-ui; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+textarea { height: 64px; resize: none; }
+.author::placeholder { color: rgb(200, 0, 0); }
+@media (prefers-color-scheme: dark) { .author::placeholder { color: rgb(255, 120, 120); } }
+.fill::placeholder { color: rgb(200, 0, 0); -webkit-text-fill-color: rgb(0, 128, 0); }
+.faded::placeholder { color: rgb(37, 99, 235); opacity: 0.5; }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v"><p class="cap">author colour (light red / dark pink)</p><input id="author" class="author" placeholder="Search projects"></section>
+<section class="v"><p class="cap">password, author colour</p><input id="secret" type="password" class="author" placeholder="Password"></section>
+<section class="v"><p class="cap">textarea, author colour</p><textarea id="note" class="author" placeholder="Tell us what happened"></textarea></section>
+<section class="v"><p class="cap">-webkit-text-fill-color wins over color</p><input id="fill" class="fill" placeholder="Green fill"></section>
+<section class="v"><p class="cap">opacity 0.5</p><input id="faded" class="faded" placeholder="Half blue"></section>
+<section class="v"><p class="cap">UA default (platform grey, unchanged)</p><input id="ua" placeholder="Default grey"></section>
+<section class="v"><p class="cap">value shown, placeholder hidden</p><input id="filled" class="author" value="Ada" placeholder="Name"></section>
+</main>
+</body>
+</html>

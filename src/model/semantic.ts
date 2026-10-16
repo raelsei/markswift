@@ -590,6 +590,8 @@ export interface ControlNode extends SemBase {
   swatch?: Color;
   /** `@placeholder`: the prompt drawn while the field is empty. */
   placeholder?: string;
+  /** The placeholder's paint from `::placeholder` (fill colour × opacity); absent for Chrome's UA grey, which keeps the platform prompt grey. */
+  promptColor?: Color;
   /** `<input type>` of a text field whose keyboard and autofill differ from plain text. */
   inputType?: "email" | "tel" | "url" | "number" | "search" | "password";
   /** WHATWG autofill field name from `autocomplete`, e.g. `one-time-code`. */

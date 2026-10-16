@@ -380,7 +380,6 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 
 - 8 of the 100 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, and iOS native line breaking that avoids a one-word last line.
-- `::placeholder` colour is not captured (needs a LayoutDoc field): placeholders draw in the platform grey.
 - An author `unicode-bidi` is not captured (needs a LayoutDoc field): `<bdo>`, `<bdi>`, `<output>` and `[dir]` get
   the UA's isolation and override, `span { unicode-bidi: bidi-override }` keeps the plain bidi algorithm.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block

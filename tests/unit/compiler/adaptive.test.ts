@@ -113,3 +113,37 @@ test("one light colour that pairs with two dark colours on a node is reported, n
     /1 node\(s\) paint a colour that changes in dark .*: card$/,
   );
 });
+
+function fieldPage(theme: "light" | "dark", prompt: string): LayoutDoc {
+  const doc = page(theme, "rgb(255, 255, 255)");
+  const input: Node = {
+    id: "q",
+    tag: "input",
+    attrs: { placeholder: "Search" },
+    styles: {
+      display: "inline-block",
+      "font-family": "system-ui",
+      "font-size": "15px",
+      "line-height": "20px",
+      color: "rgb(17, 24, 39)",
+    },
+    bounds: { x: 0, y: 0, w: 200, h: 36 },
+    children: [],
+    pseudoStyles: { placeholder: { color: prompt, "-webkit-text-fill-color": prompt, opacity: "1" } },
+  };
+  return { ...doc, combo: { screen: "field", theme }, root: { ...doc.root, children: [input] } };
+}
+
+test("a placeholder colour that changes in dark becomes an adaptive token on the prompt", () => {
+  const field = compileLayout(fieldPage("light", "rgb(115, 115, 115)"), {
+    name: "FieldView",
+    dark: fieldPage("dark", "rgb(161, 161, 161)"),
+  });
+  const name =
+    /static let (\w+) = Color\.markswift\(light: \.markswift\(0\.451, 0\.451, 0\.451\), dark: \.markswift\(0\.631, 0\.631, 0\.631\)\)/.exec(
+      field.files["FieldView+Tokens.swift"]!,
+    )?.[1];
+  expect(name).toBeDefined();
+  expect(field.code).toContain(`prompt: Text(verbatim: "Search").foregroundStyle(Palette.${name})`);
+  expect(field.warnings).toEqual([]);
+});

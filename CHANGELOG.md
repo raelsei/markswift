@@ -6,6 +6,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ### Added
 - App-mode grids keep CSS placement: `grid-column`/`grid-row` lines and spans, named areas, holes, explicit and implicit (`grid-auto-rows`) auto/px rows with CSS's row-span distribution, `justify-self`/`justify-items`, and a single implicit `auto` column now lay out through `MarkswiftTracks` (`.markswiftGridCell`) when the solvers reproduce the capture within 1 px; shadcn CardHeader actions and Alert icons reflow instead of pinning their cells.
+- Placeholders paint in the page's `::placeholder` colour (its `-webkit-text-fill-color`, faded by `opacity`): the `TextField`/`SecureField` `prompt:` and the `TextEditor` placeholder overlay in app mode, the painted placeholder in fidelity; a colour that differs in dark becomes an adaptive token. Chrome's default grey keeps the platform placeholder grey (output unchanged); `::placeholder` font style and weight are not drawn. Needs LayoutDoc 4.
 - `position: relative` offsets are drawn with `.offset(x:y:)` from the authored insets (px, `%`, `calc`, rtl), and the box keeps its flow slot, so siblings no longer shift (irregular stack gaps and `children overlap` reports are gone). Percentage offsets are pins at the captured width and are reported; `position: sticky` stays at its rest position.
 
 ### Changed (breaking)
