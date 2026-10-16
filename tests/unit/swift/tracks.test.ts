@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { solveTracks } from "../../../src/analysis/grid-tracks.ts";
-import type { GridTemplate, GridTrack } from "../../../src/model/semantic.ts";
+import { solveRows, solveTracks } from "../../../src/analysis/grid-tracks.ts";
+import type { GridRowTrack, GridTemplate, GridTrack } from "../../../src/model/semantic.ts";
 import tracksRuntime from "../../../src/swift/runtime/tracks.swift" with { type: "text" };
 import { command } from "../../../tools/verify/process.ts";
 import { typecheck } from "../../../tools/verify/typecheck.ts";
@@ -29,6 +29,16 @@ struct TracksFixture: View {
             MarkswiftTracks(autoRepeat: .fit(min: 160), hSpacing: 8, vSpacing: 8, stretch: false) {
                 Color.green.frame(maxWidth: .infinity)
                 Color.yellow.frame(maxWidth: .infinity)
+            }
+            MarkswiftTracks(tracks: [.fr(1), .auto], rows: [.auto, .auto], autoRow: .px(36), hSpacing: 8, vSpacing: 8) {
+                Color.red.frame(maxWidth: .infinity, maxHeight: .infinity).markswiftGridCell(column: 1, row: 1)
+                Color.blue.frame(maxWidth: .infinity, maxHeight: .infinity).markswiftGridCell(column: 1, row: 2)
+                Text("Action").frame(maxHeight: .infinity).markswiftGridCell(column: 2, row: 1, rowSpan: 2, justify: .end)
+                Color.green.frame(maxWidth: .infinity, maxHeight: .infinity).markswiftGridCell(column: 1, row: 3)
+            }
+            MarkswiftTracks(tracks: [.fr(1)], hSpacing: 2, vSpacing: 2) {
+                Color.red.frame(width: 24, height: 24).markswiftGridCell(column: 1, row: 1, rowSpan: 2)
+                Text("Title").frame(maxWidth: .infinity, maxHeight: .infinity).markswiftGridCell(column: 1, row: 3)
             }
             Color.red.frame(maxWidth: .infinity).markswiftFraction(0.75)
         }
@@ -92,49 +102,219 @@ function swiftCall({ t, width, gap, count, autoWidths }: (typeof CASES)[number])
   return `MarkswiftTracks.columns(width: ${width}, tracks: [${tracks.join(", ")}], autoRepeat: ${repeat}, count: ${count}, spacing: ${gap}, autoWidths: [${autoWidths.join(", ")}])`;
 }
 
+/** Compiles the runtime with `calls` (each a `[CGFloat]` expression) and returns one JSON array per call. */
+async function runSwift(calls: string[]): Promise<number[][]> {
+  const directory = await mkdtemp(join(tmpdir(), "markswift-tracks-parity-"));
+  try {
+    await Bun.write(join(directory, "tracks.swift"), `import SwiftUI\n\n${tracksRuntime}`);
+    await Bun.write(
+      join(directory, "main.swift"),
+      `import SwiftUI\n\nlet results: [[CGFloat]] = [\n${calls.map((c) => `    ${c},`).join("\n")}\n]\nfor cols in results { print("[" + cols.map { "\\(Double($0))" }.joined(separator: ",") + "]") }\n`,
+    );
+    const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
+    await command(
+      [
+        "xcrun",
+        "swiftc",
+        "-sdk",
+        sdk,
+        "-target",
+        "arm64-apple-macos15.0",
+        "-swift-version",
+        "6",
+        "-strict-concurrency=complete",
+        "-default-isolation",
+        "MainActor",
+        "-o",
+        join(directory, "parity"),
+        join(directory, "tracks.swift"),
+        join(directory, "main.swift"),
+      ],
+      directory,
+      240_000,
+    );
+    const lines = (await command([join(directory, "parity")], directory, 30_000)).trim().split("\n");
+    return lines.map((line) => JSON.parse(line) as number[]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+const near = (swift: number[], ts: number[]) => {
+  expect(swift).toHaveLength(ts.length);
+  for (const [j, w] of swift.entries()) expect(Math.abs(w - ts[j]!)).toBeLessThanOrEqual(0.001);
+};
+
 nativeTest(
   "MarkswiftTracks.columns agrees with solveTracks",
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), "markswift-tracks-parity-"));
-    try {
-      await Bun.write(join(directory, "tracks.swift"), `import SwiftUI\n\n${tracksRuntime}`);
-      await Bun.write(
-        join(directory, "main.swift"),
-        `import SwiftUI\n\nlet results: [[CGFloat]] = [\n${CASES.map((c) => `    ${swiftCall(c)},`).join("\n")}\n]\nfor cols in results { print("[" + cols.map { "\\(Double($0))" }.joined(separator: ",") + "]") }\n`,
-      );
-      const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
-      await command(
-        [
-          "xcrun",
-          "swiftc",
-          "-sdk",
-          sdk,
-          "-target",
-          "arm64-apple-macos15.0",
-          "-swift-version",
-          "6",
-          "-strict-concurrency=complete",
-          "-default-isolation",
-          "MainActor",
-          "-o",
-          join(directory, "parity"),
-          join(directory, "tracks.swift"),
-          join(directory, "main.swift"),
-        ],
-        directory,
-        240_000,
-      );
-      const lines = (await command([join(directory, "parity")], directory, 30_000)).trim().split("\n");
-      expect(lines).toHaveLength(CASES.length);
-      CASES.forEach((c, i) => {
-        const swift = JSON.parse(lines[i]!) as number[];
-        const ts = solveTracks(c.t, c.width, c.gap, c.count, c.autoWidths);
-        expect(swift).toHaveLength(ts.length);
-        for (const [j, w] of swift.entries()) expect(Math.abs(w - ts[j]!)).toBeLessThanOrEqual(0.001);
-      });
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    const results = await runSwift(CASES.map(swiftCall));
+    expect(results).toHaveLength(CASES.length);
+    for (const [i, c] of CASES.entries()) near(results[i]!, solveTracks(c.t, c.width, c.gap, c.count, c.autoWidths));
+  },
+  300000,
+);
+
+const rowAuto: GridRowTrack = { kind: "auto" };
+const rowPx = (n: number): GridRowTrack => ({ kind: "px", px: n });
+/** solveRows vectors; `expect` is Chrome 155's computed grid-template-rows (probed 2026-10-15). */
+const ROW_CASES: Array<{
+  rows: GridRowTrack[];
+  autoRow: GridRowTrack;
+  gap: number;
+  items: Array<{ row: number; span: number; height: number }>;
+  expect: number[];
+}> = [
+  // shadcn-alert: icon 24 px spans rows 1-2, title row 3, description row 4
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 2,
+    items: [
+      { row: 1, span: 2, height: 24 },
+      { row: 3, span: 1, height: 20 },
+      { row: 4, span: 1, height: 20 },
+    ],
+    expect: [11, 11, 20, 20],
+  },
+  // shadcn-card header: rows `auto auto`, auto-rows min-content; title, description, action spanning rows 1-2
+  {
+    rows: [rowAuto, rowAuto],
+    autoRow: rowAuto,
+    gap: 4,
+    items: [
+      { row: 1, span: 1, height: 22 },
+      { row: 2, span: 1, height: 20 },
+      { row: 1, span: 2, height: 21 },
+    ],
+    expect: [22, 20],
+  },
+  // Step 8 fixture `.rows`: rows `auto auto`, auto-rows 36px; Title, Description, Action (rows 1-2), Implicit
+  {
+    rows: [rowAuto, rowAuto],
+    autoRow: rowPx(36),
+    gap: 8,
+    items: [
+      { row: 1, span: 1, height: 32 },
+      { row: 2, span: 1, height: 32 },
+      { row: 1, span: 2, height: 32 },
+      { row: 3, span: 1, height: 32 },
+    ],
+    expect: [32, 32, 36],
+  },
+  // c4
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 10,
+    items: [
+      { row: 1, span: 1, height: 20 },
+      { row: 1, span: 3, height: 100 },
+      { row: 2, span: 1, height: 10 },
+    ],
+    expect: [20, 10, 50],
+  },
+  // c5
+  {
+    rows: [rowPx(40), rowAuto],
+    autoRow: rowPx(30),
+    gap: 4,
+    items: [
+      { row: 1, span: 2, height: 100 },
+      { row: 3, span: 1, height: 10 },
+    ],
+    expect: [40, 56, 30],
+  },
+  // c6
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 0,
+    items: [
+      { row: 1, span: 3, height: 90 },
+      { row: 1, span: 2, height: 60 },
+    ],
+    expect: [30, 30, 30],
+  },
+  // c7
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 0,
+    items: [
+      { row: 1, span: 1, height: 20 },
+      { row: 1, span: 2, height: 60 },
+      { row: 2, span: 1, height: 10 },
+    ],
+    expect: [35, 25],
+  },
+  // c8
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 0,
+    items: [
+      { row: 1, span: 2, height: 60 },
+      { row: 2, span: 2, height: 60 },
+    ],
+    expect: [30, 30, 30],
+  },
+  // c9
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 0,
+    items: [
+      { row: 1, span: 1, height: 20 },
+      { row: 1, span: 2, height: 60 },
+    ],
+    expect: [20, 40],
+  },
+  // c10
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 0,
+    items: [
+      { row: 1, span: 2, height: 60 },
+      { row: 2, span: 2, height: 100 },
+    ],
+    expect: [30, 50, 50],
+  },
+  // c11
+  {
+    rows: [],
+    autoRow: rowAuto,
+    gap: 6,
+    items: [
+      { row: 2, span: 1, height: 20 },
+      { row: 1, span: 2, height: 30 },
+      { row: 1, span: 4, height: 150 },
+      { row: 4, span: 1, height: 10 },
+    ],
+    expect: [4, 20, 98, 10],
+  },
+  // empty grid: one explicit 10 px row, no items
+  { rows: [rowPx(10)], autoRow: rowAuto, gap: 0, items: [], expect: [10] },
+];
+
+for (const [i, c] of ROW_CASES.entries())
+  test(`solveRows reproduces Chrome's rows (ROW_CASES[${i}])`, () => {
+    const got = solveRows(c.rows, c.autoRow, c.gap, c.items);
+    expect(got).toHaveLength(c.expect.length);
+    for (const [r, h] of got.entries()) expect(Math.abs(h - c.expect[r]!)).toBeLessThanOrEqual(0.001);
+  });
+
+const swiftRow = (r: GridRowTrack) => (r.kind === "px" ? `.px(${r.px})` : ".auto");
+const rowCall = (c: (typeof ROW_CASES)[number]) =>
+  `MarkswiftTracks.rowHeights(rows: [${c.rows.map(swiftRow).join(", ")}], autoRow: ${swiftRow(c.autoRow)}, spacing: ${c.gap}, items: [${c.items.map((i) => `(row: ${i.row}, span: ${i.span}, height: ${i.height})`).join(", ")}])`;
+
+nativeTest(
+  "MarkswiftTracks.rowHeights agrees with solveRows",
+  async () => {
+    const results = await runSwift(ROW_CASES.map(rowCall));
+    expect(results).toHaveLength(ROW_CASES.length);
+    for (const [i, c] of ROW_CASES.entries()) near(results[i]!, solveRows(c.rows, c.autoRow, c.gap, c.items));
   },
   300000,
 );

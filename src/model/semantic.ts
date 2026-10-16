@@ -78,6 +78,24 @@ export interface GridTemplate {
   tracks: GridTrack[];
   autoRepeat?: { mode: "fill" | "fit"; min: number };
 }
+/** One grid row MarkswiftTracks sizes: `auto` (also min-/max-content) is as tall as its items; px is fixed. */
+export type GridRowTrack = { kind: "px"; px: number } | { kind: "auto" };
+/** Where an admitted grid item sits: 1-based CSS lines (areas and auto-placement resolved), spans count tracks. */
+export interface GridPlacement {
+  /** Sized in px on both axes: keeps its frame (CSS does not stretch it). */
+  fixed: boolean;
+  colStart: number;
+  colSpan: number;
+  rowStart: number;
+  rowSpan: number;
+  /** Resolved `justify-self` (`auto` → the container's `justify-items`; `normal` → stretch). */
+  justify: "stretch" | "start" | "center" | "end";
+}
+/** An admitted grid item: its placement, `GridNode.children` index and [top, bottom] margin (runtime padding). */
+export interface GridItem extends GridPlacement {
+  child: number;
+  margin: [number, number];
+}
 
 /**
  * One CSS flex item MarkswiftFlexRow sizes: `basis` the border-box px of a px/0/0% basis (CSS adds padding and
@@ -451,16 +469,16 @@ export interface GridNode extends SemBase {
   measured?: MeasuredLayout;
   /**
    * Admitted authored template: app mode emits MarkswiftTracks; fidelity keeps the captured geometry and reports
-   * `fidelityNote`. `cells`: the `children` index of each grid item in DOM (row-major) order; `margins`: each item's
-   * [top, bottom] margin, same order. `fixed`: positions in `cells` of items sized in px on both axes, which keep
-   * their frames (CSS does not stretch them).
+   * `fidelityNote`.
    */
   template?: GridTemplate & {
     stretch: boolean;
     fidelityNote: string;
-    cells: number[];
-    margins: Array<[number, number]>;
-    fixed: number[];
+    /** Explicit rows (`grid-template-rows`) and `grid-auto-rows`; absent when every row is content-sized. */
+    rows?: GridRowTrack[];
+    autoRow?: GridRowTrack;
+    /** The grid items in DOM order (MarkswiftTracks subview order). */
+    items: GridItem[];
   };
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;

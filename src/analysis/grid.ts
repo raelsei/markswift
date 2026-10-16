@@ -30,7 +30,7 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
   const ys = starts(heights ?? [], vSpacing, base.frame.y + base.padding[0]);
   const ordered = [...items].sort((a, b) => a.sem.frame.y - b.sem.frame.y || a.sem.frame.x - b.sem.frame.x);
   // `admitTracks` proves the DOM's in-flow element children against the capture; MarkswiftTracks
-  // lays them out row-major in that order (`cells`), whatever order `children` keeps for paint.
+  // places them in that order (`items`), whatever order `children` keeps for paint.
   const inFlow = n.children.filter((c) => c.tag !== "#text" && renders(c) && !outOfFlow(c));
   const admit = (children: SemNode[], fidelityNote: string): GridNode["template"] => {
     const cells = inFlow.map((node) => children.findIndex((c) => items.some((it) => it.node === node && it.sem === c)));
@@ -38,9 +38,26 @@ export function buildGrid(n: LayoutNode, base: SemBase, all: AnalyzedChild[]): G
     const admitted = admitTracks(n);
     if (!admitted) return undefined;
     // Vertical margins are not in the IR (stacks turn them into spacing); the runtime needs them as padding.
-    const margins = inFlow.map((c): [number, number] => [px(c.styles["margin-top"]), px(c.styles["margin-bottom"])]);
-    const { template, stretch, fixed } = admitted;
-    return { ...template, stretch, fixed, cells, margins, fidelityNote };
+    const gridItems = admitted.placements.map((p, i) => ({
+      ...p,
+      child: cells[i]!,
+      margin: [px(inFlow[i]!.styles["margin-top"]), px(inFlow[i]!.styles["margin-bottom"])] as [number, number],
+    }));
+    // A justified cell fits its content in app mode; the px stays, so fidelity is unchanged.
+    for (const it of gridItems) {
+      const child = children[it.child]!;
+      if (it.justify !== "stretch" && !it.fixed && child.width.kind === "fixed")
+        child.width = { ...child.width, hug: true };
+    }
+    const { template, stretch, rows, autoRow } = admitted;
+    return {
+      ...template,
+      stretch,
+      ...(rows ? { rows } : {}),
+      ...(autoRow ? { autoRow } : {}),
+      items: gridItems,
+      fidelityNote,
+    };
   };
   // Native Grid can omit only the final row's trailing cells after all columns are established.
   const regular =

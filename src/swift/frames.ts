@@ -25,11 +25,11 @@ export function surplusFloor(n: SemNode, ctx: Pick<EmitContext, "mode">): TextNo
     ? n.lineBoxGrowth
     : undefined;
 }
-/** The captured fixed height a node's frame keeps (none for a disclosure in app mode, or a grid-stretched cell). */
+/** The captured fixed height a node's frame keeps (none for a disclosure in app mode, or a grid-stretched/justified cell). */
 function fixedHeight(n: SemNode, ctx: EmitContext): number | undefined {
   const app = ctx.mode === "app";
   return n.height.kind === "fixed" &&
-    (app ? ctx.allocated.get(n) : undefined) !== "both" &&
+    !(app && (ctx.allocated.get(n) === "both" || ctx.allocated.get(n) === "height")) &&
     !(app && n.kind === "control" && n.control === "disclosure")
     ? n.height.px
     : undefined;
@@ -79,7 +79,8 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   // text is a floor (`minHeight`) so native text metrics (Dynamic Type) can grow it without
   // clipping — measured or authored alike: CSS would overflow or clip the text, an app must not.
   const app = ctx.mode === "app";
-  // App: a runtime Layout (MarkswiftTracks, MarkswiftFlexRow) allocates this cell's width, and with grid stretch its height.
+  // App: a runtime Layout (MarkswiftTracks, MarkswiftFlexRow) allocates this cell's width, and with grid stretch its
+  // height; a justified grid cell only its height.
   const allocated = app ? ctx.allocated.get(n) : undefined;
   // A percentage width: app fills the MarkswiftFraction wrapper (`boxModifiers`); fidelity keeps the captured px.
   const fraction = n.width.kind === "fraction" ? n.width : undefined;
@@ -91,7 +92,7 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
       `width ${+(fraction.fraction * 100).toFixed(4)}% pinned at ${fraction.px}px; it does not follow the container at other widths`,
     );
   // App: a box that hugs in CSS, pinned only against its filling children's greed, fits its native content instead.
-  const fit = app && n.width.kind === "fixed" && n.width.hug === true && !allocated;
+  const fit = app && n.width.kind === "fixed" && n.width.hug === true && (!allocated || allocated === "height");
   const w =
     allocated || fit ? undefined : n.width.kind === "fixed" ? n.width.px : fraction && !app ? fraction.px : undefined;
   // App: a disclosure grows when it opens, so its captured (closed or open) height is not kept.
@@ -101,8 +102,13 @@ export function frameModifier(n: SemNode, ctx: EmitContext): string[] {
   const floor = surplus ? Math.max(h ?? 0, n.frame.h) : heightFloor(n, ctx);
   const fixedW = w !== undefined && !screenWide ? `width: ${num(w)}` : undefined;
   const fixedH = h !== undefined && floor === undefined ? `height: ${num(h)}` : undefined;
-  const fillW = n.width.kind === "fill" || screenWide || allocated !== undefined || (fraction !== undefined && app);
-  const fillH = n.height.kind === "fill" || allocated === "both";
+  const fillW =
+    n.width.kind === "fill" ||
+    screenWide ||
+    allocated === "width" ||
+    allocated === "both" ||
+    (fraction !== undefined && app);
+  const fillH = n.height.kind === "fill" || allocated === "both" || allocated === "height";
   const align =
     surplus && n.kind === "text"
       ? alignment(n.align === "trailing" ? "end" : n.align, surplus.edge === "top" ? "end" : "start")

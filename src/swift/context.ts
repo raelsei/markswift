@@ -52,9 +52,10 @@ export interface EmitContext extends ColorCtx {
   contentMinWidth: Set<SemNode>;
   /**
    * App mode: children whose size a runtime Layout allocates (MarkswiftTracks cells, MarkswiftFlexRow items).
-   * "width": accept the proposed width; "both": also the proposed height (grid stretch).
+   * "width": accept the proposed width; "both": also the proposed height (grid stretch); "height": a justified grid
+   * cell (MarkswiftTracks) takes the proposed height and fits its content's width.
    */
-  allocated: Map<SemNode, "width" | "both">;
+  allocated: Map<SemNode, "width" | "height" | "both">;
   /** Shape structs referenced so far, name → source. */
   shapes: Record<string, string>;
   /** Raster files referenced so far, path → bytes. */
