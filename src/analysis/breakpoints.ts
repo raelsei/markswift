@@ -207,10 +207,14 @@ export function mergeBands(
       }
       return byDeep(n, G);
     }
+    // Used size and alignment follow the children too (an inline-flex link's baseline sets its list item's height):
+    // a band that infers others lays the node out differently, so it is its own alternative.
     const keyOf = (b: number) => {
       const ln = layout[b]!.get(n.id);
-      const overlays = lookup(b, n.id).overlays.map((o) => deep(b, o.node.id) ?? o.node.id);
-      return `${ln ? own(ln) : "\u0000"}|${overlays.join(",")}`;
+      const s = lookup(b, n.id);
+      const overlays = s.overlays.map((o) => deep(b, o.node.id) ?? o.node.id);
+      const sized = JSON.stringify([s.width, s.height, s.selfAlign, s.selfAlignV]);
+      return `${ln ? own(ln) : "\u0000"}|${overlays.join(",")}|${sized}`;
     };
     const groups = group(G, keyOf);
     if (groups.length > 1) return holder(n, groups, (H) => compose(lookup(H[0]!, n.id), H));
