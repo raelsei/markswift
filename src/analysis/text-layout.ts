@@ -212,6 +212,35 @@ export function markBidi(built: MeasuredTextRun[], host: LayoutNode): void {
   }
 }
 
+/** What closes each UAX #9 explicit opener (LRE/RLE/LRO/RLO, LRI/RLI/FSI): PDF, or PDI for an isolate. */
+export const BIDI_CLOSER: Record<string, string> = {
+  "\u202A": "\u202C",
+  "\u202B": "\u202C",
+  "\u202D": "\u202C",
+  "\u202E": "\u202C",
+  "\u2066": "\u2069",
+  "\u2067": "\u2069",
+  "\u2068": "\u2069",
+};
+
+/**
+ * The bidi controls (`markBidi`) still open after `text`, outermost first. A PDI closes the innermost isolate and every
+ * embedding opened inside it; a PDF closes an embedding only inside the current isolate's scope; a "\n" is a
+ * paragraph separator and ends them all (UAX #9 X6a, X7, X8). Unmatched terminators do nothing.
+ */
+export function openBidi(text: string): string[] {
+  const stack: string[] = [];
+  for (const c of text) {
+    if (c === "\n") stack.length = 0;
+    else if (BIDI_CLOSER[c]) stack.push(c);
+    else if (c === "\u2069") {
+      const isolate = stack.findLastIndex((o) => BIDI_CLOSER[o] === "\u2069");
+      if (isolate >= 0) stack.length = isolate;
+    } else if (c === "\u202C" && BIDI_CLOSER[stack.at(-1) ?? ""] === "\u202C") stack.pop();
+  }
+  return stack;
+}
+
 /**
  * The browser's line division, re-expressed as offsets into each run's laid-out text.
  *

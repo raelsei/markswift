@@ -35,7 +35,13 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   // RTL base direction: `.environment(\.layoutDirection, .rightToLeft)` does not reach the bidi
   // algorithm, and CoreText takes the base level from the first strong character, so a leading
   // U+200F (RIGHT-TO-LEFT MARK) places trailing neutrals as the browser does.
-  const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx));
+  // A break baked into text with bidi controls (computed `unicode-bidi`) is U+2028 LINE SEPARATOR: a "\n" is a
+  // UAX #9 paragraph separator, which ends every isolate and resolves each line on its own (X8), where the browser
+  // resolves the paragraph once and reorders line by line. ponytail: only text with controls; plain RTL text keeps
+  // "\n" (each line takes its base direction from its own first strong character). Make every break U+2028 after a
+  // corpus render shows it moves nothing else.
+  const lineBreak = runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
+  const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx, lineBreak));
   if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
   // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time. A multi-line
@@ -169,7 +175,14 @@ function nativeInlineGrowth(glyphs: TextRun[], factor: number): number {
 }
 
 /** One run as a `Text` expression (every modifier here returns `Text`, so runs concatenate). */
-function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, ctx: EmitContext): string {
+function runExpr(
+  r: TextRun,
+  i: number,
+  n: TextNode,
+  literalTransform: boolean,
+  ctx: EmitContext,
+  lineBreak: string,
+): string {
   // A gap run is pure advance; a named call keeps the run array cheap to typecheck.
   if (r.gap !== undefined) return `Text.markswiftGap(${num(r.gap)})`;
   if (r.image) {
@@ -182,7 +195,7 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
       ...view.map((l) => `    ${l}`),
       "})",
     ].join("\n");
-    if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: "\\n") + ${e}`;
+    if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: ${str(lineBreak)}) + ${e}`;
     if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
     return e;
   }
@@ -193,7 +206,7 @@ function runExpr(r: TextRun, i: number, n: TextNode, literalTransform: boolean, 
     let at = 0;
     let broken = "";
     for (const b of r.breaks) {
-      broken += text.slice(at, text[b - 1] === " " ? b - 1 : b) + "\n";
+      broken += text.slice(at, text[b - 1] === " " ? b - 1 : b) + lineBreak;
       at = b;
     }
     text = broken + text.slice(at);
