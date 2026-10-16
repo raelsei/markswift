@@ -126,14 +126,10 @@ test("markswift-viewport-height sets a case's capture height; other cases and th
       .sort(),
   ).toEqual([
     "overlay-alert-dialog",
-    "overlay-context-menu",
     "overlay-dialog",
-    "overlay-dropdown-menu",
     "overlay-hover-card",
-    "overlay-menubar",
     "overlay-native",
     "overlay-popover",
-    "overlay-select",
     "overlay-sheet",
   ]);
   const plain = cases.map(({ viewportHeight: _, ...item }) => item);
