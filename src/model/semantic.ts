@@ -97,6 +97,28 @@ export interface GridItem extends GridPlacement {
   child: number;
   margin: [number, number];
 }
+/**
+ * A `table-layout: fixed` column: border-box px; `fraction` of the available width (content box minus every
+ * `border-spacing`) plus the first-row cell's horizontal padding and border (`plus`); or an equal share of the rest.
+ */
+export type TableColumn =
+  | { kind: "px"; px: number }
+  | { kind: "percent"; fraction: number; plus: number }
+  | { kind: "auto" };
+/**
+ * A CSS table laid out by `MarkswiftTable` (plan 049). `slots[i]` places `children[i]` (048's 1-based GridPlacement
+ * fields); the first `bands` children are row-group/row paint (spanning every column), the rest are the cells in DOM
+ * row-major order. `widths`/`heights` are the captured column border-box widths and row heights; `fixed`: admitted
+ * `table-layout: fixed` columns.
+ */
+export interface TableLayout {
+  widths: number[];
+  heights: number[];
+  slots: Array<Pick<GridPlacement, "rowStart" | "colStart" | "rowSpan" | "colSpan">>;
+  bands: number;
+  collapse: boolean;
+  fixed?: TableColumn[];
+}
 
 /**
  * One CSS flex item MarkswiftFlexRow sizes: `basis` the border-box px of a px/0/0% basis (CSS adds padding and
@@ -413,8 +435,8 @@ export interface SemBase extends SizeConstraints {
     hidden?: true;
     /** `<h1>`…`<h6>`, or `role="heading"` with `aria-level` (default 2). */
     heading?: 1 | 2 | 3 | 4 | 5 | 6;
-    /** `role` = button | link | img on an element that is not already that control. */
-    trait?: "isButton" | "isLink" | "isImage";
+    /** `role` = button | link | img on an element that is not already that control; `<th>` or role columnheader/rowheader → isHeader. */
+    trait?: "isButton" | "isLink" | "isImage" | "isHeader";
     /** `aria-valuetext`, else `aria-valuenow`; `aria-expanded` → `expanded`/`collapsed`, `aria-checked=mixed` → `mixed` when there is no value. */
     value?: string;
     /** Text of the `aria-describedby` elements, else `aria-description`. */
@@ -501,6 +523,8 @@ export interface GridNode extends SemBase {
     /** The grid items in DOM order (MarkswiftTracks subview order). */
     items: GridItem[];
   };
+  /** An admitted CSS table (plan 049); `hSpacing`/`vSpacing` are its used border-spacing. */
+  table?: TableLayout;
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;
   children: SemNode[];
