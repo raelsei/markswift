@@ -81,7 +81,8 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
       addDiagnostic(diagnostics, "approximated", "visibility: collapse", "visibility: collapse → hidden (space kept)");
   }
   const animation = s["animation-name"];
-  if (animation && animation !== "none")
+  // A node 063 captured (n.motion) is reported by analysis/motion.ts instead.
+  if (animation && animation !== "none" && !n.motion?.animations && !n.motion?.reduced)
     addDiagnostic(
       diagnostics,
       "unmapped",

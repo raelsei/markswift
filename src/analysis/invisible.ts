@@ -10,7 +10,8 @@ import { type SemNode, walk } from "../model/semantic.ts";
  * the pointer hit would lose that tap. Capture `pointer-events` if a design relies on it.
  */
 function invisible(n: SemNode): boolean {
-  if (n.style.opacity !== 0 || n.diagnostics.some((d) => d.feature === "animation-name")) return false;
+  if (n.style.opacity !== 0 || n.motion !== undefined || n.diagnostics.some((d) => d.feature.startsWith("animation-")))
+    return false;
   const muted = !!n.a11y?.hidden;
   let silent = true;
   walk(n, (d) => {

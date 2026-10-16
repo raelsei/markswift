@@ -8,9 +8,10 @@ import { sizeOf, trailingInset } from "./sizing.ts";
 import { insetsOf, relativeOffset } from "./geometry.ts";
 import { classifyElement } from "../html/policy.ts";
 import { activatableAction } from "./controls.ts";
-import { textContent } from "./text-runs.ts";
+import { isInlineText, textContent } from "./text-runs.ts";
 import { fieldOf, nameHintOf } from "./naming.ts";
 import { isToggleRole } from "../model/interactive.ts";
+import { motionOf } from "./motion.ts";
 
 export function finish<T extends SemNode>(node: T): T {
   node.confidence = confidenceOf(node.diagnostics);
@@ -36,6 +37,11 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     );
   const style = styleOf(n, diagnostics);
   const states = stateStylesOf(n, style);
+  const motion = motionOf(n, style, diagnostics);
+  // An inline pseudo-element is merged into this node's text runs: nothing of it is a view to animate.
+  for (const c of n.children)
+    if ((c.tag === "::before" || c.tag === "::after") && (c.motion?.animations || c.motion?.reduced) && isInlineText(c))
+      addDiagnostic(diagnostics, "unmapped", "animation-name", `animated ${c.tag} is part of a text run; not animated`);
   const { width, height, selfAlign, selfAlignV, ...constraints } = sizeOf(n, declared, ctx, diagnostics);
   const padding = insetsOf(n.styles);
   padding[2] = trailingInset(n, height, padding[2]);
@@ -70,6 +76,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(field ? { field } : {}),
     ...(labelFor ? { labelFor } : {}),
     ...(states ? { states } : {}),
+    ...(motion ? { motion } : {}),
   };
 }
 
