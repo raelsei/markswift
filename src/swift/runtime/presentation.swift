@@ -44,29 +44,35 @@ extension View {
     }
     func markswiftPlaced(_ placement: MarkswiftPlacement) -> some View { modifier(MarkswiftPlaced(placement: placement)) }
     /// A presentation drawn over the component while `isPresented`; the screen owns the state (D-PRESENT-STATE).
+    /// The container stays while closed so each root's own removal transition plays (066); `exit` animates the
+    /// runtime's own dismissal (Escape, an outside tap).
     func markswiftPresentation<C: View>(
-        isPresented: Binding<Bool>, modal: Bool, dismissOnEscape: Bool, dismissOnOutside: Bool,
+        isPresented: Binding<Bool>, modal: Bool, dismissOnEscape: Bool, dismissOnOutside: Bool, exit: Animation? = nil,
         onDismiss: @escaping () -> Void, @ViewBuilder content: @escaping () -> C
     ) -> some View {
         overlayPreferenceValue(MarkswiftAnchorKey.self) { anchors in
             GeometryReader { proxy in
-                if isPresented.wrappedValue {
-                    let dismiss = { isPresented.wrappedValue = false; onDismiss() }
-                    ZStack(alignment: .topLeading) {
-                        // Always present: the full-size base the placements align to (a ZStack aligns its children to
-                        // one another). It takes the taps outside the content only when they must not reach the page.
+                let shown = isPresented.wrappedValue
+                let dismiss = { withAnimation(exit) { isPresented.wrappedValue = false }; onDismiss() }
+                ZStack(alignment: .topLeading) {
+                    if shown {
+                        // The full-size base the placements align to (a ZStack aligns its children to one another).
+                        // It takes the taps outside the content only when they must not reach the page.
                         Color.clear.contentShape(Rectangle())
                             .onTapGesture { if dismissOnOutside { dismiss() } }
                             .allowsHitTesting(modal || dismissOnOutside)
                             .accessibilityHidden(true)
                         content()
                     }
-                    .environment(\.markswiftAnchors, anchors.mapValues { proxy[$0] })
-                    .accessibilityElement(children: .contain)
-                    .accessibilityAddTraits(modal ? .isModal : [])
-                    .accessibilityAction(.escape) { if dismissOnEscape { dismiss() } }
-                    .onKeyPress(.escape) { guard dismissOnEscape else { return .ignored }; dismiss(); return .handled }
                 }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                .environment(\.markswiftAnchors, anchors.mapValues { proxy[$0] })
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(modal && shown ? .isModal : [])
+                .accessibilityHidden(!shown)
+                .accessibilityAction(.escape) { if shown && dismissOnEscape { dismiss() } }
+                .onKeyPress(.escape) { guard shown && dismissOnEscape else { return .ignored }; dismiss(); return .handled }
+                .allowsHitTesting(shown)
             }
         }
     }

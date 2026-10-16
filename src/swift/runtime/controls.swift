@@ -239,20 +239,29 @@ nonisolated struct MarkswiftSliderTrack: View {
 }
 
 /// `<details>` as the browser draws it: the captured `<summary>` (its `::marker` included) is the
-/// whole tap target, the content follows at the measured gap, and there is no system chevron.
+/// whole tap target, the content follows at the measured gap, and there is no system chevron. `open`/`close`: the
+/// content's CSS height animation, played as a `MarkswiftReveal` (066); nil for both = it snaps.
 nonisolated struct MarkswiftDisclosureStyle: DisclosureGroupStyle {
     let spacing: CGFloat
+    var open: Animation? = nil, close: Animation? = nil
 
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: spacing) {
             Button {
-                configuration.isExpanded.toggle()
+                withAnimation(configuration.isExpanded ? close : open) { configuration.isExpanded.toggle() }
             } label: {
                 configuration.label.contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
             .accessibilityValue(configuration.isExpanded ? Text("Expanded") : Text("Collapsed"))
-            if configuration.isExpanded { configuration.content }
+            if configuration.isExpanded {
+                if open != nil || close != nil {
+                    configuration.content
+                        .transition(.modifier(active: MarkswiftReveal(fraction: 0), identity: MarkswiftReveal(fraction: 1)))
+                } else {
+                    configuration.content
+                }
+            }
         }
     }
 }

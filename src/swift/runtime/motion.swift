@@ -151,11 +151,54 @@ struct MarkswiftAnimation: ViewModifier {
         var v = base
         // `.infinity` is the settled look: the captured values exactly, not a recomputed end keyframe.
         if t.isFinite { for m in motions { m.apply(at: t, to: &v) } }
-        return content
-            .opacity(v.opacity)
-            .scaleEffect(x: v.scaleX, y: v.scaleY, anchor: anchor)
-            .rotationEffect(.degrees(v.degrees), anchor: anchor)
-            .offset(x: v.x, y: v.y)
+        return content.modifier(MarkswiftMotionFrame(value: v, anchor: anchor))
+    }
+}
+
+/// Opacity, scale, rotation and offset of one motion frame (CSS `translate · rotate · scale` order).
+struct MarkswiftMotionFrame: ViewModifier {
+    var value = MarkswiftMotionValue()
+    var anchor = UnitPoint.center
+    func body(content: Content) -> some View {
+        content
+            .opacity(value.opacity)
+            .scaleEffect(x: value.scaleX, y: value.scaleY, anchor: anchor)
+            .rotationEffect(.degrees(value.degrees), anchor: anchor)
+            .offset(x: value.x, y: value.y)
+    }
+}
+
+/// An overlay root's exit frame inside its removal transition; under Reduce Motion (system or harness-forced) the
+/// opacity-only `reduced` frame (D-MOTION).
+struct MarkswiftExitFrame: ViewModifier {
+    var value = MarkswiftMotionValue()
+    var reduced = MarkswiftMotionValue()
+    var anchor = UnitPoint.center
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.markswiftForcedStates) private var forced
+    func body(content: Content) -> some View {
+        content.modifier(MarkswiftMotionFrame(value: systemReduce || forced.contains(.reduceMotion) ? reduced : value, anchor: anchor))
+    }
+}
+
+/// Lays its content out at `fraction` of its height, top-aligned: CSS `height` 0 ↔ auto as a layout change.
+struct MarkswiftRevealLayout: Layout {
+    var fraction: Double
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(proposal) ?? .zero
+        return CGSize(width: size.width, height: size.height * fraction)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
+}
+
+/// Disclosure content's insertion/removal: the revealed fraction animates, clipped while partial.
+struct MarkswiftReveal: ViewModifier, Animatable {
+    var fraction: Double
+    var animatableData: Double { get { fraction } set { fraction = newValue } }
+    func body(content: Content) -> some View {
+        if fraction < 1 { MarkswiftRevealLayout(fraction: fraction) { content }.clipped() } else { content }
     }
 }
 

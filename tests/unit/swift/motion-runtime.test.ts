@@ -28,6 +28,12 @@ struct Probe: View {
                 .modifier(MarkswiftAnimation(motions: [MarkswiftMotion(MarkswiftTiming(duration: 0.8, iterations: 2.5, direction: .alternateReverse), scaleX: MarkswiftMotionTrack(1, [MarkswiftSegment(1.15, 0.5, .steps(4, .both)), MarkswiftSegment(1, 1, .steps(1, .start))]))]))
             Color.green.frame(width: 24, height: 24)
                 .modifier(MarkswiftStateAnimation(isOn: true, into: .timingCurve(0.4, 0, 0.2, 1, duration: 0.15).delay(0.1), back: Animation(MarkswiftEasing(duration: 0.3, ease: .steps(4, .end))), reducedInto: Animation(MarkswiftEasing(duration: 0.3, ease: .points([0, 1], [0, 1]))), reducedBack: nil))
+            Color.orange.frame(width: 24, height: 24)
+                .modifier(MarkswiftMotionFrame(value: MarkswiftMotionValue(opacity: 0.5, scaleX: 0.95, scaleY: 0.95)))
+                .transition(.asymmetric(insertion: .identity, removal: .modifier(active: MarkswiftExitFrame(value: MarkswiftMotionValue(opacity: 0, scaleX: 0.95, scaleY: 0.95), reduced: MarkswiftMotionValue(opacity: 0), anchor: UnitPoint(x: 0.5, y: 0)), identity: MarkswiftExitFrame()).animation(.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.15))))
+            Text("Revealed")
+                .transition(.modifier(active: MarkswiftReveal(fraction: 0), identity: MarkswiftReveal(fraction: 1)))
+            MarkswiftRevealLayout(fraction: 0.5) { Text("Half") }
         }
         .environment(\\.markswiftMotionTime, 0.25)
         .environment(\\.markswiftForcedStates, .reduceMotion)
