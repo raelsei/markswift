@@ -14,8 +14,12 @@ export interface QualityPolicy {
   maxDrop?: number;
   minSsim?: number;
   anchorMaxMismatch?: number;
-  /** Largest allowed app-mode SSIM loss of the 390-compiled code at another width (ssim − reflowSsim) for captures tagged reflowTag "native". */
+  /** Largest allowed app-mode SSIM loss of the 390-compiled code at another width (ssim − reflowSsim) for captures
+   * tagged reflowTag "native"; also of the merged breakpoint view for captures tagged "breakpoint-edge". */
   reflowMaxLoss?: number;
+  /** Largest allowed app-mode SSIM loss of the merged breakpoint view at a band capture width (ssim − reflowSsim)
+   * for captures tagged `breakpoint`; `breakpoint-edge` captures use `reflowMaxLoss`. */
+  breakpointMaxLoss?: number;
   cases?: Record<string, CasePolicy>;
   features?: Record<string, CasePolicy>;
   /** `families` keys are `<domain>@<app|fidelity>`, domain = first path segment of a capture's `fixture`; a floor for
@@ -200,12 +204,14 @@ function validateArtifacts(value: Record<string, unknown>, capture: string, issu
   }
 }
 
+/** Reflow arms (`--reflow`): 390-compiled code (`native`, `pinned`) or the merged breakpoint view (`breakpoint*`). */
+const REFLOW_TAGS: Record<string, true> = { native: true, pinned: true, breakpoint: true, "breakpoint-edge": true };
 /** `--reflow` fields: all or none, and `reflowDelta` is exactly `reflowSsim − ssim`. */
 function validateReflow(value: Record<string, unknown>, capture: string, issues: QualityIssue[]) {
   const fields = [value.reflowTag, value.reflowSsim, value.reflowMismatch, value.reflowDelta];
   if (fields.every((field) => field === undefined)) return;
   if (
-    (value.reflowTag !== "native" && value.reflowTag !== "pinned") ||
+    !REFLOW_TAGS[String(value.reflowTag)] ||
     !score(value.reflowSsim) ||
     !score(value.reflowMismatch) ||
     typeof value.reflowDelta !== "number" ||
@@ -215,7 +221,7 @@ function validateReflow(value: Record<string, unknown>, capture: string, issues:
       code: "invalid",
       capture,
       message:
-        "Reflow fields must be complete: reflowTag native|pinned, reflowSsim/reflowMismatch in [0,1], reflowDelta = reflowSsim − ssim.",
+        "Reflow fields must be complete: reflowTag native|pinned|breakpoint|breakpoint-edge, reflowSsim/reflowMismatch in [0,1], reflowDelta = reflowSsim − ssim.",
     });
   }
 }
@@ -240,6 +246,7 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
           "minSsim",
           "anchorMaxMismatch",
           "reflowMaxLoss",
+          "breakpointMaxLoss",
           "cases",
           "features",
           "families",
@@ -250,6 +257,7 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
     ) ||
     (policy.anchorMaxMismatch !== undefined && !score(policy.anchorMaxMismatch)) ||
     (policy.reflowMaxLoss !== undefined && !score(policy.reflowMaxLoss)) ||
+    (policy.breakpointMaxLoss !== undefined && !score(policy.breakpointMaxLoss)) ||
     (policy.maxDrop !== undefined && !score(policy.maxDrop)) ||
     (policy.minSsim !== undefined && !score(policy.minSsim)) ||
     (policy.cases !== undefined && !record(policy.cases)) ||
@@ -379,17 +387,23 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
         message: `Mismatch ${String(after.mismatch)} exceeds the allowed ${ceiling}.`,
       });
     }
-    if (
-      policy.reflowMaxLoss !== undefined &&
-      after.reflowTag === "native" &&
-      after.mode === "app" &&
-      score(after.reflowSsim) &&
-      after.ssim - after.reflowSsim > (policy.reflowMaxLoss as number) + 1e-12
-    ) {
+    const reflowLimit = (
+      after.mode !== "app"
+        ? undefined
+        : after.reflowTag === "native" || after.reflowTag === "breakpoint-edge"
+          ? policy.reflowMaxLoss
+          : after.reflowTag === "breakpoint"
+            ? policy.breakpointMaxLoss
+            : undefined
+    ) as number | undefined;
+    if (reflowLimit !== undefined && score(after.reflowSsim) && after.ssim - after.reflowSsim > reflowLimit + 1e-12) {
       issues.push({
         code: "reflow",
         capture,
-        message: `390-compiled code at this width scores ${after.reflowSsim} vs ${after.ssim} for its own capture; allowed loss ${policy.reflowMaxLoss}.`,
+        message:
+          after.reflowTag === "native"
+            ? `390-compiled code at this width scores ${after.reflowSsim} vs ${after.ssim} for its own capture; allowed loss ${reflowLimit}.`
+            : `merged breakpoint view at this width scores ${after.reflowSsim} vs ${after.ssim} for its own capture; allowed loss ${reflowLimit}.`,
       });
     }
     const beforeAnchors = anchorsOf(before),

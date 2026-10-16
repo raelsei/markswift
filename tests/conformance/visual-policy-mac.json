@@ -3,6 +3,7 @@
   "maxDrop": 0.005,
   "anchorMaxMismatch": 0.1,
   "reflowMaxLoss": 0.03,
+  "breakpointMaxLoss": 0.01,
   "features": {},
   "families": {
     "attribute@app": {
