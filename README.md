@@ -164,9 +164,11 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   `viewport` (default 390 × 844), `dpr` (default 1), `waitFor`, `prepare(page)`,
   `untrustedInput`, `timeoutMs` (default 120000 ms for the whole conversion), `breakpoints` (`true` or
   `{ devices?, max? }`: captures one LayoutDoc per CSS width band, see `bands`, and emits one view whose differing
-  elements switch at the CSS thresholds through `MarkswiftBands`). Open states need no option: triggers
-  are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native `popovertarget`/`commandfor`/`interestfor`/
-  `<details>`, shadcn `data-slot`, `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
+  elements switch at the CSS thresholds through `MarkswiftBands`; a stack or grid query container switches its
+  content on width `@container` queries at its own width, from one more capture at the top of each band). Open states
+  need no option: triggers are found automatically (ARIA `aria-haspopup`/`aria-expanded`, native
+  `popovertarget`/`commandfor`/`interestfor`/`<details>`, shadcn `data-slot`,
+  `data-markswift-opens="click|hover|contextmenu"`), at most 12, and each is opened
   in its own page per theme (~0.3 s); what it opens is captured in `layout.layers`. App mode emits the in-flow ones (a
   closed `<details>`, collapsible or accordion item): the content sits behind an `is<Name>Expanded` state seeded
   through `init`, the trigger toggles it and announces expanded/collapsed, and a `#Preview` shows it open. Dialogs,
@@ -416,10 +418,11 @@ captured (a capture warning says so).
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
 - Breakpoint branching without `--breakpoints`: one viewport and one layout per capture. With it, CSS width media
-  queries switch the view at the root's proposed width; height, orientation and container queries are reported, a
-  fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band. Paint-only
-  pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or accordion
-  item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
+  queries switch the view at the root's proposed width and container queries switch at the container's width (stack
+  and grid containers; height, style and scroll-state queries are reported); height and orientation media queries
+  are reported, a fixed-width root gets no breakpoints, and script-driven DOM differences are emitted once per band.
+  Paint-only pressed and focused deltas *are* captured, and so is the open state of a `<details>`, collapsible or
+  accordion item (app mode); other states (hover only, disabled, validation, checked, `data-state` variants) are not.
 - Dialogs and popovers are drawn inside the component's frame (app mode): no swipe-to-dismiss, collision flip, scroll
   lock or focus trap beyond VoiceOver's modal containment, and placed as captured at the primary viewport. Menus,
   menubars and selects open native popups with their captured items (app mode): the CSS look of the open list,
