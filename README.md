@@ -91,6 +91,8 @@ TeamCards(onMessage: { card in print("message", card.title) }) // card: TeamCard
   buttons were named after their own captions); other actions are `() -> Void`.
 - State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
   Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
+- Extracted ordered-list rows derive their marker from the row index: the marker string field is gone from the row
+  type and the row subview takes `ordinal: Int`.
 - Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first
   non-utility class, else the nearest heading plus a tag noun (`li` → `Row`, `article` → `Card`, else `Item`). Fields use
   `data-markswift-field`, then `data-slot`/class, then their kind (`title`, `text`, `foregroundColor`, `isOn`, …).
@@ -389,6 +391,9 @@ captured size and offset; fixed boxes stay outside the page's scroll view.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.
+- Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
+  Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
+  offset, so such lists stay unrolled instead of a `ForEach`.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
