@@ -17,7 +17,8 @@ import type { Theme } from "../model/layout.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { GENERATED_BY } from "../model/version.ts";
 import { unionFaces } from "./convert.ts";
-import { captureThemes } from "./bands.ts";
+import { captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
+import type { ConvertOptions } from "./types.ts";
 
 export interface BuildComponent {
   /** Swift view name, e.g. `AccordionView`. */
@@ -32,6 +33,8 @@ export interface BuildComponent {
   waitFor?: string;
   mode?: EmitMode;
   viewport?: { width: number; height: number };
+  /** Capture every CSS width band and emit one view across them, as `convert`'s `breakpoints`. */
+  breakpoints?: ConvertOptions["breakpoints"];
 }
 
 export interface BuildOptions {
@@ -76,6 +79,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       throw new Error(`component ${c.name}: viewport dimensions must be positive integers`);
     if (c.darkClass !== undefined && !/^\S+$/.test(c.darkClass))
       throw new Error(`component ${c.name}: darkClass must be a single class name`);
+    validateBreakpoints(c.breakpoints, `component ${c.name}: `);
     if ("url" in c.source) {
       const protocol = URL.canParse(c.source.url) ? new URL(c.source.url).protocol : "";
       if (protocol !== "http:" && protocol !== "https:")
@@ -121,30 +125,34 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
           label: path.split(sep).join("/"),
         };
       }
-      return captureThemes(
-        renderer.capture,
-        {
-          name: c.name,
-          ...page,
-          root: c.root ?? DEFAULT_ROOT,
-          theme: c.theme ?? "adaptive",
-          css: c.css,
-          darkClass: c.darkClass,
-          waitFor: c.waitFor,
-          layers: true,
-        },
-        timedOut,
-      );
+      const req = {
+        name: c.name,
+        ...page,
+        root: c.root ?? DEFAULT_ROOT,
+        theme: c.theme ?? "adaptive",
+        css: c.css,
+        darkClass: c.darkClass,
+        waitFor: c.waitFor,
+        layers: true,
+        // Width media queries are reconstructed: the captures do not report them as losses.
+        ...(c.breakpoints ? { breakpoints: true } : {}),
+      };
+      const first = await captureThemes(renderer.capture, req, timedOut);
+      if (!c.breakpoints) return { bands: [first], notes: [] };
+      // Band 0 is the emitted capture; the others reuse its renderer at their own viewport, without the layer pass.
+      const plan = planFor(c.breakpoints, first.primary.layout.conditions, viewport);
+      const bands = await captureBands(renderer.capture, req, { viewport, captured: first }, plan, timedOut);
+      return { bands, notes: plan.notes };
     };
     // ponytail: fixed 4-way capture concurrency (6.5 s vs 20 s for 61 pages, layouts byte-identical); make it a flag if a machine chokes
-    const captured: Array<{ primary: Capture; dark?: Capture }> = [];
+    const captured: Array<{ bands: Array<{ primary: Capture; dark?: Capture }>; notes: string[] }> = [];
     let next = 0;
     const worker = async () => {
       for (let i = next++; i < components.length; i = next++) captured[i] = await captureOne(components[i]!);
     };
     await Promise.all(Array.from({ length: Math.min(4, components.length) }, worker));
 
-    const all = captured.flatMap((c) => (c.dark ? [c.primary, c.dark] : [c.primary]));
+    const all = captured.flatMap((c) => c.bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary])));
     const fonts = await packageFonts(
       unionFaces(all.map((c) => c.layout.fonts)),
       new Map(all.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes])),
@@ -153,12 +161,21 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
     );
     deadline.throwIfAborted();
     const compiled = compileLayouts(
-      components.map((c, i) => ({
-        name: c.name,
-        layout: captured[i]!.primary.layout,
-        dark: captured[i]!.dark?.layout,
-        mode: c.mode,
-      })),
+      components.map((c, i) => {
+        const [first, ...rest] = captured[i]!.bands;
+        return {
+          name: c.name,
+          layout: first!.primary.layout,
+          dark: first!.dark?.layout,
+          mode: c.mode,
+          ...(rest.length
+            ? {
+                variants: rest.map((b) => b.primary.layout),
+                ...(first!.dark ? { darkVariants: rest.map((b) => b.dark!.layout) } : {}),
+              }
+            : {}),
+        };
+      }),
       {
         library,
         bundledFamilies: bundledFamilies(fonts),
@@ -207,8 +224,11 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       if (!warnings.has(key)) warnings.set(key, w);
     };
     for (const [i, c] of components.entries()) {
-      const { primary, dark } = captured[i]!;
-      for (const w of [...primary.warnings, ...(dark?.warnings ?? [])]) add({ ...w, component: c.name });
+      const { bands, notes } = captured[i]!;
+      for (const w of bands.flatMap((b) => [...b.primary.warnings, ...(b.dark?.warnings ?? [])]))
+        add({ ...w, component: c.name });
+      for (const message of notes)
+        add({ source: "capture", level: "approximated", feature: "media-query", component: c.name, message });
       for (const w of compiled.warnings) if (w.component === c.name) add(w);
     }
     for (const w of compiled.warnings) if (w.component === undefined) add(w);

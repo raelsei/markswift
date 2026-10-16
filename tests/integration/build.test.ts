@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { command } from "../../tools/verify/process.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
@@ -125,4 +126,52 @@ browserTest(
     }
   },
   240000,
+);
+
+browserTest(
+  "breakpoints in markswift.json build one view across width bands; other components are unchanged",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "markswift-build-bands-"));
+    try {
+      await copyFile(
+        join(import.meta.dir, "../conformance/fixtures/css-layout/media-query.html"),
+        join(dir, "mq.html"),
+      );
+      await writeFile(join(dir, "fluid.css"), "main[data-markswift-root]{width:auto!important}");
+      await writeFile(
+        join(dir, "plain.html"),
+        `<!doctype html><html><head><style>body{margin:0} main{width:240px;font:16px system-ui} p{color:#123456;background:#fedcba;padding:8px}</style></head><body><main data-markswift-root><p>Plain</p></main></body></html>`,
+      );
+      const config = async (file: string, out: string, breakpoints: boolean) => {
+        const path = join(dir, file);
+        await writeFile(
+          path,
+          JSON.stringify({
+            library: "Kit",
+            out,
+            components: [
+              { name: "Mq", source: "mq.html", css: "fluid.css", ...(breakpoints ? { breakpoints: true } : {}) },
+              { name: "Plain", source: "plain.html" },
+            ],
+          }),
+        );
+        return path;
+      };
+      const banded = await build(await config("bands.json", "Bands", true));
+      expect(banded.stderr).not.toContain("Error");
+      expect(banded.code).toBe(0);
+      expect((await build(await config("single.json", "Single", false))).code).toBe(0);
+      const view = (pkg: string, name: string) => readFile(join(dir, pkg, `Sources/Kit/${name}.swift`), "utf8");
+      expect(await view("Bands", "Mq")).toContain("MarkswiftBands(");
+      expect(await view("Single", "Mq")).not.toContain("MarkswiftBands(");
+      expect(await view("Bands", "Plain")).toBe(await view("Single", "Plain"));
+      if (process.env.MARKSWIFT_SWIFT_TESTS === "1") {
+        const output = await command(["swift", "build"], join(dir, "Bands"), 900_000);
+        expect(output.split("\n").filter((l) => l.includes("warning:"))).toEqual([]);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  1_200_000,
 );

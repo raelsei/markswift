@@ -2,10 +2,35 @@
 import type { Page } from "playwright-core";
 import type { BrowserCapture, Capture } from "../browser/capture.ts";
 import { captureLayers } from "../browser/layers.ts";
-import type { BandPlan } from "../compiler/index.ts";
+import { DEFAULT_BAND_DEVICES, planBands, type BandPlan } from "../compiler/index.ts";
 import { htmlIdentity } from "../input/identity.ts";
 import type { CaptureRequest } from "../input/types.ts";
-import type { Theme } from "../model/layout.ts";
+import type { LayoutCondition, Theme } from "../model/layout.ts";
+import type { ConvertOptions } from "./types.ts";
+
+/** Throws unless `bp` is unset, `true` or `{ devices?, max? }` with positive integer sizes and an integer max ≥ 320. */
+export function validateBreakpoints(bp: ConvertOptions["breakpoints"], prefix = ""): void {
+  if (
+    bp !== undefined &&
+    bp !== true &&
+    (!(bp.devices ?? []).every((d) => [d.width, d.height].every((n) => Number.isInteger(n) && n > 0)) ||
+      (bp.max !== undefined && !(Number.isInteger(bp.max) && bp.max >= 320)))
+  )
+    throw new Error(`${prefix}breakpoints devices must be positive integer sizes and max an integer ≥ 320`);
+}
+
+/** The band plan of `bp` for a page whose first capture is `first` and reports `conditions`. */
+export function planFor(
+  bp: NonNullable<ConvertOptions["breakpoints"]>,
+  conditions: LayoutCondition[],
+  first: { width: number; height: number },
+): BandPlan {
+  return planBands(conditions, {
+    first,
+    devices: (bp === true ? undefined : bp.devices) ?? DEFAULT_BAND_DEVICES,
+    max: (bp === true ? undefined : bp.max) ?? 1376,
+  });
+}
 
 /**
  * Capture one page in its theme(s), each raced against `timedOut`. Adaptive: two captures in one browser session;
