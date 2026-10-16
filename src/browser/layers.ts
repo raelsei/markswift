@@ -18,6 +18,7 @@ import {
   type Raw,
 } from "./snapshot.ts";
 import { PAINT_KEYS } from "./states.ts";
+import { recordAnimations } from "./motion.ts";
 import { settle } from "./settle.ts";
 
 /** Stamped through CDP on each layer root, valued by its paint-order index. */
@@ -200,8 +201,11 @@ export async function findTriggers(
   };
 }
 
-/** Scroll the trigger into view and activate it with the real mouse; false when it is not in the page. */
-async function activate(page: Page, root: string, trigger: Trigger): Promise<boolean> {
+/**
+ * Scroll the trigger into view and activate it with the real mouse; false when it is not in the page. The animations
+ * the activation starts are recorded (066: a short enter finishes before the layer is read).
+ */
+export async function activate(page: Page, root: string, trigger: Trigger): Promise<boolean> {
   const at = await page.evaluate(
     ({ root, path }) => {
       let el = document.querySelector(root) ?? undefined;
@@ -214,6 +218,7 @@ async function activate(page: Page, root: string, trigger: Trigger): Promise<boo
     { root, path: trigger.path },
   );
   if (!at) return false;
+  await recordAnimations(page);
   if (trigger.activation === "hover") {
     // ponytail: waits for the first mutation up to 1000 ms (a native `interestfor` popover mutates nothing, so it
     // always waits the full second); listen for `toggle` events too if that cost matters.

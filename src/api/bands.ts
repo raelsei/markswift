@@ -83,8 +83,14 @@ export async function captureThemes(
   const dark = await shot("dark", false);
   for (const layer of dark.layout.layers ?? []) {
     const light = primary.layout.layers?.find((l) => l.id === layer.id);
-    if (light) layer.dismiss = light.dismiss;
-    else
+    if (light) {
+      layer.dismiss = light.dismiss;
+      // Exits are read on the light page's dismissal only: same layer id, same root index.
+      layer.nodes.forEach((n, i) => {
+        const exit = light.nodes[i]?.motion?.exit;
+        if (exit) n.motion = { ...n.motion, exit };
+      });
+    } else
       dark.warnings.push({
         source: "capture",
         message: `layer ${layer.id} opens only in the dark theme; its dismissal was not probed`,

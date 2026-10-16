@@ -19,7 +19,7 @@ import {
   type DomSnapshot,
 } from "./snapshot.ts";
 import { readPreferredSizes } from "./sizing.ts";
-import { readMotion } from "./motion.ts";
+import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
@@ -27,6 +27,7 @@ import { inlineCapturedImages } from "./images.ts";
 import { captureStates } from "./states.ts";
 import {
   LAYER_MARK,
+  activate,
   assembleLayer,
   dismissCandidates,
   findTriggers,
@@ -284,7 +285,10 @@ export class BrowserCapture {
       const roots = await Promise.all(
         (opening ? opening.roots : []).map(async (_, i) => (await page.$(`[${LAYER_MARK}="${i}"]`))!),
       );
-      // 066: enter read — roots[i] ↔ layer.nodes[i], before settle
+      // 066: enter read — roots[i] ↔ layer.nodes[i], before settle (`activate` recorded what the opening started)
+      const enter = roots.length ? await readElementAnimations(page, roots) : { lists: [], warnings: [] };
+      errors.push(...enter.warnings);
+      let animated = enter.lists.some((l) => l.length);
       if (opening) {
         // Drops the :focus-visible ring the content took when it opened.
         await settle(page);
@@ -381,6 +385,9 @@ export class BrowserCapture {
           hiddenOnOpen,
         });
         // 066: enter attach — after layer assembly
+        enter.lists.forEach((list, i) => {
+          if (list.length) layer.nodes[i]!.motion = { ...layer.nodes[i]!.motion, enter: list };
+        });
         const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity);
         if (changed)
           errors.push(
@@ -405,9 +412,20 @@ export class BrowserCapture {
           type: "png",
         });
       }
+      // 066: exit — what closing starts on the same roots (light page only; the dark layer copies it, api/bands.ts).
+      const readExit = async (layer: NonNullable<typeof opened>["layer"]) => {
+        const exit = await readElementAnimations(page, roots);
+        errors.push(...exit.warnings);
+        exit.lists.forEach((list, i) => {
+          if (list.length) layer.nodes[i]!.motion = { ...layer.nodes[i]!.motion, exit: list };
+        });
+        animated ||= exit.lists.some((l) => l.length);
+      };
       if (opened && opening && spec.open && spec.probeDismiss && opened.layer.placement !== "inflow") {
+        await recordAnimations(page);
         await page.keyboard.press("Escape");
         // 066: exit read — same roots, before settle
+        await readExit(opened.layer);
         await settle(page);
         opened.layer.dismiss = await probeDismiss(page, opening, {
           root: rootSel,
@@ -418,6 +436,15 @@ export class BrowserCapture {
           warn: (message) => errors.push(message),
         });
       }
+      // An in-flow layer closes on a second activation of its trigger.
+      if (opened && spec.open && spec.probeDismiss && opened.layer.placement === "inflow") {
+        await activate(page, rootSel, spec.open);
+        await readExit(opened.layer);
+      }
+      if (animated && motion.authorReduce)
+        errors.push(
+          "overlay enter/exit animations follow the Reduce Motion fallback (author prefers-reduced-motion rules for them are not captured)",
+        );
       await cdp.detach();
       await Promise.all(imageReads);
       const baseURI = await page.evaluate(() => document.baseURI);

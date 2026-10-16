@@ -23,7 +23,13 @@ document.addEventListener("click", (e) => {
     el.toggleAttribute("data-closed", !open);
   }
   t.setAttribute("aria-expanded", String(open));
-  target.hidden = !open;
+  // Radix Presence: closing content stays mounted until its exit animation ends.
+  const exits = open ? [] : target.getAnimations();
+  const hide = () => (target.hidden = t.getAttribute("aria-expanded") !== "true");
+  if (exits.length) Promise.all(exits.map((a) => a.finished.catch(() => {}))).then(hide);
+  else target.hidden = !open;
+  // Radix measures the opened content for its accordion-down/up keyframes.
+  if (open) target.style.setProperty("--radix-accordion-content-height", `${target.scrollHeight}px`);
 });
 </script>
   </body>
