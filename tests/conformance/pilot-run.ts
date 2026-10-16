@@ -1,5 +1,5 @@
 /** Local visual pilot: capture browser references with pinned Chromium, compile both modes, render natively and score. */
-import { mkdir } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -47,6 +47,8 @@ type RunEntry = {
   mismatch?: number;
   /** Wall time of `BrowserCapture.capture` for this capture, ms; both modes of one capture share it. */
   captureMs?: number;
+  /** Motion frame captures: the paused time (ms) and whether Reduce Motion was on. */
+  motion?: { t: number; reduced: boolean };
   /** `@open` captures: the layer shown, and the rest capture whose conversion renders it. */
   openLayer?: string;
   openSource?: string;
@@ -331,13 +333,13 @@ async function run() {
         console.error(`${entry.key}: ${String(error)}`);
       }
     };
-    const pending: Array<Job & { conversion: RenderResult }> = [];
+    const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
     /** Render every pending iOS capture in one app build and launch, then score each. */
     const flush = async () => {
       const jobs = pending.splice(0);
       if (!jobs.length) return;
       const errors = await renderIos(
-        jobs.map((j) => ({ result: j.conversion, output: join(j.dir, "native.png") })),
+        jobs.map((j) => ({ result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced })),
         join(out, "_ios-work"),
         env.simulatorUdid!,
       ).catch((error) => new Map(jobs.map((j) => [join(j.dir, "native.png"), String(error)])));
@@ -353,8 +355,25 @@ async function run() {
       for (const width of widthsFor(item, reflow)) {
         for (const theme of item.themes) {
           const pair = matrix.filter(
-            (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme,
+            (entry) => entry.case.id === item.id && entry.width === width && entry.theme === theme && !entry.frame,
           );
+          const frames =
+            width === 390
+              ? matrix.filter((entry) => entry.case.id === item.id && entry.theme === theme && entry.frame)
+              : [];
+          const spec: CaptureRequest = {
+            screen: item.id,
+            theme,
+            url: `${server.origin}/${item.fixture}`,
+            root: "[data-markswift-root]",
+            screenshot: true,
+            async prepare(page) {
+              const style = await page.addStyleTag({
+                content: "[data-markswift-root] { width: 100% !important; }",
+              });
+              await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
+            },
+          };
           let captured: Capture;
           let captureMs = 0;
           // 390 captures also open each in-flow layer: its shot is the browser side of an `@open` capture.
@@ -362,19 +381,6 @@ async function run() {
           try {
             const t0 = performance.now();
             const browser = browsers.get(width)!;
-            const spec: CaptureRequest = {
-              screen: item.id,
-              theme,
-              url: `${server.origin}/${item.fixture}`,
-              root: "[data-markswift-root]",
-              screenshot: true,
-              async prepare(page) {
-                const style = await page.addStyleTag({
-                  content: "[data-markswift-root] { width: 100% !important; }",
-                });
-                await style.evaluate((element) => (element as Element).setAttribute("data-markswift-harness", ""));
-              },
-            };
             const label = `pilot:${item.fixture}`;
             captured = await browser.capture(spec, htmlIdentity, label);
             captureMs = performance.now() - t0;
@@ -383,9 +389,53 @@ async function run() {
                 probeDismiss: false,
               });
           } catch (error) {
-            for (const entry of pair) report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
+            for (const entry of [...pair, ...frames])
+              report.errors.push(`${entry.key}: capture failed: ${String(error)}`);
             continue;
           }
+          /** Motion frames of this 390 app capture: browser paused at `t`, native at the same time, scored like any capture. */
+          const captureFrames = async (sourceDir: string, conversion: RenderResult | undefined) => {
+            const { layout } = captured;
+            const clip = { x: -layout.viewport.x, y: -layout.viewport.y, width: layout.size.w, height: layout.size.h };
+            for (const entry of frames) {
+              const frame = entry.frame!;
+              const result: RunEntry = {
+                key: entry.key,
+                caseId: item.id,
+                viewportWidth: width,
+                theme,
+                mode: entry.mode,
+                size: layout.size,
+                loadedFonts: layout.fonts.filter((face) => face.loaded).length,
+                warnings: captured.warnings.length,
+                motion: frame,
+              };
+              report!.entries.push(result);
+              try {
+                const dir = join(out, entry.key);
+                await mkdir(dir, { recursive: true });
+                await Bun.write(join(dir, "browser.png"), await browsers.get(width)!.captureFrame(spec, frame, clip));
+                // The rest capture's inputs, so artifact hashes name what the frame was rendered from.
+                for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"])
+                  await copyFile(join(sourceDir, file), join(dir, file));
+                const job: Job = { entry, item, dir, layout, textMetrics: undefined, result };
+                const forced = frame.reduced ? ("reduceMotion" as const) : undefined;
+                if (!conversion) {
+                  report!.completed++;
+                  console.log(`${entry.key}: captured (${report!.completed}/${report!.expected})`);
+                } else if (renderer === "mac") {
+                  await renderMac(conversion, join(out, "_mac-work"), join(dir, "native.png"), forced, frame.t / 1000);
+                  await finish(job);
+                } else {
+                  pending.push({ ...job, conversion, time: frame.t / 1000, forced });
+                  if (pending.length === IOS_BATCH) await flush();
+                }
+              } catch (error) {
+                report!.errors.push(`${entry.key}: ${String(error)}`);
+                console.error(`${entry.key}: ${String(error)}`);
+              }
+            }
+          };
           for (const entry of pair) {
             const result: RunEntry = {
               key: entry.key,
@@ -464,6 +514,7 @@ async function run() {
               if (renderer === "none") {
                 report.completed++;
                 console.log(`${entry.key}: typed (${report.completed}/${report.expected})`);
+                if (entry.mode === "app") await captureFrames(dir, undefined);
               } else {
                 const conversion = {
                   ...compiled,
@@ -515,10 +566,13 @@ async function run() {
                     if (pending.length >= IOS_BATCH) await flush();
                   }
                 }
+                if (entry.mode === "app") await captureFrames(dir, conversion);
               }
             } catch (error) {
               report.errors.push(`${entry.key}: ${String(error)}`);
               console.error(`${entry.key}: ${String(error)}`);
+              if (entry.mode === "app")
+                for (const frame of frames) report.errors.push(`${frame.key}: source ${entry.key} failed`);
             }
           }
         }

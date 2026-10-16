@@ -4,14 +4,11 @@ import type { Inventory } from "./schema.ts";
  * Misc bucket: animation, transition, scroll-driven timelines, view
  * transitions, interaction-only and Chrome-internal properties.
  *
- * Governing decision: the design is a STATIC SNAPSHOT. `src/browser/capture.ts`
- * `settle()` runs `document.getAnimations().forEach(a => a.finish())` (falling
- * back to `cancel()` for infinite animations) and captures with Playwright
- * `animations: "disabled"`, so the DOMSnapshot already holds the end state of
- * every animation and no transition is ever in flight. Everything in this
- * bucket that only *drives motion* is therefore already resolved into the
- * computed values the other css-* inventories read; only `animation-name`
- * stays visible as "this element moves in the design", which is reported.
+ * Governing decision: the rest capture is a STATIC SNAPSHOT. `settle()` finishes every animation
+ * (cancelling infinite ones) before DOMSnapshot, so computed values hold the settled look. CSS
+ * `@keyframes` animations are read before that from Chrome's Web Animations objects
+ * (`src/browser/motion.ts`, `LayoutNode.motion`) and play in app output through
+ * `MarkswiftAnimation` (`SemBase.motion`); transitions are captured at their end state.
  *
  * Behavioural properties carried into the shipped app (decided here):
  * - `pointer-events: none` → `.allowsHitTesting(false)` (mapped, value row)
@@ -28,78 +25,78 @@ export default {
     {
       id: "animation-composition",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
-      impl: "yes",
-      note: "Read only with animation-name; see that row. After finish() the composited result is already in the computed values.",
+      class: "mapped",
+      target: "MarkswiftAnimation",
+      ir: "SemBase.motion",
+      via: "style",
+      impl: "no",
+      note: "Only `replace` is translated. An `add`/`accumulate` animation is reported unmapped (animation-composition) on its node and rendered settled: its channels would compose onto the static transform, which MarkswiftAnimation replaces.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-composition",
     },
     {
       id: "animation-delay",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftAnimation (MarkswiftTiming delay:)",
+      ir: "SemBase.motion.animations[].delay",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. finish() skips the delay, so the snapshot is never captured mid-delay.",
+      note: "Exact CSS delay, negative delays included (they start mid-cycle). `fill-mode: forwards` with a positive delay shows the end look during the delay (the underlying value is not captured; reported approximated animation-fill-mode).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-delay",
     },
     {
       id: "animation-direction",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftAnimation (MarkswiftTiming direction:)",
+      ir: "SemBase.motion.animations[].direction",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. Direction decides which keyframe finish() lands on; the browser resolves that before capture.",
+      note: "normal, reverse, alternate, alternate-reverse with web-animations-1 iteration semantics.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-direction",
     },
     {
       id: "animation-duration",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftAnimation (MarkswiftTiming duration:)",
+      ir: "SemBase.motion.animations[].duration",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. The duration is skipped by finish().",
+      note: "A zero duration shows the end state, which is already the settled look: nothing is emitted.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-duration",
     },
     {
       id: "animation-fill-mode",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftAnimation (MarkswiftTiming fillBackwards:/fillForwards:)",
+      ir: "SemBase.motion.animations[].fill",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. `forwards`/`both` keep the last keyframe after finish(), `none` reverts to the base style; either way the computed values are what the paint/typography rows read.",
+      note: "backwards applies the first keyframe during the delay; forwards keeps the end. The settled look (rest captures, finished one-shots) is the captured computed style.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-fill-mode",
     },
     {
       id: "animation-iteration-count",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftAnimation (MarkswiftTiming iterations:)",
+      ir: "SemBase.motion.animations[].iterations",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. `infinite` animations cannot finish(); settle() cancels them, so those elements are captured at their un-animated base style (spinners, pulses).",
+      note: "Fractional and infinite counts. Without an author prefers-reduced-motion rule, Reduce Motion stops infinite loops unless the node is a status indicator (role status/progressbar, aria-busy).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-iteration-count",
     },
     {
       id: "animation-name",
       group: "Animation",
-      class: "unmapped",
-      target: "—",
-      ir: "SemBase.diagnostics (unmapped, feature animation-name)",
+      class: "mapped",
+      target: "MarkswiftAnimation",
+      ir: "SemBase.motion",
       via: "style",
       impl: "yes",
-      note: "Motion in the design has no v1 equivalent: the element ships at its end state (finish(); infinite ones cancelled to base state) and the pipeline must report `animated element rendered at end state` once per node so the designer knows. A future mapping of simple keyframes (opacity/transform between two stops) to `.animation(_:value:)` + `.onAppear` is possible but out of scope.",
+      note: "Keyframed opacity, translate (px, % of the box), scale and rotate (transform lists composed translate · rotate · scale, or the individual properties) play in app output; fidelity renders the settled look (approximated). Keyframed colours, backgrounds, shadows, filters, stroke, layout properties, skew/3D/matrix transforms and lists that do not interpolate per function are reported per node (unmapped, or approximated when another channel still animates); animated svg shapes and inline pseudo-elements are reported on their host. Without captured motion (hand-built LayoutDoc) the node is reported `animated element rendered at end state`.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-name",
     },
     {
@@ -110,18 +107,18 @@ export default {
       ir: "—",
       via: "none",
       impl: "yes",
-      note: "Read only with animation-name; see that row. finish() ends paused animations too, so `paused` never freezes an intermediate frame in the capture.",
+      note: "Paused animations render settled (capture warning `paused animation(s) are captured at their settled look`).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-play-state",
     },
     {
       id: "animation-timing-function",
       group: "Animation",
-      class: "non-visual",
-      target: "—",
-      ir: "—",
-      via: "none",
+      class: "mapped",
+      target: "MarkswiftEase (.bezier / .steps / .points)",
+      ir: "SemBase.motion.animations[].tracks[].segments[].easing",
+      via: "style",
       impl: "yes",
-      note: "Read only with animation-name; see that row. Easing only shapes intermediate frames, none of which are captured.",
+      note: "Per-keyframe easing evaluated exactly: cubic-bezier() and its keywords, steps() with every jump position, linear() with completed inputs (Chrome vs Swift sample test). An unparseable easing drops the animation (unmapped animation-timing-function).",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-timing-function",
     },
 
@@ -151,12 +148,12 @@ export default {
     {
       id: "animation-timeline",
       group: "Scroll-driven animation",
-      class: "non-visual",
+      class: "mapped",
       target: "—",
       ir: "—",
-      via: "none",
-      impl: "yes",
-      note: "A scroll()/view() timeline replaces time with scroll progress; the snapshot is captured at one fixed scroll position, so the browser has already resolved the driven values. The motion itself is reported via animation-name.",
+      via: "style",
+      impl: "no",
+      note: "A scroll()/view() timeline replaces time with scroll progress; no scroll-linked SwiftUI equivalent is emitted yet. The node is reported unmapped (animation-timeline) and rendered at the capture's scroll position.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/animation-timeline",
     },
     {

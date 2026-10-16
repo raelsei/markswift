@@ -17,6 +17,9 @@ struct HostApp: App {
                     .accessibilityIdentifier("markswift.log")
             }
             .environment(\.layoutDirection, env["MARKSWIFT_RTL"] == "1" ? .rightToLeft : .leftToRight)
+            // Animations rest at the settled look unless a motion launch asks for the live clock.
+            .environment(\.markswiftMotionTime, env["MARKSWIFT_MOTION"] == "live" ? nil : Double.infinity)
+            .environment(\.markswiftForcedStates, env["MARKSWIFT_REDUCE_MOTION"] == "1" ? .reduceMotion : [])
         }
     }
 }

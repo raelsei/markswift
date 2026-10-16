@@ -11,7 +11,8 @@ import { type SemNode, walk } from "../model/semantic.ts";
  * SwiftUI does not hit-test `opacity(0)` content. Add both if a design relies on such a tap.
  */
 function invisible(n: SemNode): boolean {
-  if (n.style.opacity !== 0 || n.diagnostics.some((d) => d.feature === "animation-name")) return false;
+  if (n.style.opacity !== 0 || n.motion !== undefined || n.diagnostics.some((d) => d.feature.startsWith("animation-")))
+    return false;
   const muted = !!n.a11y?.hidden;
   let silent = true;
   walk(n, (d) => {

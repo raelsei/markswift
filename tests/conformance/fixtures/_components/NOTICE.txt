@@ -1,7 +1,8 @@
 Component corpus sources (compiled into ../components/ by tests/conformance/tailwind-v4.ts)
 
-- shadcn-*.html (21 components): static SSR markup of shadcn/ui "radix-nova" components (neutral theme), built in
-  research/corpora/shadcn; shadcn-list-24.html is hand-written from the same item and badge markup.
+- shadcn-*.html (23 components): static SSR markup of shadcn/ui "radix-nova" components (neutral theme), built in
+  research/corpora/shadcn; shadcn-list-24.html is hand-written from the same item and badge markup. shadcn-spinner.html
+  and shadcn-skeleton.html carry `markswift-motion` frame times.
 - overlay-collapsible.html, overlay-accordion.html: the same build's collapsible and accordion markup with every closed
   content element filled in, and a fixture-only script standing in for Radix (a trigger with aria-controls toggles it).
 - globals.css: the shadcn/ui theme and Tailwind entry sheet from the same build (tw-animate-css and shadcn/tailwind.css

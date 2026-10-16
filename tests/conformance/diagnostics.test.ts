@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { compileLayout, type LayoutDoc } from "../../src/compiler/index.ts";
-import type { LayoutNode } from "../../src/model/layout.ts";
+import type { Anim, LayoutNode } from "../../src/model/layout.ts";
 import attribute from "./inventory/attribute.ts";
 import cssLayout from "./inventory/css-layout.ts";
 import cssMisc from "./inventory/css-misc.ts";
@@ -72,6 +72,23 @@ const IMG = box(
   {},
   { tag: "img", attrs: { src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"></svg>' } },
 );
+/** A node 063 captured one opacity animation on, with `extra` overriding the animation. */
+const animated = (extra: Partial<Anim>) => {
+  const keyframes = [
+    { offset: 0, easing: "linear", values: { opacity: "0" } },
+    { offset: 1, easing: "linear", values: { opacity: "1" } },
+  ];
+  const anim: Anim = {
+    name: "a",
+    duration: 1000,
+    delay: 0,
+    iterations: 1,
+    direction: "normal",
+    fill: "none",
+    keyframes,
+  };
+  return box({}, { motion: { animations: [{ ...anim, ...extra }] } });
+};
 
 /** A paragraph whose inline pseudo `tag` (styles `styles`) holds `children`, before its own text. */
 const pseudoImages = (tag: string, styles: Record<string, string>, children: LayoutNode[]): LayoutNode =>
@@ -87,6 +104,18 @@ const pseudoImages = (tag: string, styles: Record<string, string>, children: Lay
 /** One row per feature the product does not reproduce: the input that loses it, and the diagnostic it must produce. */
 const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: LayoutNode }> = [
   { feature: "animation-name", level: "unmapped", node: box({ "animation-name": "spin" }) },
+  { feature: "animation-timeline", level: "unmapped", node: animated({ timeline: "ScrollTimeline" }) },
+  { feature: "animation-composition", level: "unmapped", node: animated({ composite: "add" }) },
+  {
+    feature: "animation-timing-function",
+    level: "unmapped",
+    node: animated({
+      keyframes: [
+        { offset: 0, easing: "bogus", values: { opacity: "0" } },
+        { offset: 1, easing: "linear", values: { opacity: "1" } },
+      ],
+    }),
+  },
   { feature: "writing-mode", level: "unmapped", node: paragraph({ "writing-mode": "vertical-rl" }) },
   { feature: "filter", level: "unmapped", node: box({ filter: "url(#f)" }) },
   { feature: "mix-blend-mode", level: "unmapped", node: box({ "mix-blend-mode": "plus-darker-bogus" }) },
