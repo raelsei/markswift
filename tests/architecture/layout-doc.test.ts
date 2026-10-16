@@ -33,7 +33,15 @@ test("only the current LayoutDoc version may be unreleased", () => {
 
 test("fingerprints of released LayoutDoc versions never change", () => {
   const tag = Bun.spawnSync(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"]).stdout.toString().trim();
-  if (!tag) return; // no release tag in this checkout (CI's shallow clone fetches none)
+  if (!tag) {
+    // A local clone without tags has nothing to compare. CI must fetch them (`fetch-depth: 0` in ci.yml and
+    // release.yml); a tagless CI checkout would skip the freeze silently.
+    expect(
+      process.env.CI,
+      "no v* tag reachable from HEAD: fetch tags (actions/checkout fetch-depth: 0)",
+    ).toBeUndefined();
+    return;
+  }
   const old = Bun.spawnSync(["git", "show", `${tag}:tests/architecture/layout-doc.test.ts`]).stdout.toString();
   const unreleased = /^const UNRELEASED_LAYOUT_DOC_VERSION[^=]*= (\d+)/m.exec(old)?.[1];
   for (const [, version, sha] of old.matchAll(/^\s+(\d+): "([0-9a-f]{64})",$/gm))
