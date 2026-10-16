@@ -297,8 +297,8 @@ export default {
       target: "—",
       ir: "—",
       via: "none",
-      impl: "yes",
-      note: "Transitions only run on state changes; the snapshot has none (Playwright captures with animations disabled).",
+      impl: "partial",
+      note: "Transitions only run on state changes; the snapshot has none (Playwright captures with animations disabled). `allow-discrete` (`display`/`overlay` for dialogs, popovers) is covered by the drawn presentation's insertion and removal: its enter/exit keyframes play (066), a discrete transition's own timing does not.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/transition-behavior",
     },
     {
