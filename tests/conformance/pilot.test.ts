@@ -114,6 +114,28 @@ test("--reflow adds 768 captures only for reflow-tagged cases", async () => {
   expect(keys(false).filter((key) => key.includes("-768-"))).toEqual([]);
 });
 
+test("markswift-viewport-height sets a case's capture height; other cases and the matrix size are unchanged", async () => {
+  const cases = await loadFixtureSet(await loadPilot());
+  const byId = (id: string) => cases.find((item) => item.id === id)!;
+  expect(byId("overlay-dialog").viewportHeight).toBe(844);
+  expect(byId("shadcn-card").viewportHeight).toBeUndefined();
+  expect(
+    cases
+      .filter((item) => item.viewportHeight !== undefined)
+      .map((item) => item.id)
+      .sort(),
+  ).toEqual([
+    "overlay-alert-dialog",
+    "overlay-dialog",
+    "overlay-hover-card",
+    "overlay-native",
+    "overlay-popover",
+    "overlay-sheet",
+  ]);
+  const plain = cases.map(({ viewportHeight: _, ...item }) => item);
+  expect(buildMatrix(cases).length).toBe(buildMatrix(plain).length);
+});
+
 test("an invalid markswift-reflow tag throws", () => {
   expect(() => reflowTag('<meta name="markswift-reflow" content="maybe">', "x")).toThrow("invalid markswift-reflow");
 });

@@ -317,7 +317,7 @@ async function run() {
               xcode: env.xcode,
               renderer: env.renderer,
               dpr: env.dpr,
-              viewportHeight: env.viewportHeight,
+              viewportHeight: item.viewportHeight ?? env.viewportHeight,
               rootWidthOverride: env.rootWidthOverride,
             },
             null,
@@ -367,6 +367,7 @@ async function run() {
             url: `${server.origin}/${item.fixture}`,
             root: "[data-markswift-root]",
             screenshot: true,
+            ...(item.viewportHeight ? { viewport: { width, height: item.viewportHeight } } : {}),
             async prepare(page) {
               const style = await page.addStyleTag({
                 content: "[data-markswift-root] { width: 100% !important; }",

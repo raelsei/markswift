@@ -293,3 +293,55 @@ describe("in-flow layers", () => {
     ]);
   });
 });
+
+describe("drawn presentations (060)", () => {
+  const fixture = (name: string) =>
+    Bun.file(`${import.meta.dir}/../conformance/fixtures/components/${name}.html`).text();
+  /** Fixture → its layer ids, then per layer: expected `.markswiftPresentation(` arguments and placement. */
+  const CASES: Record<string, Array<[string, string, string]>> = {
+    "overlay-dialog": [["edit-profile", "modal: true, dismissOnEscape: true, dismissOnOutside: true", ".center"]],
+    "overlay-alert-dialog": [
+      ["delete-account", "modal: true, dismissOnEscape: true, dismissOnOutside: false", ".center"],
+    ],
+    "overlay-sheet": [["open-sheet", "modal: true, dismissOnEscape: true, dismissOnOutside: true", ".edge(.trailing)"]],
+    "overlay-popover": [
+      ["open-popover", "modal: false, dismissOnEscape: true, dismissOnOutside: true", '.anchored("open-popover", '],
+    ],
+    "overlay-hover-card": [
+      ["nextjs", "modal: false, dismissOnEscape: true, dismissOnOutside: true", '.anchored("nextjs", '],
+    ],
+    "overlay-native": [
+      ["open-dialog", "modal: true, dismissOnEscape: true, dismissOnOutside: true", ".center"],
+      ["open-popover", "modal: false, dismissOnEscape: true, dismissOnOutside: true", '.anchored("open-popover", '],
+    ],
+  };
+  for (const [name, layers] of Object.entries(CASES))
+    browserTest(
+      `${name}: ${layers.map(([id]) => id).join(", ")}`,
+      async () => {
+        const result = await convertHtml(await fixture(name), { name: "Overlay" });
+        expect(result.layout.layers!.map((l) => l.id)).toEqual(layers.map(([id]) => id));
+        expect(result.code.split(".markswiftPresentation(").length - 1).toBe(layers.length);
+        for (const [, args, placed] of layers) {
+          expect(result.code).toContain(args);
+          expect(result.code).toContain(`.markswiftPlaced(${placed}`);
+        }
+      },
+      30_000,
+    );
+
+  browserTest(
+    "closers, long-press and the native backdrop",
+    async () => {
+      const dialog = (await convertHtml(await fixture("overlay-dialog"), { name: "Overlay" })).code;
+      expect(dialog.match(/\n +isEditProfilePresented = false\n/g)).toHaveLength(2);
+      const hover = (await convertHtml(await fixture("overlay-hover-card"), { name: "Overlay" })).code;
+      expect(hover).toContain(".simultaneousGesture(LongPressGesture().onEnded { _ in isNextjsPresented = true })");
+      const native = (await convertHtml(await fixture("overlay-native"), { name: "Overlay" })).code;
+      expect(native).toMatch(
+        /\.markswiftPresentation\(isPresented: \$isOpenDialogPresented[^\n]*\n +Color\.markswift\(/,
+      );
+    },
+    60_000,
+  );
+});
