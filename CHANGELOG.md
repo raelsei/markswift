@@ -4,7 +4,7 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
-## [2.0.0] — 2026-10-16
+## [2.0.0] — 2026-10-17
 
 Breakpoints, overlays and motion, on LayoutDoc 4. `--breakpoints` captures every CSS width band and emits one view
 that switches at the CSS thresholds on the width SwiftUI offers it (width container queries too). Dialogs, sheets,
@@ -69,7 +69,7 @@ generated images and counter markers, `unicode-bidi`, variable-font axes, `color
 - Behaviour harness: 2 known audit issues are accepted (a stock `TextField` value reported as clipped; an e-mail address labelled with itself); hit-region findings are reported, not failing.
 
 ### Migrating from 1.x
-1. Upgrade: `npm install --save-dev markswift@^2` (or `bun add -d markswift@^2`). 1.x stays installable as `markswift@^1` (the 1.x line keeps LayoutDoc 3).
+1. Upgrade: `npm install --save-dev markswift@^2` (or `bun add -d markswift@^2`). 2.0.0 is the first npm release; the 1.x line (LayoutDoc 3) stays on the `release/1.1` branch and the `v1.0.0`/`v1.1.0` tags.
 2. Saved captures: a 1.x `layout.json` (LayoutDoc 3) is rejected — `compileLayout` throws "LayoutDoc version 3 cannot be compiled by Markswift 2.0.0, which reads LayoutDoc version 4; capture the source again." Recapture with `convert`/`build`; there is no upcast.
 3. Regenerate outputs in place with `markswift convert … --update` (a 1.x `.markswift.json` is accepted; hand-edited files still exit 2 unless `--force`) or `markswift build`, and replace `MarkswiftRuntime.swift` with the regenerated one: a hand-copied 1.x runtime does not contain the 2.0 layouts (`MarkswiftBands`, `MarkswiftTable`, `MarkswiftAnimation`, `MarkswiftReveal`, …).
 4. New opt-ins: CLI `--breakpoints <auto|W[xH],…>` (one capture per CSS width band — auto: 390, 834x1210, 1210x834, 1376x1032 — and one view that switches at the CSS thresholds); API `ConvertOptions.breakpoints: true | { devices?, max? }` with `ConversionResult.bands`; `compileLayout(layout, { variants, darkVariants, variantProbes })` and `LibraryComponent.variants`/`darkVariants` for saved band captures; `markswift.json` `breakpoints` (top level or per component: `true`, `false` or `{ devices, max }`); `ConversionWarning.source: "breakpoints"`; `CompileResult.openStates`; the author attribute `data-markswift-opens="click|hover|contextmenu"` marks a trigger the automatic discovery misses. Without `--breakpoints` a conversion produces the same kind of single-layout view as 1.x.
