@@ -5,7 +5,7 @@
  * Knows nothing about where the page came from: the source's CaptureRequest
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
-import { settle } from "./settle.ts";
+import { settle, withFrozenProgress } from "./settle.ts";
 import { collectFontFaces, readFontBytes } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
@@ -404,13 +404,15 @@ export class BrowserCapture {
             `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
           );
         await cancelAncestorTransforms(page);
-        png = await page.screenshot({
-          clip: { x, y, width: size.w, height: size.h },
-          scale: "device",
-          animations: "disabled",
-          caret: "hide",
-          type: "png",
-        });
+        png = await withFrozenProgress(page, cdp, () =>
+          page.screenshot({
+            clip: { x, y, width: size.w, height: size.h },
+            scale: "device",
+            animations: "disabled",
+            caret: "hide",
+            type: "png",
+          }),
+        );
       }
       // 066: exit — what closing starts on the same roots (light page only; the dark layer copies it, api/bands.ts).
       const readExit = async (layer: NonNullable<typeof opened>["layer"]) => {
@@ -534,7 +536,9 @@ export class BrowserCapture {
       });
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" });
+      return await withFrozenProgress(page, await this.context.newCDPSession(page), () =>
+        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" }),
+      );
     } finally {
       await page.close();
     }
@@ -568,7 +572,9 @@ export class BrowserCapture {
       await settle(page, { at: t });
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" });
+      return await withFrozenProgress(page, await this.context.newCDPSession(page), () =>
+        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" }),
+      );
     } finally {
       await page.close();
     }

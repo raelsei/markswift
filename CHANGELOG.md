@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Fixed
+- Screenshots of a page with an indeterminate `<progress>` are deterministic: Chrome animates the bar from its clock (not a CSS animation), so each capture caught a different frame; the capture now paints it at its first frame (bar at the start of the track).
+
 ## [2.0.0] — 2026-10-16
 
 Breakpoints, overlays and motion, on LayoutDoc 4. `--breakpoints` captures every CSS width band and emits one view
