@@ -404,13 +404,14 @@ export class BrowserCapture {
             `capture root ${spec.root} has an empty or off-page box (${w}×${h} at ${x},${y}); nothing to screenshot`,
           );
         await cancelAncestorTransforms(page);
-        png = await withFrozenProgress(page, cdp, () =>
+        png = await withFrozenProgress(page, cdp, (timeout) =>
           page.screenshot({
             clip: { x, y, width: size.w, height: size.h },
             scale: "device",
             animations: "disabled",
             caret: "hide",
             type: "png",
+            timeout,
           }),
         );
       }
@@ -538,8 +539,8 @@ export class BrowserCapture {
       });
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await withFrozenProgress(page, await this.context.newCDPSession(page), () =>
-        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" }),
+      return await withFrozenProgress(page, await this.context.newCDPSession(page), (timeout) =>
+        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png", timeout }),
       );
     } finally {
       await page.close();
@@ -578,8 +579,8 @@ export class BrowserCapture {
         );
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await withFrozenProgress(page, await this.context.newCDPSession(page), () =>
-        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png" }),
+      return await withFrozenProgress(page, await this.context.newCDPSession(page), (timeout) =>
+        page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png", timeout }),
       );
     } finally {
       await page.close();

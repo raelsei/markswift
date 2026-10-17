@@ -63,33 +63,48 @@ export async function finishAnimations(page: Page): Promise<void> {
  * freezes the renderer's clock; the bars are hidden before and shown after, so their new layout objects start at that
  * instant and paint at progress 0. Pausing while a frame is in flight stalls every later frame (the screenshot never
  * returns), so a 1 px screenshot first waits until the hidden bars' frame is presented. A page without such a bar is
- * left alone; one with it keeps virtual time, set to `advance` (timers still fire) after `shot`.
+ * left alone; one with it keeps virtual time, set to `advance` (timers still fire) after `shot`. `shot` gets the
+ * timeout to pass to the screenshot.
  */
-export async function withFrozenProgress<T>(page: Page, cdp: CDPSession, shot: () => Promise<T>): Promise<T> {
-  const hidden = await page.evaluateHandle(() =>
-    [...document.querySelectorAll<HTMLElement>("progress:indeterminate")]
-      .filter((p) => getComputedStyle(p).appearance !== "none")
-      .map((p) => {
-        const style = p.getAttribute("style");
-        p.style.setProperty("display", "none", "important");
-        return { p, style };
-      }),
-  );
-  try {
-    if (!(await hidden.evaluate((list) => list.length))) return await shot();
-    await cdp.send("Page.captureScreenshot", { clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 } });
-    await cdp.send("Emulation.setVirtualTimePolicy", { policy: "pause" });
-    await hidden.evaluate((list) => {
-      for (const { p, style } of list)
-        if (style === null) p.removeAttribute("style");
-        else p.setAttribute("style", style);
-    });
+export async function withFrozenProgress<T>(
+  page: Page,
+  cdp: CDPSession,
+  shot: (timeout: number) => Promise<T>,
+): Promise<T> {
+  // ponytail: a frame another source starts between the 1 px screenshot and the pause still stalls the shot (seen on
+  // CI); it is retried from a fresh hide. Upgrade: drive frames with HeadlessExperimental.beginFrame.
+  for (let attempt = 1; ; attempt++) {
+    const hidden = await page.evaluateHandle(() =>
+      [...document.querySelectorAll<HTMLElement>("progress:indeterminate")]
+        .filter((p) => getComputedStyle(p).appearance !== "none")
+        .map((p) => {
+          const style = p.getAttribute("style");
+          p.style.setProperty("display", "none", "important");
+          return { p, style };
+        }),
+    );
     try {
-      return await shot();
+      if (!(await hidden.evaluate((list) => list.length))) return await shot(30_000);
+      await cdp.send("Page.captureScreenshot", { clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 } });
+      await cdp.send("Emulation.setVirtualTimePolicy", { policy: "pause" });
+      await hidden.evaluate((list) => {
+        for (const { p, style } of list)
+          if (style === null) p.removeAttribute("style");
+          else p.setAttribute("style", style);
+      });
+      try {
+        return await shot(FROZEN_SHOT_MS);
+      } catch (error) {
+        if (attempt >= FROZEN_ATTEMPTS || !(error instanceof Error && error.name === "TimeoutError")) throw error;
+      } finally {
+        await cdp.send("Emulation.setVirtualTimePolicy", { policy: "advance" });
+      }
     } finally {
-      await cdp.send("Emulation.setVirtualTimePolicy", { policy: "advance" });
+      await hidden.dispose();
     }
-  } finally {
-    await hidden.dispose();
   }
 }
+
+/** A frozen screenshot that has not returned by then has stalled (it takes well under a second otherwise). */
+const FROZEN_SHOT_MS = 8_000;
+const FROZEN_ATTEMPTS = 3;
