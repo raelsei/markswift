@@ -144,10 +144,11 @@ browserTest(
 );
 
 browserTest(
-  "container queries add a capture at the top of each band and drop their capture warning",
+  "container queries add a capture at each band's bounds and drop their capture warning",
   async () => {
     const result = await convertHtml(HTML, { css: CSS, theme: "light", breakpoints: true });
-    expect(result.bands!.map((b) => b.layout.viewport.w)).toEqual([390, 599, 834, 1376]);
+    // Band 0 keeps its 390 capture plus its top (599); band 1 adds its lower bound (600) below the 834 device capture.
+    expect(result.bands!.map((b) => b.layout.viewport.w)).toEqual([390, 599, 600, 834, 1376]);
     expect(result.layout).toBe(result.bands![0]!.layout);
     expect(result.warnings.filter((w) => w.source === "capture" && w.feature === "container-query")).toEqual([]);
   },
