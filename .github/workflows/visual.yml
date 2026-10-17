@@ -28,6 +28,8 @@ jobs:
       RENDERER: ${{ inputs.renderer || (startsWith(github.ref, 'refs/tags/v') && 'ios') || 'mac' }}
       SCOPE: ${{ inputs.scope || ((github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v')) && 'all') || 'pilot' }}
       MARKSWIFT_SIMULATOR: iPhone 17
+      # The baselines' toolchain (provenance); the image's default Xcode is older.
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -62,9 +64,16 @@ jobs:
       - name: Candidate baseline (review, then commit by hand)
         if: ${{ inputs.rebaseline }}
         run: bun run quality --write-baseline "$RUNNER_TEMP/visual" "$RUNNER_TEMP/visual-$SCOPE-$RENDERER.json"
+      # Capture keys contain ':' (`@t:250`, `@open:<layer>`), which upload-artifact refuses; ship the run as one archive.
+      - name: Archive the run
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/visual-$SCOPE-$RENDERER.tgz" -C "$RUNNER_TEMP" visual
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: visual-${{ env.SCOPE }}-${{ env.RENDERER }}
-          path: ${{ runner.temp }}/visual*
+          path: |
+            ${{ runner.temp }}/visual-${{ env.SCOPE }}-${{ env.RENDERER }}.tgz
+            ${{ runner.temp }}/visual-${{ env.SCOPE }}-${{ env.RENDERER }}.json
+          if-no-files-found: warn
           retention-days: 30
