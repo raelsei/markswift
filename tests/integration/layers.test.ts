@@ -374,3 +374,26 @@ describe("native menus (061)", () => {
       30_000,
     );
 });
+
+describe("enter frames (066)", () => {
+  const spec = (html: string) =>
+    ({ screen: "s", theme: "light", url: "http://markswift.invalid/", html, root: "[data-markswift-root]" }) as const;
+  const clip = { x: 0, y: 0, width: 390, height: 300 };
+
+  browserTest("an enter that ended before its animationstart was delivered is still paused", async () => {
+    // 1 ms: Blink delivers animationstart with animationend, when the animation has left getAnimations().
+    const html = `<style>@keyframes enter { from { opacity: 0 } } #c { animation: enter 1ms }</style>${radix()}`;
+    const trigger = (await cap(html)).triggers![0]!;
+    expect((await browser.captureLayerFrame(spec(html), trigger, 0, clip)).length).toBeGreaterThan(0);
+  });
+
+  browserTest("a frame that pauses no animation throws instead of returning the settled look", async () => {
+    const trigger = (await cap(radix())).triggers![0]!;
+    await expect(browser.captureLayerFrame(spec(radix()), trigger, 50, clip)).rejects.toThrow(
+      "s@open:edit-profile@t:50: no animation to pause",
+    );
+    await expect(browser.captureFrame(spec(radix()), { t: 50, reduced: false }, clip)).rejects.toThrow(
+      "s@t:50: no animation to pause",
+    );
+  });
+});

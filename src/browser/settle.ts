@@ -8,10 +8,10 @@ import type { CDPSession, Page } from "playwright-core";
  * layout because DOMSnapshot still reports boxes for them while nothing paints. Lazy images
  * are loaded eagerly so below-the-fold pixels exist.
  * `at` (ms): every animation is paused at that time instead of finished (motion frame captures), including the ones
- * `recordAnimations` kept that already finished (a 100 ms overlay enter, 066).
+ * `recordAnimations` kept that already finished (a 100 ms overlay enter, 066). Resolves to how many it paused.
  */
-export async function settle(page: Page, options: { at?: number } = {}): Promise<void> {
-  await page.evaluate(async (at) => {
+export async function settle(page: Page, options: { at?: number } = {}): Promise<number> {
+  return await page.evaluate(async (at) => {
     for (const img of document.images) if (img.loading === "lazy") img.loading = "eager";
     await Promise.all([...document.images].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
@@ -22,10 +22,12 @@ export async function settle(page: Page, options: { at?: number } = {}): Promise
         for (const c of el.children) (c as HTMLElement).style.setProperty("display", "none", "important");
     }
     const recorded = at === null ? [] : (window.__markswiftStarted ?? []).filter((a) => a.playState === "finished");
+    let paused = 0;
     for (const a of new Set([...document.getAnimations(), ...recorded])) {
       if (at !== null) {
         a.pause();
         a.currentTime = at;
+        paused++;
         continue;
       }
       try {
@@ -37,6 +39,7 @@ export async function settle(page: Page, options: { at?: number } = {}): Promise
     const frame = Promise.withResolvers<void>();
     requestAnimationFrame(() => requestAnimationFrame(() => frame.resolve()));
     await frame.promise;
+    return paused;
   }, options.at ?? null);
 }
 

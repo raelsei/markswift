@@ -4,6 +4,9 @@ All notable changes to Markswift. Versions follow SemVer; the package is publish
 
 ## [Unreleased]
 
+### Fixed
+- `@open:<layer>@t:<ms>` enter frames no longer flake to the settled look on a slow machine: a 100 ms enter whose `animationstart` arrived together with its `animationend` was never recorded, so nothing was paused. Animations are now recorded when the DOM mutation creates them, and a `@t` frame that pauses no animation fails with its key instead of passing the settled look off as the frame.
+
 ## [2.0.0] — 2026-10-17
 
 Breakpoints, overlays and motion, on LayoutDoc 4. `--breakpoints` captures every CSS width band and emits one view

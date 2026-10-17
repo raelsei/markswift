@@ -518,6 +518,7 @@ export class BrowserCapture {
   /**
    * Motion frame: the same page with every animation paused `frame.t` ms in (`reduced`: under
    * `prefers-reduced-motion: reduce`, else `no-preference`), screenshotted at `clip` — the rest capture's root box.
+   * Throws when no animation was paused: the frame would silently be the settled look.
    */
   async captureFrame(
     spec: CaptureRequest,
@@ -529,7 +530,8 @@ export class BrowserCapture {
       if (!frame.reduced) await page.emulateMedia({ reducedMotion: "no-preference" });
       await this.load(page, spec);
       await noTransitions(page);
-      await settle(page, { at: frame.t });
+      if (!(await settle(page, { at: frame.t })))
+        throw new Error(`${spec.screen}@t:${frame.t}: no animation to pause; the frame would be the settled look`);
       await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
         sel: spec.root,
         mark: ROOT_MARK,
@@ -547,6 +549,7 @@ export class BrowserCapture {
   /**
    * `@open:<layer>@t:<ms>` enter frame (066): a fresh page opened like the `@open` capture (058's `openLayer`), the
    * focus ring it took dropped, every animation paused `t` ms in under `no-preference`, screenshotted at `clip`.
+   * Throws when no animation was paused (as `captureFrame`).
    */
   async captureLayerFrame(
     spec: CaptureRequest,
@@ -569,7 +572,10 @@ export class BrowserCapture {
       await cdp.detach();
       if (!opening?.roots.length) throw new Error(`trigger ${trigger.id} opened nothing`);
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-      await settle(page, { at: t });
+      if (!(await settle(page, { at: t })))
+        throw new Error(
+          `${spec.screen}@open:${trigger.id}@t:${t}: no animation to pause; the frame would be the settled look`,
+        );
       await markTransformed(page);
       await cancelAncestorTransforms(page);
       return await withFrozenProgress(page, await this.context.newCDPSession(page), () =>

@@ -201,20 +201,24 @@ export async function readTransitions(page: Page, root: string): Promise<Record<
 /**
  * Starts (or restarts) the page's record of the CSS animations that start from now on, so a short overlay enter or
  * exit can be read after it finished (`readElementAnimations`). Call right before the activation or dismissal.
+ * Each DOM mutation records the CSS animations it created, in the same task: `animationstart` alone misses one when
+ * a busy main thread delivers it with `animationend` (a 100 ms enter on a slow runner) — the finished, fill-none
+ * animation has already left `getAnimations()`. The listener still catches style-only starts (`:hover`, `:focus`).
  */
 export async function recordAnimations(page: Page): Promise<void> {
   await page.evaluate(() => {
     const fresh = !window.__markswiftStarted;
     window.__markswiftStarted = [];
     if (!fresh) return;
-    document.addEventListener(
-      "animationstart",
-      (e) => {
-        const list = window.__markswiftStarted!;
-        for (const a of (e.target as Element).getAnimations()) if (!list.includes(a)) list.push(a);
-      },
-      true,
+    const add = (anims: Animation[]) => {
+      const list = window.__markswiftStarted!;
+      for (const a of anims) if (!list.includes(a)) list.push(a);
+    };
+    new MutationObserver(() => add(document.getAnimations().filter((a) => a instanceof CSSAnimation))).observe(
+      document,
+      { subtree: true, childList: true, attributes: true },
     );
+    document.addEventListener("animationstart", (e) => add((e.target as Element).getAnimations()), true);
   });
 }
 
