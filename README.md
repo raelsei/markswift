@@ -1,6 +1,11 @@
 # Markswift
 
-Convert rendered HTML and CSS into reusable SwiftUI components.
+[![npm](https://img.shields.io/npm/v/markswift)](https://www.npmjs.com/package/markswift)
+[![CI](https://github.com/raelsei/markswift/actions/workflows/ci.yml/badge.svg)](https://github.com/raelsei/markswift/actions/workflows/ci.yml)
+[![Visual](https://github.com/raelsei/markswift/actions/workflows/visual.yml/badge.svg)](https://github.com/raelsei/markswift/actions/workflows/visual.yml)
+
+Convert rendered HTML and CSS into reusable SwiftUI components. How it works, step by step:
+[raelsei.github.io/markswift](https://raelsei.github.io/markswift/).
 
 Markswift captures a page or component in Chrome and writes SwiftUI for iOS 18+ and Swift 6 that looks like the
 browser's rendering and can be reused: repeated siblings become a `ForEach` over a data array with an extracted row
@@ -551,7 +556,10 @@ reviewed and committed by hand. GitHub Actions workflows:
   with `renderer`, `scope` and `rebaseline` to produce a candidate baseline.
 - `behaviour.yml` (`v*` tags, weekly, dispatch): `bun run test:ios-behaviour`.
 - `release.yml` (`v*` tags): after approval in the `npm` environment, checks that the tag equals
-  `v<package version>`, runs lint, typecheck, `test`, the build and the npm smoke test, and publishes with provenance.
+  `v<package version>`, runs lint, typecheck, `test`, the build and the npm smoke test, and publishes with provenance
+  through npm trusted publishing (OIDC; no npm token is stored).
+- `pages.yml` (pushes to `main` that touch `site/`, dispatch): builds the Astro docs site in `site/` and deploys it to
+  GitHub Pages. Locally: `cd site && bun install && bun run dev`.
 
 | Path | Responsibility |
 | --- | --- |
@@ -569,6 +577,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 | `tests/` | Unit, architecture, integration and conformance (fixtures, inventory, baselines) suites |
 | `tools/verify/`, `tools/quality.ts` | Swift typecheck, native rendering, image comparison and the visual gate |
 | `playground/` | Local workbench and the separately deployable conversion service |
+| `site/` | Documentation site (Astro, GitHub Pages) |
 
 ## Roadmap after 2.0
 
