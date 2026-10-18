@@ -5,7 +5,7 @@
 [![Visual](https://github.com/raelsei/markswift/actions/workflows/visual.yml/badge.svg)](https://github.com/raelsei/markswift/actions/workflows/visual.yml)
 
 Convert rendered HTML and CSS into reusable SwiftUI components. How it works, step by step:
-[raelsei.github.io/markswift](https://raelsei.github.io/markswift/).
+[koray.dev/markswift](https://koray.dev/markswift/).
 
 Markswift captures a page or component in Chrome and writes SwiftUI for iOS 18+ and Swift 6 that looks like the
 browser's rendering and can be reused: repeated siblings become a `ForEach` over a data array with an extracted row
