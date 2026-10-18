@@ -7,7 +7,8 @@
       "!tests/conformance/fixtures",
       "!tests/conformance/baselines",
       "!**/*.html",
-      "!src/swift/runtime/*.swift"
+      "!src/swift/runtime/*.swift",
+      "!site"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },

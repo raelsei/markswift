@@ -1,0 +1,170 @@
+{
+  "shadcn-card": {
+    "key": "shadcn-card-390-light-app",
+    "fixture": "components/shadcn-card.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9920897536507716,
+    "mismatch": 0.004695365796283228,
+    "cssSize": {
+      "w": 390,
+      "h": 545
+    },
+    "image": {
+      "width": 600,
+      "height": 838
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "tw-cards": {
+    "key": "tw-cards-390-light-app",
+    "fixture": "components/tw-cards.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9883080227069485,
+    "mismatch": 0.008993758434547909,
+    "cssSize": {
+      "w": 390,
+      "h": 760
+    },
+    "image": {
+      "width": 600,
+      "height": 1169
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "overlay-dialog-open": {
+    "key": "overlay-dialog-390-light-app@open:edit-profile",
+    "fixture": "components/overlay-dialog.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9726448389744531,
+    "mismatch": 0.01006957102928667,
+    "cssSize": {
+      "w": 390,
+      "h": 844
+    },
+    "image": {
+      "width": 600,
+      "height": 1298
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "shadcn-table": {
+    "key": "shadcn-table-390-light-app",
+    "fixture": "components/shadcn-table.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9690198423030519,
+    "mismatch": 0.008784425451092117,
+    "cssSize": {
+      "w": 390,
+      "h": 297
+    },
+    "image": {
+      "width": 600,
+      "height": 457
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "grid-placement": {
+    "key": "grid-placement-390-light-app",
+    "fixture": "css-layout/grid-placement.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9946840353135954,
+    "mismatch": 0.00606959706959707,
+    "cssSize": {
+      "w": 390,
+      "h": 700
+    },
+    "image": {
+      "width": 600,
+      "height": 1077
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "motion-timing-t250": {
+    "key": "motion-timing-390-light-app@t:250",
+    "fixture": "css-misc/motion-timing.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9937209424997662,
+    "mismatch": 0.009855403348554033,
+    "cssSize": {
+      "w": 390,
+      "h": 438
+    },
+    "image": {
+      "width": 600,
+      "height": 674
+    },
+    "renderer": "iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "c64d6c8",
+    "capturedAt": "2026-10-16T15:50:42.084Z"
+  },
+  "bp-dialog-footer-390": {
+    "key": "bp-dialog-footer-390-light-app@bp",
+    "fixture": "breakpoints/bp-dialog-footer.html",
+    "viewportWidth": 390,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9960856420271704,
+    "mismatch": 0.00042353479853479855,
+    "cssSize": {
+      "w": 390,
+      "h": 224
+    },
+    "image": {
+      "width": 600,
+      "height": 345
+    },
+    "renderer": "iPad Pro 13-inch (M5) com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "29355ed",
+    "capturedAt": "2026-10-16T14:27:54.136Z"
+  },
+  "bp-dialog-footer-640": {
+    "key": "bp-dialog-footer-640-light-app@bp",
+    "fixture": "breakpoints/bp-dialog-footer.html",
+    "viewportWidth": 640,
+    "theme": "light",
+    "mode": "app",
+    "ssim": 0.9911305803505316,
+    "mismatch": 0.0008962673611111111,
+    "cssSize": {
+      "w": 640,
+      "h": 180
+    },
+    "image": {
+      "width": 960,
+      "height": 270
+    },
+    "renderer": "iPad Pro 13-inch (M5) com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+    "chrome": "Chromium 153.0.8010.12",
+    "sourceRevision": "29355ed",
+    "capturedAt": "2026-10-16T14:27:54.136Z"
+  }
+}

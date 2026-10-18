@@ -1,0 +1,63 @@
+---
+import evidence from "../data/evidence.json";
+
+interface Props {
+  slug: keyof typeof evidence;
+  wipe?: boolean;
+  wide?: boolean;
+  eager?: boolean;
+}
+
+const { slug, wipe = false, wide = false, eager = false } = Astro.props;
+const e = evidence[slug];
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const src = (side: string) => `${base}evidence/${slug}-${side}.webp`;
+const device = e.renderer.replace(/ com\.apple\.CoreSimulator\.SimRuntime\.iOS-(\d+)-(\d+)$/, " · iOS $1.$2");
+const chrome = e.chrome.replace("Chromium", "Chrome");
+const loading = eager ? "eager" : "lazy";
+const state = e.key.includes("@") ? e.key.slice(e.key.indexOf("@") + 1) : undefined;
+---
+
+<figure class="plate" style={`--w: ${e.cssSize.w}px`}>
+  {
+    wipe ? (
+      <>
+        <div class="wipe-sides" aria-hidden="true">
+          <span class="label">{chrome}</span>
+          <span class="label">SwiftUI · {device}</span>
+        </div>
+        <div class="wipe" data-wipe>
+          <img src={src("chrome")} width={e.image.width} height={e.image.height} alt={`Chrome rendering of ${e.fixture}`} loading={loading} />
+          <img class="over" src={src("swiftui")} width={e.image.width} height={e.image.height} alt={`SwiftUI rendering of the generated view, ${device}`} loading={loading} />
+          <span class="cut" />
+        </div>
+        <label class="wipe-control">
+          <span>Chrome ← → SwiftUI</span>
+          <input type="range" min="0" max="100" value="50" data-wipe-input aria-label="Move the cut between the Chrome and the SwiftUI rendering" />
+        </label>
+      </>
+    ) : (
+      <div class:list={["pair", { wide }]}>
+        <figure class="side">
+          <figcaption class="label">{chrome}</figcaption>
+          <img src={src("chrome")} width={e.image.width} height={e.image.height} alt={`Chrome rendering of ${e.fixture}`} loading={loading} />
+        </figure>
+        <figure class="side">
+          <figcaption class="label">SwiftUI · {device}</figcaption>
+          <img src={src("swiftui")} width={e.image.width} height={e.image.height} alt={`SwiftUI rendering of the generated view, ${device}`} loading={loading} />
+        </figure>
+      </div>
+    )
+  }
+  <dl class="ledger">
+    <div><dt>Fixture</dt><dd><code>{e.fixture.replace(/^.*\//, "")}</code></dd></div>
+    <div><dt>Width</dt><dd>{e.cssSize.w} px</dd></div>
+    <div><dt>Mode</dt><dd>{e.mode}</dd></div>
+    {state && <div><dt>State</dt><dd><code>{state}</code></dd></div>}
+    <div class="score"><dt>SSIM</dt><dd>{e.ssim.toFixed(4)}</dd></div>
+  </dl>
+  <figcaption>
+    <slot />
+    {" "}Capture <code>{e.key}</code>, revision <code>{e.sourceRevision}</code>.
+  </figcaption>
+</figure>
