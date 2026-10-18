@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { artifactRevision, github, type Row } from "../lib/book";
+import { artifactRevision, github, lemma, type Row } from "../lib/book";
 import transcript from "../artifacts/transcript.txt?raw";
 import config from "../artifacts/markswift.json?raw";
 import pkg from "../artifacts/Package.swift?raw";
@@ -42,17 +42,18 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [1, "The version every generated file’s header carries."],
-  [2, "<code>--out</code> must not exist yet. Three files: the view, its <code>+Tokens</code> palette and the runtime, plus the <code>.markswift.json</code> manifest."],
-  [3, "<code>--update</code> rewrites the files the manifest lists and never touches a file it did not write."],
-  [[5, 6], "Losses go to stderr as notes; chapter 9 reads them."],
-  [[7, 8], "One browser session for every component of the config, one Swift package, notes per component."],
-  [[9, 10], "After a line was added to <code>HelloCard.swift</code> by hand, <code>--update</code> refuses and exits 2 (the status echoed by the shell); <code>--update --force</code> discards the edit."],
-  [[11, 14, 15, 16], "A local Swift package: tools 6.2, iOS 18 and macOS 15, one library product. Add it with File › Add Package Dependencies › Add Local…"],
-  [[18, 19], "One public view per component in <code>Sources/CardKit/</code>, beside one shared <code>MarkswiftPalette.swift</code> and runtime."],
-  ["Modes", "Compiled in <code>fidelity</code> mode (<code>--mode fidelity</code>), the same card gets <code>.font(.system(size: 24.0, …))</code> and <code>.frame(height: 28.0, …)</code> where app mode writes <code>textSize24</code> and lets the text grow."],
-  ["Xcode", "Add every generated <code>.swift</code> file to one target; add <code>Fonts/</code> and <code>Images/</code> as resources when a conversion writes them."],
-  ["API", `<code>convert</code>, <code>convertHtml</code>, <code>compileLayout</code> and <code>buildLibrary</code> do the same from code; see the <a href="${github}#library-api">README</a>.`],
+  [1, lemma("<code>--version</code>", "the version every generated header carries")],
+  [2, lemma("<code>--out</code>, new", "view, <code>+Tokens</code>, runtime; plus the <code>.markswift.json</code> manifest")],
+  [3, lemma("<code>--update</code>", "rewrites what the manifest lists, never a file it did not write")],
+  [[5, 6], lemma("losses", "notes on stderr; chapter 9 reads them")],
+  [[7, 8], lemma("<code>build</code>", "one browser session, one Swift package, notes per component")],
+  [[9, 10], lemma("a line added to <code>HelloCard.swift</code>", "refused, exit 2 (echoed by the shell); <code>--update --force</code> discards it")],
+  [[11, 14, 15, 16], lemma("<code>library</code>", "a local package: tools 6.2, iOS 18, macOS 15; File › Add Package Dependencies › Add Local…")],
+  [[18, 19], lemma("<code>components</code>", "one public view each in <code>Sources/CardKit/</code>, one shared palette and runtime")],
+  ["Modes", lemma("<code>--mode fidelity</code>", "<code>.font(.system(size: 24.0, …))</code>, <code>.frame(height: 28.0, …)</code> where app writes <code>textSize24</code>; compiled from the saved card")],
+  ["Xcode", lemma("generated <code>.swift</code>", "one target; <code>Fonts/</code>, <code>Images/</code> as resources when written")],
+  ["API", lemma("from code", `<code>convert</code>, <code>convertHtml</code>, <code>compileLayout</code>, <code>buildLibrary</code>; <a href="${github}#library-api">README</a>`)],
+  ["Run", lemma("the terminal", `a recording: <code>bun src/cli.ts</code> for <code>npx markswift</code>, checkout <code>${artifactRevision}</code>`)],
 ];
 ---
 
@@ -71,15 +72,8 @@ const notes: Array<[number | number[] | string, string]> = [
         and writes one local Swift package. Output defaults to <code>app</code> mode, the product;
         <code>fidelity</code> pins the captured geometry and exists for verification.
       </p>
-    </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Install</h2>
       <pre><code>npm install --save-dev markswift</code></pre>
-      <p>
-        The terminal on the spread is a recording: each command ran as <code>bun src/cli.ts</code> in a checkout at
-        <code>{artifactRevision}</code>, which the README gives as the stand-in for <code>npx markswift</code>.
-      </p>
-    </aside>
+    </div>
   </header>
 
   <Spread
@@ -88,5 +82,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "Output · recto", note: "what comes back", sources: { output, "CardKit/Package.swift": pkg } }}
     rows={rows}
     notes={notes}
+    lit={9}
   />
 </Book>

@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { github, run, type Row } from "../lib/book";
+import { esc, github, lemma, run, type Row } from "../lib/book";
 import html from "../artifacts/inbox.html?raw";
 import swift from "../artifacts/InboxNote.swift?raw";
 import transcript from "../artifacts/transcript.txt?raw";
@@ -12,7 +12,7 @@ const printed = run(transcript, command).split("\n");
 const note = (feature: string) => {
   const line = printed.find((l) => l.startsWith("Note ") && l.includes(` ${feature}: `));
   if (!line) throw new Error(`no ${feature} note in the inbox run`);
-  return `<code>${line.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code>`;
+  return `<code>${esc(line)}</code>`;
 };
 
 const rows: Row[] = [
@@ -44,12 +44,14 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [2, `${note("position: sticky")} The heading stays where it was captured; it does not pin while the page scrolls.`],
-  [[4, 6], `${note("@onclick")} The words survive; the tap does not.`],
-  [8, `${note("writing-mode")} The text is drawn horizontally.`],
-  [[10, 13, 17], `${note("flex-wrap")} The row keeps Chrome’s line division in a measured layout.`],
-  [[14, 15, 16], `${note("flex-grow")} Each item keeps its measured width.`],
-  ["Levels", "<span class=\"lv\">approximated</span>: drawn, with a stated loss. <span class=\"lv\">unmapped</span>: not reproduced. The bracket lists node ids; <code>3/0</code> is the first child of node 3."],
+  [2, lemma("<code>position:sticky</code>", `${note("position: sticky")}; drawn where captured, never pinned`)],
+  [[4, 6], lemma("<code>onclick</code>", `${note("@onclick")}; the words stay, the tap goes`)],
+  [8, lemma("<code>writing-mode:vertical-rl</code>", `${note("writing-mode")}; drawn horizontally`)],
+  [[10, 13, 17], lemma("<code>flex-wrap:wrap</code>", `${note("flex-wrap")}`)],
+  [[14, 15, 16], lemma("<code>flex:1</code>, <code>2</code>, <code>1</code>", `${note("flex-grow")}`)],
+  ["Levels", lemma("<span class=\"lv\">approximated</span>, <span class=\"lv\">unmapped</span>", "drawn with a stated loss; not reproduced. Brackets list node ids: <code>3/0</code>, node 3’s first child")],
+  ["Run", lemma(`<code>$ ${esc(command)}</code>`, `<code>${esc(printed[1]!)}</code>, then the five notes above`)],
+  ["More", lemma("README", `<a href="${github}#not-translated">Not translated</a>, <a href="${github}#known-gaps">Known gaps</a>`)],
 ];
 ---
 
@@ -69,14 +71,6 @@ const notes: Array<[number | number[] | string, string]> = [
         them.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <pre><code>{`$ ${command}\n${printed[1]}`}</code></pre>
-      <p>
-        Its five notes stand in the apparatus. The full lists: <a href={`${github}#not-translated`}>Not translated</a>
-        and <a href={`${github}#known-gaps`}>Known gaps</a> in the README.
-      </p>
-    </aside>
   </header>
 
   <Spread
@@ -85,5 +79,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "SwiftUI · recto", note: "what came through", sources: { "InboxNote.swift": swift } }}
     rows={rows}
     notes={notes}
+    lit={8}
   />
 </Book>

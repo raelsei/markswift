@@ -10,6 +10,14 @@
   font-display: swap;
 }
 @font-face {
+  font-family: "Literata";
+  src: url("../../node_modules/@fontsource-variable/literata/files/literata-latin-opsz-italic.woff2")
+    format("woff2-variations");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
   font-family: "Alegreya Sans SC";
   src: url("../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-500-normal.woff2")
     format("woff2");
@@ -170,7 +178,8 @@ code {
 }
 .edition {
   margin: 0.2rem 1.6rem 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  font-style: italic;
   color: var(--rail-2);
 }
 .toc-head {
@@ -199,9 +208,11 @@ code {
 .toc .no {
   width: 1.1rem;
   text-align: right;
-  font-size: 0.8125rem;
+  font-family: var(--serif);
+  font-size: 0.9rem;
+  font-variant-numeric: oldstyle-nums;
+  letter-spacing: 0;
   color: var(--rail-2);
-  font-variant-numeric: tabular-nums;
 }
 .toc .t {
   flex: 1;
@@ -235,11 +246,10 @@ code {
 .rail-foot code {
   display: block;
   padding: 0.55rem 0.7rem;
-  overflow-x: auto;
-  white-space: nowrap;
   background: var(--cloth-d);
   color: var(--paper);
   font-size: 0.72rem;
+  line-height: 1.5;
   user-select: all;
 }
 .rail-foot ul {
@@ -279,14 +289,16 @@ code {
 
 .opening {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
   gap: 3.5rem;
   align-items: start;
-  padding: 2.4rem 0 1.9rem;
+  padding: 2rem 0 1.6rem;
+}
+.opening:has(> .stages) {
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
 }
 h1 {
-  margin: 0 0 1rem;
-  font-size: clamp(1.9rem, 1.35rem + 1.5vw, 2.5rem);
+  margin: 0 0 0.8rem;
+  font-size: clamp(1.9rem, 1.4rem + 1.2vw, 2.3rem);
   font-weight: 600;
   line-height: 1.14;
   letter-spacing: -0.012em;
@@ -295,6 +307,7 @@ h1 {
 h1 .no {
   margin-right: 0.3em;
   font-weight: 400;
+  font-variant-numeric: oldstyle-nums;
   color: var(--cloth);
 }
 .lede p {
@@ -306,50 +319,72 @@ h1 .no {
   margin-bottom: 0;
 }
 
-.provenance {
+.lede pre {
+  max-width: 41rem;
+  margin: 0.9rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--leaf);
+  border: 1px solid var(--rule);
+  font-size: 0.95rem;
+}
+
+/* Chapter 1's side column: the stages, each with its source and its chapter. */
+.stages {
   padding-top: 0.6rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--ink-2);
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
-.provenance h2 {
-  margin: 0 0 0.45rem;
+.stages h2 {
+  margin: 0 0 0.4rem;
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--cloth);
 }
-.provenance pre {
-  margin: 0 0 0.6rem;
-  padding: 0.5rem 0.7rem;
-  background: var(--leaf);
-  border: 1px solid var(--rule);
-  color: var(--ink);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 0.95em;
+.stages ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.provenance p {
-  margin: 0 0 0.5rem;
-  overflow-wrap: anywhere;
+.stages a {
+  display: grid;
+  grid-template-columns: 1.3rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px dotted var(--rule);
+  text-decoration: none;
+}
+.stages .no {
+  font-variant-numeric: oldstyle-nums;
+  color: var(--cloth);
+}
+.stages a:hover .t {
+  text-decoration: underline 1px;
+  text-underline-offset: 0.22em;
+}
+.stages code {
+  font-size: 0.72rem;
+  color: var(--ink-2);
 }
 
 /* The spread: verso | shared line numbers | recto. */
 
 .spread {
-  --seam: calc(50% - var(--gut) / 2);
+  /* The verso is the narrower page; the recto, usually code, takes the rest. */
+  --vw: min(26rem, 40%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--vw)) var(--gut) minmax(0, 1fr);
   padding-bottom: 0.9rem;
   border: 1px solid var(--rule);
   background: linear-gradient(
     to right,
-    var(--leaf) var(--seam),
-    var(--rule) var(--seam) calc(var(--seam) + 1px),
-    var(--paper) calc(var(--seam) + 1px) calc(100% - var(--seam) - 1px),
-    var(--rule) calc(100% - var(--seam) - 1px) calc(100% - var(--seam)),
-    var(--leaf) calc(100% - var(--seam))
+    var(--leaf) var(--vw),
+    var(--rule) var(--vw) calc(var(--vw) + 1px),
+    var(--paper) calc(var(--vw) + 1px) calc(var(--vw) + var(--gut) - 1px),
+    var(--rule) calc(var(--vw) + var(--gut) - 1px) calc(var(--vw) + var(--gut)),
+    var(--leaf) calc(var(--vw) + var(--gut))
   );
 }
 
@@ -388,9 +423,13 @@ h1 .no {
   text-indent: -2ch;
   font: 0.78rem/1.34rem var(--mono);
   white-space: pre-wrap;
-  overflow-wrap: break-word;
+  overflow-x: auto;
+  scrollbar-width: thin;
   background: var(--lit, transparent);
   color: var(--ink);
+}
+.c .t {
+  white-space: nowrap;
 }
 .c.v {
   grid-column: 1;
@@ -447,7 +486,7 @@ h1 .no {
 
 .apparatus {
   display: grid;
-  grid-template-columns: 9rem minmax(0, 1fr);
+  grid-template-columns: 12rem minmax(0, 1fr);
   gap: 1rem 2rem;
   margin-top: 1.3rem;
   padding-top: 0.9rem;
@@ -460,6 +499,17 @@ h1 .no {
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+  color: var(--cloth);
+}
+.gloss {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.sep {
+  padding: 0 0.15em;
   color: var(--cloth);
 }
 .apparatus ul {
@@ -669,11 +719,11 @@ h1 .no {
 
 /* The opening keeps its side column only where the reading column still gets its full measure. */
 @media (max-width: 75.99rem) {
-  .opening {
+  .opening:has(> .stages) {
     grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
   }
-  .provenance {
+  .stages {
     max-width: 41rem;
   }
 }

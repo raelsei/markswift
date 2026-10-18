@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { type Row } from "../lib/book";
+import { lemma, type Row } from "../lib/book";
 import layout from "../artifacts/WelcomeCard.layout.json?raw";
 import ir from "../artifacts/WelcomeCard.ir.json?raw";
 
@@ -53,16 +53,17 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [[1, 20, 36], "Each element becomes one node and keeps its capture id: <code>root</code>, <code>0</code>, <code>1</code>."],
-  [[6, 38], "The card’s 24 px bottom padding plus the paragraph’s 16 px bottom margin: the stack’s bottom padding is 40."],
-  [[10, 11], "A confidence per node, <span class=\"lv\">mapped</span> here, beside the list of what it lost: nothing."],
-  [[13, 14], "Block children laid out top to bottom read as a vertical stack."],
-  [15, "CSS collapses the heading’s 19.92 px bottom margin with the paragraph’s 16 px top margin; the gap Chrome drew, 19.9 px, becomes the stack’s spacing."],
-  [17, "The heading’s top margin cannot collapse through the padded card. Padding does not explain that offset, so it is kept as a lead inset."],
-  [[21, 23], "Every node keeps the frame Chrome measured, for verification and as a fallback."],
-  [[27, 28], "<code>&lt;h2&gt;</code> is passed on to assistive technology as a level-2 heading."],
-  [[31, 32, 42, 43], "Text nodes remember the tag they came from."],
-  [34, "The words carry over unchanged; the run beside them records the system font at 24 px, weight 700, and its colour."],
+  [[1, 20, 36], lemma("each element", "one node, same id: <code>root</code>, <code>0</code>, <code>1</code>")],
+  [[6, 38], lemma("24 px padding + 16 px margin", "bottom padding 40")],
+  [[10, 11], lemma("losses", "none listed; confidence <span class=\"lv\">mapped</span>")],
+  [[13, 14], lemma("blocks, top to bottom", "a vertical stack")],
+  [15, lemma("19.92 px and 16 px margins", "collapsed by CSS; the 19.9 px gap Chrome drew is the spacing")],
+  [17, lemma("<code>margin-top</code> through the padded card", "an offset padding does not explain: lead inset 19.91")],
+  [[21, 23], lemma("<code>bounds</code>", "<code>frame</code>, kept for verification and as a fallback")],
+  [[27, 28], lemma("<code>&lt;h2&gt;</code>", "a level-2 heading for assistive technology")],
+  [[31, 32, 42, 43], lemma("<code>&lt;h2&gt;</code>, <code>&lt;p&gt;</code>", "text nodes that keep their tag")],
+  [34, lemma("<code>Hello SwiftUI</code>", "unchanged; the run records system font, 24 px, 700, colour")],
+  ["Run", lemma("<code>inferScreen(r.layout, \"WelcomeCard-light\")</code>", "<code>src/analysis/infer.ts</code>, inside every conversion, not public API; written out by <code>recompile.ts</code>")],
 ];
 ---
 
@@ -82,14 +83,6 @@ const notes: Array<[number | number[] | string, string]> = [
         stack.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <pre><code>inferScreen(r.layout, "WelcomeCard-light")</code></pre>
-      <p>
-        The recto is the IR that <code>src/analysis/infer.ts</code> builds from the verso’s document, written out as
-        JSON by <code>recompile.ts</code>. The library does this inside every conversion; it is not public API.
-      </p>
-    </aside>
   </header>
 
   <Spread
@@ -98,5 +91,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "Semantic IR · recto", note: "what they mean", sources: { "WelcomeCard.ir.json": ir } }}
     rows={rows}
     notes={notes}
+    lit={15}
   />
 </Book>

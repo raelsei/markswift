@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { run, type Row } from "../lib/book";
+import { lemma, runEntry, type Row } from "../lib/book";
 import html from "../artifacts/welcome.html?raw";
 import layout from "../artifacts/WelcomeCard.layout.json?raw";
 import transcript from "../artifacts/transcript.txt?raw";
@@ -54,16 +54,24 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [1, "The capture root, marked <code>data-markswift-root</code>; its attributes are kept as written."],
-  [3, "Colours come back as Chrome computed them: <code>#f4f4f5</code> is <code>rgb(244, 244, 245)</code>."],
-  [[5, 11], "Shorthands come back as longhands: four corner radii, four paddings (one of each shown)."],
-  [[9, 40], "No height was written, yet the computed style reports the used one in pixels. <code>preferredSize</code>, read through CSS Typed OM, keeps what was authored: <code>auto</code>."],
-  [[13, 39], "The width twice: computed (13) and authored (39), so analysis can tell a fixed width from <code>auto</code>."],
-  [[17, 18], "The layout box in root coordinates: 368 = 320 + 2 × 24 padding."],
-  [[20, 22, 24, 26], "Nothing was written for <code>&lt;h2&gt;</code>; Chrome’s defaults arrive resolved: 24 px, weight 700, a 19.92 px (0.83 em) margin."],
-  [[28, 34], "Text nodes keep their words and get a box of their own."],
-  [36, "Each element has an id, its path from the root; the next stages keep it."],
-  ["Styles", `Every element carries the same ${styles} computed properties in alphabetical order; this page shows the ones the card sets or inherits.`],
+  [1, lemma("<code>data-markswift-root</code>", "the capture root; attributes kept as written")],
+  [3, lemma("<code>#f4f4f5</code>", "<code>rgb(244, 244, 245)</code>, as Chrome computed it")],
+  [[5, 11], lemma("<code>border-radius</code>, <code>padding</code>", "four longhands each; one shown")],
+  [[9, 40], lemma("no height written", "computed: the used px; <code>preferredSize</code> (Typed OM): <code>auto</code>")],
+  [[13, 39], lemma("<code>width: 320px</code>", "computed (13) and authored (39), fixed told from <code>auto</code>")],
+  [[17, 18], lemma("layout box", "368 = 320 + 2 × 24 padding, in root coordinates")],
+  [[20, 22, 24, 26], lemma("<code>&lt;h2&gt;</code>, nothing written", "Chrome’s defaults resolved: 24 px, 700, 19.92 px (0.83 em)")],
+  [[28, 34], lemma("text nodes", "their words and a box of their own")],
+  [36, lemma("<code>\"id\": \"1\"</code>", "the path from the root; later stages keep it")],
+  ["Styles", lemma(`${styles} properties`, "on every element, alphabetical; those the card sets or inherits shown")],
+  [
+    "Run",
+    runEntry(
+      transcript,
+      "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome",
+      `; the recto is <code>result.layout</code> of <code>convert(&lbrace; file: "welcome.html" &rbrace;)</code>, ${layoutLines} lines of JSON`,
+    ),
+  ],
 ];
 ---
 
@@ -82,14 +90,6 @@ const notes: Array<[number | number[] | string, string]> = [
         <code>rgb()</code>, and the browser’s own defaults wherever the author set nothing.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <pre><code>{run(transcript, "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome")}</code></pre>
-      <p>
-        The recto is <code>result.layout</code> of the same conversion through the library,
-        <code>convert(&lbrace; file: "welcome.html" &rbrace;)</code>, saved as JSON: {layoutLines} lines.
-      </p>
-    </aside>
   </header>
 
   <Spread
@@ -98,5 +98,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "LayoutDoc · recto", note: "what the snapshot recorded", sources: { "WelcomeCard.layout.json": layout } }}
     rows={rows}
     notes={notes}
+    lit={3}
   />
 </Book>

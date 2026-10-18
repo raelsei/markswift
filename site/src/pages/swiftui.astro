@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { run, type Row } from "../lib/book";
+import { lemma, runEntry, type Row } from "../lib/book";
 import ir from "../artifacts/WelcomeCard.ir.json?raw";
 import swift from "../artifacts/WelcomeCard.swift?raw";
 import transcript from "../artifacts/transcript.txt?raw";
@@ -43,17 +43,25 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [[1, 5], "The root node becomes the view: the struct, named by <code>--name</code>, and a body property named after the node id, <code>v_root</code>."],
-  [[2, 3, 15, 21], "Text sizes become <code>@ScaledMetric</code> properties relative to a text style, so they follow Dynamic Type."],
-  [[6, 7, 8], "The vertical stack and its measured spacing."],
-  [[9, 15, 21], "<code>stretch</code>: children align <code>.leading</code> and take the full width."],
-  [[11, 18], "The lead inset becomes top padding on the first child."],
-  [[13, 19], "<code>Text(verbatim:)</code> shows the words as written; they are not looked up as localization keys."],
-  [[14, 20], "Text wraps to the width it is offered and takes the height it needs: in app mode boxes grow with their text."],
-  [[16, 22], "Weight 700 is <code>.bold</code>, 400 <code>.regular</code>."],
-  [17, "The level-2 heading of chapter 4, line 27: a header trait and <code>.accessibilityHeading(.h2)</code>."],
-  [23, "The IR’s padding of chapter 4, lines 3 to 8 (top, right, bottom, left), as <code>EdgeInsets</code>."],
-  [25, "The fill becomes the palette token <code>Palette.canvas</code> (chapter 6) behind a 16-point rounded rectangle."],
+  [[1, 5], lemma("<code>\"root\"</code>", "the view: <code>struct WelcomeCard</code> (<code>--name</code>) and <code>v_root</code> (node id)")],
+  [[2, 3, 15, 21], lemma("<code>\"size\"</code>", "<code>@ScaledMetric</code> relative to a text style: follows Dynamic Type")],
+  [[6, 7, 8], lemma("<code>stack</code>, <code>v</code>, <code>19.9</code>", "<code>VStack(spacing: 19.9)</code>")],
+  [[9, 15, 21], lemma("<code>stretch</code>", "<code>.leading</code>, each child <code>maxWidth: .infinity</code>")],
+  [[11, 18], lemma("<code>leadInset</code>", "<code>.padding(.top, 19.91)</code> on the first child")],
+  [[13, 19], lemma("<code>\"text\"</code>", "<code>Text(verbatim:)</code>: words as written, never a localization key")],
+  [[14, 20], lemma("app mode", "text wraps to the offered width and takes the height it needs")],
+  [[16, 22], lemma("<code>700</code>, <code>400</code>", "<code>.bold</code>, <code>.regular</code>")],
+  [17, lemma("heading 2 (chapter 4, line 27)", "<code>.isHeader</code> and <code>.accessibilityHeading(.h2)</code>")],
+  [23, lemma("padding (chapter 4, lines 3–8)", "<code>EdgeInsets</code>, top, leading, bottom, trailing")],
+  [25, lemma("fill, radius 16", "<code>Palette.canvas</code> (chapter 6) in a <code>RoundedRectangle</code>")],
+  [
+    "Run",
+    runEntry(
+      transcript,
+      "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome",
+      "; the recto byte for byte what the library returned as <code>code</code>",
+    ),
+  ],
 ];
 ---
 
@@ -73,11 +81,6 @@ const notes: Array<[number | number[] | string, string]> = [
         starts with the version line that wrote it.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <pre><code>{run(transcript, "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome")}</code></pre>
-      <p>The recto is <code>WelcomeCard.swift</code> from that run, byte for byte what the library returned as <code>code</code>.</p>
-    </aside>
   </header>
 
   <Spread
@@ -86,5 +89,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "SwiftUI · recto", note: "what Markswift wrote", sources: { "WelcomeCard.swift": swift } }}
     rows={rows}
     notes={notes}
+    lit={7}
   />
 </Book>

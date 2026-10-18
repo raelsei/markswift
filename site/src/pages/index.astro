@@ -1,10 +1,15 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { artifactRevision, run, version, type Row } from "../lib/book";
+import { artifactRevision, chapters, lemma, runEntry, type Row } from "../lib/book";
 import html from "../artifacts/hello.html?raw";
 import swift from "../artifacts/HelloCard.swift?raw";
 import transcript from "../artifacts/transcript.txt?raw";
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+// Chapters 2 to 7 are the stages, in pipeline order, each with the source it lives in.
+const sources = ["src/browser/", "src/model/layout.ts", "src/analysis/", "src/swift/", "src/swift/runtime/", "tools/quality.ts"];
+const stages = sources.map((path, i) => ({ path, no: i + 2, ...chapters[i + 1]! }));
 
 const rows: Row[] = [
   ["## hello.html", "## HelloCard.swift"],
@@ -27,12 +32,20 @@ const rows: Row[] = [
 ];
 
 const notes: Array<[number | number[] | string, string]> = [
-  [1, "The element marked <code>data-markswift-root</code> becomes the view; <code>--name HelloCard</code> names it."],
-  [2, "<code>font:18px system-ui</code> becomes an 18-point system size that scales with Dynamic Type."],
-  [5, "The text keeps its words as written, <code>Text(verbatim:)</code>, with the weight and colour Chrome computed."],
-  [7, "<code>height:80px</code> becomes a floor, <code>minHeight: 80.0</code>: in app mode the box grows with its text."],
-  [12, "<code>width:240px</code> sizes the preview only; the view fills the width it is offered (line 7)."],
-  ["Losses", "None. This run reported nothing <span class=\"lv\">approximated</span> or <span class=\"lv\">unmapped</span>; chapter 9 shows a run that does."],
+  [1, lemma("<code>data-markswift-root</code>", "the view; <code>--name HelloCard</code> names it")],
+  [2, lemma("<code>font:18px system-ui</code>", "<code>@ScaledMetric</code> 18 pt, follows Dynamic Type")],
+  [5, lemma("<code>Hello Markswift</code>", "<code>Text(verbatim:)</code>, words as written, Chrome’s weight and colour")],
+  [7, lemma("<code>height:80px</code>", "<code>minHeight: 80.0</code>, a floor: the box grows with its text")],
+  [12, lemma("<code>width:240px</code>", "the preview frame only; the view fills its width (7)")],
+  ["Losses", lemma("<span class=\"lv\">approximated</span>, <span class=\"lv\">unmapped</span>", "none in this run; chapter 9 has five")],
+  [
+    "Run",
+    runEntry(
+      transcript,
+      "npx markswift convert hello.html --name HelloCard --out ./generated-hello",
+      `; checkout <code>${artifactRevision}</code>, <code>bun src/cli.ts</code> for <code>npx markswift</code>; the README’s quick-start markup on four lines`,
+    ),
+  ],
 ];
 ---
 
@@ -42,24 +55,27 @@ const notes: Array<[number | number[] | string, string]> = [
       <h1><span class="no">1</span>How Markswift turns a rendered page into SwiftUI</h1>
       <p>
         Markswift opens your HTML and CSS in Chrome, writes down what the browser actually laid out, and turns that
-        record into SwiftUI for iOS 18+ and Swift 6 that looks like the browser’s rendering.
-      </p>
-      <p>
-        This edition sets each step as a spread: its input on the left page, its output on the right, with shared line
-        numbers. Point at a number, or tab to it, to light the line on both pages and its note in the apparatus. Every
-        excerpt is verbatim Markswift {version} input or output; <code>…</code> and <code>// …</code> mark cuts.
-        Below is the README’s one-line card; chapters 2 to 6 follow a slightly larger one through every stage.
+        record into SwiftUI for iOS 18+ and Swift 6 that looks like the browser’s rendering. Each chapter sets one stage
+        as a spread, its input on the left page and its output on the right; chapters 2 to 6 follow one small card
+        through all of them.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <pre><code>{run(transcript, "npx markswift convert hello.html --name HelloCard --out ./generated-hello")}</code></pre>
-      <p>
-        <code>hello.html</code> is the README’s quick-start markup on four lines. Every run in this book was made from
-        a checkout at <code>{artifactRevision}</code>, where <code>bun src/cli.ts</code> stands for
-        <code>npx markswift</code>.
-      </p>
-    </aside>
+    <nav class="stages" aria-labelledby="stages">
+      <h2 id="stages" class="sc">The six stages</h2>
+      <ol>
+        {
+          stages.map((s) => (
+            <li>
+              <a href={`${base}${s.slug}`}>
+                <span class="no">{s.no}</span>
+                <span class="t">{s.title}</span>
+                <code>{s.path}</code>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </nav>
   </header>
 
   <Spread
@@ -68,5 +84,6 @@ const notes: Array<[number | number[] | string, string]> = [
     recto={{ label: "SwiftUI · recto", note: "what Markswift wrote", sources: { "HelloCard.swift": swift } }}
     rows={rows}
     notes={notes}
+    lit={5}
   />
 </Book>

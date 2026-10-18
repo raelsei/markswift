@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { blob, readRepo, type Row } from "../lib/book";
+import { blob, lemma, readRepo, type Row } from "../lib/book";
 
 // Scores and floors come from the tracked baseline and policy at build time.
 type Capture = { key: string; fixture: string; mode: string; ssim: number; mismatch: number; renderer: string; chrome: string; xcode: string; sourceRevision: string; capturedAt: string };
@@ -37,10 +37,19 @@ const rows: Row[] = pairs.map(({ slug, c, height }) => [
 const notes: Array<[number | number[] | string, string]> = [
   ...pairs.map(({ c, family, floor }, i): [number, string] => [
     i + 1,
-    `<code>${c.fixture}</code>${c.key.includes("@open:") ? `, open state <code>${c.key.slice(c.key.indexOf("@") + 1)}</code>` : ""}, 390 px, ${c.mode} mode: SSIM <strong class="num">${c.ssim.toFixed(4)}</strong>, pixel mismatch <span class="num">${c.mismatch.toFixed(4)}</span>; floor for <code>${family}</code> <span class="num">${floor.toFixed(2)}</span>.`,
+    lemma(
+      `<code>${c.key}</code>`,
+      `SSIM <strong class="num">${c.ssim.toFixed(4)}</strong>, mismatch <span class="num">${c.mismatch.toFixed(4)}</span>; <code>${family}</code> floor <span class="num">${floor.toFixed(2)}</span>`,
+    ),
   ]),
-  ["Run", `${browser} against SwiftUI on ${device}, ${ios} (${xcode}); revision <code>${ref.sourceRevision.slice(0, 7)}</code>, ${ref.capturedAt.slice(0, 10)}.`],
-  ["Rule", `A capture fails below its family floor, or more than <span class="num">${policy.maxDrop}</span> below its own baseline score.`],
+  ["Rule", lemma("a capture fails", `below its family floor, or <span class="num">${policy.maxDrop}</span> under its own baseline`)],
+  [
+    "Run",
+    lemma(
+      `${browser}, ${device}, ${ios}`,
+      `${xcode}; revision <code>${ref.sourceRevision.slice(0, 7)}</code>, ${ref.capturedAt.slice(0, 10)}; scores from <a href="${blob(baselinePath)}"><code>${baselinePath}</code></a>, floors from <a href="${blob(policyPath)}"><code>${policyPath}</code></a>`,
+    ),
+  ],
 ];
 const floors = Object.entries(policy.families).sort(([a], [b]) => a.localeCompare(b));
 ---
@@ -60,13 +69,6 @@ const floors = Object.entries(policy.families).sort(([a], [b]) => a.localeCompar
         read from the baseline this site was built from.
       </p>
     </div>
-    <aside class="provenance" aria-labelledby="set-from">
-      <h2 id="set-from" class="sc">Set from</h2>
-      <p>
-        Scores: <a href={blob(baselinePath)}><code>{baselinePath}</code></a>. Floors:
-        <a href={blob(policyPath)}><code>{policyPath}</code></a>. Images: the captures of that run, at 600 px wide.
-      </p>
-    </aside>
   </header>
 
   <Spread
@@ -75,6 +77,7 @@ const floors = Object.entries(policy.families).sort(([a], [b]) => a.localeCompar
     recto={{ label: "SwiftUI · recto", note: `${device}, ${ios}` }}
     rows={rows}
     notes={notes}
+    lit={1}
   />
 
   <section class="apparatus" aria-labelledby="floors">

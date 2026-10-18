@@ -31,6 +31,17 @@ export function run(transcript: string, command: string): string {
   return lines.slice(at, end < 0 ? undefined : end).join("\n").trimEnd();
 }
 
+export const esc = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+/** One apparatus entry in edition form: the lemma, a bracket, the reading. */
+export const lemma = (l: string, reading: string) => `${l} <span class="sep" aria-hidden="true">]</span> ${reading}`;
+
+/** The `Run` siglum: a recorded command as the lemma and what it printed as the reading. */
+export function runEntry(transcript: string, command: string, more = ""): string {
+  const [typed, ...printed] = run(transcript, command).split("\n");
+  return lemma(`<code>${esc(typed!)}</code>`, `${printed.map((l) => `<code>${esc(l)}</code>`).join("<br>")}${more}`);
+}
+
 export const github = "https://github.com/raelsei/markswift";
 export const blob = (path: string) => `${github}/blob/main/${path}`;
 
