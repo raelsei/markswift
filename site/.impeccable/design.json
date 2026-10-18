@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T21:42:07+00:00",
+  "title": "Design System: Markswift",
+  "extensions": {
+    "colorMeta": {
+      "cloth": {
+        "role": "primary",
+        "displayName": "Bookcloth Green",
+        "canonical": "#2f5d3a",
+        "tonalRamp": [
+          "oklch(15% 0.077 150.0)",
+          "oklch(26% 0.077 150.0)",
+          "oklch(38% 0.077 150.0)",
+          "oklch(50% 0.077 150.0)",
+          "oklch(62% 0.077 150.0)",
+          "oklch(74% 0.077 150.0)",
+          "oklch(85% 0.077 150.0)",
+          "oklch(95% 0.077 150.0)"
+        ]
+      },
+      "cloth-d": {
+        "role": "primary",
+        "displayName": "Spine Green",
+        "canonical": "#244a2e",
+        "tonalRamp": [
+          "oklch(15% 0.065 150.7)",
+          "oklch(26% 0.065 150.7)",
+          "oklch(38% 0.065 150.7)",
+          "oklch(50% 0.065 150.7)",
+          "oklch(62% 0.065 150.7)",
+          "oklch(74% 0.065 150.7)",
+          "oklch(85% 0.065 150.7)",
+          "oklch(95% 0.065 150.7)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#eef0eb",
+        "tonalRamp": [
+          "oklch(15% 0.007 124.4)",
+          "oklch(26% 0.007 124.4)",
+          "oklch(38% 0.007 124.4)",
+          "oklch(50% 0.007 124.4)",
+          "oklch(62% 0.007 124.4)",
+          "oklch(74% 0.007 124.4)",
+          "oklch(85% 0.007 124.4)",
+          "oklch(95% 0.007 124.4)"
+        ]
+      },
+      "leaf": {
+        "role": "neutral",
+        "displayName": "Leaf",
+        "canonical": "#f8f9f6",
+        "tonalRamp": [
+          "oklch(15% 0.004 121.6)",
+          "oklch(26% 0.004 121.6)",
+          "oklch(38% 0.004 121.6)",
+          "oklch(50% 0.004 121.6)",
+          "oklch(62% 0.004 121.6)",
+          "oklch(74% 0.004 121.6)",
+          "oklch(85% 0.004 121.6)",
+          "oklch(95% 0.004 121.6)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1b1d1b",
+        "tonalRamp": [
+          "oklch(15% 0.005 145.4)",
+          "oklch(26% 0.005 145.4)",
+          "oklch(38% 0.005 145.4)",
+          "oklch(50% 0.005 145.4)",
+          "oklch(62% 0.005 145.4)",
+          "oklch(74% 0.005 145.4)",
+          "oklch(85% 0.005 145.4)",
+          "oklch(95% 0.005 145.4)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Grey-Green Ink",
+        "canonical": "#4c5649",
+        "tonalRamp": [
+          "oklch(15% 0.024 138.5)",
+          "oklch(26% 0.024 138.5)",
+          "oklch(38% 0.024 138.5)",
+          "oklch(50% 0.024 138.5)",
+          "oklch(62% 0.024 138.5)",
+          "oklch(74% 0.024 138.5)",
+          "oklch(85% 0.024 138.5)",
+          "oklch(95% 0.024 138.5)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d2d8ce",
+        "tonalRamp": [
+          "oklch(15% 0.015 132.5)",
+          "oklch(26% 0.015 132.5)",
+          "oklch(38% 0.015 132.5)",
+          "oklch(50% 0.015 132.5)",
+          "oklch(62% 0.015 132.5)",
+          "oklch(74% 0.015 132.5)",
+          "oklch(85% 0.015 132.5)",
+          "oklch(95% 0.015 132.5)"
+        ]
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "#d9e5d3",
+        "tonalRamp": [
+          "oklch(15% 0.027 135.0)",
+          "oklch(26% 0.027 135.0)",
+          "oklch(38% 0.027 135.0)",
+          "oklch(50% 0.027 135.0)",
+          "oklch(62% 0.027 135.0)",
+          "oklch(74% 0.027 135.0)",
+          "oklch(85% 0.027 135.0)",
+          "oklch(95% 0.027 135.0)"
+        ]
+      },
+      "rail-ink": {
+        "role": "neutral",
+        "displayName": "Rail Ink",
+        "canonical": "#eef2ea",
+        "tonalRamp": [
+          "oklch(15% 0.011 128.6)",
+          "oklch(26% 0.011 128.6)",
+          "oklch(38% 0.011 128.6)",
+          "oklch(50% 0.011 128.6)",
+          "oklch(62% 0.011 128.6)",
+          "oklch(74% 0.011 128.6)",
+          "oklch(85% 0.011 128.6)",
+          "oklch(95% 0.011 128.6)"
+        ]
+      },
+      "rail-2": {
+        "role": "neutral",
+        "displayName": "Rail Sage",
+        "canonical": "#cfe2c8",
+        "tonalRamp": [
+          "oklch(15% 0.040 137.2)",
+          "oklch(26% 0.040 137.2)",
+          "oklch(38% 0.040 137.2)",
+          "oklch(50% 0.040 137.2)",
+          "oklch(62% 0.040 137.2)",
+          "oklch(74% 0.040 137.2)",
+          "oklch(85% 0.040 137.2)",
+          "oklch(95% 0.040 137.2)"
+        ]
+      },
+      "rail-line": {
+        "role": "neutral",
+        "displayName": "Rail Line",
+        "canonical": "#6f9275",
+        "tonalRamp": [
+          "oklch(15% 0.058 149.6)",
+          "oklch(26% 0.058 149.6)",
+          "oklch(38% 0.058 149.6)",
+          "oklch(50% 0.058 149.6)",
+          "oklch(62% 0.058 149.6)",
+          "oklch(74% 0.058 149.6)",
+          "oklch(85% 0.058 149.6)",
+          "oklch(95% 0.058 149.6)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Selection Sage",
+        "canonical": "#c5d9bd",
+        "tonalRamp": [
+          "oklch(15% 0.044 136.7)",
+          "oklch(26% 0.044 136.7)",
+          "oklch(38% 0.044 136.7)",
+          "oklch(50% 0.044 136.7)",
+          "oklch(62% 0.044 136.7)",
+          "oklch(74% 0.044 136.7)",
+          "oklch(85% 0.044 136.7)",
+          "oklch(95% 0.044 136.7)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Chapter title, one per chapter, after a green numeral."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "\"Markswift\" at the head of the binding."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Chapter openings, 66ch measure."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Apparatus entries and the stages list."
+      },
+      "gloss": {
+        "displayName": "Gloss",
+        "purpose": "Literata italic: reader instructions under the apparatus head; the edition statement."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Running heads, spread page heads, contents, turn links, file labels."
+      },
+      "label-strong": {
+        "displayName": "Label Strong",
+        "purpose": "Section heads (Contents, Apparatus, The six stages, Floors) and apparatus sigla."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Every spread line, on the 1.34rem rhythm."
+      },
+      "line-number": {
+        "displayName": "Line Number",
+        "purpose": "The shared gutter and the apparatus keys."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "page-turn",
+        "value": "460ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Chapter view transition: the new page wipes in by clip-path from the right (forward) or left (back)."
+      },
+      {
+        "name": "page-hold",
+        "value": "460ms linear",
+        "purpose": "The old page holds still beneath the turn."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "prefers-reduced-motion removes all view-transition animation."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "spread-stacks",
+        "value": "48rem"
+      },
+      {
+        "name": "rail-folds",
+        "value": "64rem"
+      },
+      {
+        "name": "opening-side-column",
+        "value": "76rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Contents Rail",
+      "kind": "nav",
+      "refersTo": "rail",
+      "description": "The binding: wordmark, italic edition statement, numbered contents with dotted leaders; the current chapter is a paper tab through the spine.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-rail-mark\" href=\"#\">Markswift</a><p class=\"ds-rail-ed\">Edition 2.0.0 · LayoutDoc 4</p><ol class=\"ds-toc\"><li><a href=\"#\" aria-current=\"page\"><span class=\"ds-no\">1</span><span class=\"ds-t\">Overview</span></a></li><li><a href=\"#\"><span class=\"ds-no\">2</span><span class=\"ds-t\">Capture</span></a></li><li><a href=\"#\"><span class=\"ds-no\">3</span><span class=\"ds-t\">LayoutDoc</span></a></li></ol></nav>",
+      "css": ".ds-rail{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;width:15.5rem;padding:1.9rem 0 1.6rem;background:var(--cloth);color:var(--rail-ink);border-right:6px solid var(--cloth-d);font-family:\"Alegreya Sans SC\", \"Gill Sans\", sans-serif;} .ds-rail-mark{display:block;margin:0 1.6rem;font-size:1.55rem;font-weight:700;letter-spacing:.06em;line-height:1.2;color:var(--paper);text-decoration:none;} .ds-rail-ed{margin:.2rem 1.6rem 1.6rem;font:italic .875rem \"Literata\", Georgia, serif;color:var(--rail-2);} .ds-toc{list-style:none;margin:0;padding:0;font-size:1rem;font-weight:500;letter-spacing:.04em;} .ds-toc a{display:flex;gap:.7rem;align-items:baseline;padding:.3rem 1.6rem;color:inherit;text-decoration:none;} .ds-toc .ds-no{width:1.1rem;text-align:right;font:.9rem \"Literata\", Georgia, serif;color:var(--rail-2);} .ds-toc .ds-t{flex:1;border-bottom:1px dotted var(--rail-line);} .ds-toc a:hover .ds-t{border-bottom:1px solid var(--rail-ink);} .ds-toc a:focus-visible{outline:2px solid var(--paper);outline-offset:3px;border-radius:2px;} .ds-toc a[aria-current]{margin-right:-6px;padding-right:calc(1.6rem + 6px);background:var(--paper);color:var(--ink);} .ds-toc a[aria-current] .ds-no{color:var(--cloth);} .ds-toc a[aria-current] .ds-t{border-bottom-color:transparent;} .ds-toc a[aria-current]:focus-visible{outline-color:var(--cloth);outline-offset:-3px;}"
+    },
+    {
+      "name": "Running Head",
+      "kind": "custom",
+      "refersTo": "running-head",
+      "description": "Small-caps green line at the top of every page, hairline beneath.",
+      "html": "<header class=\"ds-running\"><span>Markswift 2.0.0</span><span>1 · Overview</span></header>",
+      "css": ".ds-running{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;display:flex;justify-content:space-between;gap:1rem;padding:.95rem 0 .7rem;border-bottom:1px solid var(--rule);font:500 .875rem \"Alegreya Sans SC\", \"Gill Sans\", sans-serif;letter-spacing:.04em;color:var(--cloth);}"
+    },
+    {
+      "name": "Spread",
+      "kind": "custom",
+      "refersTo": "spread-page",
+      "description": "Signature: verso | shared line-number gutter | recto, one line per 1.34rem row; pointing at a number lights its line on both pages.",
+      "html": "<div class=\"ds-spread\"><div class=\"ds-ph ds-v\"><span>HTML · verso</span><span class=\"ds-pn\">what you wrote</span></div><div class=\"ds-ph ds-n\">line</div><div class=\"ds-ph ds-r\"><span>SwiftUI · recto</span><span class=\"ds-pn\">what Markswift wrote</span></div><span class=\"ds-c ds-v ds-file\">hello.html</span><span class=\"ds-n\"></span><span class=\"ds-c ds-r ds-file\">HelloCard.swift</span><code class=\"ds-c ds-v\">&lt;main data-markswift-root</code><span class=\"ds-n ds-keyed\" tabindex=\"0\">1</span><code class=\"ds-c ds-r\">struct HelloCard: View {</code><code class=\"ds-c ds-v ds-lit\">  Hello Markswift</code><span class=\"ds-n ds-lit\" tabindex=\"0\">2</span><code class=\"ds-c ds-r ds-lit\">Text(verbatim: \"Hello Markswift\")</code><code class=\"ds-c ds-v ds-cut\">…</code><span class=\"ds-n\" tabindex=\"0\">3</span><code class=\"ds-c ds-r ds-cut\">// …</code></div>",
+      "css": ".ds-spread{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;--vw:min(26rem,40%);--gut:3.25rem;--pad:1.4rem;display:grid;grid-template-columns:minmax(0,var(--vw)) var(--gut) minmax(0,1fr);padding-bottom:.9rem;border:1px solid var(--rule);background:linear-gradient(to right,var(--leaf) var(--vw),var(--rule) var(--vw) calc(var(--vw) + 1px),var(--paper) calc(var(--vw) + 1px) calc(var(--vw) + var(--gut) - 1px),var(--rule) calc(var(--vw) + var(--gut) - 1px) calc(var(--vw) + var(--gut)),var(--leaf) calc(var(--vw) + var(--gut)));} .ds-ph{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.7rem;padding:.6rem var(--pad) .5rem;border-bottom:1px solid var(--rule);font:500 .85rem \"Alegreya Sans SC\", \"Gill Sans\", sans-serif;letter-spacing:.04em;color:var(--cloth);} .ds-ph.ds-n{justify-content:center;padding-inline:0;color:var(--ink-2);} .ds-pn{color:var(--ink-2);} .ds-c{margin:0;padding:0 var(--pad);font:.78rem/1.34rem \"Fragment Mono\", ui-monospace, Menlo, monospace;white-space:pre-wrap;color:var(--ink);} .ds-c.ds-cut{color:var(--ink-2);} .ds-c.ds-file{padding-top:.55rem;padding-bottom:.15rem;font:500 .8rem/1.3 \"Alegreya Sans SC\", \"Gill Sans\", sans-serif;color:var(--cloth);} .ds-n{font:.72rem/1.34rem \"Fragment Mono\", ui-monospace, Menlo, monospace;font-variant-numeric:tabular-nums;text-align:center;color:var(--cloth);cursor:pointer;} .ds-n.ds-keyed{text-decoration:underline 1px;text-underline-offset:3px;} .ds-n:hover,.ds-n.ds-lit{background:var(--cloth);color:var(--leaf);} .ds-n:focus-visible{outline:2px solid var(--cloth);outline-offset:-1px;} .ds-c.ds-lit{background:var(--wash);}"
+    },
+    {
+      "name": "Apparatus",
+      "kind": "custom",
+      "refersTo": "apparatus-entry",
+      "description": "Notes at the foot under a 2px green rule: entries in edition form, lemma ] reading, keyed by line numbers or a small-caps siglum.",
+      "html": "<section class=\"ds-app\"><div><h2>Apparatus</h2><p class=\"ds-gloss\">Point at a line number: the line lights on both pages and here.</p></div><ul><li class=\"ds-lit\"><span class=\"ds-k\">2</span><span><code>font:18px system-ui</code> <span class=\"ds-sep\">]</span> <code>@ScaledMetric</code> 18 pt, follows Dynamic Type</span></li><li><span class=\"ds-k ds-sig\">Losses</span><span><span class=\"ds-lv\">approximated</span>, <span class=\"ds-lv\">unmapped</span> <span class=\"ds-sep\">]</span> none in this run</span></li></ul></section>",
+      "css": ".ds-app{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;display:grid;grid-template-columns:12rem minmax(0,1fr);gap:1rem 2rem;padding-top:.9rem;border-top:2px solid var(--cloth);font:.9rem/1.55 \"Literata\", Georgia, serif;color:var(--ink);} .ds-app h2{margin:0;font:700 .9rem \"Alegreya Sans SC\", \"Gill Sans\", sans-serif;letter-spacing:.08em;color:var(--cloth);} .ds-gloss{margin:.35rem 0 0;font-size:.8rem;font-style:italic;line-height:1.45;color:var(--ink-2);} .ds-app ul{list-style:none;margin:0;padding:0;} .ds-app li{display:grid;grid-template-columns:3.4rem minmax(0,1fr);column-gap:.5rem;margin:0 -.45rem;padding:.22rem .45rem .3rem;} .ds-app li:hover,.ds-app li.ds-lit{background:var(--wash);} .ds-k{font:.75rem/1.95 \"Fragment Mono\", ui-monospace, Menlo, monospace;font-variant-numeric:tabular-nums;color:var(--cloth);} .ds-k.ds-sig{font:700 .8rem/1.8 \"Alegreya Sans SC\", \"Gill Sans\", sans-serif;letter-spacing:.04em;} .ds-sep{padding:0 .15em;color:var(--cloth);} .ds-lv{font-family:\"Alegreya Sans SC\", \"Gill Sans\", sans-serif;letter-spacing:.03em;color:var(--cloth);} .ds-app code{font:.82em \"Fragment Mono\", ui-monospace, Menlo, monospace;}"
+    },
+    {
+      "name": "Turn the Page",
+      "kind": "nav",
+      "refersTo": "turn-link",
+      "description": "Chapter navigation at the foot: direction in grey-green over number and title; the forward title is green.",
+      "html": "<nav class=\"ds-turn\"><a href=\"#\"><span class=\"ds-dir\">Turn back</span><span>1 Overview</span></a><a class=\"ds-next\" href=\"#\"><span class=\"ds-dir\">Turn the page</span><span>3 LayoutDoc</span></a></nav>",
+      "css": ".ds-turn{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;display:flex;justify-content:space-between;gap:1.5rem;border-top:1px solid var(--rule);font-family:\"Alegreya Sans SC\", \"Gill Sans\", sans-serif;font-weight:500;letter-spacing:.04em;} .ds-turn a{flex:1;display:grid;gap:.05rem;padding:1rem 0 1.4rem;font-size:1.1rem;color:var(--ink);text-decoration:none;} .ds-dir{font-size:.8rem;color:var(--ink-2);} .ds-turn a:hover span:last-child{text-decoration:underline 1px;text-underline-offset:.22em;} .ds-turn a:focus-visible{outline:2px solid var(--cloth);outline-offset:3px;border-radius:2px;} .ds-next{text-align:right;} .ds-next span:last-child{color:var(--cloth);}"
+    },
+    {
+      "name": "Command Block",
+      "kind": "custom",
+      "refersTo": "command-block",
+      "description": "An install or run command in an opening: leaf ground, hairline, square, mono.",
+      "html": "<pre class=\"ds-cmd\"><code>npm install --save-dev markswift</code></pre>",
+      "css": ".ds-cmd{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;max-width:41rem;margin:0;padding:.5rem .75rem;background:var(--leaf);border:1px solid var(--rule);font:.95rem \"Fragment Mono\", ui-monospace, Menlo, monospace;color:var(--ink);} .ds-cmd code{font-size:.84em;font-variant-ligatures:none;}"
+    },
+    {
+      "name": "Rail Command",
+      "kind": "custom",
+      "refersTo": "rail-command",
+      "description": "The install command chip at the foot of the binding, select-all.",
+      "html": "<div class=\"ds-rail-foot\"><code>npm install --save-dev markswift</code></div>",
+      "css": ".ds-rail-foot{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;padding:1rem 1.6rem;background:var(--cloth);} .ds-rail-foot code{display:block;padding:.55rem .7rem;background:var(--cloth-d);color:var(--paper);font:.72rem/1.5 \"Fragment Mono\", ui-monospace, Menlo, monospace;user-select:all;}"
+    },
+    {
+      "name": "Text Link",
+      "kind": "custom",
+      "description": "Ink text, 1px underline in half-strength cloth; hover brings the underline to full colour.",
+      "html": "<p class=\"ds-p\">Read the <a class=\"ds-link\" href=\"#\">Changelog</a> for each edition.</p>",
+      "css": ".ds-p{--cloth:#2f5d3a;--cloth-d:#244a2e;--paper:#eef0eb;--leaf:#f8f9f6;--ink:#1b1d1b;--ink-2:#4c5649;--rule:#d2d8ce;--wash:#d9e5d3;--rail-ink:#eef2ea;--rail-2:#cfe2c8;--rail-line:#6f9275;font:1.0625rem/1.65 \"Literata\", Georgia, serif;color:var(--ink);} .ds-link{color:inherit;text-decoration:underline 1px;text-underline-offset:.22em;text-decoration-color:color-mix(in srgb,var(--cloth) 50%,transparent);} .ds-link:hover{text-decoration-color:currentColor;} .ds-link:focus-visible{outline:2px solid var(--cloth);outline-offset:3px;border-radius:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Parallel-Text Edition",
+    "overview": "Markswift is a translator, so its documentation is set the way scholarly editions set a text beside its translation. Each chapter is one facing-page spread: the original (HTML, a capture, a LayoutDoc) on the narrower verso, what Markswift wrote from it on the recto, the two pages sharing one gutter of line numbers, and an apparatus at the foot that records each correspondence and every loss. A cloth-green binding runs the full height of the book on the left and carries the title, the edition statement and the contents.\n\nThe register is quiet and exact. Cool off-white paper, near-black ink, one green, hairline rules; three faces with fixed duties (a serif to read, small capitals to label, a mono for the texts themselves). Density is that of a reference book, not a landing page: short openings, then the evidence, set verbatim. Nothing floats, glows or rounds; depth comes from paper tones and rules alone.\n\nThe user rejected the previous world for its white/black/red palette, condensed headings, slogan hero and one long table-heavy page; none of those belong here.",
+    "keyCharacteristics": [
+      "One hue, cloth green, owning the binding, running heads, page heads, line numbers, sigla and the apparatus rule.",
+      "Facing pages with a shared, clickable gutter of line numbers; a line lights on both pages and in its apparatus entry.",
+      "Literata reads, Alegreya Sans SC labels, Fragment Mono quotes.",
+      "Flat, square, hairline-ruled; tonal paper layers instead of shadows.",
+      "Chapters turn like pages: a clip-path wipe, the old page holding still beneath."
+    ],
+    "rules": [
+      {
+        "name": "The Binding Rule",
+        "body": "Green is the book's cloth and its marginalia, never the page. It fills only the rail and a lit line number; everywhere else it is a hairline, a numeral or a small-caps label.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Hue Rule",
+        "body": "There is no second accent: no red, no amber, no status colours. Loss levels (mapped, approximated, unmapped) are set as green small capitals and distinguished by their words.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Hands Rule",
+        "body": "Literata reads, Alegreya Sans SC labels, Fragment Mono quotes. A label is never set in the serif, reading text is never set in small caps, and only verbatim artifacts go in the mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Real Small Caps Rule",
+        "body": "Labels get their capitals from the Alegreya Sans SC face itself, written in sentence case. Never `text-transform: uppercase`, never all-caps strings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Italic Is Editorial Rule",
+        "body": "Literata italic is reserved for the edition's own voice: the edition statement and the glosses. It is not used for emphasis in running text.",
+        "section": "typography"
+      },
+      {
+        "name": "The Facing Pages Rule",
+        "body": "The original is always on the verso and the translation always on the recto, sharing one gutter of numbers. On narrow screens the pages stack in that order; they never swap and never lose their numbers.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Line Rule",
+        "body": "All spread text sits on the 1.34rem line. Nothing inside a spread may break that rhythm except images, which take whole rows.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Page Rule",
+        "body": "Separation comes from a paper tone or a rule, never from a shadow, blur or glow. The only state change in depth is colour: wash on a lit line, cloth under a lit number.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep cloth green as the only hue: binding fill, lit number fill, and otherwise rules, numerals and small-caps labels.",
+      "**Do** set the original on the verso and Markswift's output on the recto, sharing one numbered gutter on the 1.34rem line.",
+      "**Do** give every correspondence and every loss an apparatus entry, written lemma `]` reading.",
+      "**Do** use Literata for reading, Alegreya Sans SC for labels, Fragment Mono for verbatim artifacts and line numbers.",
+      "**Do** separate surfaces with paper tones (paper, leaf) and 1px hairlines; use a 2px green rule only above the apparatus.",
+      "**Do** mark a lit line with the wash on both pages and in the apparatus, and cloth behind its number."
+    ],
+    "donts": [
+      "**Don't** introduce red or any second accent colour, including status colours for losses.",
+      "**Don't** use condensed or grotesque display faces; chapter titles are Literata 600.",
+      "**Don't** uppercase labels with `text-transform` or all-caps strings; the small capitals come from the face.",
+      "**Don't** add shadows, blurs, glows or rounded corners (beyond the 2px focus radius).",
+      "**Don't** open a chapter with a slogan or marketing hero; a chapter opens with its numeral, title and a short plain lede.",
+      "**Don't** fold a chapter's evidence into a long table-heavy page; one stage, one spread."
+    ]
+  }
+}
