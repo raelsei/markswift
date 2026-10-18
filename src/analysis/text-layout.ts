@@ -141,7 +141,7 @@ const BIDI_CONTROLS: Record<string, [string, string, string]> = {
  * paragraph would hide its strong characters from the base-direction rule. ponytail: a host's `plaintext` (base
  * direction per paragraph from its first strong character) is not mapped; Core Text takes it from the layout
  * direction. Map it with an FSI around the host's runs if a design needs it. `::marker` boxes get nothing: their
- * UA `isolate` would wrap list and `<summary>` markers, which stay raw (051's `counterOf`, controls.ts `MARKER`).
+ * UA `isolate` would wrap list and `<summary>` markers, which stay raw (`counterOf`, controls.ts `MARKER`).
  */
 function bidiOf(el: LayoutNode, host: boolean): { open: string; close: string } | undefined {
   if (el.tag === "::marker") return undefined;

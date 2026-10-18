@@ -37,7 +37,7 @@ export function confidenceOf(list: readonly Diagnostic[]): Confidence {
 /**
  * One per-conversion message, not tied to a node. `capture`: page errors, unreadable resources
  * and viewport-dependent CSS the view does not follow; `fonts`: font packaging; `adaptive`:
- * light/dark pairing; `build`: `markswift build` (plan 033); `palette`: palette mapping (plan 034);
+ * light/dark pairing; `build`: `markswift build`; `palette`: palette mapping;
  * `breakpoints`: merging the width-band captures of a breakpoint conversion.
  * `level` and `feature` are set together when the message is a design loss, with the same
  * meaning as on `Diagnostic` (`feature` is an inventory row id). `component` names the
@@ -106,7 +106,7 @@ export type TableColumn =
   | { kind: "percent"; fraction: number; plus: number }
   | { kind: "auto" };
 /**
- * A CSS table laid out by `MarkswiftTable` (plan 049). `slots[i]` places `children[i]` (048's 1-based GridPlacement
+ * A CSS table laid out by `MarkswiftTable`. `slots[i]` places `children[i]` (1-based GridPlacement
  * fields); the first `bands` children are row-group/row paint (spanning every column), the rest are the cells in DOM
  * row-major order. `widths`/`heights` are the captured column border-box widths and row heights; `fixed`: admitted
  * `table-layout: fixed` columns.
@@ -258,9 +258,9 @@ export interface Motion {
   base?: Partial<Record<MotionChannel, number>>;
   /** Pressed/focused looks' CSS transitions (`analysis/motion.ts` `transitionsOf`). */
   transitions?: { pressed?: StateTransition; focused?: StateTransition };
-  /** Overlay layer roots: the exit animation, played first → last keyframe as the removal transition (066). */
+  /** Overlay layer roots: the exit animation, played first → last keyframe as the removal transition. */
   exit?: { motion: KeyframeMotion; approximated?: true };
-  /** In-flow layer content (or a `<details>` disclosure): the `height` 0 ↔ auto timing of opening and closing (066). */
+  /** In-flow layer content (or a `<details>` disclosure): the `height` 0 ↔ auto timing of opening and closing. */
   reveal?: { open?: TransitionSpec; close?: TransitionSpec };
 }
 export type StateField = keyof StateStyle;
@@ -272,7 +272,7 @@ export interface TransitionSpec {
 }
 /** Absent field = it jumps. */
 export type TransitionMap = Partial<Record<StateField, TransitionSpec>>;
-/** `in`: into the state; `out`: back to rest; `reduced`: under Reduce Motion, resolved by analysis (D-MOTION). */
+/** `in`: into the state; `out`: back to rest; `reduced`: under Reduce Motion, resolved by analysis. */
 export interface StateTransition {
   in: TransitionMap;
   out: TransitionMap;
@@ -448,11 +448,11 @@ export interface Overlay {
   /** App-mode attachment when CSS anchored the right and/or bottom edge: the host corner kept, and the node's offset from it. `offset` (top-left) stays the exact capture placement used by fidelity. */
   anchor?: { corner: "topTrailing" | "bottomLeading" | "bottomTrailing"; offset: [number, number] };
   /** App mode: a root of a drawn presentation (dialog, sheet, popover, hover card); every root of one layer shares one
-   * object, and such overlays are always `fixed` (`analysis/layers.ts`, plan 060). */
+   * object, and such overlays are always `fixed` (`analysis/layers.ts`). */
   presentation?: Presentation;
 }
 
-/** A layer drawn over the component while the screen's `is<Layer>Presented` is true (D-PRESENT). */
+/** A layer drawn over the component while the screen's `is<Layer>Presented` is true. */
 export interface Presentation {
   /** Layer id (`edit-profile`): joins light/dark and names the `@open:<id>` capture. */
   id: string;
@@ -473,7 +473,7 @@ export interface Presentation {
   dismiss: { escape: boolean; outside: boolean; buttons: string[] };
 }
 
-/** One entry of a native menu (plan 061); `id` is the item's LayoutNode id. */
+/** One entry of a native menu; `id` is the item's LayoutNode id. */
 export type MenuItem =
   | { kind: "button"; id: string; label: string; action?: Action; disabled?: true; destructive?: true }
   | { kind: "toggle"; id: string; label: string; checked: boolean; disabled?: true }
@@ -482,7 +482,7 @@ export type MenuItem =
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
   | { kind: "submenu"; id: string; label: string };
-/** A captured menu layer the trigger presents natively (plan 061, D-MENUS). */
+/** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;
   /** Opened by a right click: `.contextMenu` on the trigger instead of `Menu`. */
@@ -568,7 +568,7 @@ export interface SemBase extends SizeConstraints {
     /** `aria-disabled="true"`. */
     disabled?: true;
   };
-  /** `title`, inline-run titles and captured tooltip layers (D-HOVER): `.help` + an accessibility hint; never drawn. */
+  /** `title`, inline-run titles and captured tooltip layers: `.help` + an accessibility hint; never drawn. */
   tooltip?: string;
   /** `<label>`: id of the toggle/radio its tap changes, or of the text field it focuses. */
   labelFor?: string;
@@ -594,7 +594,7 @@ export interface SemBase extends SizeConstraints {
   opens?: { layer: string; kind: "inflow" } | { layer: string; kind: "presentation"; longPress?: true; anchor?: true };
   /** App mode: id of the in-flow layer whose open state shows this node. */
   shownBy?: string;
-  /** App mode: this node presents the captured menu natively (plan 061). */
+  /** App mode: this node presents the captured menu natively. */
   menu?: MenuSpec;
   /** Breakpoint conversions: the bands (ascending indices) this node shows in. Set only on members of `alternatives`;
    * inside a `containerBands` host they are that host's container bands. */
@@ -658,7 +658,7 @@ export interface GridNode extends SemBase {
     /** The grid items in DOM order (MarkswiftTracks subview order). */
     items: GridItem[];
   };
-  /** An admitted CSS table (plan 049); `hSpacing`/`vSpacing` are its used border-spacing. */
+  /** An admitted CSS table; `hSpacing`/`vSpacing` are its used border-spacing. */
   table?: TableLayout;
   /** Same as StackNode.scroll: the overflow axis a ScrollView covers. */
   scroll?: Axis;

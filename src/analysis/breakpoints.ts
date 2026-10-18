@@ -1,5 +1,5 @@
 /**
- * Breakpoint conversions (D-BREAKPOINTS): the per-band screens of one capture set become one SemNode tree. A DOM
+ * Breakpoint conversions: the per-band screens of one capture set become one SemNode tree. A DOM
  * element whose authored inputs are equal in every band is emitted once from one inference and reflows natively;
  * one whose inputs differ becomes a holder whose `alternatives` the emitter chooses between at layout time.
  */
@@ -214,7 +214,7 @@ export function mergeBands(
     const nodes = G.map((e) => layout[e.doc]!.get(n.id));
     if (LEAF[n.kind] && hosts.has(n.id)) hosted(n, G); // a leaf host only reports its queries
     if (LEAF[n.kind] || !nodes[0] || kids(n).some((c) => c.id !== "" && !layout[g]!.has(c.id))) return byDeep(n, G);
-    // Script-driven DOM (D-BREAKPOINTS LCA rule): CSS cannot change a child's tag or a text node's text.
+    // Script-driven DOM: CSS cannot change a child's tag or a text node's text.
     const tags = new Map<string, string>();
     let mismatch = false;
     for (const ln of nodes)
@@ -284,7 +284,7 @@ export function mergeBands(
     }
   };
 
-  // Query containers (D-BREAKPOINTS BP5): host id → its width `@container` queries.
+  // Query containers: host id → its width `@container` queries.
   const hosts = new Map<string, string[]>();
   for (const d of docs)
     for (const c of d.conditions)

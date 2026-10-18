@@ -1,4 +1,4 @@
-/** Tooltips (D-HOVER): `title` and captured tooltip layers become `SemBase.tooltip` — `.help` plus an accessibility hint, never drawn. */
+/** Tooltips: `title` and captured tooltip layers become `SemBase.tooltip` — `.help` plus an accessibility hint, never drawn. */
 import type { Layer, LayoutDoc, LayoutNode } from "../model/layout.ts";
 import { type SemBase, type SemNode, walk } from "../model/semantic.ts";
 import { textContent } from "./text-runs.ts";
@@ -23,7 +23,7 @@ export function addTooltip(base: SemBase, text: string): void {
 /**
  * A layer that only describes its trigger: tooltip content (`role=tooltip`, shadcn's `tooltip-content` slot), an
  * `aria-describedby`/`interestfor` relation, or a hover layer of a shadcn tooltip trigger (`root` resolves the trigger;
- * without it that last rule cannot fire). 060 skips these layers.
+ * without it that last rule cannot fire). Drawn presentations skip these layers.
  */
 export function isTooltipLayer(layer: Layer, root?: LayoutNode): boolean {
   if (TOOLTIP_RELATIONS[layer.relation]) return true;

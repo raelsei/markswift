@@ -38,7 +38,7 @@ export function outOfFlow(n: LayoutNode): boolean {
 const INSET_SIGN: Record<string, number> = { top: 1, left: 1, bottom: -1, right: -1 };
 
 /**
- * Used offset of a `position: relative` box from its Typed-OM insets (046; the snapshot's computed `top` reports a `%`
+ * Used offset of a `position: relative` box from its Typed-OM insets (the snapshot's computed `top` reports a `%`
  * against an auto-height block as px Chrome never applies). `top` beats `bottom`; `left` beats `right` unless the
  * containing block (`cb`, the DOM parent) is rtl. `%` resolves against `cb`'s content box; a `%` top/bottom against an
  * indefinite height is `auto`, so the other side applies (`top:10%; bottom:5px` → −5, as Chrome). `[0, 0]` for every

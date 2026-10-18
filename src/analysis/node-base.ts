@@ -28,7 +28,7 @@ export function withBase<T extends Partial<SemNode>>(n: LayoutNode, ctx: Inferen
 const passing = new WeakMap<LayoutNode, boolean>();
 /**
  * The element and every rendered element below it compute `pointer-events: none` (an `auto` descendant stays
- * hittable in CSS). `pointer-events` inherits: a child with no key and no children (046's synthetic pseudo `img`,
+ * hittable in CSS). `pointer-events` inherits: a child with no key and no children (a synthetic pseudo `img`,
  * `styles: {}`) passes under a `none` parent.
  */
 export function passesTaps(n: LayoutNode): boolean {

@@ -1,4 +1,4 @@
-/** Breakpoint planning: which viewport widths capture every CSS width band of a page (D-BREAKPOINTS). */
+/** Breakpoint planning: which viewport widths capture every CSS width band of a page. */
 import { captureWidth, widthQuery } from "../css/index.ts";
 import type { LayoutCondition } from "../model/layout.ts";
 import type { BandEdge } from "../model/semantic.ts";

@@ -1,7 +1,7 @@
 /**
  * App mode: closed in-flow layers (`<details>`, collapsibles, accordion items) become content behind the screen's state;
- * dialogs, sheets, popovers and hover cards become drawn presentations (plan 060, D-PRESENT); menus and listboxes
- * become the trigger's native `Menu` (plan 061, D-MENUS).
+ * dialogs, sheets, popovers and hover cards become drawn presentations; menus and listboxes become the trigger's native
+ * `Menu`.
  */
 import { type Layer, type LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import {
@@ -31,7 +31,7 @@ const REASON = {
 /**
  * Each `inflow` layer of `doc`: a `<details>` gets the content and `opens`; anything else inserts the content into its
  * plain parent stack after its rest predecessor (`shownBy`), and the trigger Button `opens` it. A menu or listbox layer
- * becomes its trigger's native menu (`menu`); each other layer that is not a tooltip (062) becomes a drawn presentation
+ * becomes its trigger's native menu (`menu`); each other layer that is not a tooltip becomes a drawn presentation
  * on the root (`present`). Skips are reported.
  */
 // ponytail: content goes into plain stacks only; measured/flex/grid parents report and keep today's output.
@@ -80,7 +80,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       const have = new Set(parent.content.map((c) => c.id));
       parent.content.push(...content(layer.nodes.filter((n) => n.id === undefined || !have.has(n.id))));
       parent.opens = { layer: layer.id, kind: "inflow" };
-      // The content's height keyframes time the disclosure's own open/close (066); nothing else of them plays.
+      // The content's height keyframes time the disclosure's own open/close; nothing else of them plays.
       for (const n of layer.nodes) {
         const r = revealOf(n, parent.diagnostics);
         if (r.reveal && !parent.motion?.reveal) parent.motion = { ...parent.motion, reveal: r.reveal };
@@ -117,7 +117,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       continue;
     }
     const nodes = content(layer.nodes);
-    // 066: each content root plays its enter/exit; its height keyframes time the reveal.
+    // Each content root plays its enter/exit; its height keyframes time the reveal.
     nodes.forEach((n, i) => {
       n.shownBy = layer.id;
       const r = revealOf(layer.nodes[i]!, n.diagnostics);
@@ -191,7 +191,7 @@ const disabled = (n: LayoutNode) => n.attrs["aria-disabled"] === "true" || n.att
 const checked = (n: LayoutNode, aria: string) => n.attrs[aria] === "true" || n.attrs["data-state"] === "checked";
 
 /**
- * A menu or listbox layer as its trigger's native popup (D-MENUS): the items in DOM order — a listbox is one inline
+ * A menu or listbox layer as its trigger's native popup: the items in DOM order — a listbox is one inline
  * Picker of its options — under a `Menu` on the trigger, or `.contextMenu` for a right-click layer. The trigger keeps
  * its CSS look; the open list is not drawn and has no `@open` capture.
  */
@@ -445,7 +445,7 @@ function present(
   }
   // Centred and anchored content is placed by the runtime: the translation that placed it in CSS goes.
   if (pure && (placement.kind === "center" || placement.kind === "anchored")) delete first.node.style.transform;
-  // 066: enter/exit on the placed roots (`overlays[i]` is `layer.nodes[i]`; later ones are hoisted fixed descendants).
+  // Enter/exit on the placed roots (`overlays[i]` is `layer.nodes[i]`; later ones are hoisted fixed descendants).
   layer.nodes.forEach((ln, i) => {
     const o = overlays[i];
     if (!o) return;

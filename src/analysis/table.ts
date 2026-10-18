@@ -1,5 +1,5 @@
 /**
- * Admission of a captured CSS table into `MarkswiftTable` (plan 049): its HTML-table-model slot grid, checked against
+ * Admission of a captured CSS table into `MarkswiftTable`: its HTML-table-model slot grid, checked against
  * the captured boxes, and the `table-layout: fixed` column solver the runtime mirrors.
  */
 import type { LayoutNode } from "../model/layout.ts";

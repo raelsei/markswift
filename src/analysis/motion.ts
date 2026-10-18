@@ -1,4 +1,4 @@
-/** CSS `@keyframes` animations captured by `browser/motion.ts` → IR `Motion` (D-MOTION), with per-node diagnostics. */
+/** CSS `@keyframes` animations captured by `browser/motion.ts` → IR `Motion`, with per-node diagnostics. */
 import type { Anim, LayoutNode, Transition } from "../model/layout.ts";
 import {
   addDiagnostic,
@@ -36,7 +36,7 @@ const COMPOSABLE: Record<string, true> = {
   RS: true,
   TRS: true,
 };
-/** D-MOTION: a status indicator keeps its loop under Reduce Motion. */
+/** A status indicator keeps its loop under Reduce Motion. */
 const STATUS_ROLES: Record<string, true> = { status: true, progressbar: true };
 /** Transitioned CSS longhand → the state paint field it draws; key order = which property's timing a field takes. */
 const PAINT_FIELD: Record<string, StateField> = {
@@ -65,7 +65,7 @@ const PAINT_ORDER = Object.keys(PAINT_FIELD);
 
 /**
  * Captured pressed/focused transitions → per paint field timing, only for fields the node's look changes. `reduced`
- * is the author's reduce lists, else D-MOTION's fallback: movement (`transform`) jumps, fades keep their timing.
+ * is the author's reduce lists, else the default: movement (`transform`) jumps, fades keep their timing.
  */
 export function transitionsOf(
   n: LayoutNode,
@@ -194,7 +194,7 @@ function anchorOf(n: LayoutNode): [number, number] | undefined {
 }
 
 /**
- * In-flow layer content (066): `height` keyframes from 0 to the node's own height (or `auto`) open it, the reverse
+ * In-flow layer content: `height` keyframes from 0 to the node's own height (or `auto`) open it, the reverse
  * closes it; their timing becomes `reveal`, and the lists come back without `height`. Other shapes are reported.
  */
 export function revealOf(
@@ -230,8 +230,8 @@ export function revealOf(
 }
 
 /**
- * A layer root's captured enter and exit (066), after its placement is decided (`analysis/layers.ts`): the enter joins
- * `animations` (the root is inserted when its layer opens, so it plays on appear) with D-MOTION's fallback under Reduce
+ * A layer root's captured enter and exit, after its placement is decided (`analysis/layers.ts`): the enter joins
+ * `animations` (the root is inserted when its layer opens, so it plays on appear) with the default fallback under Reduce
  * Motion (movement removed, opacity kept); the first exit becomes `exit`, exact for two keyframes starting at the
  * settled look, else played first → last (reported).
  */
