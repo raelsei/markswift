@@ -15,7 +15,8 @@ jobs:
   publish:
     runs-on: macos-26
     timeout-minutes: 60
-    # Operator configures required reviewers on this environment (approval gate) and the NPM_TOKEN secret.
+    # Required reviewers on this environment are the approval gate. npm trusts this workflow and environment
+    # (trusted publishing over OIDC, `id-token: write`), so no npm token is stored.
     environment: npm
     permissions:
       contents: read
@@ -44,8 +45,7 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: tools/verify/npm-smoke.sh
-      - name: Publish with provenance
+      - name: Publish with provenance (trusted publishing)
         run: |
+          npm install -g npm@^11.15
           npm publish --provenance --access public --tag "$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
