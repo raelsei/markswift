@@ -1,7 +1,7 @@
 /**
- * V4b: converts the curated component cases, builds them into the XCUITest host app
+ * Converts the curated component cases, builds them into the XCUITest host app
  * (`tools/verify/ios-behaviour/`), runs it on the iOS simulator and judges what iOS exposed:
- * accessibility tree, Apple's audit, Dynamic Type height (R7), RTL mirroring and interaction.
+ * accessibility tree, Apple's audit, Dynamic Type height, RTL mirroring and interaction.
  *
  *   bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>
  */
@@ -73,7 +73,7 @@ interface Prepared {
   /** The screen's own action members in source order (= its `init` order); `live` = some element calling it is enabled. */
   actions: Array<{ name: string; takesArgs: boolean; live: boolean }>;
   /** In-flow layers of the app screen: tapping the button labelled `trigger` shows the text `shows`, and hides it again.
-   * Drawn presentations (060): the trigger (long-pressed when `longPress`) shows `shows`; each of `closers` (the
+   * Drawn presentations: the trigger (long-pressed when `longPress`) shows `shows`; each of `closers` (the
    * content's dismissing buttons) closes it; a tap at the root's normalised `outsidePoint` closes it iff `outside`;
    * `buttons` are the content's other buttons, tapped so their actions log. */
   layers: Array<
@@ -91,7 +91,7 @@ interface Prepared {
         outsidePoint: [number, number];
       }
   >;
-  /** Native menus (061): `trigger` (long-pressed when `context`) opens a menu; each of `items` (its enabled buttons) is
+  /** Native menus: `trigger` (long-pressed when `context`) opens a menu; each of `items` (its enabled buttons) is
    * tapped in its own launch so its action logs. */
   menus: Array<{ trigger: string; context: boolean; items: string[] }>;
   fonts: boolean;
@@ -210,7 +210,7 @@ function elements(tree: El): El[] {
 }
 
 /**
- * R7 page at AX3, as the app-mode emitter scales it: each element's font-size (and px line-height, which native text
+ * The page at AX3, as the app-mode emitter scales it: each element's font-size (and px line-height, which native text
  * derives from the same scaled size) grows by the AX3 factor of the text style `nearestTextStyle` maps it to, and every
  * HTML box with an authored height that holds text or a form control turns that height into a floor (`min-height`):
  * app mode never pins text in a box (Chrome would overflow or clip it), so neither does the reference.
@@ -256,7 +256,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
   const fixture = join(FIXTURES, id.includes("/") ? `${id}.html` : join("components", `${id}.html`));
   const view = `Behaviour${basename(id).replace(/(^|-+)(\w)/g, (_, _dash, c: string) => c.toUpperCase())}`;
   let ax: AxNamed[] = [];
-  // A breakpoint fixture converts across its bands (054), its first capture at its first width.
+  // A breakpoint fixture converts across its bands, its first capture at its first width.
   const widths =
     /<meta name="markswift-breakpoints" content="([^"]*)"/
       .exec(await Bun.file(fixture).text())?.[1]
@@ -396,7 +396,7 @@ async function prepareCase(id: string): Promise<{ prepared: Prepared; files: Rec
     if (trigger && buttons.length) menus.push({ trigger, context: !!n.menu.context, items: buttons });
   });
   const motion = { live: false, reduced: false };
-  // What shows at launch: a closed layer's content (066: overlay enter, in-flow reveal) does not animate there.
+  // What shows at launch: a closed layer's content (overlay enter, in-flow reveal) does not animate there.
   const closed = new Set<SemNode>();
   walk(screen.root, (n) => {
     if (n.shownBy !== undefined) walk(n, (d) => closed.add(d));
@@ -543,7 +543,7 @@ function judge(item: Prepared, log: CaseLog | undefined) {
       .split(",");
     for (const { name, live } of item.actions)
       if (live && !hits.includes(name)) fail("interaction", `action:${name}`, "never called");
-    // In-flow layers (plan 059): the trigger shows the content, and a second tap hides it. Presentations (060): the
+    // In-flow layers: the trigger shows the content, and a second tap hides it. Presentations: the
     // trigger shows it inside a modal container iff it is modal, its closers and (iff dismissable) an outside tap close it.
     for (const layer of item.layers) {
       const { id } = layer;
@@ -558,13 +558,13 @@ function judge(item: Prepared, log: CaseLog | undefined) {
         if (run.outside !== layer.outside) fail("interaction", `layer:${id}`, "outside tap");
       }
     }
-    // Native menus (061): each enabled item showed when its menu opened (its action is checked above).
+    // Native menus: each enabled item showed when its menu opened (its action is checked above).
     for (const menu of item.menus)
       for (const label of menu.items)
         if (!large.menus?.find((m) => m.trigger === menu.trigger && m.label === label)?.opened)
           fail("interaction", `menu:${menu.trigger}`, `did not open to "${label}"`);
   }
-  // D-STATE-OWNERSHIP: a band switch keeps every typed value and toggle, and each control stays one element.
+  // A band switch keeps every typed value and toggle, and each control stays one element.
   const bands = log?.launches.bands;
   if (log && item.widths.length > 1 && !bands) errors.push(`${item.id}: bands launch missing`);
   if (bands) {
@@ -646,7 +646,7 @@ function judge(item: Prepared, log: CaseLog | undefined) {
     const reduced = log?.launches.motionReduced;
     if (log && (!live || !reduced)) errors.push(`${item.id}: motion launches missing`);
     if (live && live.frames[0] === live.frames[1]) fail("motion", "live", "two frames 300 ms apart are identical");
-    // Equal frames under Reduce Motion are expected exactly when nothing survives it (D-MOTION).
+    // Equal frames under Reduce Motion are expected exactly when nothing survives it.
     if (reduced && (reduced.frames[0] === reduced.frames[1]) === item.motion.reduced)
       fail(
         "motion",

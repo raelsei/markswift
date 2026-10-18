@@ -15,14 +15,14 @@ final class BehaviourTests: XCTestCase {
         let focusLooks: [String]
         let actions: [String]
         /// In-flow layers: tapping the button labelled `trigger` shows the text `shows`; a second tap hides it.
-        /// Presentations (`kind` "presentation", 060): the trigger (long-pressed when `longPress`) shows `shows`; `closers`
+        /// Presentations (`kind` "presentation"): the trigger (long-pressed when `longPress`) shows `shows`; `closers`
         /// close it; a tap at the root's normalised `outsidePoint` may; `buttons` are tapped so their actions log.
         struct Layer: Decodable {
             let id: String; let kind: String; let trigger: String; let shows: String
             let closers: [String]?; let buttons: [String]?; let longPress: Bool?; let outsidePoint: [Double]?
         }
         let layers: [Layer]
-        /// Native menus (061): `trigger` (long-pressed when `context`) opens a menu showing the buttons `items`.
+        /// Native menus: `trigger` (long-pressed when `context`) opens a menu showing the buttons `items`.
         struct Menu: Decodable { let trigger: String; let context: Bool; let items: [String] }
         let menus: [Menu]
         /// `live`: some node animates; `reduced`: something still animates under Reduce Motion.
@@ -91,7 +91,7 @@ private func launch(_ item: BehaviourTests.Case, _ category: String, rtl: Bool =
     return app
 }
 
-/// Band switch (056, D-STATE-OWNERSHIP): type into the first text field and toggle the first switch, then switch the
+/// Band switch: type into the first text field and toggle the first switch, then switch the
 /// host's width twice (`markswift.width`). Each snapshot records every text field's and switch's value and how many
 /// elements of its type carry its label; the audit runs after the first switch.
 @MainActor
@@ -331,7 +331,7 @@ private func layers(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[St
     }
 }
 
-/// Each native menu item (061) in a fresh launch: open the menu (tap, or long-press a context menu's area), wait for
+/// Each native menu item in a fresh launch: open the menu (tap, or long-press a context menu's area), wait for
 /// the item, tap it, and read the log.
 @MainActor
 private func menus(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[String: Any]] {
@@ -357,7 +357,7 @@ private func menus(_ app: XCUIApplication, _ item: BehaviourTests.Case) -> [[Str
     }
 }
 
-/// A drawn presentation (060), each probe in a fresh launch: open (tap, or long-press), whether the content sits in a
+/// A drawn presentation, each probe in a fresh launch: open (tap, or long-press), whether the content sits in a
 /// modal container, each closer, an outside tap, then every other content button so its action logs (scrolled to first
 /// when it sits below the screen, as on a screen-tall root).
 @MainActor

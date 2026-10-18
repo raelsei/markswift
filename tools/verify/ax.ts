@@ -42,7 +42,7 @@ export const CHECKED_ROLES: Record<string, (n: SemNode) => boolean> = {
   radio: toggle,
   textbox: field,
   searchbox: field,
-  /** A `<select>`, a date input, or a `<button role=combobox>` (a Radix select: its listbox layer makes it a `Menu`, 061). */
+  /** A `<select>`, a date input, or a `<button role=combobox>` (a Radix select: its listbox layer makes it a `Menu`). */
   combobox: (n) => isControl(n, "picker", "datePicker", "button"),
   slider: range,
   progressbar: range,
