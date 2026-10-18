@@ -88,7 +88,7 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   // not in the IR).
   const ariaToggles = new Set<SemNode>();
   const ariaGroups = new Map<string, SemNode[]>();
-  // In-flow layer id → the reveal timing of its content (066), for the trigger's toggle.
+  // In-flow layer id → the reveal timing of its content, for the trigger's toggle.
   const reveals = new Map<string, NonNullable<Motion["reveal"]>>();
   walk(root, (n) => {
     if (n.shownBy !== undefined && n.motion?.reveal && !reveals.has(n.shownBy)) reveals.set(n.shownBy, n.motion.reveal);
@@ -272,7 +272,7 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     const state = o.presentation && openStates.get(o.presentation.id);
     if (!state) continue;
     const buttons = new Set(o.presentation!.dismiss.buttons);
-    // 066: inside the layer's longest exit, so the closing transaction carries it.
+    // Inside the layer's longest exit, so the closing transaction carries it.
     const exit = longestExit(root.overlays.filter((x) => x.presentation === o.presentation).map((x) => x.node));
     const close = exit ? `withAnimation(${exit}) { ${state} = false }` : `${state} = false`;
     walk(o.node, (n) => {

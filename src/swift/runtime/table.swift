@@ -1,8 +1,8 @@
-/// A `table-layout: fixed` column (plan 049): border-box px, a fraction of the available width plus the cell's
+/// A `table-layout: fixed` column: border-box px, a fraction of the available width plus the cell's
 /// horizontal padding and border, or an equal share of what is left.
 enum MarkswiftTableColumn: Sendable { case px(CGFloat), percent(CGFloat, plus: CGFloat), auto }
 
-/// A CSS table (plan 049). Every subview carries `.markswiftGridCell(column:row:columnSpan:rowSpan:)` (1-based,
+/// A CSS table. Every subview carries `.markswiftGridCell(column:row:columnSpan:rowSpan:)` (1-based,
 /// tracks.swift); the first `bands` subviews paint row groups and rows and are never measured (under the cells; a
 /// band that only draws collapsed borders carries `.zIndex(1)` and draws over them, as CSS paints borders last).
 /// `border-spacing` surrounds every column and row, outer edges included.

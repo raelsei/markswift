@@ -138,7 +138,7 @@ export function pascalWords(s: string): string {
 }
 
 /**
- * K1 member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`.
+ * Member name: `prefix + PascalCase(words) + suffix` (`fallback` when no word survives); repeats become `…2`, `…3`.
  * Without a prefix the name starts lower-case (`item title` → `itemTitle`). Registered in `seen`.
  */
 export function memberName(
@@ -260,7 +260,7 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
  * - **captured axes, both modes** — a bundled family with `axes` (`font-variation-settings` tags,
  *   or `font-stretch` as `wdth`, beyond wght/opsz) is `.markswiftVariable(…, axes:)` in app mode
  *   too, sized by `fontSizeExpr` so Dynamic Type still applies: the shipped app sets the
- *   variation at runtime (docs/decisions.md "Fonts", 2.0).
+ *   variation at runtime.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) =>

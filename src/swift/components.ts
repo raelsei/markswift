@@ -576,7 +576,7 @@ export function asMember(m: ControlMembers["members"][number]): ScreenMember {
  * Repeated sibling elements of an app-mode screen as nested row types, data arrays and subviews,
  * plus the screen's `data-markswift-field` texts and controls as `init` parameters; undefined when
  * the screen has neither. Strict equality: optional children, variants and `:last-child` edges
- * break a run (post-1.0 "loose extraction"); grids and measured, wrapping or distributed stacks get
+ * break a run; grids and measured, wrapping or distributed stacks get
  * the shared subview called once per member (`Self.<array>[i]`, not a parameter) instead of a `ForEach`.
  */
 export function extractComponents(
@@ -628,7 +628,7 @@ export function extractComponents(
       }
     }
     // A string column of counter markers (`1. `, `IV. `) in an arithmetic progression: the row index renders it, so
-    // rows passed in (D-REGEN) number themselves. Binding rows keep their strings.
+    // rows passed in number themselves. Binding rows keep their strings.
     let counter: CounterColumn | undefined;
     if (!head.roles.some((r, c) => r === "field" && !LITERAL[strip(head.columns[c]!.marker)]))
       for (const [c, col] of head.columns.entries()) {

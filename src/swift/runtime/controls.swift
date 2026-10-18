@@ -240,7 +240,7 @@ nonisolated struct MarkswiftSliderTrack: View {
 
 /// `<details>` as the browser draws it: the captured `<summary>` (its `::marker` included) is the
 /// whole tap target, the content follows at the measured gap, and there is no system chevron. `open`/`close`: the
-/// content's CSS height animation, played as a `MarkswiftReveal` (066); nil for both = it snaps.
+/// content's CSS height animation, played as a `MarkswiftReveal`; nil for both = it snaps.
 nonisolated struct MarkswiftDisclosureStyle: DisclosureGroupStyle {
     let spacing: CGFloat
     var open: Animation? = nil, close: Animation? = nil
@@ -279,7 +279,7 @@ extension View {
     /// `TextEditor` insets its text inside its frame (UITextView: 8 pt above and below, 5 pt line
     /// fragment padding at the sides); the CSS padding already placed it, so the editor overhangs
     /// its frame by exactly those insets.
-    // ponytail: UIKit default insets as constants; recalibrate from an iOS render (Step 10) if an SDK changes them.
+    // ponytail: UIKit default insets as constants; recalibrate from an iOS render if an SDK changes them.
     @ViewBuilder func markswiftTextEditorInsets() -> some View {
         #if os(iOS)
         padding(EdgeInsets(top: -8, leading: -5, bottom: -8, trailing: -5))

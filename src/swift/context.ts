@@ -31,9 +31,9 @@ export interface EmitOptions {
   adaptive?: boolean;
   /** Repeated-sibling extraction (app mode). `false` only for the pixel-identity check; default on. */
   extract?: boolean;
-  /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
+  /** `public` for a generated library (`markswift build`); `convert` stays internal. Default `internal`. */
   visibility?: "internal" | "public";
-  /** Previews call `BundledFonts.register()` first: the library package bundles fonts (plan 033's `build`). */
+  /** Previews call `BundledFonts.register()` first: the library package (`markswift build`) bundles fonts. */
   registerFonts?: boolean;
   /** Command the view header names for regeneration. Default `convert`. */
   regenerate?: "convert" | "build";
@@ -124,7 +124,7 @@ export interface ControlMembers {
   decls: string[];
   /**
    * Every member in emission order; `value` = design state (`@State private`), `action` =
-   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused (plan 029), `open` = a
+   * `on<Name>` callback, `ephemeral` = UI state such as pressed/focused, `open` = a
    * layer's shown state (in-flow or drawn presentation), an `init`-seeded `@State` (`seed`). `decls` is
    * `members.flatMap(m => m.decl)`.
    */
@@ -157,7 +157,7 @@ export interface ControlMembers {
   closeOf: Map<SemNode, string[]>;
   /** Presentation layer id → its `on<Layer>Dismissed` callback (Escape or an outside tap closed it). */
   dismissedOf: Map<string, string>;
-  /** Native menu toggle/radio item id → its `@State` member (plan 061). */
+  /** Native menu toggle/radio item id → its `@State` member. */
   menuState: Map<string, string>;
   /** Single-run TextNode id → the member its text shows (a Radix select's value follows its Picker). */
   textState: Map<string, string>;

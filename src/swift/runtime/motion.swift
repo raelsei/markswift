@@ -169,7 +169,7 @@ struct MarkswiftMotionFrame: ViewModifier {
 }
 
 /// An overlay root's exit frame inside its removal transition; under Reduce Motion (system or harness-forced) the
-/// opacity-only `reduced` frame (D-MOTION).
+/// opacity-only `reduced` frame.
 struct MarkswiftExitFrame: ViewModifier {
     var value = MarkswiftMotionValue()
     var reduced = MarkswiftMotionValue()
@@ -213,7 +213,7 @@ nonisolated struct MarkswiftEasing: CustomAnimation {
 }
 
 /// A pressed/focused look's CSS transition: the new state's timing (CSS uses the new style's transition); under
-/// Reduce Motion (system or harness-forced) the reduced pair, which analysis already resolved (D-MOTION).
+/// Reduce Motion (system or harness-forced) the reduced pair, which the converter already resolved.
 struct MarkswiftStateAnimation: ViewModifier {
     let isOn: Bool
     let into: Animation?, back: Animation?, reducedInto: Animation?, reducedBack: Animation?

@@ -1,4 +1,4 @@
-/// Where a drawn presentation's content sits inside the component frame (plan 060).
+/// Where a drawn presentation's content sits inside the component frame.
 enum MarkswiftPlacement: Sendable {
     case center, edge(Edge), offset(CGSize)
     case anchored(String, from: UnitPoint, to: UnitPoint, gap: CGSize)
@@ -43,8 +43,8 @@ extension View {
         anchorPreference(key: MarkswiftAnchorKey.self, value: .bounds) { [id: $0] }
     }
     func markswiftPlaced(_ placement: MarkswiftPlacement) -> some View { modifier(MarkswiftPlaced(placement: placement)) }
-    /// A presentation drawn over the component while `isPresented`; the screen owns the state (D-PRESENT-STATE).
-    /// The container stays while closed so each root's own removal transition plays (066); `exit` animates the
+    /// A presentation drawn over the component while `isPresented`; the screen owns the state.
+    /// The container stays while closed so each root's own removal transition plays; `exit` animates the
     /// runtime's own dismissal (Escape, an outside tap).
     func markswiftPresentation<C: View>(
         isPresented: Binding<Bool>, modal: Bool, dismissOnEscape: Bool, dismissOnOutside: Bool, exit: Animation? = nil,

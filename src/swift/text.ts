@@ -232,7 +232,7 @@ function runExpr(
   // A run's own slot key (`run2`) resolves it even when the node paints its colour twice; a
   // paint fallback colour is no enumerated slot, so it keeps the node-wide lookup.
   const fill = r.paint ? undefined : `run${i}`;
-  // A Radix select's value text shows its Picker's choice (plan 061).
+  // A Radix select's value text shows its Picker's choice.
   const live = n.runs.length === 1 ? ctx.control.textState.get(n.id) : undefined;
   let e = `Text(verbatim: ${live ?? str(text)})`;
   if (r.link) {

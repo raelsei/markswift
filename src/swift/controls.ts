@@ -155,7 +155,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
       }
-      // A menu trigger (plan 061): the same label opens the native menu instead.
+      // A menu trigger: the same label opens the native menu instead.
       if (n.menu && !n.menu.context) return menuButton(n.menu, pressable(n, deps), buttonStyle, deps);
       // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
       // changes the screen's state and acts.
@@ -374,7 +374,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
             )
           : l,
       );
-      // App: the content's CSS height animation opens and closes it (066).
+      // App: the content's CSS height animation opens and closes it.
       const reveal = deps.mode === "app" ? n.motion?.reveal : undefined;
       const curves = reveal ? `, open: ${animationExpr(reveal.open)}, close: ${animationExpr(reveal.close)}` : "";
       return [
@@ -521,7 +521,7 @@ function pickerRows(options: PickerOption[]): string[] {
 }
 
 /**
- * A captured menu's items as native menu content (plan 061): buttons on the screen's action members, checkbox items as
+ * A captured menu's items as native menu content: buttons on the screen's action members, checkbox items as
  * Toggles, a radio run as an inline Picker, separators, labelled sections.
  */
 // ponytail: a submenu is a disabled label (its items are not captured); opening nested triggers is the upgrade path.

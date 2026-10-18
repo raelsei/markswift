@@ -39,7 +39,7 @@ export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
 }
 
 function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
-  // A menu trigger (plan 061) has no action member: its Button's label opens the native menu.
+  // A menu trigger has no action member: its Button's label opens the native menu.
   const menu = n.kind !== "control" && n.action && !n.action.gesture && n.menu && !n.menu.context ? n.menu : undefined;
   const name = n.kind !== "control" && n.action ? ctx.control.actionOf.get(n.action.key) : undefined;
   if (!name && !menu) return [...core, ...modifiers(n, ctx)];
@@ -250,13 +250,13 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.
   // ponytail: a later sibling's own positioned descendants paint above it in CSS but below it here.
   if (n.relativeOffset) m.push(`.offset(x: ${num(n.relativeOffset[0])}, y: ${num(n.relativeOffset[1])})`, ".zIndex(1)");
-  // A drawn presentation's trigger: what its content anchors to, and the long-press that opens a hover card (D-HOVER).
+  // A drawn presentation's trigger: what its content anchors to, and the long-press that opens a hover card.
   if (n.opens?.kind === "presentation") {
     if (n.opens.anchor) m.push(`.markswiftAnchor(${str(n.opens.layer)})`);
     const state = ctx.control.openStates.get(n.opens.layer);
     if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
   }
-  // A right-click menu (plan 061): the trigger keeps its view; a long-press opens the native menu.
+  // A right-click menu: the trigger keeps its view; a long-press opens the native menu.
   if (n.menu?.context) m.push(".contextMenu {", ...indent(menuExpr(n.menu.items, ctx.control), 1), "}");
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
@@ -286,8 +286,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     const state = ctx.control.toggleOf.get(n);
     if (state) m.push(`.accessibilityAddTraits(${state.on} ? .isSelected : [])`);
     else if (a.selected) m.push(".accessibilityAddTraits(.isSelected)");
-    // Plan 025's disclosure style and select menu already announce their own state; never add a second value there.
-    // A native menu (061) announces its popup itself; a Radix select's value is its Picker's choice.
+    // The disclosure style and select menu already announce their own state; never add a second value there.
+    // A native menu announces its popup itself; a Radix select's value is its Picker's choice.
     const ownsValue =
       (n.kind === "control" && (n.control === "disclosure" || n.control === "picker")) ||
       (!!n.menu && !n.menu.context && (a.value === "expanded" || a.value === "collapsed"));
@@ -304,7 +304,7 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
   }
-  // D-HOVER: a pointer shows `.help` (iPad, Mac); VoiceOver reads the hint. An author `aria-describedby` hint wins.
+  // A pointer shows `.help` (iPad, Mac); VoiceOver reads the hint. An author `aria-describedby` hint wins.
   if (n.tooltip) {
     m.push(`.help(${str(n.tooltip)})`);
     if (!a?.hint) m.push(`.accessibilityHint(${str(n.tooltip)})`);
@@ -321,8 +321,8 @@ export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx:
 }
 
 /**
- * One `.markswiftPresentation` per drawn presentation on `n` (plan 060), its roots in overlay order: a native
- * `::backdrop` colour, then each root as one expression (066 appends `.transition` to it). Roots `layers.ts` made
+ * One `.markswiftPresentation` per drawn presentation on `n`, its roots in overlay order: a native
+ * `::backdrop` colour, then each root as one expression (`transitionModifiers` appends to it). Roots `layers.ts` made
  * pass-through (a scrim) draw where they are; the first content root takes the presentation's placement, any later
  * one its captured offset.
  */
@@ -343,7 +343,7 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
           : at.kind === "anchored"
             ? `.anchored(${str(p.id)}, from: ${unitPoint(at.from)}, to: ${unitPoint(at.to)}, gap: ${size(at.gap)})`
             : undefined;
-    // 066: each root leaves with its own exit; Escape and outside taps close inside the longest one.
+    // Each root leaves with its own exit; Escape and outside taps close inside the longest one.
     const body = overlays.flatMap((o) => {
       const view = ctx.renderNode(o.node);
       if (o.node.hitTesting === false)

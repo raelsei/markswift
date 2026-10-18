@@ -94,7 +94,7 @@ export function stateAnimation(cond: string, t: StateTransition | undefined, fie
   return `.modifier(MarkswiftStateAnimation(isOn: ${cond}, into: ${into}, back: ${back}, reducedInto: ${reducedInto}, reducedBack: ${reducedBack}))`;
 }
 
-/** A layer root's exit as one curve: its duration, delay and first segment's easing (066). */
+/** A layer root's exit as one curve: its duration, delay and first segment's easing. */
 function exitSpec(k: KeyframeMotion): TransitionSpec {
   const easing = Object.values(k.tracks)[0]!.segments[0]!.easing;
   return { duration: k.duration, delay: Math.max(0, k.delay), easing };
@@ -133,7 +133,7 @@ export function longestExit(roots: SemNode[]): string | undefined {
 /** In-flow content's insertion/removal: the revealed height animates (`withAnimation` around the toggle times it). */
 const REVEAL = ".modifier(active: MarkswiftReveal(fraction: 0), identity: MarkswiftReveal(fraction: 1))";
 
-/** `.transition(…)` of a layer root (066): in-flow content's reveal and/or an overlay root's exit; none when neither. */
+/** `.transition(…)` of a layer root: in-flow content's reveal and/or an overlay root's exit; none when neither. */
 export function transitionModifiers(n: SemNode): string[] {
   const parts = [...(n.motion?.reveal ? [REVEAL] : []), ...(n.motion?.exit ? [exitExpr(n.motion)] : [])];
   if (!parts.length) return [];
