@@ -11,7 +11,7 @@ export type MotionByPath = Record<string, Motion>;
 
 declare global {
   interface Window {
-    /** CSS animations started since `recordAnimations` (overlay enter/exit, 066). */
+    /** CSS animations started since `recordAnimations` (overlay enter/exit). */
     __markswiftStarted?: Animation[];
   }
 }

@@ -23,7 +23,7 @@ import { settle } from "./settle.ts";
 
 /** Stamped through CDP on each layer root, valued by its paint-order index. */
 export const LAYER_MARK = "data-markswift-layer-root";
-/** At most this many triggers are opened per conversion (D-TRIGGERS). */
+/** At most this many triggers are opened per conversion. */
 const MAX_TRIGGERS = 12;
 /** At most this many buttons of a layer are clicked to find the ones that dismiss it. */
 const MAX_DISMISS_BUTTONS = 8;
@@ -75,7 +75,7 @@ export function laidOut(snap: DomSnapshot): Set<number> {
   return new Set(layout.nodeIndex.filter((i) => !hidden(i)).map((i) => nodes.backendNodeId![i]!));
 }
 
-/** Step 3 of the design: new roots in paint order, excluding `exclude` (the trigger subtree's backend ids), zero-area
+/** New roots in paint order, excluding `exclude` (the trigger subtree's backend ids), zero-area
  * subtrees and opacity-0 roots. `snap` is taken with `ROOTS_ARGS`. */
 export function layerRoots(before: Set<number>, snap: DomSnapshot, exclude: Set<number>): number[] {
   const { nodes, layout } = snap.documents[0]!;
@@ -203,7 +203,7 @@ export async function findTriggers(
 
 /**
  * Scroll the trigger into view and activate it with the real mouse; false when it is not in the page. The animations
- * the activation starts are recorded (066: a short enter finishes before the layer is read).
+ * the activation starts are recorded (a short enter finishes before the layer is read).
  */
 export async function activate(page: Page, root: string, trigger: Trigger): Promise<boolean> {
   const at = await page.evaluate(
@@ -374,7 +374,7 @@ export function dismissCandidates(roots: Raw[], paths: string[], identity: NodeI
 }
 
 /**
- * Step 5: the layer from the marked raws of the open tree (`marked[i]` carries `LAYER_MARK="<i>"`, already
+ * The layer from the marked raws of the open tree (`marked[i]` carries `LAYER_MARK="<i>"`, already
  * removed from its attrs). `root` is the open tree's root LayoutNode; `rootRaw` its raw.
  */
 export function assembleLayer(o: {
@@ -443,7 +443,7 @@ export function assembleLayer(o: {
 }
 
 /**
- * Step 6: paint the trigger and its descendants show while the layer is open (by LayoutNode id), and how many of
+ * Paint the trigger and its descendants show while the layer is open (by LayoutNode id), and how many of
  * its elements appeared or disappeared (not reproduced).
  */
 export function triggerPaint(
@@ -469,7 +469,7 @@ export function triggerPaint(
   return { paint, changed };
 }
 
-/** Step 7 after the Escape probe: outside click, then each candidate button. `escape` = the Escape probe closed it. */
+/** After the Escape probe: outside click, then each candidate button. `escape` = the Escape probe closed it. */
 export async function probeDismiss(
   page: Page,
   opening: Opening,
@@ -528,11 +528,11 @@ export async function probeDismiss(
 }
 
 /** What an `@open` capture needs: the open page's root-clipped screenshot (with `spec.screenshot`), root size, and the
- * trigger that opened it (its enter frames reopen it, 066). */
+ * trigger that opened it (its enter frames reopen it). */
 export type OpenShots = Record<string, { png?: Uint8Array; size: { w: number; h: number }; trigger: Trigger }>;
 
 /**
- * Step 8: open the first 12 of `rest.triggers`, each in a fresh page (`capture`), append the layers to
+ * Open the first 12 of `rest.triggers`, each in a fresh page (`capture`), append the layers to
  * `rest.layout.layers`, write `states.open` into `rest.layout.root`, and append warnings.
  */
 export async function captureLayers(

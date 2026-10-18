@@ -57,7 +57,7 @@ export interface CompileOptions {
   variantProbes?: Array<LayoutDoc | undefined>;
   /** @internal Pixel-identity check only: disables repeated-sibling extraction. */
   extract?: boolean;
-  /** `public` for a generated library (plan 033's `build`); `convert` stays internal. Default `internal`. */
+  /** `public` for a generated library (`markswift build`); `convert` stays internal. Default `internal`. */
   visibility?: "internal" | "public";
   /** App colours for captured tokens (`--palette`); views keep referencing `Palette.x`. */
   palette?: PaletteMap;

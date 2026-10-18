@@ -285,7 +285,7 @@ export class BrowserCapture {
       const roots = await Promise.all(
         (opening ? opening.roots : []).map(async (_, i) => (await page.$(`[${LAYER_MARK}="${i}"]`))!),
       );
-      // 066: enter read — roots[i] ↔ layer.nodes[i], before settle (`activate` recorded what the opening started)
+      // Enter read — roots[i] ↔ layer.nodes[i], before settle (`activate` recorded what the opening started)
       const enter = roots.length ? await readElementAnimations(page, roots) : { lists: [], warnings: [] };
       errors.push(...enter.warnings);
       let animated = enter.lists.some((l) => l.length);
@@ -384,7 +384,7 @@ export class BrowserCapture {
           info: rootInfo,
           hiddenOnOpen,
         });
-        // 066: enter attach — after layer assembly
+        // Enter attach — after layer assembly
         enter.lists.forEach((list, i) => {
           if (list.length) layer.nodes[i]!.motion = { ...layer.nodes[i]!.motion, enter: list };
         });
@@ -415,7 +415,7 @@ export class BrowserCapture {
           }),
         );
       }
-      // 066: exit — what closing starts on the same roots (light page only; the dark layer copies it, api/bands.ts).
+      // Exit — what closing starts on the same roots (light page only; the dark layer copies it, api/bands.ts).
       const readExit = async (layer: NonNullable<typeof opened>["layer"]) => {
         const exit = await readElementAnimations(page, roots);
         errors.push(...exit.warnings);
@@ -427,7 +427,7 @@ export class BrowserCapture {
       if (opened && opening && spec.open && spec.probeDismiss && opened.layer.placement !== "inflow") {
         await recordAnimations(page);
         await page.keyboard.press("Escape");
-        // 066: exit read — same roots, before settle
+        // Exit read — same roots, before settle
         await readExit(opened.layer);
         await settle(page);
         opened.layer.dismiss = await probeDismiss(page, opening, {
@@ -548,7 +548,7 @@ export class BrowserCapture {
   }
 
   /**
-   * `@open:<layer>@t:<ms>` enter frame (066): a fresh page opened like the `@open` capture (058's `openLayer`), the
+   * `@open:<layer>@t:<ms>` enter frame: a fresh page opened like the `@open` capture (`openLayer`), the
    * focus ring it took dropped, every animation paused `t` ms in under `no-preference`, screenshotted at `clip`.
    * Throws when no animation was paused (as `captureFrame`).
    */
