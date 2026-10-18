@@ -1,5 +1,5 @@
 ---
-import { checkVerbatim, isCut, isHead, type Row } from "../lib/book";
+import { checkVerbatim, codeTokens, isCut, isHead, type Row } from "../lib/book";
 
 interface Page {
   label: string;
@@ -43,14 +43,6 @@ const entries = notes.map(([key, html]) => ({ keys: typeof key === "string" ? []
 const keyed = new Set(entries.flatMap((e) => e.keys));
 for (const k of [...keyed, lit]) if (k < 1 || k > count) throw new Error(`${id}: line ${k} keyed, spread has ${count}`);
 
-// Code wraps only between tokens: at spaces, after ( [ , ; and before a member-access dot. Each token is kept
-// whole, so no identifier or number is ever split; the text itself is untouched.
-const tokens = (text: string) =>
-  text
-    .split(/(\s+)|(?<=[(\[,;])|(?=\.[A-Za-z_])/)
-    .filter(Boolean)
-    .map((t) => ({ t, space: /^\s+$/.test(t) }));
-
 // The signature: pointing at, focusing or choosing a line lights it on both pages and in the apparatus.
 const light = lines
   .filter((l) => l.n)
@@ -79,7 +71,7 @@ const light = lines
                   class:list={["c", side ? "r" : "v", { cut: isCut(cell), empty: !cell.trim(), ro: side && v === "" }]}
                   data-k={n || undefined}
                   style={`${pos};--i:${cell.trim() ? indent(cell) - margin[side]! : 0}`}
-                >{tokens(cell.trimStart()).map(({ t, space }, i, all) => space ? t : <Fragment>{i > 0 && !all[i - 1]!.space && <wbr />}<span class="t">{t}</span></Fragment>)}</code>
+                >{codeTokens(cell.trimStart()).map(({ t, space }, i, all) => space ? t : <Fragment>{i > 0 && !all[i - 1]!.space && <wbr />}<span class="t">{t}</span></Fragment>)}</code>
               )
             ) : (
               <figure class:list={["c img", side ? "r" : "v"]} data-k={n || undefined} style={pos}>

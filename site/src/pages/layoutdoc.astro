@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { checkVerbatim, esc, layoutDocVersion, lemma, version, type Row } from "../lib/book";
+import { checkVerbatim, code, layoutDocVersion, lemma, version, type Row } from "../lib/book";
 import layout from "../artifacts/WelcomeCard.layout.json?raw";
 import script from "../artifacts/recompile.ts?raw";
 import stdout from "../artifacts/recompile.out.txt?raw";
@@ -60,7 +60,7 @@ const notes: Array<[number | number[] | string, string]> = [
   [[13, 14], lemma("<code>viewport</code>", "root coordinates: the root sat 8 px in, the body’s default margin")],
   [18, lemma("<code>conditions</code>", "size <code>@media</code>/<code>@container</code> rules that hit elements; none")],
   [21, lemma("<code>fonts</code>", "the page’s <code>@font-face</code> faces; none, so no <code>Fonts/</code> folder")],
-  ["Run", lemma(`<code>recompile.ts</code>`, `${call.map((l) => `<code>${esc(l.trim())}</code>`).join("<br>")}; run with Bun against the library`)],
+  ["Run", lemma(`<code>recompile.ts</code>`, `${call.map((l) => code(l.trim())).join("<br>")}; run with Bun against the library`)],
 ];
 ---
 

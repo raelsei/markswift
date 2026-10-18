@@ -423,12 +423,10 @@ h1 .no {
   text-indent: -2ch;
   font: 0.78rem/1.34rem var(--mono);
   white-space: pre-wrap;
-  overflow-x: auto;
-  scrollbar-width: thin;
   background: var(--lit, transparent);
   color: var(--ink);
 }
-.c .t {
+code .t {
   white-space: nowrap;
 }
 .c.v {
@@ -542,7 +540,7 @@ h1 .no {
 }
 .apparatus code {
   font-size: 0.82em;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
 }
 .lv {
   font-family: var(--sc);

@@ -1,7 +1,7 @@
 ---
 import Book from "../layouts/Book.astro";
 import Spread from "../components/Spread.astro";
-import { esc, github, lemma, run, type Row } from "../lib/book";
+import { code, github, lemma, run, type Row } from "../lib/book";
 import html from "../artifacts/inbox.html?raw";
 import swift from "../artifacts/InboxNote.swift?raw";
 import transcript from "../artifacts/transcript.txt?raw";
@@ -12,7 +12,7 @@ const printed = run(transcript, command).split("\n");
 const note = (feature: string) => {
   const line = printed.find((l) => l.startsWith("Note ") && l.includes(` ${feature}: `));
   if (!line) throw new Error(`no ${feature} note in the inbox run`);
-  return `<code>${esc(line)}</code>`;
+  return code(line);
 };
 
 const rows: Row[] = [
@@ -50,7 +50,7 @@ const notes: Array<[number | number[] | string, string]> = [
   [[10, 13, 17], lemma("<code>flex-wrap:wrap</code>", `${note("flex-wrap")}`)],
   [[14, 15, 16], lemma("<code>flex:1</code>, <code>2</code>, <code>1</code>", `${note("flex-grow")}`)],
   ["Levels", lemma("<span class=\"lv\">approximated</span>, <span class=\"lv\">unmapped</span>", "drawn with a stated loss; not reproduced. Brackets list node ids: <code>3/0</code>, node 3’s first child")],
-  ["Run", lemma(`<code>$ ${esc(command)}</code>`, `<code>${esc(printed[1]!)}</code>, then the five notes above`)],
+  ["Run", lemma(code(`$ ${command}`), `${code(printed[1]!)}, then the five notes above`)],
   ["More", lemma("README", `<a href="${github}#not-translated">Not translated</a>, <a href="${github}#known-gaps">Known gaps</a>`)],
 ];
 ---
