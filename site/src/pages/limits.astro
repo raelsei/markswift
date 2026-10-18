@@ -1,0 +1,89 @@
+---
+import Book from "../layouts/Book.astro";
+import Spread from "../components/Spread.astro";
+import { github, run, type Row } from "../lib/book";
+import html from "../artifacts/inbox.html?raw";
+import swift from "../artifacts/InboxNote.swift?raw";
+import transcript from "../artifacts/transcript.txt?raw";
+
+const command = "npx markswift convert inbox.html --name InboxNote --theme light --out ./generated-inbox";
+const printed = run(transcript, command).split("\n");
+/** The run's own note for one feature, verbatim. */
+const note = (feature: string) => {
+  const line = printed.find((l) => l.startsWith("Note ") && l.includes(` ${feature}: `));
+  if (!line) throw new Error(`no ${feature} note in the inbox run`);
+  return `<code>${line.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code>`;
+};
+
+const rows: Row[] = [
+  ["## inbox.html", "## InboxNote.swift"],
+  [`<section data-markswift-root style="width:320px;font:16px system-ui">`, "        VStack(alignment: .leading, spacing: 0.0) {"],
+  [
+    `  <h3 style="position:sticky;top:0">Inbox</h3>`,
+    `            Text(verbatim: "Inbox").font(.system(size: textSize18_72, weight: .bold, design: .default)).foregroundStyle(Palette.textBlack)`,
+  ],
+  ["", "            // …"],
+  [`  <p>Reply <span onclick="reply()">now</span>.</p>`, "            Text.markswiftRuns(["],
+  ["", `                Text(verbatim: "Reply ").font(.system(size: textSize16, weight: .regular, design: .default)).foregroundStyle(Palette.textBlack),`],
+  ["", `                Text(verbatim: "now").font(.system(size: textSize16, weight: .regular, design: .default)).foregroundStyle(Palette.textBlack),`],
+  ["", "                // …"],
+  [
+    `  <p style="writing-mode:vertical-rl">Ab</p>`,
+    `            Text(verbatim: "Ab").font(.system(size: textSize16, weight: .regular, design: .default)).foregroundStyle(Palette.textBlack)`,
+  ],
+  ["", "            // …"],
+  [`  <div style="display:flex;flex-wrap:wrap;gap:8px">`, "            v_3"],
+  ["", "            // …"],
+  ["", "    private var v_3: some View {"],
+  ["", "        MarkswiftMeasuredLayout(width: 320.0, height: 44.0, frames: ["],
+  [`    <b style="flex:1 0 120px">One</b>`, "            CGRect(x: 0.0, y: 0.0, width: 154.0, height: 18.0),"],
+  [`    <b style="flex:2 0 90px">Two</b>`, "            CGRect(x: 162.0, y: 0.0, width: 158.0, height: 18.0),"],
+  [`    <b style="flex:1 0 140px">Three</b>`, "            CGRect(x: 0.0, y: 26.0, width: 320.0, height: 18.0),"],
+  ["  </div>", "        ], grows: true) {"],
+  ["</section>", "        // …"],
+];
+
+const notes: Array<[number | number[] | string, string]> = [
+  [2, `${note("position: sticky")} The heading stays where it was captured; it does not pin while the page scrolls.`],
+  [[4, 6], `${note("@onclick")} The words survive; the tap does not.`],
+  [8, `${note("writing-mode")} The text is drawn horizontally.`],
+  [[10, 13, 17], `${note("flex-wrap")} The row keeps Chrome’s line division in a measured layout.`],
+  [[14, 15, 16], `${note("flex-grow")} Each item keeps its measured width.`],
+  ["Levels", "<span class=\"lv\">approximated</span>: drawn, with a stated loss. <span class=\"lv\">unmapped</span>: not reproduced. The bracket lists node ids; <code>3/0</code> is the first child of node 3."],
+];
+---
+
+<Book at={8} description="Limits: what Markswift does not translate, and how every loss is reported as a note per node.">
+  <header class="opening">
+    <div class="lede">
+      <h1><span class="no">9</span>Limits: what it says it lost</h1>
+      <p>
+        Markswift translates what Chrome laid out, not what scripts do: JavaScript runs only during capture. It does
+        not translate height or orientation media queries, width breakpoints without <code>--breakpoints</code>,
+        validation states, hover-only states beyond tooltips and hover cards, sticky pinning, scroll-driven animations or <code>&lt;select
+        multiple&gt;</code>. Some layouts keep their captured geometry in app mode instead of reflowing.
+      </p>
+      <p>
+        Nothing is lost silently. Every loss is printed as a note naming its level, its feature and its nodes, and the
+        library returns the same list as <code>diagnostics</code>. The page on the left was written to trip five of
+        them.
+      </p>
+    </div>
+    <aside class="provenance" aria-labelledby="set-from">
+      <h2 id="set-from" class="sc">Set from</h2>
+      <pre><code>{`$ ${command}\n${printed[1]}`}</code></pre>
+      <p>
+        Its five notes stand in the apparatus. The full lists: <a href={`${github}#not-translated`}>Not translated</a>
+        and <a href={`${github}#known-gaps`}>Known gaps</a> in the README.
+      </p>
+    </aside>
+  </header>
+
+  <Spread
+    id="limits"
+    verso={{ label: "HTML · verso", note: "written to lose", sources: { "inbox.html": html } }}
+    recto={{ label: "SwiftUI · recto", note: "what came through", sources: { "InboxNote.swift": swift } }}
+    rows={rows}
+    notes={notes}
+  />
+</Book>

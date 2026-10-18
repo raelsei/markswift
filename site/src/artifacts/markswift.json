@@ -1,0 +1,9 @@
+{
+  "library": "CardKit",
+  "out": "CardKit",
+  "theme": "light",
+  "components": [
+    { "name": "WelcomeCard", "source": "welcome.html" },
+    { "name": "InboxNote", "source": "inbox.html" }
+  ]
+}

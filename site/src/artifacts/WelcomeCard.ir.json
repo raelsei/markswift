@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "name": "WelcomeCard-light",
+  "source": "welcome.html",
+  "theme": "light",
+  "size": {
+    "w": 368,
+    "h": 149
+  },
+  "canvas": {
+    "r": 0.9568627450980393,
+    "g": 0.9568627450980393,
+    "b": 0.9607843137254902,
+    "a": 1
+  },
+  "root": {
+    "id": "root",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "w": 368,
+      "h": 149.81
+    },
+    "width": {
+      "kind": "fill"
+    },
+    "height": {
+      "kind": "fill"
+    },
+    "padding": [
+      24,
+      24,
+      40,
+      24
+    ],
+    "style": {
+      "fills": [
+        {
+          "kind": "solid",
+          "color": {
+            "r": 0.9568627450980393,
+            "g": 0.9568627450980393,
+            "b": 0.9607843137254902,
+            "a": 1
+          }
+        }
+      ],
+      "shadows": [],
+      "radius": [
+        16,
+        16,
+        16,
+        16
+      ]
+    },
+    "confidence": "mapped",
+    "diagnostics": [],
+    "overlays": [],
+    "nameHint": {
+      "words": "card",
+      "source": "class"
+    },
+    "kind": "stack",
+    "axis": "v",
+    "spacing": 19.9,
+    "align": "stretch",
+    "distribution": "start",
+    "leadInset": 19.91,
+    "children": [
+      {
+        "id": "0",
+        "frame": {
+          "x": 24,
+          "y": 43.91,
+          "w": 320,
+          "h": 28
+        },
+        "width": {
+          "kind": "fill"
+        },
+        "height": {
+          "kind": "hug"
+        },
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "style": {
+          "fills": [],
+          "shadows": []
+        },
+        "confidence": "mapped",
+        "diagnostics": [],
+        "overlays": [],
+        "a11y": {
+          "heading": 2
+        },
+        "nameHint": {
+          "words": "Item",
+          "source": "tag"
+        },
+        "kind": "text",
+        "sourceTag": "h2",
+        "runs": [
+          {
+            "text": "Hello SwiftUI",
+            "font": {
+              "family": {
+                "kind": "system",
+                "design": "default"
+              },
+              "size": 24,
+              "weight": 700
+            },
+            "color": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 1
+            }
+          }
+        ],
+        "align": "leading",
+        "lines": 1
+      },
+      {
+        "id": "1",
+        "frame": {
+          "x": 24,
+          "y": 91.81,
+          "w": 320,
+          "h": 18
+        },
+        "width": {
+          "kind": "fill"
+        },
+        "height": {
+          "kind": "hug"
+        },
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "style": {
+          "fills": [],
+          "shadows": []
+        },
+        "confidence": "mapped",
+        "diagnostics": [],
+        "overlays": [],
+        "nameHint": {
+          "words": "Item",
+          "source": "tag"
+        },
+        "kind": "text",
+        "sourceTag": "p",
+        "runs": [
+          {
+            "text": "Made from HTML.",
+            "font": {
+              "family": {
+                "kind": "system",
+                "design": "default"
+              },
+              "size": 16,
+              "weight": 400
+            },
+            "color": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 1
+            }
+          }
+        ],
+        "align": "leading",
+        "lines": 1
+      }
+    ]
+  }
+}

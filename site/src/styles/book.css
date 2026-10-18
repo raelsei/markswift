@@ -1,0 +1,752 @@
+/* Markswift, a parallel-text edition: cloth-green binding, cool paper, ink; Literata to read, Alegreya Sans SC
+   for running heads and contents, Fragment Mono for the texts themselves. */
+
+@font-face {
+  font-family: "Literata";
+  src: url("../../node_modules/@fontsource-variable/literata/files/literata-latin-opsz-normal.woff2")
+    format("woff2-variations");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans SC";
+  src: url("../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-500-normal.woff2")
+    format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans SC";
+  src: url("../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-700-normal.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fragment Mono";
+  src: url("../../node_modules/@fontsource/fragment-mono/files/fragment-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --cloth: #2f5d3a;
+  --cloth-d: #244a2e;
+  --paper: #eef0eb;
+  --leaf: #f8f9f6;
+  --ink: #1b1d1b;
+  --ink-2: #4c5649;
+  --rule: #d2d8ce;
+  --wash: #d9e5d3;
+  --rail-ink: #eef2ea;
+  --rail-2: #cfe2c8;
+  --rail-line: #6f9275;
+  --serif: "Literata", Georgia, serif;
+  --sc: "Alegreya Sans SC", "Gill Sans", sans-serif;
+  --mono: "Fragment Mono", ui-monospace, Menlo, monospace;
+  --gut: 3.25rem;
+  --pad: 1.4rem;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.65 var(--serif);
+  font-optical-sizing: auto;
+  -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--cloth) var(--paper);
+}
+
+body {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  min-height: 100vh;
+  /* The binding runs the full height of the book, below the sticky rail too. */
+  background: linear-gradient(
+    to right,
+    var(--cloth) calc(15.5rem - 6px),
+    var(--cloth-d) calc(15.5rem - 6px) 15.5rem,
+    transparent 15.5rem
+  );
+}
+
+::selection {
+  background: #c5d9bd;
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--cloth);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in srgb, var(--cloth) 50%, transparent);
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  font-variant-ligatures: none;
+}
+
+.sc {
+  font-family: var(--sc);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  left: -100vw;
+  z-index: 10;
+  padding: 0.5rem 0.9rem;
+  background: var(--paper);
+  color: var(--ink);
+}
+.skip:focus {
+  left: 1rem;
+  top: 1rem;
+}
+
+/* The binding: contents rail. */
+
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 1.9rem 0 1.6rem;
+  background: var(--cloth);
+  color: var(--rail-ink);
+  border-right: 6px solid var(--cloth-d);
+  scrollbar-color: var(--rail-line) var(--cloth);
+}
+.rail :focus-visible {
+  outline-color: var(--paper);
+}
+.rail ::selection {
+  background: var(--paper);
+  color: var(--cloth);
+}
+
+.mark {
+  margin: 0 1.6rem;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  color: var(--paper);
+  text-decoration: none;
+}
+.edition {
+  margin: 0.2rem 1.6rem 0;
+  font-size: 0.8125rem;
+  color: var(--rail-2);
+}
+.toc-head {
+  margin: 2.2rem 1.6rem 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--rail-2);
+}
+.toc-wrap > summary {
+  display: none;
+}
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 1rem;
+}
+.toc a {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.3rem 1.6rem;
+  text-decoration: none;
+}
+.toc .no {
+  width: 1.1rem;
+  text-align: right;
+  font-size: 0.8125rem;
+  color: var(--rail-2);
+  font-variant-numeric: tabular-nums;
+}
+.toc .t {
+  flex: 1;
+  border-bottom: 1px dotted var(--rail-line);
+}
+.toc a:hover .t {
+  border-bottom: 1px solid var(--rail-ink);
+}
+.toc a[aria-current] {
+  margin-right: -6px;
+  padding-right: calc(1.6rem + 6px);
+  background: var(--paper);
+  color: var(--ink);
+}
+.toc a[aria-current] .no {
+  color: var(--cloth);
+}
+.toc a[aria-current] .t {
+  border-bottom-color: transparent;
+}
+.toc a[aria-current]:focus-visible {
+  outline-color: var(--cloth);
+  outline-offset: -3px;
+}
+
+.rail-foot {
+  margin-top: auto;
+  padding: 2.2rem 1.6rem 0;
+  font-size: 0.875rem;
+}
+.rail-foot code {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: var(--cloth-d);
+  color: var(--paper);
+  font-size: 0.72rem;
+  user-select: all;
+}
+.rail-foot ul {
+  list-style: none;
+  display: flex;
+  gap: 1.1rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+}
+.rail-foot a {
+  text-decoration-color: var(--rail-line);
+}
+
+/* The page. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+  padding: 0 clamp(1.25rem, 4vw, 4rem);
+}
+.page > * {
+  width: 100%;
+  max-width: 80rem;
+}
+
+.running {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 0 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.875rem;
+  color: var(--cloth);
+}
+
+.opening {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  gap: 3.5rem;
+  align-items: start;
+  padding: 2.4rem 0 1.9rem;
+}
+h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.9rem, 1.35rem + 1.5vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+h1 .no {
+  margin-right: 0.3em;
+  font-weight: 400;
+  color: var(--cloth);
+}
+.lede p {
+  max-width: 66ch;
+  margin: 0 0 0.75em;
+  text-wrap: pretty;
+}
+.lede p:last-child {
+  margin-bottom: 0;
+}
+
+.provenance {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.provenance h2 {
+  margin: 0 0 0.45rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cloth);
+}
+.provenance pre {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--leaf);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.95em;
+}
+.provenance p {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+/* The spread: verso | shared line numbers | recto. */
+
+.spread {
+  --seam: calc(50% - var(--gut) / 2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+  padding-bottom: 0.9rem;
+  border: 1px solid var(--rule);
+  background: linear-gradient(
+    to right,
+    var(--leaf) var(--seam),
+    var(--rule) var(--seam) calc(var(--seam) + 1px),
+    var(--paper) calc(var(--seam) + 1px) calc(100% - var(--seam) - 1px),
+    var(--rule) calc(100% - var(--seam) - 1px) calc(100% - var(--seam)),
+    var(--leaf) calc(100% - var(--seam))
+  );
+}
+
+.ph {
+  grid-row: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+  padding: 0.6rem var(--pad) 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.85rem;
+  color: var(--cloth);
+}
+.ph.v {
+  grid-column: 1;
+}
+.ph.n {
+  grid-column: 2;
+  justify-content: center;
+  padding-inline: 0;
+  color: var(--ink-2);
+}
+.ph.r {
+  grid-column: 3;
+}
+.pn {
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.c {
+  grid-row: var(--d);
+  margin: 0;
+  padding: 0 var(--pad) 0 calc(var(--pad) + (var(--i, 0) + 2) * 1ch);
+  text-indent: -2ch;
+  font: 0.78rem/1.34rem var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  background: var(--lit, transparent);
+  color: var(--ink);
+}
+.c.v {
+  grid-column: 1;
+}
+.c.r {
+  grid-column: 3;
+}
+.c.cut {
+  color: var(--ink-2);
+}
+.c.file {
+  padding-top: 0.55rem;
+  padding-bottom: 0.15rem;
+  text-indent: 0;
+  font: 500 0.8rem/1.3 var(--sc);
+  color: var(--cloth);
+}
+
+.n {
+  grid-column: 2;
+  grid-row: var(--d);
+  position: relative;
+  font: 0.72rem/1.34rem var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  background: var(--lit-n, transparent);
+  color: var(--lit-nc, var(--cloth));
+  cursor: pointer;
+}
+.n.keyed {
+  text-decoration: underline 1px;
+  text-underline-offset: 3px;
+}
+.n:has(:focus-visible) {
+  outline: 2px solid var(--cloth);
+  outline-offset: -1px;
+}
+
+.c.img {
+  display: flex;
+  justify-content: center;
+  padding: 0.4rem var(--pad) 1rem;
+  text-indent: 0;
+}
+.c.img img {
+  display: block;
+  width: 100%;
+  max-width: 18rem;
+  height: auto;
+  border: 1px solid var(--rule);
+}
+
+/* Apparatus: the notes at the foot, keyed to the shared line numbers. */
+
+.apparatus {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 1rem 2rem;
+  margin-top: 1.3rem;
+  padding-top: 0.9rem;
+  border-top: 2px solid var(--cloth);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.apparatus h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cloth);
+}
+.apparatus ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2 22rem;
+  column-gap: 2.5rem;
+}
+.apparatus li {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  margin: 0 -0.45rem;
+  padding: 0.22rem 0.45rem 0.3rem;
+  break-inside: avoid;
+  background: var(--lit, transparent);
+}
+.apparatus .k {
+  font: 0.75rem/1.95 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cloth);
+}
+.apparatus label.k {
+  cursor: pointer;
+}
+.apparatus span.k {
+  font: 700 0.8rem/1.8 var(--sc);
+  letter-spacing: 0.04em;
+}
+.apparatus code {
+  font-size: 0.82em;
+  overflow-wrap: anywhere;
+}
+.lv {
+  font-family: var(--sc);
+  letter-spacing: 0.03em;
+  color: var(--cloth);
+}
+
+.apparatus .floors {
+  columns: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0 2rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.apparatus .floors li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.12rem 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Turn the page. */
+
+.ch {
+  padding-bottom: 3rem;
+}
+.turn {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+}
+.turn > * {
+  flex: 1;
+}
+.turn a {
+  display: grid;
+  gap: 0.05rem;
+  padding: 1rem 0 1.4rem;
+  text-decoration: none;
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+.turn .dir {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.turn a:hover span:last-child {
+  text-decoration: underline 1px;
+  text-underline-offset: 0.22em;
+}
+.turn .next {
+  text-align: right;
+}
+.turn .next span:last-child {
+  color: var(--cloth);
+}
+
+/* Chapters turn like pages. */
+
+@keyframes page-in-right {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes page-in-left {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes page-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Narrower: the rail folds into a contents bar. */
+
+@media (max-width: 63.99rem) {
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    background: none;
+  }
+  .rail {
+    position: static;
+    height: auto;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 0 1rem;
+    padding: 0.55rem clamp(1.25rem, 4vw, 4rem);
+    border-right: 0;
+    border-bottom: 4px solid var(--cloth-d);
+  }
+  .mark {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  .edition,
+  .toc-head,
+  .rail-foot {
+    display: none;
+  }
+  .toc-wrap {
+    flex: 1;
+  }
+  .toc-wrap > summary {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0;
+    list-style: none;
+    cursor: pointer;
+    color: var(--rail-2);
+  }
+  .toc-wrap > summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc-wrap > summary::after {
+    content: "";
+    width: 0.42em;
+    height: 0.42em;
+    margin: 0 0.15rem 0.2em 0.1rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+  }
+  .toc-wrap[open] > summary::after {
+    margin-bottom: -0.2em;
+    transform: rotate(-135deg);
+  }
+  .here-short {
+    color: var(--paper);
+  }
+  .toc-wrap[open] {
+    flex-basis: 100%;
+    padding-bottom: 0.5rem;
+  }
+  .toc a {
+    padding: 0.4rem 0.6rem;
+  }
+  .toc a[aria-current] {
+    margin-right: 0;
+    padding-right: 0.6rem;
+  }
+  .toc-wrap[open] ~ .rail-foot {
+    display: block;
+    flex-basis: 100%;
+    padding: 0.4rem 0.6rem 0.8rem;
+  }
+}
+
+/* The opening keeps its side column only where the reading column still gets its full measure. */
+@media (max-width: 75.99rem) {
+  .opening {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  .provenance {
+    max-width: 41rem;
+  }
+}
+
+/* Narrow: the spread stacks, verso above recto, each line keeping its number. */
+
+@media (max-width: 47.99rem) {
+  :root {
+    --gut: 2.5rem;
+    --pad: 0.85rem;
+  }
+  .spread {
+    grid-template-columns: var(--gut) minmax(0, 1fr);
+    background: linear-gradient(
+      to right,
+      var(--paper) calc(var(--gut) - 1px),
+      var(--rule) calc(var(--gut) - 1px) var(--gut),
+      var(--leaf) var(--gut)
+    );
+  }
+  .ph.v {
+    grid-column: 1 / -1;
+    background: var(--leaf);
+  }
+  .ph.n {
+    display: none;
+  }
+  .ph.r {
+    grid-column: 1 / -1;
+    grid-row: var(--m-recto);
+    margin-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+    background: var(--leaf);
+  }
+  .n {
+    grid-column: 1;
+  }
+  .c.v {
+    grid-column: 2;
+  }
+  .c.r {
+    grid-column: 2;
+    grid-row: var(--m);
+    position: relative;
+  }
+  .c.empty {
+    display: none;
+  }
+  .n.ro {
+    grid-row: var(--m);
+  }
+  .c.r.ro[data-k]::before {
+    content: none;
+  }
+  .c.r[data-k]::before {
+    content: attr(data-k);
+    position: absolute;
+    left: calc(-1 * var(--gut));
+    width: var(--gut);
+    text-indent: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--lit-nc, var(--cloth));
+    background: var(--lit-n, transparent);
+  }
+  .running {
+    font-size: 0.8rem;
+  }
+  .apparatus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .turn {
+    flex-direction: column;
+    gap: 0;
+  }
+}

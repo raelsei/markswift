@@ -1,0 +1,90 @@
+---
+import Book from "../layouts/Book.astro";
+import Spread from "../components/Spread.astro";
+import { run, type Row } from "../lib/book";
+import ir from "../artifacts/WelcomeCard.ir.json?raw";
+import swift from "../artifacts/WelcomeCard.swift?raw";
+import transcript from "../artifacts/transcript.txt?raw";
+
+const rows: Row[] = [
+  ["## WelcomeCard.ir.json", "## WelcomeCard.swift"],
+  [`"root": {`, "struct WelcomeCard: View {"],
+  ["  …", "    @ScaledMetric(relativeTo: .callout) private var textSize16: CGFloat = 16.0"],
+  ["", "    @ScaledMetric(relativeTo: .title2) private var textSize24: CGFloat = 24.0"],
+  ["", "    // …"],
+  ["", "    private var v_root: some View {"],
+  [`  "kind": "stack",`, "        VStack(alignment: .leading, spacing: 19.9) {"],
+  [`  "axis": "v",`, ""],
+  [`  "spacing": 19.9,`, ""],
+  [`  "align": "stretch",`, ""],
+  ["  …", ""],
+  [`  "leadInset": 19.91,`, ""],
+  ["  …", ""],
+  [
+    `      "text": "Hello SwiftUI",`,
+    `            Text(verbatim: "Hello SwiftUI").font(.system(size: textSize24, weight: .bold, design: .default)).foregroundStyle(Palette.textBlack)`,
+  ],
+  ["      …", "            .fixedSize(horizontal: false, vertical: true)"],
+  [`        "size": 24,`, "            .frame(minWidth: 0.0, maxWidth: .infinity, alignment: .leading)"],
+  [`        "weight": 700`, "            .accessibilityAddTraits(.isHeader)"],
+  ["      …", "            .accessibilityHeading(.h2)"],
+  ["", "            .padding(.top, 19.91)"],
+  [
+    `      "text": "Made from HTML.",`,
+    `            Text(verbatim: "Made from HTML.").font(.system(size: textSize16, weight: .regular, design: .default)).foregroundStyle(Palette.textBlack)`,
+  ],
+  ["      …", "            .fixedSize(horizontal: false, vertical: true)"],
+  [`        "size": 16,`, "            .frame(minWidth: 0.0, maxWidth: .infinity, alignment: .leading)"],
+  [`        "weight": 400`, "        }"],
+  ["", "        .padding(EdgeInsets(top: 24.0, leading: 24.0, bottom: 40.0, trailing: 24.0))"],
+  ["", "        .frame(minWidth: 0.0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)"],
+  ["", "        .background(Palette.canvas, in: RoundedRectangle(cornerRadius: 16.0, style: .circular))"],
+  ["", "    }"],
+];
+
+const notes: Array<[number | number[] | string, string]> = [
+  [[1, 5], "The root node becomes the view: the struct, named by <code>--name</code>, and a body property named after the node id, <code>v_root</code>."],
+  [[2, 3, 15, 21], "Text sizes become <code>@ScaledMetric</code> properties relative to a text style, so they follow Dynamic Type."],
+  [[6, 7, 8], "The vertical stack and its measured spacing."],
+  [[9, 15, 21], "<code>stretch</code>: children align <code>.leading</code> and take the full width."],
+  [[11, 18], "The lead inset becomes top padding on the first child."],
+  [[13, 19], "<code>Text(verbatim:)</code> shows the words as written; they are not looked up as localization keys."],
+  [[14, 20], "Text wraps to the width it is offered and takes the height it needs: in app mode boxes grow with their text."],
+  [[16, 22], "Weight 700 is <code>.bold</code>, 400 <code>.regular</code>."],
+  [17, "The level-2 heading of chapter 4, line 27: a header trait and <code>.accessibilityHeading(.h2)</code>."],
+  [23, "The IR’s padding of chapter 4, lines 3 to 8 (top, right, bottom, left), as <code>EdgeInsets</code>."],
+  [25, "The fill becomes the palette token <code>Palette.canvas</code> (chapter 6) behind a 16-point rounded rectangle."],
+];
+---
+
+<Book at={4} description="SwiftUI: how Markswift emits a view from the semantic IR, with Dynamic Type, explicit init and native stacks.">
+  <header class="opening">
+    <div class="lede">
+      <h1><span class="no">5</span>SwiftUI: the view it writes</h1>
+      <p>
+        The emitter walks the IR and writes one SwiftUI view: stacks become <code>VStack</code> and
+        <code>HStack</code> or a runtime layout, text becomes <code>Text</code>, controls become native controls. In
+        <code>app</code> mode, the default, sizes are floors rather than pins: text scales with Dynamic Type through
+        <code>@ScaledMetric</code>, and boxes grow with their text.
+      </p>
+      <p>
+        The view has an explicit <code>init</code>. Repeated rows become a <code>ForEach</code> over a data array and
+        buttons become <code>on&lt;Name&gt;</code> closures; this card has neither. Every <code>.swift</code> file
+        starts with the version line that wrote it.
+      </p>
+    </div>
+    <aside class="provenance" aria-labelledby="set-from">
+      <h2 id="set-from" class="sc">Set from</h2>
+      <pre><code>{run(transcript, "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome")}</code></pre>
+      <p>The recto is <code>WelcomeCard.swift</code> from that run, byte for byte what the library returned as <code>code</code>.</p>
+    </aside>
+  </header>
+
+  <Spread
+    id="swiftui"
+    verso={{ label: "Semantic IR · verso", note: "what it means", sources: { "WelcomeCard.ir.json": ir } }}
+    recto={{ label: "SwiftUI · recto", note: "what Markswift wrote", sources: { "WelcomeCard.swift": swift } }}
+    rows={rows}
+    notes={notes}
+  />
+</Book>

@@ -1,0 +1,113 @@
+---
+import { checkVerbatim, isCut, isHead, type Row } from "../lib/book";
+
+interface Page {
+  label: string;
+  note?: string;
+  /** Text sources the page's lines must come from, by the name a `## name` row uses. */
+  sources?: Record<string, string>;
+}
+interface Props {
+  id: string;
+  verso: Page;
+  recto: Page;
+  rows: Row[];
+  /**
+   * Apparatus entries: the line or lines a note is keyed to (or a siglum), and the note as HTML. A note keyed to
+   * several lines lights all of them.
+   */
+  notes: Array<[number | number[] | string, string]>;
+}
+
+const { id, verso, recto, rows, notes } = Astro.props;
+checkVerbatim(rows.map((r) => r[0]), verso.sources ?? {}, `${id} verso`);
+checkVerbatim(rows.map((r) => r[1]), recto.sources ?? {}, `${id} recto`);
+
+// Head rows name a source and carry no line number. Side by side, row 1 holds the page heads and row i + 2 the
+// spread's row i. Stacked, the verso comes first (head at 1, lines from 2), then the recto (head at total + 2); a
+// line only the recto has (`ro`) folds its empty verso line and carries its number beside the recto instead.
+let count = 0;
+const total = rows.length;
+const lines = rows.map(([v, r], i) => ({
+  v,
+  r,
+  n: isHead(v) || isHead(r) ? 0 : ++count,
+  pos: `--d:${i + 2};--m:${total + 3 + i}`,
+}));
+// Each page is set from its own left margin: the indentation every text line shares is dropped.
+const indent = (c: unknown) => (typeof c === "string" && c.trim() && !isHead(c) ? c.length - c.trimStart().length : Infinity);
+const margin = [0, 1].map((side) => Math.min(...rows.map((r) => indent(r[side]))));
+const entries = notes.map(([key, html]) => ({ keys: typeof key === "string" ? [] : [key].flat(), siglum: key, html }));
+const keyed = new Set(entries.flatMap((e) => e.keys));
+for (const k of keyed) if (k < 1 || k > count) throw new Error(`${id}: apparatus entry for line ${k}, spread has ${count}`);
+
+// The signature: pointing at, focusing or choosing a line lights it on both pages and in the apparatus.
+const light = lines
+  .filter((l) => l.n)
+  .map(
+    ({ n }) =>
+      `#${id}:has([data-k~="${n}"]:hover,[value="${n}"]:checked) [data-k~="${n}"]{--lit:var(--wash);--lit-n:var(--cloth);--lit-nc:var(--leaf)}`,
+  )
+  .join("\n");
+---
+
+<div id={id}>
+  <style set:html={light} is:inline></style>
+  <div class="spread" style={`--m-recto:${total + 2}`}>
+    <div class="ph v sc"><span>{verso.label}</span>{verso.note && <span class="pn">{verso.note}</span>}</div>
+    <div class="ph n sc" aria-hidden="true">line</div>
+    <div class="ph r sc"><span>{recto.label}</span>{recto.note && <span class="pn">{recto.note}</span>}</div>
+    {
+      lines.map(({ v, r, n, pos }) => (
+        <Fragment>
+          {[v, r].map((cell, side) =>
+            typeof cell === "string" ? (
+              isHead(cell) ? (
+                <span class:list={["c file", side ? "r" : "v"]} style={pos}>{cell.slice(3)}</span>
+              ) : (
+                <code
+                  class:list={["c", side ? "r" : "v", { cut: isCut(cell), empty: !cell.trim(), ro: side && v === "" }]}
+                  data-k={n || undefined}
+                  style={`${pos};--i:${cell.trim() ? indent(cell) - margin[side]! : 0}`}
+                >{cell.trimStart()}</code>
+              )
+            ) : (
+              <figure class:list={["c img", side ? "r" : "v"]} data-k={n || undefined} style={pos}>
+                <img src={cell.src} alt={cell.alt} width={cell.width} height={cell.height} loading="lazy" decoding="async" />
+              </figure>
+            ),
+          )}
+          {n ? (
+            <label class:list={["n", { keyed: keyed.has(n), ro: v === "" && r !== "" }]} data-k={n} style={pos}>
+              <input type="radio" class="sr" name={`line-${id}`} id={`l-${id}-${n}`} value={n} />
+              <span class="sr">Line </span>{n}
+            </label>
+          ) : (
+            <span class="n" style={pos} aria-hidden="true" />
+          )}
+        </Fragment>
+      ))
+    }
+  </div>
+
+  <section class="apparatus" aria-labelledby={`${id}-app`}>
+    <h2 id={`${id}-app`} class="sc">Apparatus</h2>
+    <ul>
+      {
+        entries.map(({ keys, siglum, html }) => (
+          <li data-k={keys.length ? keys.join(" ") : undefined}>
+            {keys.length ? (
+              <label class="k" for={`l-${id}-${keys[0]}`}>
+                <span class="sr">{keys.length > 1 ? "Lines " : "Line "}</span>
+                {keys.join(", ")}
+              </label>
+            ) : (
+              <span class="k sc">{siglum}</span>
+            )}
+            <span set:html={html} />
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</div>

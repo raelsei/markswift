@@ -1,0 +1,102 @@
+---
+import Book from "../layouts/Book.astro";
+import Spread from "../components/Spread.astro";
+import { type Row } from "../lib/book";
+import layout from "../artifacts/WelcomeCard.layout.json?raw";
+import ir from "../artifacts/WelcomeCard.ir.json?raw";
+
+const rows: Row[] = [
+  ["## WelcomeCard.layout.json", "## WelcomeCard.ir.json"],
+  [`"tag": "article",`, `"id": "root",`],
+  ["…", "…"],
+  ["", `"padding": [`],
+  ["", "  24,"],
+  ["", "  24,"],
+  [`  "padding-bottom": "24px",`, "  40,"],
+  ["", "  24"],
+  ["", "],"],
+  ["…", "…"],
+  ["", `"confidence": "mapped",`],
+  ["", `"diagnostics": [],`],
+  ["", "…"],
+  [`  "tag": "h2",`, `"kind": "stack",`],
+  ["  …", `"axis": "v",`],
+  [`    "margin-bottom": "19.92px",`, `"spacing": 19.9,`],
+  ["    …", "…"],
+  [`    "margin-top": "19.92px",`, `"leadInset": 19.91,`],
+  ["  …", `"children": [`],
+  ["", "  {"],
+  ["", `    "id": "0",`],
+  [`  "bounds": {`, `    "frame": {`],
+  [`    "x": 24,`, `      "x": 24,`],
+  [`    "y": 43.91,`, `      "y": 43.91,`],
+  [`    "w": 320,`, `      "w": 320,`],
+  [`    "h": 28`, `      "h": 28`],
+  ["  …", "    …"],
+  ["", `    "a11y": {`],
+  ["", `      "heading": 2`],
+  ["", "    },"],
+  ["", "    …"],
+  ["", `    "kind": "text",`],
+  ["", `    "sourceTag": "h2",`],
+  ["", "    …"],
+  [`      "text": "Hello SwiftUI",`, `        "text": "Hello SwiftUI",`],
+  ["  …", "    …"],
+  [`  "tag": "p",`, `    "id": "1",`],
+  ["  …", "    …"],
+  [`    "margin-bottom": "16px",`, ""],
+  ["  …", ""],
+  [`    "y": 91.81,`, `      "y": 91.81,`],
+  ["  …", "    …"],
+  ["", `    "kind": "text",`],
+  ["", `    "sourceTag": "p",`],
+];
+
+const notes: Array<[number | number[] | string, string]> = [
+  [[1, 20, 36], "Each element becomes one node and keeps its capture id: <code>root</code>, <code>0</code>, <code>1</code>."],
+  [[6, 38], "The card’s 24 px bottom padding plus the paragraph’s 16 px bottom margin: the stack’s bottom padding is 40."],
+  [[10, 11], "A confidence per node, <span class=\"lv\">mapped</span> here, beside the list of what it lost: nothing."],
+  [[13, 14], "Block children laid out top to bottom read as a vertical stack."],
+  [15, "CSS collapses the heading’s 19.92 px bottom margin with the paragraph’s 16 px top margin; the gap Chrome drew, 19.9 px, becomes the stack’s spacing."],
+  [17, "The heading’s top margin cannot collapse through the padded card. Padding does not explain that offset, so it is kept as a lead inset."],
+  [[21, 23], "Every node keeps the frame Chrome measured, for verification and as a fallback."],
+  [[27, 28], "<code>&lt;h2&gt;</code> is passed on to assistive technology as a level-2 heading."],
+  [[31, 32, 42, 43], "Text nodes remember the tag they came from."],
+  [34, "The words carry over unchanged; the run beside them records the system font at 24 px, weight 700, and its colour."],
+];
+---
+
+<Book at={3} description="Semantic IR: how Markswift reads measured boxes as stacks, text and controls before any SwiftUI is written.">
+  <header class="opening">
+    <div class="lede">
+      <h1><span class="no">4</span>Semantic IR: what the boxes mean</h1>
+      <p>
+        Analysis reads the LayoutDoc and writes down what the design means, with no SwiftUI vocabulary yet: stacks,
+        grids, text, controls. It works from measured boxes rather than CSS rules, so the gaps it records are the ones
+        Chrome actually drew.
+      </p>
+      <p>
+        Every node keeps its frame, its capture id and a confidence: <span class="lv">mapped</span>,
+        <span class="lv">approximated</span> or <span class="lv">unmapped</span>, the worst of the losses listed
+        beside it. Those lists are what the CLI prints as notes. Here two margins and a padding become one vertical
+        stack.
+      </p>
+    </div>
+    <aside class="provenance" aria-labelledby="set-from">
+      <h2 id="set-from" class="sc">Set from</h2>
+      <pre><code>inferScreen(r.layout, "WelcomeCard-light")</code></pre>
+      <p>
+        The recto is the IR that <code>src/analysis/infer.ts</code> builds from the verso’s document, written out as
+        JSON by <code>recompile.ts</code>. The library does this inside every conversion; it is not public API.
+      </p>
+    </aside>
+  </header>
+
+  <Spread
+    id="ir"
+    verso={{ label: "LayoutDoc · verso", note: "measured boxes", sources: { "WelcomeCard.layout.json": layout } }}
+    recto={{ label: "Semantic IR · recto", note: "what they mean", sources: { "WelcomeCard.ir.json": ir } }}
+    rows={rows}
+    notes={notes}
+  />
+</Book>

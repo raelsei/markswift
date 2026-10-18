@@ -1,0 +1,117 @@
+---
+import { ClientRouter } from "astro:transitions";
+import "../styles/book.css";
+import { chapters, github, layoutDocVersion, version } from "../lib/book";
+
+interface Props {
+  /** Index into `chapters`. */
+  at: number;
+  description: string;
+}
+
+const { at, description } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const chapter = chapters[at]!;
+const prev = chapters[at - 1];
+const next = chapters[at + 1];
+const href = (slug: string) => `${base}${slug}`;
+const pageTitle = at === 0 ? "Markswift: how it works" : `${at + 1} ${chapter.title} · Markswift`;
+
+// The one authored motion: chapters turn like pages. Forward, the next page sweeps in from the right edge;
+// back, from the left. The old page holds still underneath.
+const timing = { duration: "460ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)", fillMode: "both" };
+const hold = { ...timing, name: "page-hold", easing: "linear" };
+const turn = {
+  forwards: { old: hold, new: { ...timing, name: "page-in-right" } },
+  backwards: { old: hold, new: { ...timing, name: "page-in-left" } },
+};
+---
+
+<!doctype html>
+<html lang="en" transition:animate="none">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#2f5d3a" />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <ClientRouter />
+  </head>
+  <body>
+    <a class="skip sc" href="#chapter">Skip to the chapter</a>
+    <nav class="rail" aria-label="Contents">
+      <a class="mark sc" href={href("")}>Markswift</a>
+      <p class="edition">Edition {version} · LayoutDoc {layoutDocVersion}</p>
+      <h2 class="toc-head sc">Contents</h2>
+      <details class="toc-wrap" open>
+        <summary class="sc"><span>Contents</span><span class="here-short">{at + 1} {chapter.title}</span></summary>
+        <ol class="toc sc">
+          {
+            chapters.map((c, i) => (
+              <li>
+                <a href={href(c.slug)} aria-current={i === at ? "page" : undefined}>
+                  <span class="no">{i + 1}</span>
+                  <span class="t">{c.title}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ol>
+      </details>
+      <script is:inline>
+        // A rail on wide screens; a folded contents bar on narrow ones.
+        {
+          const toc = document.currentScript.previousElementSibling;
+          const wide = matchMedia("(min-width: 64rem)");
+          toc.open = wide.matches;
+          wide.onchange = () => (toc.open = wide.matches);
+        }
+      </script>
+      <div class="rail-foot">
+        <code>npm install --save-dev markswift</code>
+        <ul class="sc">
+          <li><a href={github}>GitHub</a></li>
+          <li><a href="https://www.npmjs.com/package/markswift">npm</a></li>
+          <li><a href={`${github}/blob/main/CHANGELOG.md`}>Changelog</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <main id="chapter" class="page" transition:name="page" transition:animate={turn}>
+      <header class="running sc">
+        <span>Markswift {version}</span>
+        <span>{at + 1} · {chapter.title}</span>
+      </header>
+      <article class="ch">
+        <slot />
+      </article>
+      <nav class="turn sc" aria-label="Chapters">
+        {
+          prev ? (
+            <a rel="prev" href={href(prev.slug)}>
+              <span class="dir">Turn back</span>
+              <span>{at} {prev.title}</span>
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next ? (
+            <a rel="next" class="next" href={href(next.slug)}>
+              <span class="dir">Turn the page</span>
+              <span>{at + 2} {next.title}</span>
+            </a>
+          ) : (
+            <a class="next" href={href("")}>
+              <span class="dir">Back to the start</span>
+              <span>1 Overview</span>
+            </a>
+          )
+        }
+      </nav>
+    </main>
+  </body>
+</html>

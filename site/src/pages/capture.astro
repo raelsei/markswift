@@ -1,0 +1,102 @@
+---
+import Book from "../layouts/Book.astro";
+import Spread from "../components/Spread.astro";
+import { run, type Row } from "../lib/book";
+import html from "../artifacts/welcome.html?raw";
+import layout from "../artifacts/WelcomeCard.layout.json?raw";
+import transcript from "../artifacts/transcript.txt?raw";
+
+const styles = Object.keys(JSON.parse(layout).root.styles).length;
+const layoutLines = layout.trimEnd().split("\n").length;
+
+const rows: Row[] = [
+  ["## welcome.html", "## WelcomeCard.layout.json"],
+  ["<article data-markswift-root class=\"card\"", `"tag": "article",`],
+  ["", "…"],
+  [`         style="background: #f4f4f5;`, `  "background-color": "rgb(244, 244, 245)",`],
+  ["", "  …"],
+  ["                border-radius: 16px;", `  "border-top-left-radius": "16px",`],
+  ["", "  …"],
+  ["                font-family: system-ui;", `  "font-family": "system-ui",`],
+  ["", "  …"],
+  ["", `  "height": "101.812px",`],
+  ["", "  …"],
+  ["                padding: 24px;", `  "padding-top": "24px",`],
+  ["", "  …"],
+  [`                width: 320px">`, `  "width": "320px",`],
+  ["", "…"],
+  ["", `"bounds": {`],
+  ["", "  …"],
+  ["", `  "w": 368,`],
+  ["", `  "h": 149.81`],
+  ["", "…"],
+  ["  <h2>Hello SwiftUI</h2>", `    "tag": "h2",`],
+  ["", "    …"],
+  ["", `      "font-size": "24px",`],
+  ["", "      …"],
+  ["", `      "font-weight": "700",`],
+  ["", "      …"],
+  ["", `      "margin-top": "19.92px",`],
+  ["", "    …"],
+  ["", `        "text": "Hello SwiftUI",`],
+  ["", "    …"],
+  ["  <p>Made from HTML.</p>", `    "tag": "p",`],
+  ["", "    …"],
+  ["", `      "margin-top": "16px",`],
+  ["", "    …"],
+  ["", `        "text": "Made from HTML.",`],
+  ["", "    …"],
+  ["", `    "id": "1",`],
+  ["", "…"],
+  ["</article>", `"preferredSize": {`],
+  ["", `  "width": "320px",`],
+  ["", `  "height": "auto"`],
+];
+
+const notes: Array<[number | number[] | string, string]> = [
+  [1, "The capture root, marked <code>data-markswift-root</code>; its attributes are kept as written."],
+  [3, "Colours come back as Chrome computed them: <code>#f4f4f5</code> is <code>rgb(244, 244, 245)</code>."],
+  [[5, 11], "Shorthands come back as longhands: four corner radii, four paddings (one of each shown)."],
+  [[9, 40], "No height was written, yet the computed style reports the used one in pixels. <code>preferredSize</code>, read through CSS Typed OM, keeps what was authored: <code>auto</code>."],
+  [[13, 39], "The width twice: computed (13) and authored (39), so analysis can tell a fixed width from <code>auto</code>."],
+  [[17, 18], "The layout box in root coordinates: 368 = 320 + 2 × 24 padding."],
+  [[20, 22, 24, 26], "Nothing was written for <code>&lt;h2&gt;</code>; Chrome’s defaults arrive resolved: 24 px, weight 700, a 19.92 px (0.83 em) margin."],
+  [[28, 34], "Text nodes keep their words and get a box of their own."],
+  [36, "Each element has an id, its path from the root; the next stages keep it."],
+  ["Styles", `Every element carries the same ${styles} computed properties in alphabetical order; this page shows the ones the card sets or inherits.`],
+];
+---
+
+<Book at={1} description="Capture: how Markswift reads computed styles and layout boxes from headless Chrome.">
+  <header class="opening">
+    <div class="lede">
+      <h1><span class="no">2</span>Capture: what Chrome actually laid out</h1>
+      <p>
+        Markswift loads the page in headless Chrome through Playwright, lets fonts and animations settle, then asks the
+        DevTools protocol for a <code>DOMSnapshot</code>: {styles} computed style properties and a layout box for every
+        element under the root. It snapshots twice, once as painted and once with transforms switched off, so the boxes
+        are true layout boxes.
+      </p>
+      <p>
+        What it keeps is what the browser resolved, not what the stylesheet said: shorthands as longhands, colours as
+        <code>rgb()</code>, and the browser’s own defaults wherever the author set nothing.
+      </p>
+    </div>
+    <aside class="provenance" aria-labelledby="set-from">
+      <h2 id="set-from" class="sc">Set from</h2>
+      <pre><code>{run(transcript, "npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome")}</code></pre>
+      <p>
+        The recto is <code>result.layout</code> of the same conversion through the library,
+        <code>convert(&lbrace; file: "welcome.html" &rbrace;)</code>, saved as JSON: {layoutLines} lines.
+      </p>
+    </aside>
+  </header>
+
+  <Spread
+    id="capture"
+    verso={{ label: "HTML · verso", note: "the page", sources: { "welcome.html": html } }}
+    recto={{ label: "LayoutDoc · recto", note: "what the snapshot recorded", sources: { "WelcomeCard.layout.json": layout } }}
+    rows={rows}
+    notes={notes}
+  />
+</Book>
