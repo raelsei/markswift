@@ -5,3 +5,4 @@ dist/
 .impeccable/mocks/
 .impeccable/config.local.json
 .impeccable/review/
+.impeccable/decision-payload.json
