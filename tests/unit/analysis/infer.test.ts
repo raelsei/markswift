@@ -50,8 +50,8 @@ function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
 
 describe("text groups", () => {
   // Two inline controls on separate source lines: the whitespace between them is a text node the
-  // browser collapsed away entirely. It used to become a `TextNode` with zero runs, which the
-  // emitter wrote as an empty run array — invalid Swift in both modes.
+  // browser collapsed away entirely. As a `TextNode` with zero runs, the emitter would write an
+  // empty run array — invalid Swift in both modes.
   test("a run group that is nothing but collapsed whitespace does not become a text node", () => {
     const section = el("section", { x: 0, y: 0, w: 200, h: 21 }, { display: "block" }, [
       textNode("\n  ", { x: 0, y: 0, w: 0, h: 0 }),
@@ -155,7 +155,7 @@ describe("text groups", () => {
 
 describe("line height", () => {
   // Tailwind's type scale always sets both, so this is the common case, not the exception.
-  test("an explicit line-height rides on the run's font and is no longer an approximation", () => {
+  test("an explicit line-height rides on the run's font and is not an approximation", () => {
     const root = el("main", { x: 0, y: 0, w: 200, h: 20 }, { display: "block" }, [
       el("p", { x: 0, y: 0, w: 200, h: 20 }, { "line-height": "20px" }, [
         textNode("hello", { x: 0, y: 3, w: 40, h: 14 }),
@@ -217,7 +217,7 @@ describe("tables", () => {
     expect(filled[0]!.style.radius).toEqual([10, 0, 0, 0]);
   });
 
-  test("042: caption-bottom — a caption first in the markup but painted below stays below the rows", () => {
+  test("caption-bottom — a caption first in the markup but painted below stays below the rows", () => {
     const table = el("table", { x: 0, y: 0, w: 200, h: 66 }, { display: "table", "border-collapse": "collapse" }, [
       el("caption", { x: 0, y: 40, w: 200, h: 26 }, { display: "table-caption", "caption-side": "bottom" }, [
         textNode("Quarterly sales", { x: 0, y: 43, w: 100, h: 20 }),
@@ -265,7 +265,7 @@ describe("tables", () => {
       ]),
     ]);
 
-  test("044: collapsed-rule — a row border is centred on the grid line: half in each row, the footer's top rule drawn once", () => {
+  test("collapsed-rule — a row border is centred on the grid line: half in each row, the footer's top rule drawn once", () => {
     const table = collapsedRule({ "border-collapse": "collapse" });
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 200, h: 110.5 }, { display: "block" }, [table])), "s");
     expect(rules(screen.root)).toEqual(["0:bottom=0.5", "36.5:top=0.5", "36.5:bottom=0.5", "73.5:top=0.5"]);
@@ -277,7 +277,7 @@ describe("tables", () => {
     ]);
   });
 
-  test("044: collapsed-outer — the table holds the outer half of its edge cells' borders, cells the inner half", () => {
+  test("collapsed-outer — the table holds the outer half of its edge cells' borders, cells the inner half", () => {
     const box = { ...rule("top"), ...rule("right"), ...rule("bottom"), ...rule("left") };
     const cell = (x: number, w: number) =>
       el("td", { x, y: 0.5, w, h: 37 }, { display: "table-cell", ...pad, ...box }, [
@@ -313,7 +313,7 @@ describe("tables", () => {
     expect(rules(screen.root)).toEqual(["0:bottom=1", "36.5:bottom=1", "73.5:top=1"]);
   });
 
-  test("044: separated — cells apart by `border-spacing` keep their own borders", () => {
+  test("separated — cells apart by `border-spacing` keep their own borders", () => {
     const cell = (x: number) =>
       el("td", { x, y: 2, w: 97, h: 36 }, { display: "table-cell", ...pad, ...rule("bottom") }, [
         textNode("Q", { x: x + 8, y: 10, w: 10, h: 20 }),
@@ -325,7 +325,7 @@ describe("tables", () => {
     expect(rules(screen.root)).toEqual(["2:bottom=1", "2:bottom=1"]);
   });
 
-  test("042: cell-middle — a table outside the MarkswiftTable subset keeps row alignment", () => {
+  test("cell-middle — a table outside the MarkswiftTable subset keeps row alignment", () => {
     const cell = (x: number, kids: LayoutNode[]) =>
       el("td", { x, y: 0, w: 100, h: 38 }, { display: "table-cell", "vertical-align": "middle", padding: "8px" }, kids);
     const tr = el("tr", { x: 0, y: 0, w: 200, h: 38 }, { display: "table-row", "vertical-align": "middle" }, [
@@ -346,7 +346,7 @@ describe("tables", () => {
   const tableNotes = (n: SemNode) => n.diagnostics.filter((d) => d.feature === "table" || d.feature === "table-layout");
   const grids = (root: SemNode) => flatten(root).filter((n): n is GridNode => n.kind === "grid" && !!n.table);
 
-  test("049: a captioned admitted table — caption, then the grid of its rows box with the table's paint and padding", () => {
+  test("a captioned admitted table — caption, then the grid of its rows box with the table's paint and padding", () => {
     const t = separated();
     const root = inferScreen(tableDoc(t), "s").root as StackNode;
     const outer = root.children[0] as StackNode;
@@ -368,7 +368,7 @@ describe("tables", () => {
     ]);
   });
 
-  test("049: an auto-width admitted table also reports the auto table layout", () => {
+  test("an auto-width admitted table also reports the auto table layout", () => {
     const [grid] = grids(inferScreen(tableDoc(collapsed()), "s").root);
     expect(tableNotes(grid!).map((d) => [d.level, d.feature, d.message])).toEqual([
       [
@@ -384,7 +384,7 @@ describe("tables", () => {
     ]);
   });
 
-  test("049: a table outside the subset (rtl) keeps the measured rows and reports `approximated table`", () => {
+  test("a table outside the subset (rtl) keeps the measured rows and reports `approximated table`", () => {
     const t = collapsed();
     t.styles["direction"] = "rtl";
     const root = inferScreen(tableDoc(t), "s").root as StackNode;
@@ -394,7 +394,7 @@ describe("tables", () => {
     );
   });
 
-  test("049: rule 3b — a row with onclick keeps the measured-rows path and its action", () => {
+  test("a row with onclick keeps the measured-rows path and its action", () => {
     const t = collapsed();
     t.children[1]!.children[0]!.attrs["onclick"] = "go()";
     const root = inferScreen(tableDoc(t), "s").root as StackNode;
@@ -406,7 +406,7 @@ describe("tables", () => {
     );
   });
 
-  test("052: empty-cells: hide paints no background or border on whitespace-only cells of a separated table", () => {
+  test("empty-cells: hide paints no background or border on whitespace-only cells of a separated table", () => {
     const edge = (side: string) => ({
       [`border-${side}-style`]: "solid",
       [`border-${side}-width`]: "2px",
@@ -520,7 +520,7 @@ describe("pointer-events", () => {
     expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
   });
 
-  test("a key-less childless child (046's pseudo img) passes under a none parent", () => {
+  test("a key-less childless child (a pseudo img) passes under a none parent", () => {
     const root = positioned(el("div", box, none, [el("img", { x: 10, y: 10, w: 20, h: 20 }, {})]));
     expect(root.overlays[0]?.node.hitTesting).toBe(false);
   });
@@ -583,7 +583,7 @@ describe("ARIA names", () => {
   });
 });
 
-describe("043 item 10: inline box chain", () => {
+describe("inline box chain", () => {
   /** `<p>Find <span …><mark><b>this</b></mark></span></p>`: the run's own element is `b`. */
   function sentence(span: Record<string, string>): TextNode {
     const b = el("b", { x: 40, y: 0, w: 30, h: 20 }, { "font-weight": "700" }, [

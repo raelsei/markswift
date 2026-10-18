@@ -1,6 +1,6 @@
 import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
- * Flex alignment and direction in visual terms (plan 011): reverse/RTL packing, text alignment,
+ * Flex alignment and direction in visual terms: reverse/RTL packing, text alignment,
  * unbreakable words, align-self and auto margins. Hand-built layout docs, as in infer.test.ts.
  */
 import { describe, expect, test } from "bun:test";
@@ -58,7 +58,7 @@ function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
 
 const BOX = { x: 0, y: 0, w: 300, h: 40 };
 
-describe("Step 1 direction", () => {
+describe("direction", () => {
   const packing: [string, string, string, string][] = [
     // flex-direction, direction, justify-content, visual side (Chrome, 2026-10-10)
     ["row-reverse", "ltr", "flex-end", "start"],
@@ -135,7 +135,7 @@ function leafText(host: LayoutNode): TextNode {
   return t;
 }
 
-describe("Step 2 text alignment", () => {
+describe("text alignment", () => {
   test("-webkit-center (<center>, align=center) centres the text", () => {
     const t = leafText(
       el("div", { x: 0, y: 0, w: 200, h: 20 }, { display: "block", "text-align": "-webkit-center" }, [
@@ -236,7 +236,7 @@ function chipText(d: LayoutDoc): TextNode {
   return t;
 }
 
-describe("Step 3 unbreakable words", () => {
+describe("unbreakable words", () => {
   test("a single word never soft-wraps in app mode", () => {
     const d = chipDoc("Design");
     expect(chipText(d).unbreakable).toBe(true);
@@ -280,7 +280,7 @@ function inferred(host: LayoutNode, id: string): { doc: LayoutDoc; node: SemNode
 const RED = { "background-color": "rgb(255, 0, 0)" };
 const BLUE = { "background-color": "rgb(0, 0, 255)" };
 
-describe("Step 4 align-self", () => {
+describe("align-self", () => {
   test("align-self: flex-end in a flex-start row sits at the bottom", () => {
     const row = el(
       "div",
@@ -396,7 +396,7 @@ function item(
   };
 }
 
-describe("Step 6 auto margins", () => {
+describe("auto margins", () => {
   test("ml-auto in a navbar becomes a Spacer whose minimum is the CSS gap", () => {
     const nav = {
       ...el(

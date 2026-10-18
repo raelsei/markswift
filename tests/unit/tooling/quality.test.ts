@@ -555,21 +555,21 @@ test("ratchetFamilies floors at min − 0.005 rounded down to 0.01, never lowers
     "css-layout@app": { minSsim: 0.98 },
   });
   const next = ratchetFamilies(
-    { maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } },
+    { maxDrop: 0.005, exceptions: { "low@app": "owner: @raelsei" } },
     { b: m(0.9, "svg/a.html"), a: m(0.7, "html/a.html"), c: m(0.4, "svg/b.html", "low") },
   );
   expect(Object.keys(next.families)).toEqual(["html@app", "svg@app"]);
   expect(next.families["svg@app"]).toEqual({ minSsim: 0.89 });
-  expect(next).toMatchObject({ maxDrop: 0.005, exceptions: { "low@app": "owner: plan 042" } });
+  expect(next).toMatchObject({ maxDrop: 0.005, exceptions: { "low@app": "owner: @raelsei" } });
 });
 
 test("readmeSummary lists exceptions sorted after the domain table, and nothing without them", () => {
   const manifest = flex(0.9);
   expect(readmeSummary(manifest)).not.toContain("Exceptions");
-  const lines = readmeSummary(manifest, { exceptions: { z: "zed", "display-flex@app": "owner: plan 042" } }).split(
+  const lines = readmeSummary(manifest, { exceptions: { z: "zed", "display-flex@app": "owner: @raelsei" } }).split(
     "\n",
   );
-  expect(lines.slice(-2)).toEqual(["- `display-flex@app`: owner: plan 042", "- `z`: zed"]);
+  expect(lines.slice(-2)).toEqual(["- `display-flex@app`: owner: @raelsei", "- `z`: zed"]);
   expect(lines).toContain(
     "Exceptions (exempt from family floors and the 1.0 component target; the 0.005 drop rule still applies):",
   );

@@ -73,7 +73,7 @@ test("a button's name includes descendant labels in any order", () => {
   expect(axParity([{ role: "button", name: "loading saving" }], s)).toEqual([]);
 });
 
-test("049: table cells read in DOM order; a `<th>` is a columnheader, a `<td>` is not", () => {
+test("table cells read in DOM order; a `<th>` is a columnheader, a `<td>` is not", () => {
   const s = inferScreen(tableDoc(collapsed()), "s");
   expect(s.root.kind === "stack" && s.root.children[0]!.kind).toBe("grid");
   const cell = (name: string) => ({ role: "cell", name });

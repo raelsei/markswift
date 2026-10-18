@@ -1,4 +1,4 @@
-/** Plan 054: per-band screens compose into one tree; only elements whose authored inputs differ become holders. */
+/** Per-band screens compose into one tree; only elements whose authored inputs differ become holders. */
 import { expect, test } from "bun:test";
 import { planBands } from "../../../src/analysis/bands.ts";
 import { bandEdges, mergeBands } from "../../../src/analysis/breakpoints.ts";
@@ -20,7 +20,7 @@ const holders = (n: SemNode, out: string[] = []): string[] => {
 };
 const W = [390, 834];
 
-test("1: fluid differences only (bounds, margin-left without a conditional rule) → no merge", () => {
+test("fluid differences only (bounds, margin-left without a conditional rule) → no merge", () => {
   const docs = W.map((w) =>
     band(w, [
       el("a", "div", { x: 16, y: 0, w: w - 32, h: 20 }, { "margin-left": `${w / 20}px` }, [txt("hello", w - 32)]),
@@ -29,7 +29,7 @@ test("1: fluid differences only (bounds, margin-left without a conditional rule)
   expect(merge(docs)).toBeUndefined();
 });
 
-test("2: a child present in band 1 only makes its parent a holder; everything else stays band 0's", () => {
+test("a child present in band 1 only makes its parent a holder; everything else stays band 0's", () => {
   const docs = W.map((w) =>
     band(w, [
       el("head", "header", { x: 0, y: 0, w, h: 20 }, {}, [txt("Title", w)]),
@@ -52,7 +52,7 @@ test("2: a child present in band 1 only makes its parent a holder; everything el
   expect(merged.warnings).toEqual([]);
 });
 
-test("3: a conditional flex-direction change → holder at that node only", () => {
+test("a conditional flex-direction change → holder at that node only", () => {
   const docs = W.map((w) =>
     band(w, [
       el(
@@ -74,7 +74,7 @@ test("3: a conditional flex-direction change → holder at that node only", () =
   expect(holders(merged.root)).toEqual(["row"]);
 });
 
-test("4: a conditional padding change → holder; the same change without a conditional rule → none", () => {
+test("a conditional padding change → holder; the same change without a conditional rule → none", () => {
   const docs = (conditional: boolean) =>
     W.map((w) =>
       band(w, [
@@ -92,7 +92,7 @@ test("4: a conditional padding change → holder; the same change without a cond
   expect(merge(docs(false))).toBeUndefined();
 });
 
-test("5: bands 0 and 2 equal, band 1 different → members [0, 2] and [1]", () => {
+test("bands 0 and 2 equal, band 1 different → members [0, 2] and [1]", () => {
   const widths = [390, 700, 1100];
   const conditions = [
     { kind: "media" as const, query: "(min-width: 600px)", matches: false },
@@ -121,7 +121,7 @@ test("5: bands 0 and 2 equal, band 1 different → members [0, 2] and [1]", () =
   expect(x.alternatives!.map((a) => a.bands)).toEqual([[0, 2], [1]]);
 });
 
-test("6: same id, different tag (script insert) → the root is a holder and one breakpoint warning names it", () => {
+test("same id, different tag (script insert) → the root is a holder and one breakpoint warning names it", () => {
   const docs = W.map((w) =>
     band(w, [
       w > 600
@@ -137,7 +137,7 @@ test("6: same id, different tag (script insert) → the root is a holder and one
   expect(merged.warnings[0]!.message).toContain("script-driven DOM differs between viewports under root");
 });
 
-test("7: a node inference drops in band 1 only (invisible overlay) → its parent is the holder", () => {
+test("a node inference drops in band 1 only (invisible overlay) → its parent is the holder", () => {
   const docs = W.map((w) =>
     band(w, [
       el("p", "div", { x: 0, y: 0, w, h: 40 }, { position: "relative" }, [
@@ -158,7 +158,7 @@ test("7: a node inference drops in band 1 only (invisible overlay) → its paren
   expect(kids(merged.root)[0]!.alternatives!.map((a) => a.bands)).toEqual([[0], [1]]);
 });
 
-test("8: a container with synthesized /row children is atomic: holder by deep, rows not aligned", () => {
+test("a container with synthesized /row children is atomic: holder by deep, rows not aligned", () => {
   const item = (id: string, x: number, y: number, color: string, conditional = false) =>
     el(
       id,
@@ -183,7 +183,7 @@ test("8: a container with synthesized /row children is atomic: holder by deep, r
   expect(holders(merged.root)).toEqual(["c"]);
 });
 
-test("9: bandEdges subtracts the root's offset from the viewport, refuses fixed roots and unsorted variants", () => {
+test("bandEdges subtracts the root's offset from the viewport, refuses fixed roots and unsorted variants", () => {
   const at = (w: number, root: Partial<LayoutNode>) => {
     const d = band(w, []);
     return { ...d, root: { ...d.root, ...root } };
@@ -214,7 +214,7 @@ test("9: bandEdges subtracts the root's offset from the viewport, refuses fixed 
   );
 });
 
-test("10: layers and open states (band 0 only) are ignored", () => {
+test("layers and open states (band 0 only) are ignored", () => {
   const docs = (pressed: boolean) =>
     W.map((w) => {
       const states = {
@@ -243,7 +243,7 @@ test("10: layers and open states (band 0 only) are ignored", () => {
   expect(merge(docs(true))).toBeUndefined();
 });
 
-test("11: equal authored inputs but a band-dependent used height (bp-pagination's Next item) → that node is a holder", () => {
+test("equal authored inputs but a band-dependent used height (bp-pagination's Next item) → that node is a holder", () => {
   // Band 0's item is 35 tall around a 32 pt child (an inline-flex baseline strut), band 1's hugs it.
   const docs = W.map((w) =>
     band(w, [
@@ -260,7 +260,7 @@ test("11: equal authored inputs but a band-dependent used height (bp-pagination'
   expect(li.alternatives!.map((a) => a.height)).toEqual([{ kind: "fixed", px: 35 }, { kind: "hug" }]);
 });
 
-// Plan 057: query containers. Captures 390/767/834/1376 sit in viewport bands 0, 0, 1, 1.
+// Query containers. Captures 390/767/834/1376 sit in viewport bands 0, 0, 1, 1.
 const VIEWPORT = [0, 0, 1, 1];
 const mergeAt = (docs: LayoutDoc[], bands = VIEWPORT) =>
   mergeBands(
@@ -276,7 +276,7 @@ const hosts = (n: SemNode, out: string[] = []): string[] => {
   return out;
 };
 
-test("057/1: a field switching at its group's 448px content width → a holder inside the host, container bands", () => {
+test("a field switching at its group's 448px content width → a holder inside the host, container bands", () => {
   const merged = mergeAt(fieldGroupDocs())!;
   expect(hosts(merged.root)).toEqual(["group"]);
   expect(holders(merged.root)).toEqual(["field"]);
@@ -288,7 +288,7 @@ test("057/1: a field switching at its group's 448px content width → a holder i
   expect(merged.warnings).toEqual([]);
 });
 
-test("057/2: a host 280px wide at every capture → no container bands, one 'never crosses' warning", () => {
+test("a host 280px wide at every capture → no container bands, one 'never crosses' warning", () => {
   const merged = mergeAt(fieldGroupDocs({ side: true }))!;
   expect(hosts(merged.root)).toEqual(["group"]);
   expect(merged.warnings).toEqual([
@@ -302,7 +302,7 @@ test("057/2: a host 280px wide at every capture → no container bands, one 'nev
   ]);
 });
 
-test("057/3: a media-only difference at one container band → 'both restyle', the lower capture's content kept", () => {
+test("a media-only difference at one container band → 'both restyle', the lower capture's content kept", () => {
   const merged = mergeAt(fieldGroupDocs({ wideColor: "rgb(255, 0, 0)" }))!;
   expect(hosts(merged.root)).toEqual(["group"]);
   const row = find(merged.root, "field")!.alternatives![1]!;
@@ -313,7 +313,7 @@ test("057/3: a media-only difference at one container band → 'both restyle', t
   ]);
 });
 
-test("057/3b: 'both restyle' ignores a size-following transform-origin, not a media grid-template-columns", () => {
+test("'both restyle' ignores a size-following transform-origin, not a media grid-template-columns", () => {
   const withField = (styles: (w: number, field: LayoutNode) => Record<string, string>) =>
     fieldGroupDocs().map((d) => {
       const set = (n: LayoutNode): LayoutNode =>
@@ -332,7 +332,7 @@ test("057/3b: 'both restyle' ignores a size-following transform-origin, not a me
   ]);
 });
 
-test("057/4: a query container that is a text node → reported, not reconstructed", () => {
+test("a query container that is a text node → reported, not reconstructed", () => {
   const docs = [390, 767].map((w) =>
     band(
       w,
@@ -360,7 +360,7 @@ test("057/4: a query container that is a text node → reported, not reconstruct
   ]);
 });
 
-test("057/5: media-only docs merge exactly as without explicit bands", () => {
+test("media-only docs merge exactly as without explicit bands", () => {
   const docs = W.map((w) =>
     band(w, [
       el(
@@ -380,7 +380,7 @@ test("057/5: media-only docs merge exactly as without explicit bands", () => {
   expect(merged.warnings).toEqual([]);
 });
 
-test("057/6: bandEdges takes two captures in one band only with container queries", () => {
+test("bandEdges takes two captures in one band only with container queries", () => {
   const docs = fieldGroupDocs();
   expect(bandEdges(docs)).toEqual({
     edges: [{ px: 768, inclusive: true }],
@@ -392,7 +392,7 @@ test("057/6: bandEdges takes two captures in one band only with container querie
   expect(() => bandEdges([docs[0]!, docs[2]!, docs[1]!])).toThrow("one capture per width band");
 });
 
-test("057/7: a host crossing just above a band's lower bound (bp-field-responsive at 768) → container bands there", () => {
+test("a host crossing just above a band's lower bound (bp-field-responsive at 768) → container bands there", () => {
   // The planner's captures: the group is 432px wide at 768 but 498px at band 1's device capture (834).
   const plan = planBands(fieldGroupDocs()[0]!.conditions, {
     first: { width: 390, height: 844 },

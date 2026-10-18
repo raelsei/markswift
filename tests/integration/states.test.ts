@@ -39,7 +39,7 @@ for (const [fixture, state, decl] of [
   ["shadcn-input.html", "focused", "@MarkswiftFocused private var"],
 ] as const) {
   browserTest(
-    `029: ${fixture} gets a ${state} member for at least 90% of the elements that restyle`,
+    `${fixture} gets a ${state} member for at least 90% of the elements that restyle`,
     async () => {
       const result = await convert(
         { file: join(DIR, fixture) },

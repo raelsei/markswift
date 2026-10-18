@@ -1,4 +1,4 @@
-/** Plan 054: a merged breakpoint screen emits band chains, band-parameterised containers and one state per control. */
+/** A merged breakpoint screen emits band chains, band-parameterised containers and one state per control. */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -195,7 +195,7 @@ test("fidelity mode compiles a breakpoint view", () => {
   expect(code).toContain("MarkswiftBands(edges: [.atLeast(600.0)]) { band in");
 });
 
-test("057: a query container nests MarkswiftBands inside its padding; its members take container band names", () => {
+test("a query container nests MarkswiftBands inside its padding; its members take container band names", () => {
   for (const mode of ["app", "fidelity"] as const) {
     const code = compile(fieldGroupDocs({ side: true }), { mode }).code;
     expect(code).toMatch(
@@ -211,7 +211,7 @@ test("057: a query container nests MarkswiftBands inside its padding; its member
 });
 
 nativeTest(
-  "057: a query-container view typechecks with and without MainActor default isolation",
+  "a query-container view typechecks with and without MainActor default isolation",
   async () => {
     for (const mode of ["app", "fidelity"] as const) {
       const r = compile(fieldGroupDocs({ side: true }), { mode });

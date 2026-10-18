@@ -1,4 +1,4 @@
-/** Plan 052: each LayoutDoc 4 rider read end to end from Chrome's computed serialisation. */
+/** Each LayoutDoc 4 rider read end to end from Chrome's computed serialisation. */
 import { expect, test } from "bun:test";
 import { inferScreen } from "../../src/analysis/infer.ts";
 import { convertHtml } from "../../src/index.ts";

@@ -1,4 +1,4 @@
-/** Plan 010 capture facts: the viewport in root coordinates, Typed-OM insets, computed object-position. */
+/** App-sizing capture facts: the viewport in root coordinates, Typed-OM insets, computed object-position. */
 import { expect, test } from "bun:test";
 import { convertHtml } from "../../src/index.ts";
 

@@ -1,4 +1,4 @@
-/** Hand-built captured tables (plan 049): boxes on a column/row lattice, as Chrome lays a CSS table out. */
+/** Hand-built captured tables: boxes on a column/row lattice, as Chrome lays a CSS table out. */
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode, type Rect } from "../../src/model/layout.ts";
 
 const TEXT = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
@@ -190,7 +190,7 @@ export function doc(root: LayoutNode): LayoutDoc {
 }
 
 /**
- * Chrome 155's separated probe (plan 049): caption, `border-spacing: 3px 5px`, border 2 + padding 4, a colspan and a
+ * Chrome 155's separated probe: caption, `border-spacing: 3px 5px`, border 2 + padding 4, a colspan and a
  * rowspan. Chrome's columns are 88.688 / 93.641 / 93.672 at a 300px table; the middle one is rounded so they sum to 276.
  */
 export function separated(): LayoutNode {

@@ -1,4 +1,4 @@
-/** Hand-built width-band captures (plan 054): one `(min-width: 600px)` condition unless a test passes its own. */
+/** Hand-built width-band captures: one `(min-width: 600px)` condition unless a test passes its own. */
 import { LAYOUT_DOC_VERSION, type LayoutCondition, type LayoutDoc, type LayoutNode } from "../../src/model/layout.ts";
 
 const TEXT = { "font-family": "system-ui", "font-size": "15px", "line-height": "20px", color: "rgb(0, 0, 0)" };
@@ -48,11 +48,11 @@ export function band(
   };
 }
 
-/** Plan 057: a viewport capture's content width of the `group` query container (bands 0, 0, 1, 1, 1). */
+/** A viewport capture's content width of the `group` query container (bands 0, 0, 1, 1, 1). */
 export const GROUP_WIDTHS: Record<number, number> = { 390: 358, 767: 735, 768: 432, 834: 498, 1376: 874 };
 
 /**
- * Plan 057: captures at `widths` (default 390/767/834/1376) of a `group` query container whose `field` turns into a
+ * Captures at `widths` (default 390/767/834/1376) of a `group` query container whose `field` turns into a
  * row at a 448px content width (`@container (width >= 28rem)`); `side`: a second, 280px host; `wideColor`: the label
  * colour from 768px (a media-only difference inside the host).
  */

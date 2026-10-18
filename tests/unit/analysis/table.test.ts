@@ -1,4 +1,4 @@
-/** Plan 049: table slot admission, the fixed-layout solver and MarkswiftTable emission. */
+/** Table slot admission, the fixed-layout solver and MarkswiftTable emission. */
 import { describe, expect, test } from "bun:test";
 import { solveTableColumns, tableSlots } from "../../../src/analysis/table.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";

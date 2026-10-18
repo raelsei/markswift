@@ -2083,7 +2083,7 @@ export default {
       ir: "LayoutNode paint rewrite (`hideEmptyCells`)",
       via: "style",
       impl: "yes",
-      note: "Separated tables only (collapsed ones ignore it, as in CSS). A cell is empty as Chrome decides it (probed): only collapsible whitespace inside, so `&nbsp;` or an empty `<span>` still paints. Its background, border and box-shadow are hidden; its box keeps its place. Plan 049 keeps the rewrite.",
+      note: "Separated tables only (collapsed ones ignore it, as in CSS). A cell is empty as Chrome decides it (probed): only collapsible whitespace inside, so `&nbsp;` or an empty `<span>` still paints. Its background, border and box-shadow are hidden; its box keeps its place. `MarkswiftTable` grids keep the rewrite.",
       spec: mdn("empty-cells"),
     },
     {

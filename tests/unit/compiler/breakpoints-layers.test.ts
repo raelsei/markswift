@@ -1,4 +1,4 @@
-/** Plan 055 (M1, decision A): band 0's in-flow layers join the merged breakpoint screen once, before tokens. */
+/** Band 0's in-flow layers join the merged breakpoint screen once, before tokens. */
 import { expect, test } from "bun:test";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import type { LayoutDoc, Theme } from "../../../src/model/layout.ts";

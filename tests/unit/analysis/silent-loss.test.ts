@@ -1,7 +1,7 @@
 import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
- * Inference losses that used to happen without a diagnostic (audit 2026-10-10). Each block is a
- * characterization of one bug: it failed before the fix and pins the fixed behaviour.
+ * Inference losses that must not go undiagnosed. Each block is a characterization of one bug: it
+ * pins the fixed behaviour.
  */
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
@@ -50,7 +50,7 @@ function flatten(n: SemNode, out: SemNode[] = []): SemNode[] {
   return out;
 }
 
-describe("BUG-16 preserve-mode source map", () => {
+describe("preserve-mode source map", () => {
   // `markLineBreaks` indexes the source map in UTF-16 units; a code-point map came up short after an emoji.
   test("one entry per UTF-16 unit", () => {
     const text = "a😀b\nc";
@@ -58,7 +58,7 @@ describe("BUG-16 preserve-mode source map", () => {
   });
 });
 
-describe("BUG-05 non-collapsible spaces", () => {
+describe("non-collapsible spaces", () => {
   // CSS collapses only space, tab, segment breaks and form feed; JS `\s` also matched NBSP and friends.
   test("NBSP survives collapse; ASCII whitespace still collapses", () => {
     expect(normalizeWhitespace("10\u00A0km", "collapse").text).toBe("10\u00A0km");
@@ -77,7 +77,7 @@ describe("BUG-05 non-collapsible spaces", () => {
   });
 });
 
-describe("BUG-01 groupRuns", () => {
+describe("groupRuns", () => {
   // Every run of one inline element shares its top-level child, so the second run of `<b>` must
   // not open a new group: only a flow child between runs does.
   test("runs under one inline ancestor stay one group", () => {
@@ -123,8 +123,8 @@ describe("BUG-01 groupRuns", () => {
   });
 });
 
-describe("BUG-18 synthetic text item", () => {
-  // The text group between flow children used to be a copy of the host node, so it carried the
+describe("synthetic text item", () => {
+  // The text group between flow children must not be a copy of the host node, or it carries the
   // host's float and margins into line and stack building.
   test("a floated host's text group does not float", () => {
     const host = el("div", { x: 0, y: 8, w: 200, h: 24 }, { display: "block", float: "left", "margin-top": "8px" }, [
@@ -139,7 +139,7 @@ describe("BUG-18 synthetic text item", () => {
   });
 });
 
-describe("BUG-11 nested fixed", () => {
+describe("nested fixed", () => {
   // Building a fixed layer hoists its own fixed descendants after the overlay list was copied.
   test("a fixed node inside a fixed layer is built", () => {
     const inner = el(
@@ -163,7 +163,7 @@ describe("BUG-11 nested fixed", () => {
   });
 });
 
-describe("BUG-17 hidden runs", () => {
+describe("hidden runs", () => {
   // `visibility: hidden` was read per node only: a hidden inline span painted its glyphs.
   test("a hidden span keeps its advance and paints nothing", () => {
     const p = el("p", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [
@@ -184,7 +184,7 @@ describe("BUG-17 hidden runs", () => {
   });
 });
 
-describe("BUG-06 nested background-clip text", () => {
+describe("nested background-clip text", () => {
   // The gradient of a `background-clip: text` element paints every glyph below it; only runs whose
   // own element carried the clip got it, so nested spans and block children rendered invisible.
   const CLIP = {
@@ -232,7 +232,7 @@ describe("BUG-06 nested background-clip text", () => {
   });
 });
 
-describe("BUG-15 overflow containers", () => {
+describe("overflow containers", () => {
   // Scroll detection ran only on the stack path: grids and text-only boxes spilled their overflow.
   test("an overflowing grid scrolls in app mode and clips in fidelity", () => {
     const g = el(

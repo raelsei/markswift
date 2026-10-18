@@ -86,7 +86,7 @@ function boundaryWrap(linkY: number, linkSize = "18px"): LayoutDoc {
   return p;
 }
 
-test("043 item 9: a wrap at a run boundary is a fidelity break; app output keeps native wrapping", () => {
+test("a wrap at a run boundary is a fidelity break; app output keeps native wrapping", () => {
   const screen = inferScreen(boundaryWrap(47), "Paragraph");
   const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity" }).view;
   const app = emitSwift(screen, "ParagraphView", { mode: "app" }).view;
@@ -96,7 +96,7 @@ test("043 item 9: a wrap at a run boundary is a fidelity break; app output keeps
   expect(app).not.toContain("\\n");
 });
 
-test("043 item 9: a smaller run on the same baseline is not a break", () => {
+test("a smaller run on the same baseline is not a break", () => {
   // 14px glyph box sitting on the 18px run's baseline: tops differ by 3px, baselines by < 1px.
   const doc = boundaryWrap(24.2, "14px");
   const link = doc.root.children[0]!.children[1]!;

@@ -1,4 +1,4 @@
-/** D-HOVER: `title` and captured tooltip layers become `SemBase.tooltip`. */
+/** `title` and captured tooltip layers become `SemBase.tooltip`. */
 import { describe, expect, test } from "bun:test";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { isTooltipLayer } from "../../../src/analysis/tooltips.ts";

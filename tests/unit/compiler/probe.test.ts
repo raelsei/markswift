@@ -1,4 +1,4 @@
-/** Plan 037: a probe capture at another width keeps admitted runtime layouts only when it reproduces them. */
+/** A probe capture at another width keeps admitted runtime layouts only when it reproduces them. */
 import { expect, test } from "bun:test";
 import { type CompileResult, compileLayout, needsProbe } from "../../../src/compiler/index.ts";
 import { admitTracks } from "../../../src/analysis/grid-tracks.ts";

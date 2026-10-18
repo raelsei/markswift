@@ -72,7 +72,7 @@ const IMG = box(
   {},
   { tag: "img", attrs: { src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"></svg>' } },
 );
-/** A node 063 captured one opacity animation on, with `extra` overriding the animation. */
+/** A node with one captured opacity animation, `extra` overriding the animation. */
 const animated = (extra: Partial<Anim>) => {
   const keyframes = [
     { offset: 0, easing: "linear", values: { opacity: "0" } },

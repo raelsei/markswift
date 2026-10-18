@@ -1,4 +1,4 @@
-/** D-HOVER: a tooltip is `.help` plus an accessibility hint in both modes; an author hint wins. */
+/** A tooltip is `.help` plus an accessibility hint in both modes; an author hint wins. */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

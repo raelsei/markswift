@@ -71,7 +71,7 @@ test("wrapped prose links preserve DOM reading order and stay links", () => {
   expect(screen.root.runs.map((run) => run.text).join("")).toBe("Before long link wrapping After");
   const result = compileLayout(input);
   expect(result.code).toContain('Text.markswiftLink("long link wrapping", "https://example.com"');
-  // An inline link loses nothing any more: no `a` diagnostic at all.
+  // An inline link loses nothing: no `a` diagnostic at all.
   expect(result.diagnostics.flatMap((item) => item.diagnostics).filter((d) => d.feature === "a")).toEqual([]);
 });
 

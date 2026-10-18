@@ -1,4 +1,4 @@
-/** Plan 049: `MarkswiftTable` compiles (iOS 18, Swift 6) and its column solver agrees with `solveTableColumns`. */
+/** `MarkswiftTable` compiles (iOS 18, Swift 6) and its column solver agrees with `solveTableColumns`. */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

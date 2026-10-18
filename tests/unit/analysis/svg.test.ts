@@ -66,7 +66,7 @@ test("SVG chart labels and nested tspans use the conversion's bundled fonts", ()
   expect(emitSwift(custom, "ChartView", { mode: "app" }).view).toContain('.custom("Geist Variable"');
 });
 
-describe("BUG-03 markup SVG paints like the browser", () => {
+describe("markup SVG paints like the browser", () => {
   // Markup (`<img src=*.svg>`, data: backgrounds) has no computed style: the SVG initial values,
   // named colours, `currentColor` and inline `style` have to be resolved from attributes.
   const FRAME = { x: 0, y: 0, w: 10, h: 10 };
@@ -118,7 +118,7 @@ describe("BUG-03 markup SVG paints like the browser", () => {
   });
 });
 
-describe("BUG-14 SVG groups, nested viewports and object-bounding-box clips", () => {
+describe("SVG groups, nested viewports and object-bounding-box clips", () => {
   const FRAME = { x: 0, y: 0, w: 20, h: 20 };
   const draw = (markup: string) => svgFromMarkup(markup, FRAME)!;
 
@@ -307,7 +307,7 @@ describe("data: svg sources are parsed once, during analysis", () => {
   });
 });
 
-describe("052: fill-rule from computed style", () => {
+describe("fill-rule from computed style", () => {
   const node = (
     tag: string,
     attrs: Record<string, string>,

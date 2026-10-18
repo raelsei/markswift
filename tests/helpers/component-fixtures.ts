@@ -1,4 +1,4 @@
-/** Inline sources for repeated-sibling extraction (plan 030): rows with controls, icons, a grid and radios; annotated names (plan 031). */
+/** Inline sources for repeated-sibling extraction: rows with controls, icons, a grid and radios; annotated names. */
 export const SETTINGS = `<form data-markswift-root class="f"><h3>Email</h3>
  ${["Marketing", "Security", "Social"].map((t, i) => `<div class="row"><div><label for="c${i}">${t}</label><p>About ${t.toLowerCase()}</p></div><input id="c${i}" type="checkbox" role="switch" ${i ? "checked" : ""}><button type="button">Edit</button></div>`).join("")}
  <button type="button" onclick="save()">Save</button></form>`;

@@ -42,7 +42,7 @@ test("pascalWords and memberName build K1 member names", () => {
   expect(memberName("is", "Save", seen, "Control", "Pressed")).toBe("isSavePressed");
 });
 
-test("043 item 11: a bundled family without a wght axis selects its static face in fidelity; app keeps Dynamic Type", () => {
+test("a bundled family without a wght axis selects its static face in fidelity; app keeps Dynamic Type", () => {
   const face = (weight: number, axes: Record<string, [number, number]>): PackagedFace => ({
     family: "Fam",
     file: `fam-${weight}.ttf`,
@@ -63,7 +63,7 @@ test("043 item 11: a bundled family without a wght axis selects its static face 
     expect(fontExpr(f, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
 });
 
-describe("052: variation axes", () => {
+describe("variation axes", () => {
   const face = (axes: Record<string, [number, number]>): PackagedFace => ({
     family: "Fam",
     file: "fam.ttf",

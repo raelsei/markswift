@@ -28,7 +28,7 @@ const WHITE = rgb(1, 1, 1);
 const NEAR_BLACK = rgb(0.04, 0.06, 0.08);
 const INDIGO = rgb(0.49, 0.36, 0.84);
 
-/** Plan 034 Step 1: `emitDesignTokens` output before the palette map existed (the version line follows the release). */
+/** `emitDesignTokens` output without a palette map (the version line follows the release). */
 const PINNED_NESTED = `// ${GENERATED_BY} — colour tokens paired from the light and dark captures of one page.
 //
 // The generated view references these names instead of inline Color.markswift(…) literals.
@@ -155,7 +155,7 @@ describe("extractTokens", () => {
     expect(card?.dark).toEqual(NEAR_BLACK);
   });
 
-  test("029: a pressed colour that flips with the theme becomes a semantic token the ternary names", () => {
+  test("a pressed colour that flips with the theme becomes a semantic token the ternary names", () => {
     const [light, dark] = pair();
     const pressedLight = rgb(0.9, 0.9, 0.92);
     const pressedDark = rgb(0.15, 0.16, 0.18);
@@ -249,7 +249,7 @@ describe("emitDesignTokens", () => {
     expect(swift).not.toContain("extension Color");
   });
 
-  test("without a palette map the file is byte-identical to the pre-map output", () => {
+  test("without a palette map the file matches the pinned output", () => {
     const [light, dark] = pair();
     (light!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];
     (dark!.root as StackNode).children[0]!.style.tokens = ["surface-raised"];

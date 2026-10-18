@@ -298,7 +298,7 @@ export default {
       ir: "—",
       via: "none",
       impl: "partial",
-      note: "Transitions only run on state changes; the snapshot has none (Playwright captures with animations disabled). `allow-discrete` (`display`/`overlay` for dialogs, popovers) is covered by the drawn presentation's insertion and removal: its enter/exit keyframes play (066), a discrete transition's own timing does not.",
+      note: "Transitions only run on state changes; the snapshot has none (Playwright captures with animations disabled). `allow-discrete` (`display`/`overlay` for dialogs, popovers) is covered by the drawn presentation's insertion and removal: its enter/exit keyframes play, a discrete transition's own timing does not.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/transition-behavior",
     },
     {
@@ -331,7 +331,7 @@ export default {
       ir: "SemBase.motion.transitions",
       via: "style",
       impl: "yes",
-      note: "Only the paint the browser transitions animates; other changed fields of the look jump. Under Reduce Motion without an author rule, transform changes jump and fades keep their timing (D-MOTION).",
+      note: "Only the paint the browser transitions animates; other changed fields of the look jump. Under Reduce Motion without an author rule, transform changes jump and fades keep their timing.",
       spec: "https://developer.mozilla.org/docs/Web/CSS/transition-property",
     },
     {

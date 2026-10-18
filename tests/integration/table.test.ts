@@ -1,4 +1,4 @@
-/** Plan 049: LD4 table keys are captured, admitted tables become `MarkswiftTable` grids, `<th>` is a header. */
+/** LD4 table keys are captured, admitted tables become `MarkswiftTable` grids, `<th>` is a header. */
 import { expect, test } from "bun:test";
 import { convertHtml } from "../../src/index.ts";
 import { inferScreen } from "../../src/analysis/infer.ts";
@@ -33,7 +33,7 @@ browserTest(
     };
     visit(result.layout.root, false);
 
-    // 1. Capture (046).
+    // 1. Capture.
     expect(byId.get("sep")!.styles["border-spacing"]).toBe("3px 5px");
     expect(byId.get("fix")!.styles["table-layout"]).toBe("fixed");
     expect(byId.get("col")!.styles["border-collapse"]).toBe("collapse");
@@ -47,7 +47,7 @@ browserTest(
     expect(grids).toHaveLength(4);
     const [sep, fix, col, emp] = grids as [GridNode, GridNode, GridNode, GridNode];
     expect([sep.columns, sep.hSpacing, sep.vSpacing, sep.table!.collapse]).toEqual([3, 3, 5, false]);
-    // Columns and rows are the captured lattice (the plan's probe read 88.688 / 93.641 / 93.672 and rows of 26 under
+    // Columns and rows are the captured lattice (a probe read 88.688 / 93.641 / 93.672 and rows of 26 under
     // another font; this page's capture differs by a few tenths, so the live boxes are the reference).
     const sepTable = byId.get("sep")!;
     const [caption, tbody] = sepTable.children as [LayoutNode, LayoutNode];

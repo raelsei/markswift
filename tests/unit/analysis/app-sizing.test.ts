@@ -1,6 +1,6 @@
 import { LAYOUT_DOC_VERSION } from "../../../src/model/layout.ts";
 /**
- * Plan 010: app mode follows CSS intent instead of the capture device (object-fit, bottom slack,
+ * App mode follows CSS intent instead of the capture device (object-fit, bottom slack,
  * viewport heights, page scroll, corner-anchored overlays). Hand-built measured trees.
  */
 import { describe, expect, test } from "bun:test";
@@ -61,7 +61,7 @@ const byId = (root: SemNode, id: string) => flatten(root).find((n) => n.id === i
 const features = (n: SemNode) => n.diagnostics.map((d) => `${d.level}:${d.feature}`);
 const code = (d: LayoutDoc, mode: "app" | "fidelity" = "app") => compileLayout(d, { name: "F", mode }).code;
 
-describe("Step 1 object-fit", () => {
+describe("object-fit", () => {
   const fixture = (fit?: string, position?: string) =>
     doc(
       el("main", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [
@@ -194,7 +194,7 @@ describe("object-fit on an SVG source (drawn as Shapes)", () => {
   });
 });
 
-describe("Step 3 trailing inset", () => {
+describe("trailing inset", () => {
   const RED = { "background-color": "rgb(255, 0, 0)" };
 
   test("min-height slack is not bottom padding", () => {
@@ -268,7 +268,7 @@ describe("Step 3 trailing inset", () => {
   });
 });
 
-describe("Step 4 viewport", () => {
+describe("viewport", () => {
   const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
   const RED = { "background-color": "rgb(255, 0, 0)" };
   const tallRoot = () =>
@@ -298,7 +298,7 @@ describe("Step 4 viewport", () => {
   });
 });
 
-describe("Step 5 page scroll", () => {
+describe("page scroll", () => {
   const VIEWPORT = { x: 0, y: 0, w: 390, h: 844 };
   const page = (h: number) =>
     doc(
@@ -370,7 +370,7 @@ describe("Step 5 page scroll", () => {
   });
 });
 
-describe("Step 6 overlay anchoring", () => {
+describe("overlay anchoring", () => {
   const RED = { "background-color": "rgb(255, 0, 0)" };
   const card = (y: number, insets: { top: string; right: string; bottom: string; left: string }) =>
     doc({

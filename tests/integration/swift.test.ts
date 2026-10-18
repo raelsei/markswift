@@ -110,7 +110,7 @@ nativeTest(
 );
 
 nativeTest(
-  "027: action members and inline links compile and keep the link colour",
+  "action members and inline links compile and keep the link colour",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-027-"));
     const html =
@@ -233,7 +233,7 @@ nativeTest(
 );
 
 nativeTest(
-  "028: ARIA and input traits compile in both modes",
+  "ARIA and input traits compile in both modes",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-028-"));
     const html =
@@ -280,7 +280,7 @@ nativeTest(
 );
 
 nativeTest(
-  "009: silent-loss fixes emit compilable Swift in both modes",
+  "silent-loss fixes emit compilable Swift in both modes",
   async () => {
     const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
     const node = (
@@ -375,7 +375,7 @@ nativeTest(
 );
 
 nativeTest(
-  "010: app-sizing output compiles in both modes",
+  "app-sizing output compiles in both modes",
   async () => {
     const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
     const node = (
@@ -486,7 +486,7 @@ nativeTest(
 );
 
 nativeTest(
-  "011: flex and direction output compiles in both modes",
+  "flex and direction output compiles in both modes",
   async () => {
     const BASE = { color: "rgb(0, 0, 0)", "font-family": "system-ui", "font-size": "14px", "line-height": "20px" };
     const node = (
@@ -964,7 +964,7 @@ nativeTest(
 );
 
 nativeTest(
-  "029: forced pressed and focused looks match the browser",
+  "forced pressed and focused looks match the browser",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-native-029-"));
     const file = join(import.meta.dir, "../conformance/fixtures/_states/interactive-states.html");

@@ -295,7 +295,7 @@ describe("in-flow layers", () => {
   });
 });
 
-describe("drawn presentations (060)", () => {
+describe("drawn presentations", () => {
   const fixture = (name: string) =>
     Bun.file(`${import.meta.dir}/../conformance/fixtures/components/${name}.html`).text();
   /** Fixture → its layer ids, then per layer: expected `.markswiftPresentation(` arguments and placement. */
@@ -335,7 +335,7 @@ describe("drawn presentations (060)", () => {
     "closers, long-press and the native backdrop",
     async () => {
       const dialog = (await convertHtml(await fixture("overlay-dialog"), { name: "Overlay" })).code;
-      // 066: the closers close inside the layer's exit curve.
+      // The closers close inside the layer's exit curve.
       expect(dialog.match(/\n +withAnimation\([^\n]*\) \{ isEditProfilePresented = false \}\n/g)).toHaveLength(2);
       const hover = (await convertHtml(await fixture("overlay-hover-card"), { name: "Overlay" })).code;
       expect(hover).toContain(".simultaneousGesture(LongPressGesture().onEnded { _ in isNextjsPresented = true })");
@@ -348,7 +348,7 @@ describe("drawn presentations (060)", () => {
   );
 });
 
-describe("native menus (061)", () => {
+describe("native menus", () => {
   /** Fixture → its layer ids, the role its content lists, and whether it opens on a right click. */
   const CASES: Record<string, [string[], "menu" | "listbox", boolean]> = {
     "overlay-dropdown-menu": [["open"], "menu", false],
@@ -375,7 +375,7 @@ describe("native menus (061)", () => {
     );
 });
 
-describe("enter frames (066)", () => {
+describe("enter frames", () => {
   const spec = (html: string) =>
     ({ screen: "s", theme: "light", url: "http://markswift.invalid/", html, root: "[data-markswift-root]" }) as const;
   const clip = { x: 0, y: 0, width: 390, height: 300 };

@@ -93,7 +93,7 @@ browserTest(
     expect(result.layout).toBe(bands[0]!.layout);
     const plain = await convert(MEDIA_QUERY, { css: FLUID, theme: "light" });
     expect(plain.bands).toBeUndefined();
-    // Plan 054 merges the bands into one view; without `breakpoints` the band-0 view is unchanged.
+    // `breakpoints` merges the bands into one view; without it the band-0 view is unchanged.
     expect(result.code).toContain("MarkswiftBands(");
     expect(plain.code).not.toContain("MarkswiftBands(");
   },

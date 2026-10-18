@@ -102,7 +102,7 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(view).toContain("minHeight: 72.0");
   expect(view).not.toContain("height: 72.0,");
   expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(2);
-  // 044 item 4: an editor's text starts at its top, so its half-leading pads above the first line, as Chrome's line box.
+  // An editor's text starts at its top, so its half-leading pads above the first line, as Chrome's line box.
   expect(
     view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline, editor: true)").length - 1,
   ).toBe(2);
@@ -217,7 +217,7 @@ test("appearance: none removes the select arrow; native checkboxes and ranges dr
   expect(drawn).toContain(".background(Color.markswift(1.0, 1.0, 1.0)");
 });
 
-test("044: a native select pads its label like Chrome's menulist and puts the arrow at the inner border edge", () => {
+test("a native select pads its label like Chrome's menulist and puts the arrow at the inner border edge", () => {
   // BOX: 1 px border; 12 px author padding → the 15 px arrow box overhangs the content edge by 12 px.
   const select = (styles: Record<string, string>) =>
     el("select", { id: "s" }, { x: 0, y: 0, w: 320, h: 38 }, [option("One")], {
@@ -239,7 +239,7 @@ test("044: a native select pads its label like Chrome's menulist and puts the ar
   }
 });
 
-test("044: an input button's caption stays one line and shrinks into its measured width", () => {
+test("an input button's caption stays one line and shrinks into its measured width", () => {
   const submit = el("input", { id: "go", type: "submit" }, { x: 0, y: 0, w: 58, h: 21 }, [], {
     display: "inline-block",
     ...BOX,
@@ -251,7 +251,7 @@ test("044: an input button's caption stays one line and shrinks into its measure
   }
 });
 
-test("044: tapping a text field's <label> focuses it (app mode)", () => {
+test("tapping a text field's <label> focuses it (app mode)", () => {
   const children = [
     el("label", { for: "email" }, { x: 0, y: 0, w: 320, h: 20 }, [text("Email", 0, 0, 40, 20)]),
     field("input", { id: "email", type: "email" }, 24),
@@ -353,7 +353,7 @@ test("details draw the captured summary and marker, no system chevron, no pinned
   expect(group.slice(0, group.indexOf(".disclosureGroupStyle(") + 200)).not.toContain(".frame(height:");
 });
 
-test("042: disabled-field-dim — a disabled text field or editor keeps the design's opacity in app mode", () => {
+test("disabled-field-dim — a disabled text field or editor keeps the design's opacity in app mode", () => {
   // SwiftUI dims a disabled Button itself, but not a TextField/TextEditor whose text has its own colour.
   const dim = { display: "inline-block", ...BOX, opacity: "0.5" };
   const { view } = swift([
@@ -364,7 +364,7 @@ test("042: disabled-field-dim — a disabled text field or editor keeps the desi
   expect(view.match(/\.opacity\(0\.5\)/g)).toHaveLength(2);
 });
 
-test("042: field-face-leading — an editor in a bundled face spaces its lines from that face's natural line", () => {
+test("field-face-leading — an editor in a bundled face spaces its lines from that face's natural line", () => {
   const doc: LayoutDoc = {
     version: LAYOUT_DOC_VERSION,
     source: "controls.html",
@@ -384,13 +384,13 @@ test("042: field-face-leading — an editor in a bundled face spaces its lines f
   editor.font = { ...editor.font!, family: { kind: "custom", name: "Geist Variable" }, size: 16, lineHeight: 24 };
   const metrics = { "geist variable": { upem: 1000, ascent: 1005, descent: 295, lineGap: 0, useTypoMetrics: false } };
   const view = emitSwift(screen, "ControlsView", { mode: "app", fontMetrics: metrics }).view;
-  // The face name lets the runtime find how far the editor's tall glyphs lower its first line (044 item 4).
+  // The face name lets the runtime find how far the editor's tall glyphs lower its first line.
   expect(view).toContain(
     '.markswiftFieldLineHeight(24.0, size: 16.0, relativeTo: .callout, natural: 1.3, editor: true, face: "Geist Variable")',
   );
 });
 
-test("042: control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {
+test("control-content-place — a switch thumb stays at the track's start in its fixed frame", () => {
   // Radix switch: a 32×18.4 track (1 px border) with a 16 px thumb at the start; a fixed frame centres by default.
   const track = el(
     "button",
@@ -408,13 +408,13 @@ test("042: control-content-place — a switch thumb stays at the track's start i
   expect(view).toContain(".frame(width: 32.0, alignment: .leading)");
 });
 
-test("042: editor-edge-effect — an app-mode editor draws no scroll edge effect over its first line", () => {
+test("editor-edge-effect — an app-mode editor draws no scroll edge effect over its first line", () => {
   // iOS 26 softens the top edge of a scroll view whose content reaches it; a `<textarea>` paints no such fade.
   const { view } = swift([field("textarea", { id: "note" }, 0, 66, [text("Sidebar navigation landed.", 0, 0, 0, 0)])]);
   expect(view).toMatch(/\.scrollContentBackground\(\.hidden\)\n\s*\.markswiftScrollEdgeEffectHidden\(\)\n/);
 });
 
-test("042: field-text-centre — a select's or field's single line stays centred in its app-mode height floor", () => {
+test("field-text-centre — a select's or field's single line stays centred in its app-mode height floor", () => {
   // Chrome centres a select's and an input's text in the box; an editor's text starts at the top.
   const { view } = swift([
     field("select", { id: "region" }, 0, 32, [option("Frankfurt", { selected: "" })]),
@@ -425,7 +425,7 @@ test("042: field-text-centre — a select's or field's single line stays centred
   expect(view).toContain("minHeight: 64.0, alignment: .topLeading)");
 });
 
-test("043: a disabled fieldset disables its controls, except inside its first legend", () => {
+test("a disabled fieldset disables its controls, except inside its first legend", () => {
   const box = (y: number, h: number) => ({ x: 0, y, w: 320, h });
   const { view } = swift([
     el("fieldset", { id: "fs", disabled: "" }, box(0, 200), [
@@ -451,7 +451,7 @@ test("043: a disabled fieldset disables its controls, except inside its first le
   expect(disabledAfter("s_outside")).toBe(false);
 });
 
-test("043: radios group by form owner and name; an unnamed radio only selects", () => {
+test("radios group by form owner and name; an unnamed radio only selects", () => {
   const radio = (id: string, attrs: Record<string, string>, y: number) =>
     el("input", { id, type: "radio", ...attrs }, { x: 0, y, w: 13, h: 13 }, [], { display: "inline-block" });
   const box = (y: number) => ({ x: 0, y, w: 320, h: 40 });
@@ -478,7 +478,7 @@ test("043: radios group by form owner and name; an unnamed radio only selects", 
   expect(view).toContain("Toggle(isOn: $s_solo.markswiftSelects(true))");
 });
 
-test("043: a select lists only its visible options, disables the disabled ones and heads its groups", () => {
+test("a select lists only its visible options, disables the disabled ones and heads its groups", () => {
   const zero = { x: 0, y: 0, w: 0, h: 0 };
   const { view } = swift([
     field("select", { id: "pick" }, 0, 38, [

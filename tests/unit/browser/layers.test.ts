@@ -337,7 +337,7 @@ describe("compileLayout ignores the open state", () => {
     };
   };
 
-  // App mode consumes layers (059 in-flow content, 060 drawn presentations); fidelity never does.
+  // App mode consumes layers (in-flow content, drawn presentations); fidelity never does.
   test("fidelity code and diagnostics are byte-identical without layers, states.open and ::backdrop", () => {
     const full = withOpen();
     const { layers: _, ...rest } = withOpen();

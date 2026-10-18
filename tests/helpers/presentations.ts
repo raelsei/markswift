@@ -1,4 +1,4 @@
-/** Hand-built LayoutDocs with viewport/anchored layers (plan 060): a trigger in a 390×844 root, closed content in `layers`. */
+/** Hand-built LayoutDocs with viewport/anchored layers: a trigger in a 390×844 root, closed content in `layers`. */
 import { LAYOUT_DOC_VERSION, type Layer, type LayoutDoc, type LayoutNode } from "../../src/model/layout.ts";
 
 const FONT = { "font-family": "system-ui", "font-size": "15px", "line-height": "20px", color: "rgb(17, 24, 39)" };
@@ -238,7 +238,7 @@ export const NATIVE = () =>
     ],
   });
 
-/** A menu layer (061) and a tooltip layer (062): both left alone. */
+/** A menu layer and a tooltip layer: both left alone. */
 export const MENU = () =>
   presentationDoc({
     id: "menu",
@@ -275,7 +275,7 @@ const popper = (id: string, content: LayoutNode) =>
     },
   );
 
-/** shadcn dropdown (plan 061's fixture table, first row). */
+/** shadcn dropdown. */
 export const DROPDOWN = () =>
   presentationDoc({
     id: "open",

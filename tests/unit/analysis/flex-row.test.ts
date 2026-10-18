@@ -1,4 +1,4 @@
-/** Plan 037: flex rows MarkswiftFlexRow reproduces, admitted only when the solver mirror matches the capture. */
+/** Flex rows MarkswiftFlexRow reproduces, admitted only when the solver mirror matches the capture. */
 import { expect, test } from "bun:test";
 import { admitFlexRow, solveFlexRow } from "../../../src/analysis/flex-row.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";

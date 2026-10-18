@@ -50,20 +50,20 @@ function compile(children: LayoutNode[], mode: "app" | "fidelity" = "app") {
 
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
 
-test("027: a plain button gets a named placeholder action", () => {
+test("a plain button gets a named placeholder action", () => {
   const { code } = compile([el("button", {}, [text("Save")])]);
   expect(code).toContain("Button(action: onSave)");
   expect(code).toContain("var onSave: () -> Void = {}");
   expect(code).toContain("in the design has no handler");
 });
 
-test("027: the handler name beats the caption", () => {
+test("the handler name beats the caption", () => {
   const { code } = compile([el("button", { onclick: "save()" }, [text("Store")])]);
   expect(code).toContain("Button(action: onSave)");
   expect(code).toContain('/// `onclick="save()"` in the design.');
 });
 
-test("027: alike names are deduplicated, a shared handler is one member", () => {
+test("alike names are deduplicated, a shared handler is one member", () => {
   const twin = compile([el("button", {}, [text("Edit")]), el("button", {}, [text("Edit")])]).code;
   expect(twin).toContain("Button(action: onEdit)");
   expect(twin).toContain("Button(action: onEdit2)");
@@ -75,14 +75,14 @@ test("027: alike names are deduplicated, a shared handler is one member", () => 
   expect(count(shared, "Button(action: onGo)")).toBe(2);
 });
 
-test("027: a role=button div is a real Button", () => {
+test("a role=button div is a real Button", () => {
   const { code } = compile([el("div", { role: "button", onclick: "openMenu()" }, [text("Menu")])]);
   expect(code).toContain("Button(action: onOpenMenu)");
   expect(code).toContain(".buttonStyle(.plain)");
   expect(code).not.toContain(".isButton");
 });
 
-test("027: an activatable element containing a control gets a tap gesture", () => {
+test("an activatable element containing a control gets a tap gesture", () => {
   const { code } = compile([
     el("div", { role: "button" }, [el("input", { type: "checkbox" }, [], {}, { x: 0, y: 0, w: 13, h: 13 })]),
   ]);
@@ -91,13 +91,13 @@ test("027: an activatable element containing a control gets a tap gesture", () =
   expect(code).toContain(".accessibilityAddTraits(.isButton)");
 });
 
-test("027: input buttons are named from their caption", () => {
+test("input buttons are named from their caption", () => {
   expect(compile([el("input", { type: "submit", value: "Send" })]).code).toContain("Button(action: onSend)");
   expect(compile([el("input", { type: "reset" })]).code).toContain("Button(action: onReset)");
   expect(compile([el("input", { type: "button" })]).code).toContain("Button(action: onAction)");
 });
 
-test("027: form onsubmit reaches the fields' Return and the submit button", () => {
+test("form onsubmit reaches the fields' Return and the submit button", () => {
   const { code } = compile([
     el("form", { onsubmit: "save(event)" }, [el("input", { type: "text" }), el("button", {}, [text("Go")])]),
   ]);
@@ -106,12 +106,12 @@ test("027: form onsubmit reaches the fields' Return and the submit button", () =
   expect(count(code, "var onSave:")).toBe(1);
 });
 
-test("027: a block in-app link is a Button over its target", () => {
+test("a block in-app link is a Button over its target", () => {
   const { code } = compile([el("a", { href: "#faq" }, [text("FAQ")])]);
   expect(code).toContain("Button(action: onFaq)");
 });
 
-test("027: inline links are link runs; in-app hrefs route to members", () => {
+test("inline links are link runs; in-app hrefs route to members", () => {
   const { code, diagnostics } = compile([
     el("p", {}, [
       text("Read the "),
@@ -127,7 +127,7 @@ test("027: inline links are link runs; in-app hrefs route to members", () => {
   expect(diagnostics.filter((d) => d.feature === "a")).toEqual([]);
 });
 
-test("027: an inline link with background-clip: text is reported as one colour", () => {
+test("an inline link with background-clip: text is reported as one colour", () => {
   const { diagnostics } = compile([
     el("p", {}, [
       text("Go "),
@@ -145,14 +145,14 @@ test("027: an inline link with background-clip: text is reported as one colour",
   );
 });
 
-test("027: an inline non-link handler is reported", () => {
+test("an inline non-link handler is reported", () => {
   const { diagnostics } = compile([
     el("p", {}, [text("Hi "), el("span", { onclick: "x()" }, [text("there")], { display: "inline" })]),
   ]);
   expect(diagnostics).toContainEqual(expect.objectContaining({ feature: "@onclick" }));
 });
 
-test("052: a pointer-events: none overlay ends with .allowsHitTesting(false) in app mode only", () => {
+test("a pointer-events: none overlay ends with .allowsHitTesting(false) in app mode only", () => {
   const veil = () =>
     el("div", {}, [], { position: "absolute", "pointer-events": "none", "background-color": "rgb(0, 0, 255)" });
   const app = compile([el("p", {}, [text("Under")]), veil()]).code;
@@ -162,7 +162,7 @@ test("052: a pointer-events: none overlay ends with .allowsHitTesting(false) in 
   expect(compile([el("p", {}, [text("Under")]), veil()], "fidelity").code).not.toContain(".allowsHitTesting");
 });
 
-test("052: a pass-through overlay button gets .allowsHitTesting(false) after its placement", () => {
+test("a pass-through overlay button gets .allowsHitTesting(false) after its placement", () => {
   const { code } = compile([
     el("p", {}, [text("Under")]),
     el("button", { onclick: "go()" }, [text("Go")], { position: "absolute", "pointer-events": "none" }),
@@ -172,7 +172,7 @@ test("052: a pass-through overlay button gets .allowsHitTesting(false) after its
   expect(code).toMatch(/\.allowsHitTesting\(false\)\n(\s*\.offset\([^\n]*\n)?\s*\}/);
 });
 
-test("027: no dead Buttons, no snake-case members, every action declared", () => {
+test("no dead Buttons, no snake-case members, every action declared", () => {
   const out = outputs.join("\n");
   expect(out).not.toContain("Button(action: {})");
   expect(out).not.toMatch(/\bon_[A-Za-z]/);

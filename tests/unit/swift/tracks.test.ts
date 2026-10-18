@@ -189,7 +189,7 @@ const ROW_CASES: Array<{
     ],
     expect: [22, 20],
   },
-  // Step 8 fixture `.rows`: rows `auto auto`, auto-rows 36px; Title, Description, Action (rows 1-2), Implicit
+  // Fixture `.rows`: rows `auto auto`, auto-rows 36px; Title, Description, Action (rows 1-2), Implicit
   {
     rows: [rowAuto, rowAuto],
     autoRow: rowPx(36),

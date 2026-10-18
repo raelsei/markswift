@@ -177,7 +177,7 @@ test("finite caps preserve intrinsic dimensions before background paint", () => 
   for (const mode of ["app", "fidelity"] as const) {
     const code = emitSwift(screen, "ConstraintView", { mode }).view;
     const capped = code.slice(code.indexOf("maxWidth: 200.0, maxHeight: 100.0"));
-    // App fits the width to the offered one (`markswiftFitWidth`, 042: hug-cap-fit), still before paint.
+    // App fits the width to the offered one (`markswiftFitWidth`, hug-cap-fit), still before paint.
     const hug = mode === "app" ? ".markswiftFitWidth()" : ".fixedSize(horizontal: true, vertical: true)";
     if (mode === "app") expect(capped).toContain(".fixedSize(horizontal: false, vertical: true)");
     expect(capped).toContain(hug);
@@ -230,7 +230,7 @@ test("a box pinned only against its filling children fits its content in app mod
   expect(fidelity).not.toContain("markswiftFitWidth");
 });
 
-test("042: hug-cap-fit — a hugging box with a max-width never takes more than its container offers in app mode", () => {
+test("hug-cap-fit — a hugging box with a max-width never takes more than its container offers in app mode", () => {
   // An empty state's `max-w-sm` column: CSS shrink-to-fit is min(content, 384, container); SwiftUI's
   // `fixedSize` takes the content's ideal width, one 346 pt line, past a 308 pt card.
   const screen = inferScreen(capturedText({}), "constraints");
@@ -297,7 +297,7 @@ test("app-mode text controls treat a measured height as a floor", () => {
   expect(fidelity).toContain("height: 38.0");
 });
 
-test("042: control-floor-centre — a button's label stays centred in its app-mode height floor", () => {
+test("control-floor-centre — a button's label stays centred in its app-mode height floor", () => {
   // shadcn `h-8` button: 32 px border box, 1 px border, a 20 px line Chrome centres in the 30 px content box.
   const input: LayoutDoc = {
     version: LAYOUT_DOC_VERSION,
@@ -362,6 +362,6 @@ test("042: control-floor-centre — a button's label stays centred in its app-mo
   if (control?.kind !== "control") throw new Error("expected a control");
   control.height = { kind: "fixed", px: 32 };
   const app = emitSwift(screen, "F", { mode: "app" }).view;
-  // Centred on both axes: the single label carries the whole content box (042: control-content-place).
+  // Centred on both axes: the single label carries the whole content box (control-content-place).
   expect(app).toContain("minHeight: 32.0, alignment: .center)");
 });

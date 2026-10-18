@@ -333,7 +333,7 @@ const field = (attrs: Record<string, string>, y = 0) =>
   el("input", { id: "f", ...attrs }, { x: 0, y, w: 320, h: 30 }, [], { display: "inline-block" });
 const inline = { display: "inline" };
 
-test("028: aria-labelledby names a field and wins over aria-label", () => {
+test("aria-labelledby names a field and wins over aria-label", () => {
   const app = swift(
     [
       el("span", { id: "t1" }, { x: 0, y: 0, w: 60, h: 22 }, [text("Billing", 0, 0, 60, 22)], inline),
@@ -347,7 +347,7 @@ test("028: aria-labelledby names a field and wins over aria-label", () => {
   expect(view).not.toContain('.accessibilityLabel("X")');
 });
 
-test("028: aria-describedby and aria-description become the hint", () => {
+test("aria-describedby and aria-description become the hint", () => {
   const app = swift(
     [
       el("p", { id: "h" }, { x: 0, y: 0, w: 320, h: 22 }, [text("We never share it", 0, 0, 140, 22)]),
@@ -362,7 +362,7 @@ test("028: aria-describedby and aria-description become the hint", () => {
   expect(app).toContain('.accessibilityHint("Opens in a sheet")');
 });
 
-test("028: aria-valuenow and aria-valuetext become the value", () => {
+test("aria-valuenow and aria-valuetext become the value", () => {
   const bar = (attrs: Record<string, string>) =>
     swift([el("div", { id: "bar", role: "progressbar", ...attrs }, { x: 0, y: 0, w: 320, h: 8 })], "app");
   expect(bar({ "aria-valuenow": "40" })).toContain('.accessibilityValue("40")');
@@ -371,7 +371,7 @@ test("028: aria-valuenow and aria-valuetext become the value", () => {
   expect(valued).not.toContain('.accessibilityValue("40")');
 });
 
-test("028: selected tabs, current links and checked checkboxes add .isSelected", () => {
+test("selected tabs, current links and checked checkboxes add .isSelected", () => {
   const tab = swift(
     [
       el("button", { id: "tab", role: "tab", "aria-selected": "true" }, { x: 0, y: 0, w: 60, h: 30 }, [
@@ -466,7 +466,7 @@ test("ARIA toggle Buttons own their checked state: a tap flips it, then runs the
   expect(group).toContain('.accessibilityAddTraits(s_plan == "1" ? .isSelected : [])');
 });
 
-test("028: aria-disabled disables a button in app mode only", () => {
+test("aria-disabled disables a button in app mode only", () => {
   const pay = (mode: EmitMode) =>
     swift(
       [
@@ -486,7 +486,7 @@ test("028: aria-disabled disables a button in app mode only", () => {
   expect(pay("fidelity")).not.toContain(".disabled(");
 });
 
-test("028: aria-disabled disables an activatable div's Button", () => {
+test("aria-disabled disables an activatable div's Button", () => {
   const app = swift(
     [
       el(
@@ -504,7 +504,7 @@ test("028: aria-disabled disables an activatable div's Button", () => {
   expect(lines[style + 1]).toBe(".disabled(true)");
 });
 
-test("028: aria-expanded becomes the value", () => {
+test("aria-expanded becomes the value", () => {
   const app = swift(
     [
       el(
@@ -522,7 +522,7 @@ test("028: aria-expanded becomes the value", () => {
   expect(app).toContain('.accessibilityValue("collapsed")');
 });
 
-test("028: autocomplete names the field's autofill type", () => {
+test("autocomplete names the field's autofill type", () => {
   expect(swift([field({ autocomplete: "shipping given-name" })], "app")).toContain(
     '.markswiftInputTraits(autofill: "given-name")',
   );
@@ -532,16 +532,16 @@ test("028: autocomplete names the field's autofill type", () => {
   expect(swift([field({ autocomplete: "off" })], "app")).not.toContain("autofill:");
 });
 
-test("028: inputmode chooses the keyboard; unknown keywords are ignored", () => {
+test("inputmode chooses the keyboard; unknown keywords are ignored", () => {
   expect(swift([field({ inputmode: "numeric" })], "app")).toContain('.markswiftInputTraits(inputMode: "numeric")');
   expect(swift([field({ inputmode: "bogus" })], "app")).not.toContain("inputMode:");
 });
 
-test("028: enterkeyhint labels the Return key", () => {
+test("enterkeyhint labels the Return key", () => {
   expect(swift([field({ enterkeyhint: "send" })], "app")).toContain('.markswiftInputTraits(enterKey: "send")');
 });
 
-test("028: link-like Buttons announce a link, not a button", () => {
+test("link-like Buttons announce a link, not a button", () => {
   const span = swift(
     [
       el(

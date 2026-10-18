@@ -17,7 +17,7 @@ const byId = (root: LayoutNode, id: string) => all(root).find((n) => n.attrs["id
 const byClass = (root: LayoutNode, cls: string) => all(root).find((n) => n.attrs["class"]?.split(/\s+/).includes(cls))!;
 
 browserTest(
-  "063: animation-name.html — spin, fade and pulse from Web Animations; rest snapshot still settled",
+  "animation-name.html — spin, fade and pulse from Web Animations; rest snapshot still settled",
   async () => {
     const { layout } = await capture("css-misc/animation-name.html");
     const spinner = byClass(layout.root, "spinner");
@@ -47,7 +47,7 @@ browserTest(
 );
 
 browserTest(
-  "063: motion-timing.html — negative delay, steps(), linear(), fractional iterations, ::after",
+  "motion-timing.html — negative delay, steps(), linear(), fractional iterations, ::after",
   async () => {
     const { layout } = await capture("css-misc/motion-timing.html");
     const first = (id: string) => byId(layout.root, id).motion!.animations![0]!;
@@ -67,7 +67,7 @@ browserTest(
 );
 
 browserTest(
-  "063: motion-reduced.html — both prefers-reduced-motion branches and per-direction press transitions",
+  "motion-reduced.html — both prefers-reduced-motion branches and per-direction press transitions",
   async () => {
     const { layout } = await capture("css-misc/motion-reduced.html");
     const motion = (id: string) => byId(layout.root, id).motion!;
@@ -88,7 +88,7 @@ browserTest(
 );
 
 browserTest(
-  "063: shadcn button spinner keyframes and 150 ms press transitions; shadcn input focus border",
+  "shadcn button spinner keyframes and 150 ms press transitions; shadcn input focus border",
   async () => {
     const button = (await capture("components/shadcn-button.html")).layout;
     const spin = all(button.root).find((n) => n.motion?.animations?.[0]?.name === "spin");
@@ -108,7 +108,7 @@ browserTest(
 );
 
 browserTest(
-  "063: script animations and @starting-style are reported",
+  "script animations and @starting-style are reported",
   async () => {
     const script = await convertHtml(
       `<div id=s></div><script>document.getElementById("s").animate([{opacity:0},{opacity:1}],{duration:1000,iterations:Infinity})</script>`,
@@ -122,7 +122,7 @@ browserTest(
 );
 
 browserTest(
-  "063: reduced-motion emulation keeps the colour scheme; captures are deterministic",
+  "reduced-motion emulation keeps the colour scheme; captures are deterministic",
   async () => {
     const dark = await capture("css-misc/animation-name.html", "dark");
     expect(dark.layout.canvas).toBe("rgb(11, 14, 19)");
@@ -135,7 +135,7 @@ browserTest(
 );
 
 browserTest(
-  "064: every unmapped animation in motion-unmapped.html is reported on its node; @starting-style warns",
+  "every unmapped animation in motion-unmapped.html is reported on its node; @starting-style warns",
   async () => {
     const result = await capture("css-misc/motion-unmapped.html");
     const diagnostics = (id: string) => {
@@ -159,7 +159,7 @@ browserTest(
 );
 
 browserTest(
-  "064: app output animates the fixtures' keyframes; Reduce Motion follows D-MOTION",
+  "app output animates the fixtures' keyframes; Reduce Motion stops loops and keeps fades' opacity",
   async () => {
     const swift = (await capture("css-misc/animation-name.html")).files["Motion.swift"]!;
     // spin (decorative loop: stops), fade (one-shot: movement removed, opacity kept, so `reduced` differs), pulse.

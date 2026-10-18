@@ -179,7 +179,7 @@ browserTest(
 
 /** Every extracted name, checked by eye against the markup; a rule change shows up here as a renamed API. */
 // shadcn-avatar: three avatar runs (`data-slot="avatar"`) differ in shape, so three types. tw-cards: the
-// nearest heading of the member cards is the following "Invite a teammate" card's (Step 2 rule order).
+// nearest heading of the member cards is the following "Invite a teammate" card's.
 const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[]; actions: string[] }> = {
   "overlay-dialog": {
     types: ["EditProfileItem"],

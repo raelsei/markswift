@@ -1,4 +1,4 @@
-/** Plan 043 item 5: an embedded raster's header size places and tiles its background layer. */
+/** An embedded raster's header size places and tiles its background layer. */
 import { describe, expect, test } from "bun:test";
 import { imagePaint } from "../../../src/analysis/style-background.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";

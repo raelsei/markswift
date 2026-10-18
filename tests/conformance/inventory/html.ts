@@ -1117,7 +1117,7 @@ export default {
       ir: "ButtonNode (new)",
       via: "attribute",
       impl: "yes",
-      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; the action member is plan 027\'s.',
+      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; it gets an action member.',
       spec: `${MDN}input/button`,
     },
     {
@@ -1246,7 +1246,7 @@ export default {
       ir: "ButtonNode (new)",
       via: "attribute",
       impl: "yes",
-      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; the action member is plan 027\'s.',
+      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; it gets an action member.',
       spec: `${MDN}input/reset`,
     },
     {
@@ -1268,7 +1268,7 @@ export default {
       ir: "ButtonNode (new)",
       via: "attribute",
       impl: "yes",
-      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; the action member is plan 027\'s.',
+      note: 'Caption from `@value`, else Chrome\'s "Submit"/"Reset"; it gets an action member.',
       spec: `${MDN}input/submit`,
     },
     {
@@ -1560,7 +1560,7 @@ export default {
       ir: "TextRun",
       via: "structure",
       impl: "partial",
-      note: `Chrome no longer blinks, so the static text is the whole effect. ${NOT_INLINE}`,
+      note: `Chrome does not blink, so the static text is the whole effect. ${NOT_INLINE}`,
       spec: `${WHATWG}obsolete.html#blink`,
     },
     {

@@ -1,4 +1,4 @@
-/** Plan 054: `compileLayout` with width-band variants. */
+/** `compileLayout` with width-band variants. */
 import { expect, test } from "bun:test";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import type { Theme } from "../../../src/model/layout.ts";

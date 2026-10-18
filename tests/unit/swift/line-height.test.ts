@@ -202,7 +202,7 @@ test("small line-box growth (a kbd border) is app-only padding", () => {
   expect(emit(doc, "fidelity").view).not.toContain(".padding(.bottom, 2.0)");
 });
 
-test("042: anon-flex-line-box — text beside an icon in a flex box keeps its half-leading", () => {
+test("anon-flex-line-box — text beside an icon in a flex box keeps its half-leading", () => {
   // An accordion trigger: `flex py-2.5`, 20 px line, a 16 px icon. The #text bounds are the glyph
   // area (18 px); the anonymous flex item around it is the 20 px line box, so the text keeps it.
   const doc = paragraph(
@@ -231,7 +231,7 @@ test("042: anon-flex-line-box — text beside an icon in a flex box keeps its ha
   expect(emit(doc, "app").view).not.toContain("halfLeading: false");
 });
 
-test("042: text-balance — balanced multi-line text balances its native lines in app mode", () => {
+test("text-balance — balanced multi-line text balances its native lines in app mode", () => {
   const doc = paragraph({ "text-wrap-style": "balance", "text-align": "center" }, 40);
   expect(emit(doc, "app").view).toMatch(/\.markswiftLineHeight\([^\n]*\)\n\s*\.markswiftBalance\(\)\n/);
   expect(emit(doc, "fidelity").view).not.toContain("markswiftBalance");

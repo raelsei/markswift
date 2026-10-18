@@ -1,4 +1,4 @@
-/** Plan 054: `convert({ breakpoints })` emits one view that switches at the CSS width thresholds. */
+/** `convert({ breakpoints })` emits one view that switches at the CSS width thresholds. */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ const native = process.env.MARKSWIFT_SWIFT_TESTS === "1";
 
 const MEDIA_QUERY = { file: "tests/conformance/fixtures/css-layout/media-query.html" };
 const FLUID = "main[data-markswift-root]{width:auto!important}";
-// Bodies of 056's breakpoint fixtures.
+// Bodies of the breakpoint fixtures.
 const SWAP = `<style>body{margin:0;font:15px/20px system-ui} main{padding:16px} .cards .c{border:1px solid #ccc;border-radius:8px;padding:8px;margin-bottom:8px} table{width:100%;border-collapse:collapse} td,th{border:1px solid #ccc;padding:4px} .side{display:none} @media (min-width:1024px){ .layout{display:flex;gap:16px} .side{display:block;width:200px;background:#eef} .top{display:none} } @media (min-width:768px){ .cards{display:none} } @media (max-width:767px){ table{display:none} }</style><main data-markswift-root><div class="layout"><nav class="side"><a href="#a">Home</a><br><a href="#b">Settings</a></nav><div class="content"><nav class="top"><a href="#a">Home</a> · <a href="#b">Settings</a></nav><h1 id="title">Orders</h1><div class="cards"><div class="c"><b>#1</b> Alice — $10</div><div class="c"><b>#2</b> Bob — $20</div></div><table><tr><th>Id</th><th>Name</th><th>Total</th></tr><tr><td>1</td><td>Alice</td><td>$10</td></tr><tr><td>2</td><td>Bob</td><td>$20</td></tr></table><label>Note <input id="note" value="hi"></label></div></div></main>`;
 const JS_SWAP = `<style>body{margin:0;font:15px system-ui} @media (min-width:768px){main{padding:0}}</style><main data-markswift-root><p>intro</p><p>after</p><button>Go</button></main><script>if (innerWidth>=768) document.querySelector('main').insertAdjacentHTML('afterbegin','<header>Wide header</header>');</script>`;
 const MAXW = "main[data-markswift-root]{width:auto!important;max-width:700px;margin:0 auto}";
@@ -32,7 +32,7 @@ async function typechecks(result: ConversionResult): Promise<void> {
 }
 
 browserTest(
-  "media-query: one view switching at 600px, the width query no longer reported",
+  "media-query: one view switching at 600px, the width query not reported",
   async () => {
     const result = await convert(MEDIA_QUERY, { css: FLUID, theme: "light", breakpoints: true });
     expect(result.code).toContain("MarkswiftBands(edges: [.atLeast(600.0)])");

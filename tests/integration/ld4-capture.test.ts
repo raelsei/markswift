@@ -7,7 +7,7 @@ const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.sk
 const SVG = (body: string, size: number) =>
   `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'%3E${body}%3C/svg%3E`;
 
-// Built from the RLayoutDoc4 probe (/tmp/v2-RLayoutDoc4/probe.html): every LD4 field a 2.0 consumer reads.
+// Built from an RLayoutDoc4 probe page: every LD4 field a 2.0 consumer reads.
 const HTML = `<style>
 body { margin: 0; font: 16px/24px Helvetica, Arial, sans-serif; }
 #ph::placeholder { color: rgb(200, 0, 0); font-style: italic; }
