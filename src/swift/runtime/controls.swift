@@ -306,9 +306,9 @@ extension View {
     /// A field's single line is centred, and at the default size the captured box already holds it (Chrome centres it
     /// in a shorter input, too): only what Dynamic Type adds pads it.
     func markswiftFieldLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
-                                  natural: CGFloat = 2444.0 / 2048, editor: Bool = false, face: String? = nil) -> some View {
+                                  natural: CGFloat = 2444.0 / 2048, editor: Bool = false, face: String? = nil, capturedHeight: CGFloat? = nil) -> some View {
         modifier(MarkswiftFieldLineHeight(factor: lineHeight / size, natural: natural, base: size, editor: editor, face: face,
-                                          relativeTo: style))
+                                          relativeTo: style, capturedHeight: capturedHeight))
     }
 }
 
@@ -318,14 +318,17 @@ struct MarkswiftFieldLineHeight: ViewModifier {
     let base: CGFloat
     let editor: Bool
     let face: String?
+    let capturedHeight: CGFloat?
+    @Environment(\.displayScale) private var scale
     @ScaledMetric private var size: CGFloat
 
-    init(factor: CGFloat, natural: CGFloat, base: CGFloat, editor: Bool, face: String?, relativeTo style: Font.TextStyle) {
+    init(factor: CGFloat, natural: CGFloat, base: CGFloat, editor: Bool, face: String?, relativeTo style: Font.TextStyle, capturedHeight: CGFloat?) {
         self.factor = factor
         self.natural = natural
         self.base = base
         self.editor = editor
         self.face = face
+        self.capturedHeight = capturedHeight
         _size = ScaledMetric(wrappedValue: base, relativeTo: style)
     }
 
@@ -334,7 +337,31 @@ struct MarkswiftFieldLineHeight: ViewModifier {
         let half = leading * (editor ? size : max(0, size - base)) / 2
         // The editor draws its first line lower by its tall glyphs; the top pad gives that back, the bottom keeps the box.
         let tall = editor ? markswiftTallGlyphs(face, size) : 0
-        content.lineSpacing(leading * size).padding(.top, half - tall).padding(.bottom, half + tall)
+        MarkswiftFieldBox(height: editor ? nil : capturedHeight, scale: scale) {
+            content.lineSpacing(leading * size)
+        }.padding(.top, half - tall).padding(.bottom, half + tall)
+    }
+}
+
+/// A single-line native field can round its intrinsic height up by one device pixel beyond
+/// the captured content box. Remove only that surplus; larger Dynamic Type growth stays native.
+private struct MarkswiftFieldBox: Layout {
+    let height: CGFloat?
+    let scale: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let field = subviews.first else { return .zero }
+        var size = field.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        if let height, height > 0 {
+            let surplus = size.height - height
+            if surplus >= 0 && surplus <= 1 / max(1, scale) + 0.001 { size.height = height }
+        }
+        return size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let field = subviews.first else { return }
+        let offered = ProposedViewSize(width: bounds.width, height: nil)
+        let natural = field.sizeThatFits(offered)
+        field.place(at: CGPoint(x: bounds.minX, y: bounds.midY - natural.height / 2), proposal: offered)
     }
 }
 
