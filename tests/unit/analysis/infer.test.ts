@@ -363,7 +363,8 @@ describe("tables", () => {
       {
         level: "approximated",
         feature: "table",
-        message: "VoiceOver table navigation (row/column position, header association) is not translated",
+        message:
+          "VoiceOver two-dimensional table navigation is not translated; cell positions and supported header associations are exposed as accessibility content",
       },
     ]);
   });
@@ -374,7 +375,7 @@ describe("tables", () => {
       [
         "approximated",
         "table",
-        "VoiceOver table navigation (row/column position, header association) is not translated",
+        "VoiceOver two-dimensional table navigation is not translated; cell positions and supported header associations are exposed as accessibility content",
       ],
       [
         "approximated",

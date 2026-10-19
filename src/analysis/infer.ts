@@ -1,3 +1,4 @@
+import { applyTableCellContext, tableCellContext } from "./table-accessibility.ts";
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
 import {
@@ -423,7 +424,7 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
     base.diagnostics,
     "approximated",
     "table",
-    "VoiceOver table navigation (row/column position, header association) is not translated",
+    "VoiceOver two-dimensional table navigation is not translated; cell positions and supported header associations are exposed as accessibility content",
   );
   if (s.fixedRequested && !s.fixed)
     addDiagnostic(
@@ -458,6 +459,9 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
       textClip: [c.parent, c.group, box].find((e) => e && clipsText(e)) ?? ctx.textClip,
     }),
   );
+  cells.forEach((cell, i) => {
+    applyTableCellContext(cell, tableCellContext(s.cells[i]!, s));
+  });
   const children = [...bands, ...cells];
   // Fidelity keeps the captured lattice; app mode allocates every slot (emit.ts) and ignores these.
   for (const c of children) {
