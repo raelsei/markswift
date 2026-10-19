@@ -192,13 +192,16 @@ function runExpr(
     const view = inlineImageView(r.image, n, ctx);
     if (!view) return `Text.markswiftGap(${num(r.image.w)})`;
     const label = r.image.alt !== undefined ? `, label: ${str(r.image.alt)}` : "";
+    const size = fontSizeExpr(r.font, ctx);
+    const ratio = ctx.mode === "app" && r.font.size > 0 ? `${size} / ${num(r.font.size)}` : undefined;
+    const scale = ratio ? `, scale: ${ratio}` : "";
     let e = [
-      `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${label}) {`,
+      `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${scale}${label}) {`,
       ...view.map((l) => `    ${l}`),
       `}).font(${fontExpr(r.font, ctx)})`,
     ].join("\n");
     if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: ${str(lineBreak)}) + ${e}`;
-    if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
+    if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)}${ratio ? ` * (${ratio})` : ""})`;
     return e;
   }
   let text = r.text;

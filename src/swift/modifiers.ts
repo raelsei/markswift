@@ -2,6 +2,7 @@ import type { SemNode, Overlay, Presentation, StateField } from "../model/semant
 import type { EmitContext } from "./context.ts";
 import {
   colorArgs,
+  fontSizeExpr,
   colorExpr,
   edgeInsets,
   horizontalAlignment,
@@ -20,7 +21,15 @@ import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS, menuButton, menuExpr } from "./controls.ts";
 import { animated, animationModifier, longestExit, stateAnimation, transitionModifiers } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
-  return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
+  const generated: string[] = [];
+  if (n.kind === "image" && n.generatedFont && n.generatedFont.size > 0 && ctx.mode === "app") {
+    const scale = `(${fontSizeExpr(n.generatedFont, ctx)} / ${num(n.generatedFont.size)})`;
+    generated.push(
+      `.scaleEffect(${scale}, anchor: .topLeading)`,
+      `.frame(width: ${num(n.frame.w)} * ${scale}, height: ${num(n.frame.h)} * ${scale}, alignment: .topLeading)`,
+    );
+  }
+  return [...boxModifiers(n, ctx), ...generated, ...placementModifiers(n, ctx)];
 }
 
 /**
@@ -316,7 +325,9 @@ export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx:
   const inner = ctx.renderNode(o.node);
   // App mode keeps the corner CSS anchored; fidelity reproduces the capture from the top-left.
   const anchored = ctx.mode === "app" ? o.anchor : undefined;
-  const [x, y] = anchored ? anchored.offset : o.offset;
+  const marker = ctx.mode === "app" && o.outsideMarker;
+  if (marker) inner.push(".alignmentGuide(.leading) { $0[.trailing] }");
+  const [x, y] = anchored ? anchored.offset : marker ? [o.offset[0] + o.node.frame.w, o.offset[1]] : o.offset;
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(x)}, y: ${num(y)})`];
   return [`.${mode}(alignment: .${anchored ? anchored.corner : "topLeading"}) {`, ...indent(body, 1), `}`];
 }

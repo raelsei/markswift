@@ -73,7 +73,7 @@ struct CounterFixture: View {
     var rows: [Row] = [Row(id: "a", name: "Plan"), Row(id: "b", name: "Build")]
     var body: some View {
         VStack {
-            Text.markswiftRuns([Text(Image.markswiftRendered(width: 10, height: 10) { Circle().fill(Color.blue) }).baselineOffset(2), Text(verbatim: " x")])
+            Text.markswiftRuns([Text(Image.markswiftRendered(width: 10, height: 10, scale: 2) { Circle().fill(Color.blue) }).baselineOffset(2), Text(verbatim: " x")])
             ForEach(Array(rows.enumerated()), id: \\.element.id) { index, row in
                 Text(verbatim: "\\(markswiftCounter(1 + index, .upperRoman)). \\(row.name)")
             }
@@ -85,6 +85,54 @@ struct CounterFixture: View {
       const check = await typecheck(directory);
       if (!check.ok) throw new Error(check.output);
       expect(check.ok).toBe(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  120_000,
+);
+
+nativeTest(
+  "a rendered inline image doubles its pixel width when its font scale doubles",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-image-scale-"));
+    try {
+      await Bun.write(join(directory, "runtime.swift"), SWIFT_RUNTIME);
+      await Bun.write(
+        join(directory, "main.swift"),
+        `import SwiftUI
+for scale in [1.0, 2.0] {
+    let image = Image.markswiftRendered(width: 12, height: 8, scale: scale) { Color.red }
+    let renderer = ImageRenderer(content: Text(image).font(.system(size: 1)))
+    renderer.scale = 1
+    guard let pixels = renderer.cgImage else { fatalError("missing image") }
+    print(pixels.width)
+}
+`,
+      );
+      const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
+      await command(
+        [
+          "xcrun",
+          "swiftc",
+          "-sdk",
+          sdk,
+          "-target",
+          "arm64-apple-macos15.0",
+          "-swift-version",
+          "6",
+          "-default-isolation",
+          "MainActor",
+          "-o",
+          join(directory, "scale"),
+          join(directory, "runtime.swift"),
+          join(directory, "main.swift"),
+        ],
+        directory,
+        240_000,
+      );
+      const widths = (await command([join(directory, "scale")], directory, 30_000)).trim().split("\n").map(Number);
+      expect(widths).toEqual([12, 24]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

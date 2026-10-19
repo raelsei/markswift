@@ -441,6 +441,8 @@ export interface Overlay {
   layer: "background" | "overlay";
   /** Offset of the node's top-left from the host's top-left (px). */
   offset: [number, number];
+  /** Outside counter marker: app mode aligns its intrinsic trailing edge to the captured right edge. */
+  outsideMarker?: true;
   /** True when the node covers exactly the host box (inset: 0). */
   covers: boolean;
   /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
@@ -707,6 +709,8 @@ export interface SvgNode extends SemBase {
 }
 
 export interface ImageNode extends SemBase {
+  /** A standalone generated image scales with its pseudo-element’s font in app mode. */
+  generatedFont?: FontSpec;
   kind: "image";
   src: string;
   /** A `data:image/svg+xml` source, parsed during analysis. */

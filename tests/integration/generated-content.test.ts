@@ -51,6 +51,9 @@ browserTest(
     const ext = texts(nodes).find((t) => t.runs.some((r) => r.text.includes("before upgrading")))!;
     expect(ext.runs.some((r) => r.image?.vector)).toBe(true);
     expect(nodes.filter((n): n is ImageNode => n.kind === "image").map((n) => n.alt)).toContain("Info");
+    const block = nodes.find((n): n is ImageNode => n.kind === "image" && n.alt === "Info");
+    expect(block?.generatedFont?.size).toBeGreaterThan(0);
+    expect(result.code).toMatch(/\.scaleEffect\(\(textSize[\d_]+ \/ [\d.]+\), anchor: \.topLeading\)/);
     expect(generatedNotes(result)).toEqual([]);
   },
   60_000,

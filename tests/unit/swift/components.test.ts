@@ -438,7 +438,7 @@ test("visibility public: API members public, private members private, internal u
 
 const LI = { "font-size": "14px", "line-height": "20px", color: "rgb(17, 17, 17)" };
 /** An `<ol>` of text rows whose inside `::marker` prints `markers[i]` in `type`. */
-function markerList(markers: string[], type: string | undefined): LayoutDoc {
+function markerList(markers: string[], type: string | undefined, outside = false): LayoutDoc {
   const t = (s: string, x: number, y: number, w: number): LayoutNode => ({
     tag: "#text",
     attrs: {},
@@ -464,7 +464,16 @@ function markerList(markers: string[], type: string | undefined): LayoutDoc {
       },
       [t(m, 16, y, 20)],
     );
-    return element("li", 16, y, 360, 20, { ...LI, display: "list-item" }, [marker, t(`Step ${i}`, 36, y, 60)]);
+    if (outside) {
+      const width = 8 * m.length;
+      marker.bounds = { x: 16 - width, y, w: width, h: 20 };
+      marker.styles.display = "inline-block";
+      marker.children[0]!.bounds = { ...marker.bounds };
+    }
+    return element("li", 16, y, 360, 20, { ...LI, display: "list-item" }, [
+      marker,
+      t(`Step ${i}`, outside ? 16 : 36, y, 60),
+    ]);
   });
   const list = element(
     "ol",
@@ -539,7 +548,9 @@ test("a generated image run renders inside the text", () => {
   const swift = emit(iconDoc(SVG10));
   expect(swift).toContain("Text.markswiftRuns([");
   const lines = swift.split("\n");
-  const at = lines.findIndex((l) => l.includes("Text(Image.markswiftRendered(width: 10.0, height: 10.0) {"));
+  const at = lines.findIndex((l) =>
+    l.includes("Text(Image.markswiftRendered(width: 10.0, height: 10.0, scale: textSize14 / 14.0) {"),
+  );
   expect(at).toBeGreaterThan(0);
   const indentOf = (l: string) => l.length - l.trimStart().length;
   expect(indentOf(lines[at + 1]!)).toBe(indentOf(lines[at]!) + 4);
@@ -556,4 +567,25 @@ test("a generated image run renders inside the text", () => {
   expect(broken.report.flatMap((r) => r.diagnostics).map((d) => `${d.level} ${d.feature}`)).toContain(
     "unmapped content: url()",
   );
+});
+
+test("generated inline images scale with their run's font only in app mode", () => {
+  const app = emit(iconDoc(SVG10));
+  expect(app).toContain("scale: textSize14 / 14.0");
+  expect(app).toContain("@ScaledMetric(relativeTo: .subheadline) private var textSize14");
+  const fidelity = emit(iconDoc(SVG10), { mode: "fidelity" });
+  expect(fidelity).toContain("markswiftRendered(width: 10.0, height: 10.0) {");
+  expect(fidelity).not.toContain("scale: textSize");
+});
+
+test("outside counters with unequal widths share an extracted row and align their right edges", () => {
+  const swift = emit(markerList(["9. ", "10. ", "11. "], "decimal", true));
+  expect(swift).toContain("ForEach(Array(rows.enumerated())");
+  expect(swift).toContain("markswiftCounter(ordinal, .decimal)");
+  expect(swift).toContain(".alignmentGuide(.leading) { $0[.trailing] }");
+  expect(swift).toContain(".offset(x: 0.0, y: 0.0)");
+  const fidelity = emit(markerList(["9. ", "10. ", "11. "], "decimal", true), { mode: "fidelity" });
+  expect(fidelity).not.toContain(".alignmentGuide(.leading)");
+  expect(fidelity).toContain(".offset(x: -24.0, y: 0.0)");
+  expect(fidelity).toContain(".offset(x: -32.0, y: 0.0)");
 });
