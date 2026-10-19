@@ -480,12 +480,10 @@ captured (a capture warning says so).
 - 13 of the 198 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `ui-monospace` drawn in
   the wider SF Mono.
-- Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
-  `<summary>` markers are not mapped; single-scheme `color-scheme` values apply on the root and nested boxes; on system
-  fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
-  `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
-  descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
-  hit it.
+- Font riders: on system fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped
+  (reported); the `@font-face` `font-stretch` descriptor does not select faces. Paragraph `unicode-bidi: plaintext`,
+  isolated list/disclosure markers, nested single-scheme `color-scheme`, and pointer-enabled descendants of
+  pass-through overlays are translated. Transparent controls retain their actions even when hidden from accessibility.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.

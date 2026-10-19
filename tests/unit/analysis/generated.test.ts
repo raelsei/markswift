@@ -161,17 +161,17 @@ describe("counters", () => {
     expect(runsOf("::before", { content: 'counter(n, upper-roman) ") "' }, ") ")[0]!.counter).toBeUndefined();
   });
 
-  test("decision 7: an isolated inside marker keeps raw text and counter; an isolated ::before loses its counter", () => {
+  test("isolated markers and generated counters retain isolation when regenerated", () => {
     const marker = runsOf(
       "::marker",
       { ...MARKER, "list-style-type": "upper-roman", "unicode-bidi": "isolate" },
       "I. ",
     )[0]!;
-    expect(marker.text).toBe("I. ");
-    expect(marker.counter).toEqual({ style: "upper-roman", value: 1, prefix: "", suffix: ". " });
+    expect(marker.text).toBe("\u2066I. \u2069");
+    expect(marker.counter).toEqual({ style: "upper-roman", value: 1, prefix: "\u2066", suffix: ". \u2069" });
     const before = runsOf("::before", { content: "counter(step)", "unicode-bidi": "isolate" }, "3")[0]!;
     expect(before.text).toBe("\u20663\u2069");
-    expect(before.counter).toBeUndefined();
+    expect(before.counter).toEqual({ style: "decimal", value: 3, prefix: "\u2066", suffix: "\u2069" });
   });
 });
 

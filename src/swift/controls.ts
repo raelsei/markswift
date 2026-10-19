@@ -367,11 +367,12 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // split into its own `v_*` property keeps its captured marker.
       const label = (n.label ? deps.child(n.label) : ["EmptyView()"]).map((l) =>
         state
-          ? l.replace(
-              MARKER,
-              (_, closed: string) =>
-                `Text(verbatim: ${state} ? "\u25be " : ${str(`${closed === "\u25be" ? "\u25b8" : closed} `)})`,
-            )
+          ? l.replace(MARKER, (_, isolate: string | undefined, closed: string, end: string | undefined) => {
+              const prefix = isolate ?? "",
+                suffix = end ?? "";
+              const marker = closed === "\u25be" ? "\u25b8" : closed;
+              return `Text(verbatim: ${state} ? "${prefix}▾ ${suffix}" : "${prefix}${marker} ${suffix}")`;
+            })
           : l,
       );
       // App: the content's CSS height animation opens and closes it.
@@ -398,7 +399,7 @@ const DATE_COMPONENTS: Record<NonNullable<ControlNode["dateKind"]>, string> = {
 };
 
 /** Chrome's `::marker` text for `<summary>`: ▸ closed (◂ right-to-left), ▾ open. */
-const MARKER = /Text\(verbatim: "([\u25b8\u25be\u25c2]) "\)/;
+const MARKER = /Text\(verbatim: "(\\u\{206[678]\})?([\u25b8\u25be\u25c2]) (\\u\{2069\})?"\)/;
 
 /** What iOS Safari gives the same field: keyboard, autofill type and Return key, via the iOS-only `markswiftInputTraits` (runtime/controls.swift). */
 function inputTraits(n: ControlNode): string[] {

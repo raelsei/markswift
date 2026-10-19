@@ -588,6 +588,9 @@ export interface SemBase extends SizeConstraints {
    * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
    */
   hitTesting?: false;
+  /** Live descendant bounds which alone can receive taps in a pass-through container. */
+  hitRegionTargets?: string[];
+  hitRegionTarget?: string;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
   states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
@@ -668,6 +671,8 @@ export interface GridNode extends SemBase {
 }
 
 export interface TextNode extends SemBase {
+  /** CSS plaintext uses each paragraph's first strong character for its base direction. */
+  plaintext?: true;
   kind: "text";
   /** Source element, retained so emitters can scope text-layout strategies safely. */
   sourceTag?: string;

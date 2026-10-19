@@ -40,9 +40,9 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   // resolves the paragraph once and reorders line by line. ponytail: only text with controls; plain RTL text keeps
   // "\n" (each line takes its base direction from its own first strong character). Make every break U+2028 after a
   // corpus render shows it moves nothing else.
-  const lineBreak = runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
+  const lineBreak = n.plaintext || runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
   const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx, lineBreak));
-  if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
+  if (n.layoutDirection === "rtl" && !n.plaintext) parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
   // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time. A multi-line
   // part (an image run's view) indents as a block.
