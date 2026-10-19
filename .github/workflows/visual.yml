@@ -77,3 +77,58 @@ jobs:
             ${{ runner.temp }}/visual-${{ env.SCOPE }}-${{ env.RENDERER }}.json
           if-no-files-found: warn
           retention-days: 30
+
+  breakpoints-ios:
+    name: iPad breakpoint reflow
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      MARKSWIFT_SIMULATOR: iPhone 17
+      MARKSWIFT_SIMULATOR_IPAD: iPad Pro 13-inch (M5)
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install fonttools==4.60.2 brotli==1.2.0
+      - run: bun install --frozen-lockfile
+      - run: ./node_modules/.bin/playwright-core install --no-shell chromium
+      # The device type has a memory suffix that cannot be derived from the display name.
+      - name: Ensure the iPad simulator exists
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          def simctl(*args):
+              return subprocess.check_output(["xcrun", "simctl", *args], text=True)
+          name = os.environ["MARKSWIFT_SIMULATOR_IPAD"]
+          devices = json.loads(simctl("list", "devices", "available", "-j"))["devices"]
+          if not any(d["name"] == name and d.get("isAvailable") for group in devices.values() for d in group):
+              runtimes = json.loads(simctl("list", "runtimes", "available", "-j"))["runtimes"]
+              ios = [r for r in runtimes if r["platform"] == "iOS"]
+              runtime = max(ios, key=lambda r: tuple(map(int, r["version"].split("."))))["identifier"]
+              print(simctl("create", name, "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB", runtime))
+          PY
+      - name: Render iPhone and iPad breakpoint captures
+        run: bun run pilot --renderer ios --all --reflow --group breakpoints --out "$RUNNER_TEMP/breakpoints-ios"
+      - name: Gate breakpoint reflow
+        if: ${{ !inputs.rebaseline }}
+        run: bun run quality tests/conformance/baselines/visual-breakpoints-ios.json "$RUNNER_TEMP/breakpoints-ios" tests/conformance/visual-policy-ios.json
+      - name: Candidate baseline (review, then commit by hand)
+        if: ${{ inputs.rebaseline }}
+        run: bun run quality --write-baseline "$RUNNER_TEMP/breakpoints-ios" "$RUNNER_TEMP/visual-breakpoints-ios.json"
+      - name: Archive the run
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/visual-breakpoints-ios.tgz" -C "$RUNNER_TEMP" breakpoints-ios
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-breakpoints-ios
+          path: |
+            ${{ runner.temp }}/visual-breakpoints-ios.tgz
+            ${{ runner.temp }}/visual-breakpoints-ios.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -553,7 +553,9 @@ reviewed and committed by hand. GitHub Actions workflows:
   package build with the npm smoke test, and the conformance pilot (capture, both modes, iOS typecheck).
 - `visual.yml`: the macOS gate on pull requests and pushes to `main` (pilot scope, with the 320/768 resize check)
   and nightly (all fixtures); the iOS renderer over all fixtures on `v*` tags and manual dispatch only. Dispatch it
-  with `renderer`, `scope` and `rebaseline` to produce a candidate baseline.
+  with `renderer`, `scope` and `rebaseline` to produce a candidate baseline. A separate iOS breakpoint job runs on
+  every trigger, including pull requests: `--all --reflow --group breakpoints`, with wide `@bp` captures on the iPad,
+  gated against `visual-breakpoints-ios.json`. Its run and optional candidate baseline are uploaded separately.
 - `behaviour.yml` (`v*` tags, weekly, dispatch): `bun run test:ios-behaviour`.
 - `release.yml` (`v*` tags): after approval in the `npm` environment, checks that the tag equals
   `v<package version>`, runs lint, typecheck, `test`, the build and the npm smoke test, and publishes with provenance
