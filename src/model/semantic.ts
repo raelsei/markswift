@@ -293,7 +293,7 @@ export interface FontSpec {
   opsz?: number;
   /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
   stretch?: number;
-  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  /** Bundled axes are clamped during analysis; system axes are clamped against the installed face at runtime. */
   axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;

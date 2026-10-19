@@ -107,12 +107,12 @@ describe("variation axes", () => {
     );
   });
 
-  test("a system family's font-stretch is SF's nearest width instance", () => {
+  test("a system family retains exact font-stretch as a native axis", () => {
     const sys = (stretch: string) =>
       fontExpr(fontOf({ "font-family": "system-ui", "font-size": "18px", "font-stretch": stretch }), {
         mode: "fidelity",
       });
-    expect(sys("75%")).toBe(".system(size: 18.0, weight: .regular, design: .default).width(Font.Width(-0.1))");
-    expect(sys("95%")).toBe(".system(size: 18.0, weight: .regular, design: .default)");
+    expect(sys("75%")).toBe('.markswiftSystem(size: 18.0, weight: 400.0, design: .default, axes: ["wdth": 75.0])');
+    expect(sys("95%")).toBe('.markswiftSystem(size: 18.0, weight: 400.0, design: .default, axes: ["wdth": 95.0])');
   });
 });

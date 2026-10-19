@@ -186,22 +186,6 @@ const WEIGHT_NAMES: Array<[number, string]> = [
 ];
 
 /**
- * CSS `font-stretch` % → the SF width (`Font.Width` value) closest to Chrome's rendering; SwiftUI snaps to SF's
- * named width instances. Other % take the nearest key. ponytail: measured 2026-10-15 (Chrome 155 `system-ui` vs
- * AppKit `systemFont(width:)`, macOS 27, 20 px); re-measure when SF's instances change.
- */
-const SF_WIDTH: Record<string, number> = {
-  "50": -0.3,
-  "62.5": -0.2,
-  "75": -0.1,
-  "87.5": -0.1,
-  "100": 0,
-  "112.5": 0.1,
-  "125": 0.2,
-  "150": 0.3,
-};
-
-/**
  * Default point size of each `Font.TextStyle` at the standard content size — the table `relativeTo:` scales against.
  * No `.caption2` (11): Xcode's accessibility audit reports every `.caption2`-relative font, `.font(.caption2)`
  * included, as partially supporting Dynamic Type at xSmall, large and AX5, while the same 10–11 pt sizes relative
@@ -245,8 +229,8 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
 
 /**
  * Swift `Font` expression for a run's font. A system family is its design plus the nearest
- * named weight in both modes, sized by `fontSizeExpr`, plus `.width(…)` (SF's nearest width
- * instance, `SF_WIDTH`) for a captured `font-stretch`; a bundled family differs by mode:
+ * named weight in both modes, sized by `fontSizeExpr`, plus exact CoreText axes for a captured
+ * `font-stretch` or variation request; a bundled family differs by mode:
  *
  * - **app** — `.custom(family, size:, relativeTo:)` plus an explicit `.weight(…)`: the shipped
  *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a
@@ -278,16 +262,15 @@ export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
       return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${opsz})`;
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;
   }
-  const stretch = f.stretch;
-  const width =
-    stretch === undefined
-      ? 0
-      : SF_WIDTH[
-          Object.keys(SF_WIDTH).reduce((a, b) =>
-            Math.abs(Number(b) - stretch) < Math.abs(Number(a) - stretch) ? b : a,
-          )
-        ]!;
-  return `.system(size: ${fontSizeExpr(f, ctx, fixed)}, weight: .${weightName}, design: .${f.family.design})${width ? `.width(Font.Width(${num(width)}))` : ""}`;
+  if (f.axes || f.stretch !== undefined) {
+    const axes = { ...(f.stretch !== undefined ? { wdth: f.stretch } : {}), ...f.axes };
+    return `.markswiftSystem(size: ${fontSizeExpr(f, ctx, fixed)}, weight: ${num(f.weight)}, design: .${f.family.design}, axes: [${Object.entries(
+      axes,
+    )
+      .map(([tag, value]) => `${str(tag)}: ${num(value)}`)
+      .join(", ")}])`;
+  }
+  return `.system(size: ${fontSizeExpr(f, ctx, fixed)}, weight: .${weightName}, design: .${f.family.design})`;
 }
 
 /** FNV-1a 32-bit, hex — stable names for generated shapes. */

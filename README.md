@@ -480,8 +480,9 @@ captured (a capture warning says so).
 - 13 of the 198 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `ui-monospace` drawn in
   the wider SF Mono.
-- Font riders: on system fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped
-  (reported); the `@font-face` `font-stretch` descriptor does not select faces. Paragraph `unicode-bidi: plaintext`,
+- Font riders: `@font-face` stretch descriptors still require the separate LayoutDoc 5 implementation. System-font
+  width and variation requests use exact CoreText axes when the installed face exposes them, clamped to its ranges;
+  unrecognized axes remain diagnosed and unavailable axes are ignored. Paragraph `unicode-bidi: plaintext`,
   isolated list/disclosure markers, nested single-scheme `color-scheme`, and pointer-enabled descendants of
   pass-through overlays are translated. Transparent controls retain their actions even when hidden from accessibility.
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block

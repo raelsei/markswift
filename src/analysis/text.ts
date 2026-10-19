@@ -244,19 +244,13 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         );
       }
     }
-    if (run.font.stretch !== undefined)
-      note(
-        "approximated",
-        "font-stretch",
-        `font-stretch ${run.font.stretch}% → SF's nearest width instance; glyph advances differ from the reference`,
-      );
     if (run.font.family.kind === "system")
       for (const tag of Object.keys(variationSettings(s["font-variation-settings"])))
-        if (tag !== "wght" && tag !== "wdth" && tag !== "opsz")
+        if (!["wght", "wdth", "opsz", "GRAD"].includes(tag))
           note(
             "approximated",
             "font-variation-settings",
-            `font-variation-settings axis ${tag} has no system-font mapping → dropped`,
+            `font-variation-settings axis ${tag} applies only if the installed system face exposes it; unsupported axes are ignored`,
           );
     const ls = s["letter-spacing"];
     if (ls && ls !== "normal") run.kerning = round2(px(ls));

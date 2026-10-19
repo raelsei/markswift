@@ -504,3 +504,38 @@ struct MarkswiftRestoreColorScheme: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View { content.environment(\.colorScheme, base ?? scheme) }
 }
+
+/// Apply only axes the installed system face actually exposes, clamped to its declared range.
+/// Font.width selects named SF instances; CoreText variation values retain intermediate widths.
+nonisolated func markswiftSystemFont(size: CGFloat, weight: CGFloat, design: Font.Design, axes requested: [String: CGFloat]) -> CTFont {
+    let index = (0..<9).min { abs(CGFloat($0 + 1) * 100 - weight) < abs(CGFloat($1 + 1) * 100 - weight) } ?? 3
+    #if canImport(UIKit)
+    let weights: [UIFont.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+    let base = UIFont.systemFont(ofSize: size, weight: weights[index])
+    let kind: UIFontDescriptor.SystemDesign = design == .serif ? .serif : design == .rounded ? .rounded : design == .monospaced ? .monospaced : .default
+    let font = UIFont(descriptor: base.fontDescriptor.withDesign(kind) ?? base.fontDescriptor, size: size) as CTFont
+    #else
+    let weights: [NSFont.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+    let base = NSFont.systemFont(ofSize: size, weight: weights[index])
+    let kind: NSFontDescriptor.SystemDesign = design == .serif ? .serif : design == .rounded ? .rounded : design == .monospaced ? .monospaced : .default
+    let font = (NSFont(descriptor: base.fontDescriptor.withDesign(kind) ?? base.fontDescriptor, size: size) ?? base) as CTFont
+    #endif
+    let values = requested.merging(["wght": weight]) { old, _ in old }
+    var selected: [Int: CGFloat] = [:]
+    for axis in CTFontCopyVariationAxes(font) as? [[CFString: Any]] ?? [] {
+        guard let id = axis[kCTFontVariationAxisIdentifierKey] as? Int,
+              let lo = axis[kCTFontVariationAxisMinimumValueKey] as? CGFloat,
+              let hi = axis[kCTFontVariationAxisMaximumValueKey] as? CGFloat else { continue }
+        for (tag, value) in values where tag.utf8.reduce(0, { $0 << 8 | Int($1) }) == id {
+            selected[id] = min(hi, max(lo, value))
+        }
+    }
+    guard !selected.isEmpty else { return font }
+    let descriptor = CTFontDescriptorCreateWithAttributes([kCTFontVariationAttribute: selected] as CFDictionary)
+    return CTFontCreateCopyWithAttributes(font, size, nil, descriptor)
+}
+extension Font {
+    nonisolated static func markswiftSystem(size: CGFloat, weight: CGFloat, design: Font.Design, axes: [String: CGFloat]) -> Font {
+        Font(markswiftSystemFont(size: size, weight: weight, design: design, axes: axes))
+    }
+}
