@@ -131,9 +131,9 @@ extension View {
     /// above the first and below the last line.
     func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
                              ascent: CGFloat, descent: CGFloat, natural: CGFloat = 2444.0 / 2048,
-                             halfLeading: Bool = true, compressLines: Bool = false) -> some View {
+                             halfLeading: Bool = true, compressLines: Bool = false, exactLineBox: Bool = false) -> some View {
         modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
-                                     halfLeading: halfLeading, compressLines: compressLines, size: size, relativeTo: style))
+                                     halfLeading: halfLeading, compressLines: compressLines, exactLineBox: exactLineBox, size: size, relativeTo: style))
     }
 }
 
@@ -144,10 +144,11 @@ struct MarkswiftLineHeight: ViewModifier {
     let natural: CGFloat
     let halfLeading: Bool
     let compressLines: Bool
+    let exactLineBox: Bool
     @ScaledMetric private var size: CGFloat
     @Environment(\.displayScale) private var scale
 
-    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, compressLines: Bool,
+    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, compressLines: Bool, exactLineBox: Bool,
          size: CGFloat, relativeTo style: Font.TextStyle) {
         self.factor = factor
         self.ascent = ascent
@@ -155,6 +156,7 @@ struct MarkswiftLineHeight: ViewModifier {
         self.natural = natural
         self.halfLeading = halfLeading
         self.compressLines = compressLines
+        self.exactLineBox = exactLineBox
         _size = ScaledMetric(wrappedValue: size, relativeTo: style)
     }
 
@@ -169,12 +171,33 @@ struct MarkswiftLineHeight: ViewModifier {
             // A Text's height is rounded up to the pixel, so the trim is too: the box is exactly the CSS line.
             let tight = factor < natural && !compressLines
             let overflow = tight ? (natural * size * scale).rounded(.up) / scale - factor * size : 0
-            content.lineHeight(.multiple(factor: tight ? natural : factor))
-                .padding(.top, shift - trim)
+            MarkswiftLineBox(lineHeight: exactLineBox && !tight ? factor * size : nil, scale: scale) {
+                content.lineHeight(.multiple(factor: tight ? natural : factor))
+            }.padding(.top, shift - trim)
                 .padding(.bottom, -shift - trim - overflow)
         } else {
             content.lineSpacing(max(0, leading)).padding(.vertical, leading / 2 - trim)
         }
+    }
+}
+
+/// SwiftUI rounds a uniform paragraph's total height up to a device pixel. Keep its natural
+/// text frame for painting, but return the fractional CSS line box to the surrounding layout.
+private struct MarkswiftLineBox: Layout {
+    let lineHeight: CGFloat?
+    let scale: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        var size = text.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        if let lineHeight, lineHeight > 0 {
+            let exact = (size.height / lineHeight).rounded() * lineHeight
+            let surplus = size.height - exact
+            if exact > 0 && surplus >= -0.001 && surplus < 1 / max(1, scale) + 0.001 { size.height = exact }
+        }
+        return size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
