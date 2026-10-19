@@ -27,8 +27,6 @@ A LayoutDoc schema change is a major version.
 - Nested colour schemes, paragraph/marker bidi isolation and pointer-enabled children of pass-through overlays work.
   Transparent controls retain pointer actions independently of accessibility visibility.
 - Generated images scale with Dynamic Type; uneven counter widths no longer prevent repeated-list extraction.
-- Native iOS tables expose row/column positions, spans and header associations while retaining interactive controls.
-  Column-group scope and native two-dimensional macOS table navigation remain unsupported.
 - Captures have bounded, contextual timeout diagnostics. Browser rejection tests await their errors, and performance
   tests use three-sample medians without relaxing the budgets.
 - The documentation site loads CSS, scripts and navigation from the custom domain root.
@@ -39,7 +37,8 @@ A LayoutDoc schema change is a major version.
 - Publishing verifies the registry version, distribution tag and installed CLI in a clean directory.
 - Six component app captures remain documented visual exceptions (four fields and two dark cards); existing
   accessibility audit exceptions and unsupported CSS/interaction boundaries remain documented in README.
-- The post-release roadmap in #16 is outside this release.
+- Native table navigation (#8 / draft #25) is held back after visual regression checks. The post-release roadmap
+  in #16 is outside this release.
 
 ### Migrating from 2.x
 

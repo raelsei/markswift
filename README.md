@@ -24,7 +24,7 @@ New in 3.0:
 - Nested overlays and submenus, repeated-row presentation actions, responsive dialogs, and fresh layers per breakpoint.
 - Exact available system-font axes, width-specific webfont selection, resolved monospace faces, fractional text boxes,
   and greedy wrapping for plain multiline paragraphs with packaged font metrics on iOS 26+.
-- Native iOS table accessibility, nested colour schemes, pointer pass-through regions, and generated images that scale
+- Nested colour schemes, pointer pass-through regions, and generated images that scale
   with Dynamic Type. iPad breakpoint reflow now has a tracked CI gate.
 
 Upgrading from 2.x: LayoutDoc 5 replaces LayoutDoc 4. Recapture saved documents and regenerate all views with their
