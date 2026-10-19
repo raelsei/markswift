@@ -47,7 +47,9 @@ export function stateStylesOf(n: LayoutNode, rest: Style): SemBase["states"] {
     // Diagnostics of the state pass would duplicate the resting ones.
     // The captured translation slopes describe the resting transform declaration only.
     const preferredSize =
-      delta?.["transform"] !== undefined ? { ...n.preferredSize, transformTranslation: undefined } : n.preferredSize;
+      n.preferredSize && delta?.["transform"] !== undefined
+        ? { ...n.preferredSize, transformTranslation: undefined }
+        : n.preferredSize;
     const st = { ...styleOf({ ...n, styles, preferredSize }, []), ...themed };
     const diff: StateStyle = {};
     for (const f of STATE_FIELDS) {

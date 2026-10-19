@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { convertHtml } from "../../src/index.ts";
-import type { LayoutNode } from "../../src/model/layout.ts";
+import { LAYOUT_DOC_VERSION, type LayoutNode } from "../../src/model/layout.ts";
 
 const browserTest = process.env.MARKSWIFT_BROWSER_TESTS === "1" ? test : test.skip;
 
@@ -43,10 +43,10 @@ ul { list-style: square inside url("${SVG("%3Crect width='8' height='8' fill='re
 </main>`;
 
 browserTest(
-  "LayoutDoc 4 records the 2.0 capture facts",
+  "the current LayoutDoc preserves the 2.0 capture facts",
   async () => {
     const { layout } = await convertHtml(HTML, { theme: "light", viewport: { width: 390, height: 800 } });
-    expect(layout.version).toBe(4);
+    expect(layout.version).toBe(LAYOUT_DOC_VERSION);
     expect(layout.conditions).toEqual([]);
     expect(layout.viewport.w).toBe(390);
 
