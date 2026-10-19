@@ -54,7 +54,7 @@ function paragraph(): LayoutDoc {
 const metrics = { geist: { upem: 1000, ascent: 1000, descent: 286, lineGap: 0, useTypoMetrics: true } };
 function bundledParagraph(doc = paragraph()) {
   doc.root.children[0]!.styles["font-family"] = "Geist";
-  return inferScreen(doc, "Paragraph", { bundledFamilies: { geist: { weight: [100, 900], wght: [100, 900] } } });
+  return inferScreen(doc, "Paragraph", { bundledFamilies: { Geist: { weight: [100, 900], wght: [100, 900] } } });
 }
 
 test("plain app paragraphs with packaged metrics select greedy wrapping; fidelity keeps Text", () => {
