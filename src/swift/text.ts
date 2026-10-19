@@ -181,8 +181,13 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     // Tight leading the browser shows between lines stays compressed on iOS 26+; one-line text keeps natural lines
     // (its glyphs overflow the CSS line box), so its Text never reads as clipped.
     if (leading <= -0.01 && n.lines > 1) args.push("compressLines: true");
-    // Uniform runs have a known line-height quantum; mixed-size/baseline runs retain native growth.
-    if (runs.every((r) => r.font.size === s && !r.baselineOffset && !r.image) && lh % 1 !== 0)
+    // Uniform, unclamped runs have a line-height quantum. Native clamps own their line-count box;
+    // normalizing that box can move the clipped title and its surrounding stack across pixel boundaries.
+    if (
+      n.lineLimit === undefined &&
+      runs.every((r) => r.font.size === s && !r.baselineOffset && !r.image) &&
+      lh % 1 !== 0
+    )
       args.push("exactLineBox: true");
     out.push(`.markswiftLineHeight(${args.join(", ")})`);
     // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
