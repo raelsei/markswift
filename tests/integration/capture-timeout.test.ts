@@ -60,3 +60,44 @@ browserTest(
   },
   15_000,
 );
+
+browserTest(
+  "navigation can use the capture deadline beyond Playwright's default 30 seconds",
+  async () => {
+    const server = Bun.serve({
+      port: 0,
+      idleTimeout: 60,
+      async fetch() {
+        await Bun.sleep(31_000);
+        return new Response('<main style="width:100px;height:40px">Loaded</main>', {
+          headers: { "Content-Type": "text/html" },
+        });
+      },
+    });
+    const browser = new BrowserCapture({
+      dpr: 1,
+      viewport: { width: 320, height: 400 },
+      channel: "chromium",
+      timeoutMs: 60_000,
+    });
+    try {
+      await browser.start();
+      const result = await browser.capture(
+        {
+          screen: "slow-navigation",
+          theme: "light",
+          url: `http://127.0.0.1:${server.port}/`,
+          root: "main",
+          screenshot: false,
+        },
+        htmlIdentity,
+        "slow-navigation-fixture",
+      );
+      expect(result.layout.size).toEqual({ w: 100, h: 40 });
+    } finally {
+      await browser.stop();
+      server.stop(true);
+    }
+  },
+  90_000,
+);

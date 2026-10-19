@@ -632,7 +632,8 @@ export class BrowserCapture {
               : route.continue(),
       );
     }
-    await page.goto(spec.url, { waitUntil: "load" });
+    // Navigation shares the configured capture budget instead of failing at Playwright's shorter default.
+    await page.goto(spec.url, { waitUntil: "load", timeout: this.opts.timeoutMs ?? 120_000 });
     await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
     await spec.prepare?.(page);
   }
