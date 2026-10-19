@@ -248,19 +248,9 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
  * named weight in both modes, sized by `fontSizeExpr`, plus `.width(…)` (SF's nearest width
  * instance, `SF_WIDTH`) for a captured `font-stretch`; a bundled family differs by mode:
  *
- * - **app** — `.custom(family, size:, relativeTo:)` plus an explicit `.weight(…)`: the shipped
- *   app must scale with Dynamic Type, and the weight is stated rather than inherited because a
- *   variable file's default instance is whatever its `fvar` says (Bricolage Grotesque defaults
- *   to 800, not 400).
- * - **fidelity** — `.markswiftVariable(family, size:, weight:, opsz:)`: the variable axes the browser
- *   actually rendered, so an SSIM against the reference measures the design and not a weight
- *   quantisation. Nothing in this mode is shipped. A family without a `wght` axis is a set of
- *   static faces: a variation request would land on its default (regular) face, so the named
- *   weight selects the face instead, at a fixed size.
- * - **captured axes, both modes** — a bundled family with `axes` (`font-variation-settings` tags,
- *   or `font-stretch` as `wdth`, beyond wght/opsz) is `.markswiftVariable(…, axes:)` in app mode
- *   too, sized by `fontSizeExpr` so Dynamic Type still applies: the shipped app sets the
- *   variation at runtime.
+ * Variable faces use exact captured axes in both modes; app sizes come from `@ScaledMetric` so
+ * Dynamic Type still applies. Static families select their named weight with `.custom`, at a
+ * fixed size in fidelity and a Dynamic Type size in app mode.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) =>
@@ -274,8 +264,8 @@ export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
     }
     if (ctx.mode === "fidelity" && f.family.static)
       return `.custom(${str(f.family.name)}, fixedSize: ${num(f.size)}).weight(.${weightName})`;
-    if (ctx.mode === "fidelity")
-      return `.markswiftVariable(${str(f.family.name)}, size: ${num(f.size)}, weight: ${num(f.weight)}${opsz})`;
+    if (!f.family.static)
+      return `.markswiftVariable(${str(f.family.name)}, size: ${fontSizeExpr(f, ctx, fixed)}, weight: ${num(f.weight)}${opsz})`;
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;
   }
   const stretch = f.stretch;
