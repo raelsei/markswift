@@ -97,8 +97,8 @@ function componentScreens(
   const infer = (d: LayoutDoc, band = 0) =>
     inferScreen(d, `${base}${band ? `@${band}` : ""}-${d.combo.theme}`, { bundledFamilies });
   // App: closed in-flow layers join the screen before probe checks and tokens see it.
-  const layered = (d: LayoutDoc) => {
-    const s = infer(d);
+  const layered = (d: LayoutDoc, band = 0) => {
+    const s = infer(d, band);
     if (mode === "app") applyLayers(s, d, { bundledFamilies });
     return s;
   };
@@ -112,18 +112,19 @@ function componentScreens(
   const edges = bandEdges(docs);
   if ("warning" in edges)
     return single([{ source: "breakpoints", level: "approximated", feature: "media-query", message: edges.warning }]);
+  const perBandLayers = mode === "app" && docs.every((d) => d.layers !== undefined);
   const screens = docs.map((d, b) => {
-    const s = infer(d, b);
+    const s = perBandLayers ? layered(d, b) : infer(d, b);
     const probe = b ? variants[b - 1]!.probe : probeDoc;
     if (probe) verifyAtProbe(s, probe);
     return s;
   });
   // Each capture's viewport band; a band's lowest capture represents it (the others are container-query captures).
   const { bands } = edges;
-  const merged = mergeBands(docs, screens, bands);
+  const merged = mergeBands(docs, screens, bands, perBandLayers);
   // No element differs between bands: band 0 compiles alone, exactly as without variants (with any merge warnings).
   if (!merged || merged.root === screens[0]!.root) return single(merged?.warnings ?? []);
-  const dark = darkDoc && infer(darkDoc);
+  const dark = darkDoc && (perBandLayers ? layered(darkDoc) : infer(darkDoc));
   const screen: Screen = {
     ...screens[0]!,
     root: merged.root,
@@ -135,9 +136,9 @@ function componentScreens(
     },
   };
   const warnings = [...merged.warnings];
-  // App: band 0's layers (bands > 0 are captured without them), once on the merged screen. A layer whose trigger or
+  // Legacy app captures: band 0's layers, once on the merged screen. A layer whose trigger or
   // parent sits in a holder alternative differs between bands, so it is reported instead.
-  if (mode === "app") {
+  if (mode === "app" && !perBandLayers) {
     const inAlt = new Set<string>();
     visit(merged.root, (n) => {
       if (n.alternatives) visit(n, (m) => inAlt.add(m.id));
@@ -160,7 +161,9 @@ function componentScreens(
   // Tokens pair band 0's light screen — the merged root as band 0 shows it, layer content included — with its dark.
   const bandScreens: BandScreens = screens.map((s, b) => [
     b ? s : { ...s, root: bandRoot(screen.root, 0) },
-    b ? variants[b - 1]!.dark && infer(variants[b - 1]!.dark!, b) : dark,
+    b
+      ? variants[b - 1]!.dark && (perBandLayers ? layered(variants[b - 1]!.dark!, b) : infer(variants[b - 1]!.dark!, b))
+      : dark,
   ]);
   return { screen, ...(dark ? { dark } : {}), bands: bandScreens, warnings };
 }

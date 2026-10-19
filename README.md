@@ -463,7 +463,7 @@ captured (a capture warning says so).
   `data-state` variants are not.
 - Swipe-to-dismiss and system presentation chrome: dialogs and popovers are drawn inside the component's frame (app
   mode), with no collision flip, scroll lock or focus trap beyond VoiceOver's modal containment, and placed as
-  captured at the primary viewport. Menus, menubars and selects open native popups with their captured items (app
+  captured for the active width band. Menus, menubars and selects open native popups with their captured items (app
   mode): the CSS look of the open list, shortcut text, item icons and submenu items are not drawn (a submenu is a
   disabled entry), and a menu trigger has no tap action of its own; tooltips are described below.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
@@ -497,8 +497,9 @@ captured (a capture warning says so).
   the left edge; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
   `object-fit: cover` image does not refill its box.
 - Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
-  repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width; with
-  `--breakpoints`, layers come from the primary capture and apply in every band.
+  repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width within each band.
+  Fresh `--breakpoints` conversions capture and select layers per width band; older capture sets without complete
+  layer inventories retain primary-band behavior. Changed layers conservatively select the whole band root.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics

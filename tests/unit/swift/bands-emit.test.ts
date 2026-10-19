@@ -250,3 +250,45 @@ nativeTest(
   },
   180000,
 );
+
+async function presentedBands() {
+  const { DIALOG } = await import("../../helpers/presentations.ts");
+  return [390, 834].map((w, i) => {
+    const d = DIALOG();
+    d.viewport.w = d.size.w = d.root.bounds.w = w;
+    d.conditions = [{ kind: "media", query: "(min-width: 600px)", matches: i > 0 }];
+    d.layers![0]!.nodes[0]!.bounds.w = w;
+    const card = d.layers![0]!.nodes[1]!;
+    card.bounds.x = w / 2;
+    card.bounds.w = i ? 500 : 300;
+    card.preferredSize!.width = `${card.bounds.w}px`;
+    return d;
+  });
+}
+
+test("complete layer inventories select each band's presentation and share the open state", async () => {
+  const result = compile(await presentedBands(), { name: "BandDialog", mode: "app" });
+  expect(result.code).toContain("if band >= 1");
+  expect(result.code.match(/@State private var isEditProfilePresented\b/g)).toHaveLength(1);
+  expect(result.code.match(/\.markswiftPresentation\(/g)).toHaveLength(2);
+  expect(result.code).toContain(".frame(width: 300.0");
+  expect(result.code).toContain(".frame(width: 500.0");
+  expect(result.warnings.some((w) => w.message.includes("layer edit-profile is not emitted"))).toBe(false);
+});
+
+nativeTest(
+  "per-band presentation alternatives compile with shared actions and state",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "markswift-band-dialog-"));
+    try {
+      const result = compile(await presentedBands(), { name: "BandDialog", mode: "app" });
+      for (const [name, content] of Object.entries(result.files)) await Bun.write(join(dir, name), content);
+      const check = await typecheck(dir);
+      if (!check.ok) throw new Error(check.output);
+      expect(check.ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);

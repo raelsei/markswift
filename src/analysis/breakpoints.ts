@@ -96,6 +96,7 @@ export function mergeBands(
   docs: LayoutDoc[],
   screens: Screen[],
   bands: number[] = docs.map((_, i) => i),
+  layers = false,
 ): { root: SemNode; warnings: ConversionWarning[] } | undefined {
   const layout = docs.map((d) => {
     const byId = new Map<string, LayoutNode>();
@@ -104,6 +105,7 @@ export function mergeBands(
       for (const c of n.children) index(c);
     };
     index(d.root);
+    if (layers) for (const layer of d.layers ?? []) layer.nodes.forEach(index);
     return byId;
   });
   const idx = screens.map((s) => {
@@ -119,7 +121,9 @@ export function mergeBands(
     if (k === undefined) interned.set(s, (k = `#${interned.size}`));
     return k;
   };
-  // `states.open` and `doc.layers` exist on band 0 only (band captures skip the layer pass): never compared.
+  // Legacy documents skipped band layers. Complete inventories are compared conservatively at the root:
+  // a changed presentation gets its own band so its trigger, state and content always travel together.
+  const layerKeys = new Map(docs.map((d) => [d.root, layers ? JSON.stringify(d.layers ?? []) : ""]));
   /** Content keys of a node (`own`) and of its subtree in capture `b` (`deep`), leaving out the styles in `drop`. */
   const contentKeys = (drop: Record<string, true>) => {
     const ownMemo = new Map<LayoutNode, string>();
@@ -131,6 +135,7 @@ export function mergeBands(
       key = intern(
         JSON.stringify([
           n.tag,
+          layerKeys.get(n) ?? "",
           n.text ?? "",
           Object.entries(n.attrs).sort(byKey),
           n.currentSrc ?? "",
