@@ -10,10 +10,11 @@ struct MarkswiftGreedyText: View {
     let ascent: CGFloat
     let descent: CGFloat
     let natural: CGFloat
+    var lineLimit: Int? = nil
     var body: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight)
+            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, lineLimit: lineLimit)
         } else { fallback }
         #else
         fallback
@@ -21,6 +22,7 @@ struct MarkswiftGreedyText: View {
     }
     private var fallback: some View {
         Text(verbatim: text).font(font).foregroundStyle(color)
+            .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
             .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
                                  ascent: ascent, descent: descent, natural: natural)
@@ -34,13 +36,15 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
     let color: Color
     let size: CGFloat
     let lineHeight: CGFloat
+    let lineLimit: Int?
     func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
-        label.numberOfLines = 0
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
     }
     func updateUIView(_ label: UILabel, context: Context) {
+        label.numberOfLines = lineLimit ?? 0
+        label.lineBreakMode = lineLimit == nil ? .byWordWrapping : .byTruncatingTail
         let resolved = font.resolve(in: context.environment.fontResolutionContext)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping

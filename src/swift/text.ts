@@ -35,8 +35,8 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     !n.noWrap &&
     !n.balance &&
     !n.unbreakable &&
-    !n.truncate &&
-    n.lineLimit === undefined &&
+    (!n.truncate || (n.lineLimit !== undefined && n.lineLimit > 1)) &&
+    (n.lineLimit === undefined || n.lineLimit > 1) &&
     !n.lineBoxGrowth &&
     plain &&
     plain.font.lineHeight !== undefined &&
@@ -63,7 +63,7 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     const leading = plain.font.lineHeight - ascent - descent;
     const below = descent + leading - 2 * Math.floor(leading / 2);
     return [
-      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)})`,
+      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)}, lineLimit: ${n.lineLimit ?? "nil"})`,
     ];
   }
 
