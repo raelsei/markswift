@@ -44,7 +44,7 @@ export function withInlineGaps(built: MeasuredTextRun[], host: LayoutNode): Text
 export function hostSpace(host: LayoutNode, families: BundledFamilies): MeasuredTextRun {
   const s = host.styles;
   const color = textColorOf(s);
-  const run: TextRun = { text: " ", font: fontOf(s, families), color };
+  const run: TextRun = { text: " ", font: fontOf(s, families, host.resolvedFont), color };
   const deco = decorationOf(s, color);
   if (deco) run.decoration = deco;
   const node: LayoutNode = {

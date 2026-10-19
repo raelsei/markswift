@@ -444,3 +444,25 @@ private func presentation(_ app: XCUIApplication, _ layer: BehaviourTests.Case.L
         "log": log.joined(separator: ","),
     ]
 }
+
+
+extension BehaviourTests {
+    @MainActor
+    func testGreedyTextReflowAndDynamicType() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_GREEDY_PROBE"] = "1"
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Deploys, failures and mentions."].exists)
+        let normal = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        app.buttons["Resize"].tap()
+        let narrow = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        XCTAssertGreaterThan(narrow, normal)
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Deploys, failures and mentions."].exists)
+        let large = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        XCTAssertGreaterThan(large, normal)
+    }
+}

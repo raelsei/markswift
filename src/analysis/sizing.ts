@@ -225,6 +225,16 @@ export function sizeOf(
   else height = measuredH;
 
   const constraints = constraintsOf(n, d, ctx, diagnostics);
+  // A 100%-wide border box already follows its parent's proposal. A redundant max-width:100%
+  // must not turn that proposal into a captured-pixel ceiling (notably Tailwind's image reset).
+  const [, rightInset, , leftInset] = insetsOf(s);
+  if (
+    width.kind === "fill" &&
+    declW === "100%" &&
+    (s["max-width"] ?? d["max-width"]) === "100%" &&
+    (s["box-sizing"] === "border-box" || rightInset + leftInset === 0)
+  )
+    delete constraints.maxWidth;
 
   // Horizontal margins on a block child are not part of the IR: the used `auto` margins of a
   // centred box, like plain side margins, make the margin box fill the parent while the border

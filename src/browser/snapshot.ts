@@ -69,6 +69,7 @@ export interface Raw {
   attrs: Record<string, string>;
   /** `<img>` only: see `LayoutNode.currentSrc`. */
   currentSrc?: string;
+  resolvedFont?: string;
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
@@ -132,6 +133,39 @@ export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoSty
     for (const [i, child] of pathChildren(raw).entries()) walk(child, path ? `${path}/${i}` : String(i));
   };
   walk(root, "");
+}
+
+/** Measure pseudo paint before/after cancelling relative insets, subtracting the host's own motion. */
+export function attachRelativePseudos(root: Raw, before: Raw): void {
+  const byBackend = new Map<number, Raw>();
+  const index = (n: Raw): void => {
+    if (n.backend !== undefined) byBackend.set(n.backend, n);
+    n.children.forEach(index);
+  };
+  index(before);
+  const walk = (n: Raw): void => {
+    if (n.pseudo && n.styles["position"] === "relative" && n.backend !== undefined) {
+      const old = byBackend.get(n.backend);
+      if (old?.bounds && n.bounds && old.parent?.bounds && n.parent?.bounds) {
+        n.preferredSize = {
+          width: "auto",
+          height: "auto",
+          insets: {
+            top: n.styles["top"] ?? "auto",
+            right: n.styles["right"] ?? "auto",
+            bottom: n.styles["bottom"] ?? "auto",
+            left: n.styles["left"] ?? "auto",
+          },
+          relativeOffset: [
+            old.bounds.x - old.parent.bounds.x - (n.bounds.x - n.parent.bounds.x),
+            old.bounds.y - old.parent.bounds.y - (n.bounds.y - n.parent.bounds.y),
+          ],
+        };
+      }
+    }
+    n.children.forEach(walk);
+  };
+  walk(root);
 }
 
 /** Join captured motion (browser/motion.ts) by element path; `<path>::before|::after` lands on that pseudo child. */
@@ -463,6 +497,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
+  if (raw.resolvedFont !== undefined) node.resolvedFont = raw.resolvedFont;
   if (raw.states) node.states = raw.states;
   if (raw.motion) node.motion = raw.motion;
   if (raw.pseudoStyles) node.pseudoStyles = raw.pseudoStyles;
@@ -613,6 +648,7 @@ function pseudoElement(
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.states) node.states = raw.states;
   if (raw.motion) node.motion = raw.motion;
+  if (raw.preferredSize) node.preferredSize = raw.preferredSize;
   return node;
 }
 

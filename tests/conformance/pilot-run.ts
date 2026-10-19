@@ -33,10 +33,10 @@ import {
 } from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
-const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text|breakpoints] [--renderer none|mac|ios] [--reflow] [--out <dir>]
+const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text|breakpoints|components] [--renderer none|mac|ios] [--reflow] [--out <dir>]
   --all       every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
   --only      one case id
-  --group     text: only cases with expected text; breakpoints: only markswift-breakpoints fixtures
+  --group     text: only cases with expected text; breakpoints: only markswift-breakpoints fixtures; components: component fixtures
   --renderer  mac (default): macOS ImageRenderer, the per-PR gate;
               ios: iOS Simulator (UIHostingController + drawHierarchy, batched builds), the release gate; \`@bp\`
               captures render on MARKSWIFT_SIMULATOR_IPAD (default "iPad Pro 13-inch (M5)") after the iPhone batches;
@@ -238,14 +238,17 @@ async function run() {
   const pilot = await loadPilot();
   const cases = flags.all ? await loadFixtureSet(pilot) : pilot;
   if (only && !cases.some((item) => item.id === only)) throw new Error(`unknown pilot case: ${only}`);
-  if (group && group !== "text" && group !== "breakpoints") throw new Error(`unknown pilot group: ${group}`);
+  if (group && group !== "text" && group !== "breakpoints" && group !== "components")
+    throw new Error(`unknown pilot group: ${group}`);
   const selected = only
     ? cases.filter((item) => item.id === only)
     : group === "text"
       ? cases.filter((item) => item.expectedText !== undefined)
       : group === "breakpoints"
         ? cases.filter((item) => item.breakpoints)
-        : cases;
+        : group === "components"
+          ? cases.filter((item) => item.fixture.startsWith("components/"))
+          : cases;
   await mkdir(dirname(out), { recursive: true });
   try {
     await mkdir(out);

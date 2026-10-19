@@ -438,3 +438,24 @@ describe("overlay anchoring", () => {
     expect(anchor.offset[1]).toBe(0);
   });
 });
+
+test("a full-width image's max-width:100% remains responsive, while a px cap stays authored", () => {
+  const img = el(
+    "img",
+    { x: 0, y: 0, w: 200, h: 100 },
+    {
+      display: "block",
+      "object-fit": "cover",
+      "box-sizing": "border-box",
+      "max-width": "100%",
+    },
+    [],
+    { id: "image", src: PNG },
+  );
+  img.preferredSize = { width: "100%", height: "100px" };
+  const input = doc(el("main", { x: 0, y: 0, w: 200, h: 100 }, { display: "block" }, [img]));
+  expect(byId(inferScreen(input, "s").root, "image").width.kind).toBe("fill");
+  expect(byId(inferScreen(input, "s").root, "image").maxWidth).toBeUndefined();
+  img.styles["max-width"] = "200px";
+  expect(byId(inferScreen(input, "s").root, "image").maxWidth).toBe(200);
+});

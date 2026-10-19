@@ -45,7 +45,12 @@ export function stateStylesOf(n: LayoutNode, rest: Style): SemBase["states"] {
     const themed = key === "pressed" ? themedPressed(n.tag, styles) : undefined;
     if (!delta && !themed) continue;
     // Diagnostics of the state pass would duplicate the resting ones.
-    const st = { ...styleOf({ ...n, styles }, []), ...themed };
+    // The captured translation slopes describe the resting transform declaration only.
+    const preferredSize =
+      n.preferredSize && delta?.["transform"] !== undefined
+        ? { ...n.preferredSize, transformTranslation: undefined }
+        : n.preferredSize;
+    const st = { ...styleOf({ ...n, styles, preferredSize }, []), ...themed };
     const diff: StateStyle = {};
     for (const f of STATE_FIELDS) {
       if (JSON.stringify(st[f] ?? null) === JSON.stringify(rest[f] ?? null)) continue;

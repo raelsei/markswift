@@ -6,7 +6,7 @@
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
 import { settle, withFrozenProgress } from "./settle.ts";
-import { collectFontFaces, readFontBytes } from "./fonts.ts";
+import { collectFontFaces, readFontBytes, attachResolvedFonts } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
 import {
@@ -15,10 +15,11 @@ import {
   toLayout,
   attachPreferredSizes,
   attachMotion,
+  attachRelativePseudos,
   rawAt,
   type DomSnapshot,
 } from "./snapshot.ts";
-import { readPreferredSizes } from "./sizing.ts";
+import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
@@ -68,15 +69,23 @@ function sniffImage(b: Buffer): string | undefined {
 }
 
 /** Marks every transformed element and every `position: relative` one (`TRANSFORMED_MARK`, `RELATIVE_MARK`). */
-async function markTransformed(page: Page): Promise<void> {
-  await page.evaluate(
+async function markTransformed(page: Page): Promise<boolean> {
+  return page.evaluate(
     ([transformed, relative]) => {
+      let pseudos = false;
       for (const el of document.querySelectorAll("*")) {
         const cs = getComputedStyle(el);
         if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
           el.setAttribute(transformed, "");
         if (cs.position === "relative") el.setAttribute(relative, "");
+        for (const pseudo of ["before", "after"]) {
+          if (getComputedStyle(el, `::${pseudo}`).position === "relative") {
+            el.setAttribute(`${relative}-${pseudo}`, "");
+            pseudos = true;
+          }
+        }
       }
+      return pseudos;
     },
     [TRANSFORMED_MARK, RELATIVE_MARK] as const,
   );
@@ -390,7 +399,7 @@ export class BrowserCapture {
       );
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
-      await markTransformed(page);
+      const relativePseudos = await markTransformed(page);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
       // <style> is appended last so node indices of everything else are unchanged. The individual
       // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
@@ -402,12 +411,30 @@ export class BrowserCapture {
         s.id = "__markswift_notransform";
         s.textContent = css;
         document.body.appendChild(s);
-      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
+      const selectors = [spec.root, ...roots.map((_, i) => `[${LAYER_MARK}="${i}"]`)];
+      const before = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const pseudoBefore = relativePseudos
+        ? snapshotToTree((await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot)
+        : undefined;
+      await page.evaluate((css) => {
+        document.getElementById("__markswift_notransform")!.textContent += css;
+      }, `\n[${RELATIVE_MARK}], [${RELATIVE_MARK}-before]::before, [${RELATIVE_MARK}-after]::after { inset: auto !important; }`);
+      const after = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const captures = [sizes, ...layerSizes.map((layer) => layer.sizes)];
+      captures.forEach((captured, i) => {
+        for (const [path, [x, y]] of Object.entries(before[i]!)) {
+          const rest = after[i]![path];
+          if (captured[path] && rest) captured[path]!.relativeOffset = [x - rest[0], y - rest[1]];
+        }
+      });
       progress("DOMSnapshot.captureSnapshot (layout)");
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
       const tree = snapshotToTree(snapA, snapB, states);
+      await attachResolvedFonts(cdp, tree);
+      if (pseudoBefore) attachRelativePseudos(tree, pseudoBefore);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);

@@ -283,15 +283,11 @@ export function assessQuality(baseline: unknown, current: unknown, policy: unkno
   }
   const features = (policy.features ?? {}) as Record<string, unknown>;
   for (const [feature, rule] of Object.entries(features)) {
-    const [, caseId, mode] = /^(.+)@(app|fidelity)$/.exec(feature) ?? [];
-    if (
-      !caseId ||
-      !validRule(rule) ||
-      !Object.values(baseline).some((value) => record(value) && value.caseId === caseId && value.mode === mode)
-    ) {
+    // Shared with pilot runs, whose baseline can omit this feature entirely.
+    if (!/^[a-z0-9-]+@(app|fidelity)$/.test(feature) || !validRule(rule)) {
       issues.push({
         code: "policy",
-        message: `Feature policy ${feature} must be <caseId>@<app|fidelity> naming a baseline case and mode, with maxDrop/minSsim/maxMismatch in [0,1].`,
+        message: `Feature policy ${feature} must be <caseId>@<app|fidelity> with maxDrop/minSsim/maxMismatch in [0,1].`,
       });
     }
   }
@@ -620,24 +616,39 @@ export function summarize(manifest: unknown, policy: Record<string, unknown> = {
   return lines.join("\n");
 }
 
-/** Family floors at (measured minimum − 0.005) rounded down to 0.01, so the per-capture 0.005 drop allowance never
+/** Family and explicitly configured feature floors at (measured minimum − 0.005) rounded down to 0.01, so the per-capture 0.005 drop allowance never
  * trips a floor; an existing higher floor is kept; excepted captures do not count. Never lowers. */
-export function ratchetFamilies(policy: Record<string, unknown>, manifest: Record<string, unknown>) {
+export function ratchetFamilies(
+  policy: Record<string, unknown>,
+  manifest: Record<string, unknown>,
+  options: { featuresOnly?: boolean } = {},
+) {
   const old = (policy.families ?? {}) as Record<string, CasePolicy>;
   const mins = new Map<string, number>();
+  const features = { ...(policy.features ?? {}) } as Record<string, CasePolicy>;
+  const featureMins = new Map<string, number>();
   for (const [key, c] of Object.entries(manifest)) {
     if (!record(c) || !score(c.ssim)) throw new Error(`capture ${key} lacks ssim`);
     if (exceptionOf(policy, key, c)) continue;
     const family = familyOf(c);
     mins.set(family, Math.min(mins.get(family) ?? 1, c.ssim));
+    const feature = `${c.caseId}@${c.mode}`;
+    if (Object.hasOwn(features, feature)) featureMins.set(feature, Math.min(featureMins.get(feature) ?? 1, c.ssim));
   }
   const families: Record<string, CasePolicy> = { ...old };
-  for (const [family, min] of mins) {
+  for (const [family, min] of options.featuresOnly ? [] : mins) {
     const computed = Math.max(0, Math.floor((min - 0.005) * 100) / 100);
     families[family] = { ...old[family], minSsim: Math.max(old[family]?.minSsim ?? 0, computed) };
   }
+  for (const [feature, min] of featureMins) {
+    const computed = Math.max(0, Math.floor((min - 0.005) * 100) / 100);
+    features[feature] = { ...features[feature], minSsim: Math.max(features[feature]?.minSsim ?? 0, computed) };
+  }
   return {
     ...policy,
+    ...(policy.features
+      ? { features: Object.fromEntries(Object.entries(features).sort(([a], [b]) => a.localeCompare(b))) }
+      : {}),
     families: Object.fromEntries(Object.entries(families).sort(([a], [b]) => a.localeCompare(b))),
   };
 }
@@ -645,7 +656,7 @@ export function ratchetFamilies(policy: Record<string, unknown>, manifest: Recor
 const USAGE = `Usage: bun run tools/quality.ts <baseline-dir|manifest.json> <current-dir> [policy.json]
        bun run tools/quality.ts --write-baseline <run-dir> <manifest.json>
        bun run tools/quality.ts --summary <manifest.json> [policy.json]
-       bun run tools/quality.ts --ratchet <policy.json> <manifest.json>
+       bun run tools/quality.ts --ratchet <policy.json> <manifest.json> [--features-only]
        bun run tools/quality.ts --readme <manifest.json> <policy.json>`;
 
 if (import.meta.main) {
@@ -659,12 +670,14 @@ if (import.meta.main) {
       const policy = args[2] ? await Bun.file(args[2]).json() : {};
       console.log(summarize(await Bun.file(args[1]!).json(), policy));
     } else if (args[0] === "--ratchet") {
-      if (args.length !== 3) throw new Error(USAGE);
+      if (args.length !== 3 && !(args.length === 4 && args[3] === "--features-only")) throw new Error(USAGE);
       const policy = (await Bun.file(args[1]!).json()) as Record<string, unknown>;
-      const next = ratchetFamilies(policy, await Bun.file(args[2]!).json());
+      const next = ratchetFamilies(policy, await Bun.file(args[2]!).json(), {
+        featuresOnly: args[3] === "--features-only",
+      });
       await Bun.write(args[1]!, `${JSON.stringify(next, null, 2)}\n`);
-      const before = (policy.families ?? {}) as Record<string, CasePolicy>;
-      for (const [family, rule] of Object.entries(next.families)) {
+      const before = { ...(policy.families ?? {}), ...(policy.features ?? {}) } as Record<string, CasePolicy>;
+      for (const [family, rule] of Object.entries({ ...next.families, ...next.features })) {
         const was = before[family]?.minSsim;
         if (was === undefined) console.log(`${family}: new ${rule.minSsim}`);
         else if (was !== rule.minSsim) console.log(`${family}: ${was} → ${rule.minSsim}`);

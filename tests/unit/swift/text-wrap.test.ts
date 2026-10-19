@@ -51,12 +51,24 @@ function paragraph(): LayoutDoc {
   };
 }
 
-test("app paragraph uses native Text in both modes", () => {
+test("plain app paragraphs select the native greedy wrapper; fidelity keeps Text", () => {
   const screen = inferScreen(paragraph(), "Paragraph");
   const app = emitSwift(screen, "ParagraphView", { mode: "app" }).view;
   const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity" }).view;
-  expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+  expect(app).toContain('MarkswiftGreedyText(text: "Measured text shifts nearby layout."');
   expect(fidelity).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+});
+
+test("plain multiline clamps retain their limit in the native wrapping view", () => {
+  const doc = paragraph();
+  const host = doc.root.children[0]!;
+  host.styles["display"] = "-webkit-box";
+  host.styles["-webkit-line-clamp"] = "2";
+  host.styles["-webkit-box-orient"] = "vertical";
+  host.styles["overflow"] = "hidden";
+  const app = emitSwift(inferScreen(doc, "Paragraph"), "ParagraphView", { mode: "app" }).view;
+  expect(app).toContain("MarkswiftGreedyText(");
+  expect(app).toContain("lineLimit: 2)");
 });
 
 /** "Read the " then `<a>`: the browser wrapped exactly at the run boundary, so `a` starts line 2. */

@@ -21,5 +21,13 @@ export function bundledFamilies(pkg: FontPackage): BundledFamilies {
       ...(Object.keys(axes).length ? { axes } : prev?.axes ? { axes: prev.axes } : {}),
     };
   }
+  for (const f of pkg.faces) {
+    if (f.style !== "normal") continue;
+    const name = f.sourceFamily ?? f.family;
+    if (!pkg.faces.some((face) => face.sourceFamily === name && face.family !== name)) continue;
+    const family = (out[name] ??= { ...out[f.family]! });
+    const widths = (family.widths ??= []);
+    if (!widths.some((w) => w.name === f.family)) widths.push({ name: f.family, stretch: f.stretch ?? [100, 100] });
+  }
   return out;
 }

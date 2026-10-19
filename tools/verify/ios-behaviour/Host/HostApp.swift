@@ -8,6 +8,7 @@ struct HostApp: App {
         WindowGroup {
             if ProcessInfo.processInfo.environment["MARKSWIFT_MENU_PRESS"] == "1" { MenuPressProbe() }
             else if ProcessInfo.processInfo.environment["MARKSWIFT_POINTER_PROBE"] == "1" { PointerProbe() }
+            else if ProcessInfo.processInfo.environment["MARKSWIFT_GREEDY_PROBE"] == "1" { GreedyProbe() }
             else { HostRoot() }
         }
     }
@@ -123,6 +124,22 @@ private struct PointerProbe: View {
                 }.buttonStyle(.plain).contentShape(Rectangle()).accessibilityHidden(true)
             }.frame(width: 100, height: 44).accessibilityElement(children: .ignore).accessibilityLabel("Hidden area").accessibilityIdentifier("hidden-area")
             Text("under=\(underneath) live=\(live) hidden=\(hidden)").accessibilityIdentifier("pointer-result")
+        }
+    }
+}
+
+private struct GreedyProbe: View {
+    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 14
+    @State private var narrow = false
+    @State private var height: CGFloat = 0
+    var body: some View {
+        VStack {
+            MarkswiftGreedyText(text: "Deploys, failures and mentions.", font: .system(size: size), color: .primary,
+                size: 14, style: .subheadline, lineHeight: 20, ascent: 1, descent: 0.286, natural: 2444.0 / 2048)
+                .frame(width: narrow ? 100 : 240)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            Button("Resize") { narrow.toggle() }
+            Text(String(Double(height))).accessibilityIdentifier("greedy-height")
         }
     }
 }

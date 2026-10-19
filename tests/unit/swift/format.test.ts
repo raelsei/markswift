@@ -59,8 +59,8 @@ test("a bundled family without a wght axis selects its static face in fidelity; 
   const variableFont = fontOf(bold, bundledFamilies(pkg([face(100, { wght: [100, 900] })])));
   expect(fontExpr(staticFont, { mode: "fidelity" })).toBe('.custom("Fam", fixedSize: 18.0).weight(.bold)');
   expect(fontExpr(variableFont, { mode: "fidelity" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
-  for (const f of [staticFont, variableFont])
-    expect(fontExpr(f, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
+  expect(fontExpr(staticFont, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
+  expect(fontExpr(variableFont, { mode: "app" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
 });
 
 describe("variation axes", () => {
@@ -85,7 +85,7 @@ describe("variation axes", () => {
   test("a wght variation sets the weight of a variable family, not of a static one", () => {
     expect(both({ "font-variation-settings": '"wght" 650' })).toEqual([
       '.markswiftVariable("Fam", size: 18.0, weight: 650.0)',
-      '.custom("Fam", size: 18.0, relativeTo: .body).weight(.semibold)',
+      '.markswiftVariable("Fam", size: 18.0, weight: 650.0)',
     ]);
     expect(fontOf({ ...base, "font-variation-settings": '"wght" 650' }, families({})).weight).toBe(400);
   });

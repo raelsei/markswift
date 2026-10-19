@@ -358,10 +358,8 @@ test("feature rules are keyed <caseId>@<mode>; a bare case id is a policy error"
     ),
   ).toEqual(["policy"]);
   expect(
-    assessQuality(a, a, { requireEvidence: true, features: { "display-flex@fidelity": { minSsim: 0.5 } } }).issues.map(
-      (i) => i.code,
-    ),
-  ).toEqual(["policy"]);
+    assessQuality(a, a, { requireEvidence: true, features: { "display-flex@fidelity": { minSsim: 0.5 } } }).ok,
+  ).toBe(true);
   expect(assessQuality(a, a, { requireEvidence: true, features: { "display-flex@app": { minSsim: 0.5 } } }).ok).toBe(
     true,
   );
@@ -587,4 +585,29 @@ test("README evidence table is the generated iOS summary", async () => {
       await Bun.file(join(root, "tests/conformance/visual-policy-ios.json")).json(),
     ),
   );
+});
+
+test("ratchet raises configured feature floors without lifting unrelated family or mode floors", () => {
+  const policy = {
+    features: { "x@app": { minSsim: 0.94 }, "x@fidelity": { minSsim: 0.99 } },
+    families: { "components@app": { minSsim: 0.94 } },
+  };
+  const next = ratchetFamilies(policy, {
+    a: evidence({ caseId: "x", fixture: "components/x.html", mode: "app", ssim: 0.989 }),
+    b: evidence({ caseId: "x", fixture: "components/x.html", mode: "fidelity", ssim: 0.95 }),
+    c: evidence({ caseId: "y", fixture: "components/y.html", mode: "app", ssim: 0.951 }),
+  });
+  expect(next.features).toEqual({ "x@app": { minSsim: 0.98 }, "x@fidelity": { minSsim: 0.99 } });
+  expect(next.families["components@app"]).toEqual({ minSsim: 0.94 });
+});
+
+test("a feature-only ratchet preserves family floors from a partial run", () => {
+  const policy = { families: { "components@app": { minSsim: 0.94 } }, features: { "x@app": { minSsim: 0.94 } } };
+  const next = ratchetFamilies(
+    policy,
+    { a: { caseId: "x", mode: "app", fixture: "components/x.html", ssim: 0.969 } },
+    { featuresOnly: true },
+  );
+  expect(next.families).toEqual(policy.families);
+  expect(next.features).toEqual({ "x@app": { minSsim: 0.96 } });
 });

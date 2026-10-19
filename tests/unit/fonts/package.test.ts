@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { FontFace } from "../../../src/model/layout.ts";
 import type { FontConverter, FontToolResult } from "../../../src/fonts/converter.ts";
+import { bundledFamilies } from "../../../src/fonts/metadata.ts";
+import { fontOf } from "../../../src/analysis/typography.ts";
 import { packageFonts } from "../../../src/fonts/package.ts";
 import { fontFileStem } from "../../../src/fonts/source.ts";
 import { plistFragment, registrationSwift } from "../../../src/fonts/registration.ts";
@@ -78,7 +80,9 @@ describe("packageFonts: faces + bytes in, assets out", () => {
 
 test("a missing python3 leaves the face unbundled with a note and ships no asset", async () => {
   // Bun.spawn resolves executables from the spawn environment, so PATH is cut in a child Bun.
-  const script = `import { packageFonts } from ${JSON.stringify(resolve(import.meta.dir, "../../../src/fonts/package.ts"))};
+  const script = `import { bundledFamilies } from "../../../src/fonts/metadata.ts";
+import { fontOf } from "../../../src/analysis/typography.ts";
+import { packageFonts } from ${JSON.stringify(resolve(import.meta.dir, "../../../src/fonts/package.ts"))};
 const pkg = await packageFonts([{ family: "Probe", style: "normal", weight: [400, 400], loaded: true,
   src: [{ url: "data:font/ttf;base64,AAEAAAAA" }] }], new Map());
 console.log(JSON.stringify({ notes: pkg.notes, faces: pkg.faces.length, assets: Object.keys(pkg.assets) }));`;
@@ -115,4 +119,26 @@ test("packaged font file stems never collide", () => {
 test("the plist fragment and +Fonts.swift name the Markswift version", () => {
   expect(plistFragment(["Geist.ttf"])).toContain(GENERATED_BY);
   expect(registrationSwift([], "CardView")).toContain(GENERATED_BY);
+});
+
+test("width descriptors retain distinct files and select narrower/wider faces in CSS order", async () => {
+  const pkg = await packageFonts([face(), face({ stretch: [75, 75] }), face({ stretch: [125, 125] })], sources, fake);
+  expect(pkg.faces).toHaveLength(3);
+  expect(new Set(pkg.faces.map((f) => f.file)).size).toBe(3);
+  expect(pkg.notes).toEqual([]);
+  const families = bundledFamilies(pkg);
+  const chosen = (stretch: string, variation = "normal") =>
+    fontOf(
+      {
+        "font-family": "Test Face",
+        "font-size": "16px",
+        "font-stretch": stretch,
+        "font-variation-settings": variation,
+      },
+      families,
+    ).family;
+  expect(chosen("90%")).toMatchObject({ name: "Test Face Width 75-75" });
+  expect(chosen("100%")).toMatchObject({ name: "Test Face" });
+  expect(chosen("110%")).toMatchObject({ name: "Test Face Width 125-125" });
+  expect(chosen("75%", '"wdth" 125')).toMatchObject({ name: "Test Face Width 75-75" });
 });
