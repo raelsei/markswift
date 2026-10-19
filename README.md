@@ -504,7 +504,7 @@ captured (a capture warning says so).
 - Inline generated images (`content: url()`, inside `list-style-image`) scale with their text under Dynamic Type.
   Standalone generated images scale with their pseudo-element’s font as well. Outside counter markers align their
   trailing edges, so unequal marker widths no longer prevent otherwise matching list rows from becoming a `ForEach`.
-- Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
+- Native tables (`MarkswiftTable`): cells retain their controls and DOM reading order. App output exposes row/column positions and spans, explicit `headers`, `scope=col|row|rowgroup`, and simple first-row/column headers as high-importance accessibility content. Two-dimensional VoiceOver table navigation and `scope=colgroup` remain unsupported (`approximated table`).
 - Layout: percentage 2D translations and SVG cover/contain images follow their rendered box in app mode;
   percentage translations in flattened 3D transforms remain captured geometry.
 - Overlay discovery is bounded to 12 triggers. Nested triggers replay their ancestors; repeated rows retain their
