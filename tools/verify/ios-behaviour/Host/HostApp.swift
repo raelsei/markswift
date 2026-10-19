@@ -1,10 +1,14 @@
 import SwiftUI
+import UIKit
 
 @main
 struct HostApp: App {
     init() { BehaviourRegistry.registerFonts() }
     var body: some Scene {
-        WindowGroup { HostRoot() }
+        WindowGroup {
+            if ProcessInfo.processInfo.environment["MARKSWIFT_MENU_PRESS"] == "1" { MenuPressProbe() }
+            else { HostRoot() }
+        }
     }
 }
 
@@ -41,5 +45,53 @@ struct HostRoot: View {
         // Animations rest at the settled look unless a motion launch asks for the live clock.
         .environment(\.markswiftMotionTime, env["MARKSWIFT_MOTION"] == "live" ? nil : Double.infinity)
         .environment(\.markswiftForcedStates, env["MARKSWIFT_REDUCE_MOTION"] == "1" ? .reduceMotion : [])
+    }
+}
+
+/// A real Menu uses the same styles as emitted triggers; sample its rendered pressed label, not a forced state.
+struct MenuPressProbe: View {
+    @State private var pressed = false
+    @State private var frame = CGRect.zero
+    @State private var result = "waiting"
+    var body: some View {
+        VStack {
+            Menu { Button("Probe action") {} } label: {
+                Text("Press probe").foregroundStyle(.white).frame(width: 180, height: 64)
+                    .background(pressed ? Color.red : Color.blue)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            }
+            .menuStyle(.button)
+            .buttonStyle(MarkswiftPressStyle(isPressed: $pressed))
+            .accessibilityIdentifier("markswift.menu-press")
+            Text(result).accessibilityIdentifier("markswift.menu-press-result")
+        }
+        .onChange(of: pressed) { _, down in
+            guard down else { return }
+            // Let the state update reach a display frame while the UI test holds the finger down.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard pressed, let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let window = scene.windows.first(where: \.isKeyWindow) else { return }
+                let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+                    window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+                }
+                guard let cg = image.cgImage else { result = "no pixels"; return }
+                let point = CGPoint(x: (frame.minX + 20) * image.scale, y: frame.midY * image.scale)
+                guard let pixel = cg.cropping(to: CGRect(origin: point, size: CGSize(width: 1, height: 1))) else {
+                    result = "no label frame"; return
+                }
+                var rgba = [UInt8](repeating: 0, count: 4)
+                let red = rgba.withUnsafeMutableBytes { bytes -> Bool in
+                    guard let context = CGContext(data: bytes.baseAddress, width: 1, height: 1,
+                        bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+                    context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+                    return bytes[0] > 200 && bytes[1] < 100 && bytes[2] < 100
+                }
+                result = red ? "pressed frame is red" : "pressed frame is not red: \(rgba), \(frame)"
+                if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    try? image.pngData()?.write(to: dir.appendingPathComponent("menu-pressed.png"))
+                }
+            }
+        }
     }
 }

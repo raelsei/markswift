@@ -35,6 +35,21 @@ final class BehaviourTests: XCTestCase {
     }
 
     @MainActor
+    func testMenuPressedFrame() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_MENU_PRESS"] = "1"
+        app.launch()
+        let trigger = app.buttons["markswift.menu-press"]
+        XCTAssertTrue(trigger.waitForExistence(timeout: 5))
+        trigger.press(forDuration: 1)
+        // Dismiss the native popup before reading the persistent sample result below it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1)).tap()
+        let result = app.staticTexts["markswift.menu-press-result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.label, "pressed frame is red")
+    }
+
+    @MainActor
     func testBehaviour() throws {
         continueAfterFailure = true
         let dir = try XCTUnwrap(ProcessInfo.processInfo.environment["MARKSWIFT_BEHAVIOUR_DIR"], "MARKSWIFT_BEHAVIOUR_DIR is not set")
