@@ -125,6 +125,8 @@ export interface CaptureOptions {
   channel?: string;
   restricted?: boolean;
   signal?: AbortSignal;
+  /** Deadline for each capture, including page creation and CDP calls. Defaults to 120 seconds. */
+  timeoutMs?: number;
 }
 
 export class BrowserCapture {
@@ -134,6 +136,8 @@ export class BrowserCapture {
   private readonly opts: CaptureOptions;
 
   constructor(opts: CaptureOptions) {
+    if (opts.timeoutMs !== undefined && (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs <= 0))
+      throw new Error("capture timeoutMs must be positive and finite");
     this.opts = opts;
   }
 
@@ -175,7 +179,54 @@ export class BrowserCapture {
    * LayoutDoc.source label. The page's `prefers-color-scheme` follows `spec.theme`.
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
+    const timeoutMs = this.opts.timeoutMs ?? 120_000;
+    const viewport = spec.viewport ?? this.opts.viewport;
+    const key = `${source}/${spec.screen}/${viewport.width}/${spec.theme}${spec.open ? `/open:${spec.open.id}` : ""}`;
+    let phase = "newPage";
+    let page: Page | undefined;
+    let expired = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        expired = true;
+        reject(new Error(`capture ${key} timed out after ${timeoutMs}ms during ${phase}`));
+        // Closing a page releases pending CDP work. A stuck newPage needs the browser closed.
+        void (page ? page.close() : this.stop()).catch(() => {});
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        this.capturePage(
+          spec,
+          identity,
+          source,
+          (next) => {
+            phase = next;
+          },
+          (created) => {
+            page = created;
+            if (expired) {
+              void page.close().catch(() => {});
+              throw new Error(`capture ${key} expired during newPage`);
+            }
+          },
+        ),
+        timedOut,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async capturePage(
+    spec: CaptureRequest,
+    identity: NodeIdentity,
+    source: string,
+    progress: (phase: string) => void,
+    openedPage: (page: Page) => void,
+  ): Promise<Capture> {
     const page = await this.context.newPage();
+    openedPage(page);
     const viewport = spec.viewport ?? this.opts.viewport;
     const errors: string[] = [];
     const images = new Map<string, string>();
@@ -223,16 +274,21 @@ export class BrowserCapture {
       }
     });
     try {
+      progress("load / prepare");
       await this.load(page, spec);
       // Static capture: transitions only interpolate towards the same end state, but a
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await noTransitions(page);
       // Motion is read before settle() finishes it (a finished CSSAnimation leaves getAnimations()).
+      progress("readMotion");
       const motion = await readMotion(page, spec.root);
       errors.push(...motion.warnings);
+      progress("settle");
       await settle(page);
+      progress("newCDPSession / stylesheets");
       const cdp = await this.context.newCDPSession(page);
       await Promise.all(sheetReads);
+      progress("collectFontFaces");
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
       for (const href of unreadable)
         errors.push(`Stylesheet could not be read: ${href}; its @font-face rules were not collected.`);
@@ -246,6 +302,7 @@ export class BrowserCapture {
         errors.push(
           `Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`,
         );
+      progress("readFontBytes");
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
       const canvas = await page.evaluate(
         ({ sel, mark }) => {
@@ -313,15 +370,18 @@ export class BrowserCapture {
           )
         : [];
       const hiddenOnOpen = !!opening && roots.length > 0 && !opening.hidden && (await rootHidden(page, rootSel));
+      progress("conditional rules / preferred sizes");
       const conditional = await readConditionalRules(page, spec.root, viewport.width, spec.breakpoints);
       const { sizes, pseudoStyles } = await readPreferredSizes(page, spec.root);
       const layerSizes = await Promise.all(roots.map((_, i) => readPreferredSizes(page, `[${LAYER_MARK}="${i}"]`)));
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
+      progress("DOMSnapshot.captureSnapshot (paint)");
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs), plus the
       // CSSTransitions each state starts (rest page only: transitions are keyed by paths under `spec.root`).
       // In an open page, the layer's own buttons and fields.
+      progress("captureStates");
       const states = await captureStates(
         cdp,
         spec.open ? `[${LAYER_MARK}]` : rootSel,
@@ -343,6 +403,7 @@ export class BrowserCapture {
         s.textContent = css;
         document.body.appendChild(s);
       }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      progress("DOMSnapshot.captureSnapshot (layout)");
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
@@ -398,6 +459,7 @@ export class BrowserCapture {
       }
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
+        progress("screenshot");
         const { x, y, w, h } = box;
         if (!(size.w > 0 && size.h > 0) || x + w <= 0 || y + h <= 0)
           throw new Error(
@@ -424,6 +486,7 @@ export class BrowserCapture {
         });
         animated ||= exit.lists.some((l) => l.length);
       };
+      progress("dismiss probes");
       if (opened && opening && spec.open && spec.probeDismiss && opened.layer.placement !== "inflow") {
         await recordAnimations(page);
         await page.keyboard.press("Escape");
@@ -448,6 +511,7 @@ export class BrowserCapture {
         errors.push(
           "overlay enter/exit animations follow the Reduce Motion fallback (author prefers-reduced-motion rules for them are not captured)",
         );
+      progress("CDP detach / image responses");
       await cdp.detach();
       await Promise.all(imageReads);
       const baseURI = await page.evaluate(() => document.baseURI);
@@ -474,6 +538,7 @@ export class BrowserCapture {
         ...(opened ? { opened } : {}),
       };
     } finally {
+      progress("page.close");
       await page.close();
     }
   }
