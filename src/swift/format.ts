@@ -232,9 +232,9 @@ export function fontSizeExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string 
  * named weight in both modes, sized by `fontSizeExpr`, plus exact CoreText axes for a captured
  * `font-stretch` or variation request; a bundled family differs by mode:
  *
- * Explicit axes and nonstandard variable weights use CoreText with `@ScaledMetric` app sizes.
- * Named weights keep `.custom(..., relativeTo:)`, preserving native control sizing and Dynamic Type.
- * Fidelity retains exact variable axes; static families select their named face at a fixed size.
+ * Variable faces use exact captured axes in both modes; app sizes come from `@ScaledMetric` so
+ * Dynamic Type still applies. Static families select their named weight with `.custom`, at a
+ * fixed size in fidelity and a Dynamic Type size in app mode.
  */
 export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
   const weightName = WEIGHT_NAMES.reduce((best, [w, name]) =>
@@ -248,10 +248,7 @@ export function fontExpr(f: FontSpec, ctx: ColorCtx, fixed = false): string {
     }
     if (ctx.mode === "fidelity" && f.family.static)
       return `.custom(${str(f.family.name)}, fixedSize: ${num(f.size)}).weight(.${weightName})`;
-    if (
-      !f.family.static &&
-      (ctx.mode === "fidelity" || f.opsz !== undefined || !WEIGHT_NAMES.some(([w]) => w === f.weight))
-    )
+    if (!f.family.static)
       return `.markswiftVariable(${str(f.family.name)}, size: ${fontSizeExpr(f, ctx, fixed)}, weight: ${num(f.weight)}${opsz})`;
     return `.custom(${str(f.family.name)}, size: ${num(f.size)}, relativeTo: .${nearestTextStyle(f.size)}).weight(.${weightName})`;
   }

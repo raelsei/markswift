@@ -729,7 +729,7 @@ const FAMILIES: Array<{
     assetsDir: ASSETS,
     html: "<p>Geist text</p>",
     css: '@font-face{font-family:Geist;src:url(geist-latin-wght-normal.woff2) format("woff2");font-weight:100 900} main{font-family:Geist}',
-    app: ["WebfontFamily+Fonts.swift", '.custom("Geist"'],
+    app: ["WebfontFamily+Fonts.swift", '.markswiftVariable("Geist"'],
   },
   {
     name: "EscapesFamily",

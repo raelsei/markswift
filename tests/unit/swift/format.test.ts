@@ -60,7 +60,7 @@ test("a bundled family without a wght axis selects its static face in fidelity; 
   expect(fontExpr(staticFont, { mode: "fidelity" })).toBe('.custom("Fam", fixedSize: 18.0).weight(.bold)');
   expect(fontExpr(variableFont, { mode: "fidelity" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
   expect(fontExpr(staticFont, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
-  expect(fontExpr(variableFont, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
+  expect(fontExpr(variableFont, { mode: "app" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
 });
 
 describe("variation axes", () => {
