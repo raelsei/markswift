@@ -709,6 +709,8 @@ export interface SvgNode extends SemBase {
 }
 
 export interface ImageNode extends SemBase {
+  /** A standalone generated image scales with its pseudo-element’s font in app mode. */
+  generatedFont?: FontSpec;
   kind: "image";
   src: string;
   /** A `data:image/svg+xml` source, parsed during analysis. */

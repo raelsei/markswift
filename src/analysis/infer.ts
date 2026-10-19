@@ -15,7 +15,7 @@ import {
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
-import { generatedAlt } from "./generated.ts";
+import { generatedAlt, PSEUDO } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -154,6 +154,9 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
     const node = withBase(n, ctx, {
       kind: "image",
+      ...(ctx.parent && PSEUDO[ctx.parent.tag]
+        ? { generatedFont: fontOf(ctx.parent.styles, ctx.bundledFamilies) }
+        : {}),
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
