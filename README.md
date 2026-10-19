@@ -344,11 +344,6 @@ Exceptions (exempt from family floors and the 1.0 component target; the 0.005 dr
 
 - `motion-unmapped-320-light-fidelity`: the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion) — owner: @raelsei
 - `motion-unmapped-390-light-fidelity`: the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion) — owner: @raelsei
-- `overlay-collapsible-320-dark-app`: the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the `<pre>` lines are wider and wrap differently — generic ui-* faces are a support boundary (README) — owner: @raelsei
-- `overlay-collapsible-320-light-app`: the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the `<pre>` lines are wider and wrap differently — generic ui-* faces are a support boundary (README) — owner: @raelsei
-- `overlay-collapsible-390-dark-app`: the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the `<pre>` lines are wider and wrap differently — generic ui-* faces are a support boundary (README) — owner: @raelsei
-- `overlay-collapsible-390-dark-app@open:advanced-settings`: the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the `<pre>` lines are wider and wrap differently — generic ui-* faces are a support boundary (README) — owner: @raelsei
-- `overlay-collapsible-390-light-app`: the `<pre>` stack `ui-monospace, SFMono-Regular, Menlo` is Menlo in Chrome and SF Mono (wider) natively, so the `<pre>` lines are wider and wrap differently — generic ui-* faces are a support boundary (README) — owner: @raelsei
 - `shadcn-field@app`: items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei
 - `shadcn-item-320-dark-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking — owner: @raelsei
 - `shadcn-item-320-light-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking — owner: @raelsei
@@ -367,8 +362,14 @@ Read the table with these limits:
 - `<case>-390-<theme>-app@open:<layer>` captures check each in-flow layer open: Chrome's page with the trigger
   clicked against the view initialised with `is<Name>Expanded: true`; they count toward their family floor. Menus
   have no `@open` capture: their popup is native, so only the closed trigger is compared.
-- Chrome renders `ui-monospace`, `ui-serif` and `ui-rounded` with other faces than iOS (SF Mono,
-  New York, SF Rounded), which depresses the `font-family` scores.
+- Captured uniform Menlo text uses Menlo on iOS. Other installed monospace faces, `ui-serif` and
+  `ui-rounded` can still differ from the native generic designs, which depresses the `font-family` scores.
+
+The LayoutDoc 5 font-selection change has a separate reviewed iOS component run in
+`tests/conformance/baselines/components-v3-ios.json`: 358 captures (198 app, 160 fidelity), no errors.
+Its six `overlay-collapsible@app` captures score 0.9897–0.9957; all five Menlo exceptions are removed
+and that feature's floor is ratcheted to 0.98. The table above retains the earlier full-corpus
+provenance; the scoped run does not replace unrelated family baselines or raise their floors.
 
 Every pull request also runs the macOS gate (`tests/conformance/baselines/visual-{pilot,all}-mac.json`, rendered
 with `ImageRenderer` on macOS): the same per-capture 0.005 drop rule, anchors and family floors, plus the same-code
@@ -477,9 +478,8 @@ captured (a capture warning says so).
 
 ## Known gaps
 
-- 13 of the 198 `components@app` iOS captures are listed exceptions (see the block above): fractional line boxes
-  rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `ui-monospace` drawn in
-  the wider SF Mono.
+- 8 of the 198 `components@app` iOS captures remain listed exceptions (see the block above): fractional line boxes
+  rounded to the pixel grid and iOS native line breaking that avoids a one-word last line.
 - Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
   `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
   fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
