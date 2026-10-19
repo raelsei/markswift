@@ -73,7 +73,10 @@ nativeTest(
           name: "AxesCard",
           mode,
         });
-        if (mode === "app") expect(result.code).toContain(".width(Font.Width(-0.1))");
+        if (mode === "app") {
+          expect(result.code).toContain(".markswiftSystem(");
+          expect(result.code).toContain('axes: ["wdth": 75.0]');
+        }
         const output = join(directory, mode);
         for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
         await Bun.write(

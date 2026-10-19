@@ -1,18 +1,53 @@
 # Changelog
 
-## Unreleased — 3.0
-
-- Plain ASCII multiline app paragraphs use UIKit greedy word wrapping on iOS 26+, retaining CSS half-leading, multiline limits, accessibility labels and Dynamic Type. Rich text, other scripts, older iOS and macOS keep the existing SwiftUI text path.
-
-- LayoutDoc 5 captures `@font-face` stretch ranges and the installed face of uniform monospace text. Font packaging retains distinct width faces and selects them by CSS stretch matching order; Chrome-resolved Menlo remains Menlo on Apple targets.
-- Breaking: captures use LayoutDoc 5 to retain percentage transform translation and measured relative offsets. Saved LayoutDoc 4 captures must be recaptured.
-- Relative percentage insets now resolve against percentage-height and stretched flex/grid containing blocks using browser measurements.
-- SVG images with cover/contain sizing rescale to their offered box in app mode.
-- App-mode percentage translations now follow the rendered box size, including composed 2D transforms.
-
-All notable changes to Markswift. Versions follow SemVer; the package is published to npm as `markswift`. A LayoutDoc schema change is a major version.
+All notable changes to Markswift. Versions follow SemVer; the package is published to npm as `markswift`.
+A LayoutDoc schema change is a major version.
 
 ## [Unreleased]
+
+## [3.0.0] — 2026-10-20
+
+### Changed (breaking)
+
+- LayoutDoc 5 records responsive transform geometry, measured relative offsets, font-face stretch ranges and resolved
+  monospace faces. LayoutDoc 4 captures are rejected with a recapture instruction. LayoutDoc 5 is frozen with this release.
+- Regenerate every view and its shared runtime together; generated runtime interfaces have changed.
+
+### Fixed
+
+- Percentage-width blocks align correctly in RTL, and bare text splits around floats without losing words.
+- Percentage 2D translations and SVG cover/contain sizing follow the rendered box in app mode. Relative offsets
+  resolve against percentage-height and stretched containers; inline and pseudo-element offsets preserve text flow.
+- Nested overlays replay ancestor triggers, native menus retain submenus, repeated rows retain independent actions,
+  supported dialog widths resize, and breakpoint captures select their own layers.
+- Exact available system-font axes, distinct webfont width faces and Chrome-resolved monospace fonts are retained.
+  Fractional text line boxes, variable font weights and native field heights preserve their captured metrics.
+- Plain ASCII multiline paragraphs use greedy UIKit wrapping on iOS 26+, with accessibility and Dynamic Type.
+  Rich text, other scripts, older iOS and macOS retain the SwiftUI path.
+- Nested colour schemes, paragraph/marker bidi isolation and pointer-enabled children of pass-through overlays work.
+  Transparent controls retain pointer actions independently of accessibility visibility.
+- Generated images scale with Dynamic Type; uneven counter widths no longer prevent repeated-list extraction.
+- Native iOS tables expose row/column positions, spans and header associations while retaining interactive controls.
+  Column-group scope and native two-dimensional macOS table navigation remain unsupported.
+- Captures have bounded, contextual timeout diagnostics. Browser rejection tests await their errors, and performance
+  tests use three-sample medians without relaxing the budgets.
+- The documentation site loads CSS, scripts and navigation from the custom domain root.
+
+### Validation and publishing
+
+- iPad breakpoint reflow is gated against a tracked baseline; native Menu pressed appearance has a live UI check.
+- Publishing verifies the registry version, distribution tag and installed CLI in a clean directory.
+- Six component app captures remain documented visual exceptions (four fields and two dark cards); existing
+  accessibility audit exceptions and unsupported CSS/interaction boundaries remain documented in README.
+- The post-release roadmap in #16 is outside this release.
+
+### Migrating from 2.x
+
+1. Upgrade `markswift` to 3.0.0. Saved LayoutDoc 4 files cannot be relabelled: recapture their HTML/CSS source.
+2. Rerun `markswift convert ... --update` or `markswift build ...` to regenerate all views and their shared runtime.
+   Keep custom code in caller-owned files; review generated initializer changes for repeated overlays and menus.
+3. Rebuild the Swift target and verify application callbacks. iOS 18+ remains supported; greedy paragraph wrapping
+   uses UIKit on iOS 26+ and falls back to SwiftUI on earlier systems.
 
 ## [2.0.0] — 2026-10-18
 

@@ -18,17 +18,18 @@ product, `fidelity` exists for verification ([Modes](#modes)). What is measured 
 [Supported subset](#supported-subset-evidence); everything else the capture loses is reported (see
 [Diagnostics](#diagnostics)).
 
-New in 2.0:
+New in 3.0:
 
-- Breakpoints (opt-in `--breakpoints`): one conversion captures every CSS width band and emits one view that switches
-  on the width SwiftUI offers it; iPad portrait and landscape are width bands ([Library API](#library-api)).
-- Dialogs, alert dialogs, sheets, popovers and hover cards opened by a trigger are found automatically and drawn in the
-  view hierarchy with their CSS look behind an `is<Name>Presented` state seeded through `init`; disclosures expand in
-  place (`is<Name>Expanded`) and menus open native popups ([Not translated](#not-translated) lists the limits).
-- CSS animations and transitions play with their CSS timing and honour Reduce Motion ([Motion](#motion)).
+- Responsive percentage translations, SVG cover/contain sizing, and measured relative offsets, including inline text.
+- Nested overlays and submenus, repeated-row presentation actions, responsive dialogs, and fresh layers per breakpoint.
+- Exact available system-font axes, width-specific webfont selection, resolved monospace faces, fractional text boxes,
+  and greedy wrapping for plain multiline paragraphs on iOS 26+.
+- Native iOS table accessibility, nested colour schemes, pointer pass-through regions, and generated images that scale
+  with Dynamic Type. iPad breakpoint reflow now has a tracked CI gate.
 
-Upgrading from 1.x: saved 1.x captures must be recaptured and some call sites change — see
-[Migrating from 1.x](CHANGELOG.md#migrating-from-1x).
+Upgrading from 2.x: LayoutDoc 5 replaces LayoutDoc 4. Recapture saved documents and regenerate all views with their
+shared runtime together — see [Migrating from 2.x](CHANGELOG.md#migrating-from-2x). Swift output still targets iOS 18+;
+the new paragraph wrapper uses a SwiftUI fallback before iOS 26.
 
 ## Requirements
 
@@ -501,10 +502,9 @@ captured (a capture warning says so).
   `scope=colgroup` remains unsupported; macOS retains accessibility content without two-dimensional table navigation.
 - Layout: percentage 2D translations and SVG cover/contain images follow their rendered box in app mode;
   percentage translations in flattened 3D transforms remain captured geometry.
-- Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
-  repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width within each band.
-  Fresh `--breakpoints` conversions capture and select layers per width band; older capture sets without complete
-  layer inventories retain primary-band behavior. Changed layers conservatively select the whole band root.
+- Overlay discovery is bounded to 12 triggers. Nested triggers replay their ancestors; repeated rows retain their
+  actions, and supported percentage/calc dialog widths follow the offered width. Fresh `--breakpoints` conversions
+  capture layers per width band; changed layers conservatively select the whole band root.
 - Accessibility: the 2 known audit issues above; hit-region findings are reported, not failing.
 
 ## Diagnostics
