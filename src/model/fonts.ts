@@ -29,3 +29,8 @@ export interface FaceMetrics {
 
 /** Lowercase CSS family name to packaged font metrics. */
 export type FontMetrics = Readonly<Record<string, FaceMetrics>>;
+
+/** Installed Apple faces retained when capture confirms their identity. */
+export const APPLE_FONT_METRICS: FontMetrics = {
+  menlo: { upem: 2048, ascent: 1901, descent: 483, lineGap: 0, useTypoMetrics: false },
+};

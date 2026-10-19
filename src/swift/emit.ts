@@ -1,3 +1,4 @@
+import { APPLE_FONT_METRICS } from "../model/fonts.ts";
 /** Assemble a screen from cohesive Swift emission modules. */
 import type { Screen, SemNode, StackNode, GridNode } from "../model/semantic.ts";
 import type { Theme } from "../model/layout.ts";
@@ -104,7 +105,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   const control = controlMembers(screen.root, opts.mode, !!screen.breakpoints);
   const scaledFonts = new Map<string, string>();
   const ctx: EmitContext = {
-    fontMetrics: opts.fontMetrics ?? {},
+    fontMetrics: { ...APPLE_FONT_METRICS, ...opts.fontMetrics },
     nameOf,
     contentMinWidth,
     allocated,
