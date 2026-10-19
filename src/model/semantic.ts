@@ -112,6 +112,10 @@ export type TableColumn =
  * `table-layout: fixed` columns.
  */
 export interface TableLayout {
+  /** Native accessibility header axes, one entry per cell (excluding paint bands). */
+  headers?: Array<"row" | "column" | "">;
+  /** Authored row-group header coverage, in one-based table rows. */
+  headerRows?: number[][];
   widths: number[];
   heights: number[];
   slots: Array<Pick<GridPlacement, "rowStart" | "colStart" | "rowSpan" | "colSpan">>;

@@ -62,3 +62,18 @@ test("a nested table retains its own context", () => {
   });
   expect(JSON.stringify(grid)).toBe(before);
 });
+
+test("native cell identities stay distinct when a saved table has no node IDs", () => {
+  const code = compileLayout(doc(fixture()), { name: "Report", mode: "app" }).code;
+  const ids = [...code.matchAll(/MarkswiftAccessibleCell\(id: "([^"]+)"/g)].map((m) => m[1]);
+  expect(ids).toHaveLength(5);
+  expect(new Set(ids).size).toBe(5);
+});
+
+test("row-group headers cover their group without changing the header cell's span", () => {
+  const t = fixture();
+  const slots = tableSlots(t)!;
+  slots.cells[2]!.node.attrs.scope = "rowgroup";
+  const code = compileLayout(doc(t), { name: "Report", mode: "app" }).code;
+  expect(code).toContain('rowSpan: 1, columnSpan: 1, header: "row", headerRows: [1, 2, 3]');
+});
