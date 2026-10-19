@@ -337,9 +337,13 @@ struct MarkswiftFieldLineHeight: ViewModifier {
         let half = leading * (editor ? size : max(0, size - base)) / 2
         // The editor draws its first line lower by its tall glyphs; the top pad gives that back, the bottom keeps the box.
         let tall = editor ? markswiftTallGlyphs(face, size) : 0
-        MarkswiftFieldBox(height: editor ? nil : capturedHeight, scale: scale) {
-            content.lineSpacing(leading * size)
-        }.padding(.top, half - tall).padding(.bottom, half + tall)
+        if editor || capturedHeight == nil {
+            content.lineSpacing(leading * size).padding(.top, half - tall).padding(.bottom, half + tall)
+        } else {
+            MarkswiftFieldBox(height: capturedHeight, scale: scale) {
+                content.lineSpacing(leading * size)
+            }.padding(.top, half).padding(.bottom, half)
+        }
     }
 }
 

@@ -125,6 +125,13 @@ for scale in [1, 2, 3] as [CGFloat] {
         renderer.scale = scale
         _ = renderer.nsImage
     }
+    for (tag, height) in [("field", 22 + 1 / scale), ("grown-field", 44)] {
+        let view = Report(label: tag + s) {
+            Color.clear.frame(width: 100, height: height)
+                .markswiftFieldLineHeight(24, size: 16, relativeTo: .callout, natural: 1.3, capturedHeight: 22)
+        }.environment(\\.displayScale, scale)
+        _ = ImageRenderer(content: view).nsImage
+    }
 }
 `;
 
@@ -160,6 +167,8 @@ nativeTest(
         expect(out[`none13@${scale}-text`]).toBeGreaterThanOrEqual((13 * 2444) / 2048);
         // A loose line height is unchanged: Text and box are the CSS line box; so is a compressed one's.
         expect([out[`loose@${scale}-box`], out[`loose@${scale}-text`]]).toEqual([20, 20]);
+        expect(out[`field@${scale}`]).toBe(22);
+        expect(out[`grown-field@${scale}`]).toBe(44);
         expect(out[`fractional@${scale}-box`]).toBe(19.25);
         expect(out[`fractional@${scale}-text`]).toBeGreaterThanOrEqual(19.25);
         expect([out[`compressed@${scale}-box`], out[`compressed@${scale}-text`]]).toEqual([14, 14]);

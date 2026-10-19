@@ -101,7 +101,10 @@ test("text fields, select and textarea keep the CSS box and native behaviour", (
   expect(view).toContain('.markswiftFitsText(s_note.isEmpty ? "Add a note" : s_note)');
   expect(view).toContain("minHeight: 72.0");
   expect(view).not.toContain("height: 72.0,");
-  expect(view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline)").length - 1).toBe(2);
+  expect(
+    view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline, capturedHeight: 36.0)").length -
+      1,
+  ).toBe(2);
   // An editor's text starts at its top, so its half-leading pads above the first line, as Chrome's line box.
   expect(
     view.split(".markswiftFieldLineHeight(20.0, size: 15.0, relativeTo: .subheadline, editor: true)").length - 1,
