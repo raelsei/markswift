@@ -215,9 +215,7 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const makeRun = (parent: StackNode | GridNode, start: number, members: SemNode[]): Run | undefined => {
     if (tpl(parent).children.some((c, i, all) => members.includes(c) && all.indexOf(c) !== i)) return undefined;
     const subtrees = members.map((m) => new Set(collect(m)));
-    // Menu item state and conditionally inserted content still need their own extraction model.
-    // Trigger open state remains on the screen and is handed to each row through a binding.
-    if (subtrees.some((s) => [...s].some((x) => x.shownBy !== undefined || x.menu))) return undefined;
+    // Open state stays on the screen; conditional content references it through row bindings.
     const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
     const columns = flats[0]!.map(({ s, n }, c) => {
       const own = tpl(n).own;
