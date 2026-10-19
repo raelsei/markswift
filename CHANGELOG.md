@@ -22,8 +22,8 @@ A LayoutDoc schema change is a major version.
   supported dialog widths resize, and breakpoint captures select their own layers.
 - Exact available system-font axes, distinct webfont width faces and Chrome-resolved monospace fonts are retained.
   Fractional text line boxes, variable font weights and native field heights preserve their captured metrics.
-- Plain ASCII multiline paragraphs use greedy UIKit wrapping on iOS 26+, with accessibility and Dynamic Type.
-  Rich text, other scripts, older iOS and macOS retain the SwiftUI path.
+- Plain ASCII multiline paragraphs with packaged font metrics use greedy UIKit wrapping on iOS 26+, with accessibility and Dynamic Type.
+  System-font fallbacks, rich text, other scripts, older iOS and macOS retain the SwiftUI path.
 - Nested colour schemes, paragraph/marker bidi isolation and pointer-enabled children of pass-through overlays work.
   Transparent controls retain pointer actions independently of accessibility visibility.
 - Generated images scale with Dynamic Type; uneven counter widths no longer prevent repeated-list extraction.

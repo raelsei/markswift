@@ -39,6 +39,8 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     (n.lineLimit === undefined || n.lineLimit > 1) &&
     !n.lineBoxGrowth &&
     plain &&
+    plain.font.family.kind === "custom" &&
+    ctx.fontMetrics[plain.font.family.name.toLowerCase()] !== undefined &&
     plain.font.lineHeight !== undefined &&
     plain.font.lineHeight >= plain.font.size * faceRatios(plain.font, ctx.fontMetrics).natural &&
     !plain.kerning &&
