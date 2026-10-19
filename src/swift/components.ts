@@ -215,9 +215,9 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
   const makeRun = (parent: StackNode | GridNode, start: number, members: SemNode[]): Run | undefined => {
     if (tpl(parent).children.some((c, i, all) => members.includes(c) && all.indexOf(c) !== i)) return undefined;
     const subtrees = members.map((m) => new Set(collect(m)));
-    // ponytail: an in-flow layer's state stays on the screen, so its trigger and content stay unrolled (a menu's item
-    // members too); per-row open state (`presented<Type>: Int?`, ROverlays §4) is the upgrade path.
-    if (subtrees.some((s) => [...s].some((x) => x.opens || x.shownBy !== undefined || x.menu))) return undefined;
+    // Menu item state and conditionally inserted content still need their own extraction model.
+    // Trigger open state remains on the screen and is handed to each row through a binding.
+    if (subtrees.some((s) => [...s].some((x) => x.shownBy !== undefined || x.menu))) return undefined;
     const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
     const columns = flats[0]!.map(({ s, n }, c) => {
       const own = tpl(n).own;
@@ -244,6 +244,10 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       for (const [i, v] of col.values.entries()) {
         if ((classOf[i]!.get(strip(v)) ?? cls[c]) !== cls[c]) return undefined;
         classOf[i]!.set(strip(v), cls[c]!);
+      }
+      if (kind.startsWith("open:")) {
+        roles.push("binding");
+        continue;
       }
       // A member's own state, action or press must live only inside that member to move into its row.
       if (varying && col.values.some((v, i) => refs.get(strip(v))!.some((n) => !subtrees[i]!.has(n)))) return undefined;
@@ -593,7 +597,9 @@ export function extractComponents(
   const memberOf = new Map(ctx.control.members.map((m) => [m.name, m]));
   /** A control state's design seed (its `@State` initial value). */
   const seed = (name: string) => {
-    const decl = memberOf.get(name)!.decl.at(-1)!;
+    const member = memberOf.get(name)!;
+    if (member.seed !== undefined) return member.seed;
+    const decl = member.decl.at(-1)!;
     return decl.slice(decl.indexOf(" = ") + 3);
   };
 
@@ -723,7 +729,14 @@ export function extractComponents(
       [
         `${row}: ${value}`,
         ...(ord ? [`${ordinal}: ${index}`] : []),
-        ...classes(run, "binding").map((c) => `${pass.get(c)}: $${nameAt(run, c)}`),
+        ...classes(run, "binding").map((c) => {
+          const values = run.columns[c]!.values.map(strip);
+          const same = values.every((v) => v === values[0]);
+          const binding = same
+            ? `$${nameAt(run, c)}`
+            : `([${values.map((v, i) => `${str(run.members[i]!.id)}: $${v}`).join(", ")}][${item}.id] ?? .constant(false))`;
+          return `${pass.get(c)}: ${binding}`;
+        }),
         ...classes(run, "pass").map((c) => `${nameAt(t.run, c)}: ${nameAt(run, c)}`),
         ...classes(run, "collapse").map((c) => `${actionAt(t.run, c)}: { ${actionAt(run, c)}(${item}) }`),
       ].join(", ");

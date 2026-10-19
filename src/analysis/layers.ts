@@ -14,11 +14,12 @@ import {
   confidenceOf,
   walk,
 } from "../model/semantic.ts";
-import { parseColor, round2 } from "../css/index.ts";
+import { parseColor, round2, resolveLength } from "../css/index.ts";
 import { type InferOptions } from "./context.ts";
 import { elementAction } from "./controls.ts";
 import { buildDetached, layerOverlays } from "./infer.ts";
 import { isTooltipLayer } from "./tooltips.ts";
+import { insetsOf } from "./geometry.ts";
 import { layerMotionOf, revealOf } from "./motion.ts";
 
 const REASON = {
@@ -445,6 +446,30 @@ function present(
   }
   // Centred and anchored content is placed by the runtime: the translation that placed it in CSS goes.
   if (pure && (placement.kind === "center" || placement.kind === "anchored")) delete first.node.style.transform;
+  // Admit only a linear authored width whose captured result proves this viewport is its containing block.
+  const authoredWidth = c.preferredSize?.width;
+  let width: Presentation["width"];
+  if (authoredWidth?.includes("%") && (placement.kind === "center" || placement.kind === "edge")) {
+    const zero = resolveLength(authoredWidth, 0),
+      hundred = resolveLength(authoredWidth, 100);
+    if (zero !== undefined && hundred !== undefined) {
+      const [, right, , left] = insetsOf(c.styles);
+      const inset = c.styles["box-sizing"] === "border-box" ? 0 : right + left;
+      const fraction = (hundred - zero) / 100,
+        offset = zero + inset;
+      const min = first.node.minWidth ?? right + left,
+        max = first.node.maxWidth;
+      // Percent/complex min/max constraints currently hold captured pixels: do not pretend those are fluid.
+      const constraints = [c.styles["min-width"], c.styles["max-width"]].filter(Boolean);
+      const simple = constraints.every((v) => v === "auto" || v === "none" || /^[-\d.]+px$/.test(v!));
+      const expected = Math.max(min, Math.min(max ?? Infinity, fraction * vp.w + offset));
+      if (simple && fraction > 0 && near(expected, c.bounds.w)) {
+        width = { fraction, offset, min, ...(max !== undefined ? { max } : {}) };
+        first.node.width = { kind: "fill" };
+        if (c.preferredSize?.height === "auto") first.node.height = { kind: "hug" };
+      }
+    }
+  }
   // Enter/exit on the placed roots (`overlays[i]` is `layer.nodes[i]`; later ones are hoisted fixed descendants).
   layer.nodes.forEach((ln, i) => {
     const o = overlays[i];
@@ -461,6 +486,7 @@ function present(
   for (const o of overlays) walk(o.node, (n) => inside.set(n.id, n));
   const presentation: Presentation = {
     id: layer.id,
+    ...(width ? { width } : {}),
     trigger: trigger.id,
     style: alert
       ? "alertdialog"

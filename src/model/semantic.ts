@@ -454,6 +454,8 @@ export interface Overlay {
 
 /** A layer drawn over the component while the screen's `is<Layer>Presented` is true. */
 export interface Presentation {
+  /** Authored border-box width of the first content root, resolved against the live component width. */
+  width?: { fraction: number; offset: number; min: number; max?: number };
   /** Layer id (`edit-profile`): joins light/dark and names the `@open:<id>` capture. */
   id: string;
   /** SemNode id of the trigger. */

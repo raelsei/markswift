@@ -352,7 +352,13 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
           ...transitionModifiers(o.node),
         ];
       return [
-        ...view,
+        ...(o === first && p.width
+          ? [
+              `MarkswiftPresentationWidth(fraction: ${num(p.width.fraction)}, offset: ${num(p.width.offset)}, minimum: ${num(p.width.min)}, maximum: ${p.width.max === undefined ? ".infinity" : num(p.width.max)}) {`,
+              ...indent(view, 1),
+              "}",
+            ]
+          : view),
         `.markswiftPlaced(${(o === first && placed) || `.offset(${size(o.offset)})`})`,
         ...transitionModifiers(o.node),
       ];

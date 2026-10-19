@@ -77,3 +77,23 @@ extension View {
         }
     }
 }
+
+/// Resolves CSS percentage/calc width before asking the content for its wrapping height.
+struct MarkswiftPresentationWidth: Layout {
+    let fraction: CGFloat
+    let offset: CGFloat
+    let minimum: CGFloat
+    let maximum: CGFloat
+    func width(_ offered: CGFloat?) -> CGFloat? {
+        offered.map { max(minimum, min(maximum, max(0, $0 * fraction + offset))) }
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let w = width(proposal.width)
+        let size = child.sizeThatFits(ProposedViewSize(width: w, height: nil))
+        return CGSize(width: w ?? size.width, height: size.height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
+}
