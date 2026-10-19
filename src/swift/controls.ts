@@ -106,7 +106,9 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
     const family = n.font.family.kind === "custom" ? n.font.family.name : undefined;
     const face = family !== undefined ? deps.fontMetrics?.[family.toLowerCase()] : undefined;
     const editor =
-      n.control === "textEditor" ? `, editor: true${family !== undefined ? `, face: ${str(family)}` : ""}` : "";
+      n.control === "textEditor"
+        ? `, editor: true${family !== undefined ? `, face: ${str(family)}` : ""}`
+        : `, capturedHeight: ${num(Math.max(0, n.frame.h - n.padding[0] - n.padding[2]))}`;
     if (deps.mode === "app" && FIELDS[n.control] && lh !== undefined && (family === undefined || face))
       out.push(
         `.markswiftFieldLineHeight(${num(lh)}, size: ${num(n.font.size)}, relativeTo: .${nearestTextStyle(n.font.size)}${face ? `, natural: ${num((face.ascent + face.descent + face.lineGap) / face.upem)}` : ""}${editor})`,
