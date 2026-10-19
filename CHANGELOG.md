@@ -21,13 +21,15 @@ A LayoutDoc schema change is a major version.
 - Nested overlays replay ancestor triggers, native menus retain submenus, repeated rows retain independent actions,
   supported dialog widths resize, and breakpoint captures select their own layers.
 - Exact available system-font axes, distinct webfont width faces and Chrome-resolved monospace fonts are retained.
-  Fractional text line boxes, variable font weights and native field heights preserve their captured metrics.
+  Variable font weights and native field heights preserve their captured metrics. iOS fractional text line boxes
+  avoid pixel-rounding drift; macOS retains its native paragraph sizing.
 - Plain ASCII multiline paragraphs with packaged font metrics use greedy UIKit wrapping on iOS 26+, with accessibility and Dynamic Type.
   System-font fallbacks, rich text, other scripts, older iOS and macOS retain the SwiftUI path.
 - Nested colour schemes, paragraph/marker bidi isolation and pointer-enabled children of pass-through overlays work.
   Transparent controls retain pointer actions independently of accessibility visibility.
 - Generated images scale with Dynamic Type; uneven counter widths no longer prevent repeated-list extraction.
-- Captures have bounded, contextual timeout diagnostics. Browser rejection tests await their errors, and performance
+- Captures have bounded, contextual timeout diagnostics; page navigation uses the same capture deadline.
+  Browser rejection tests await their errors, and performance
   tests use three-sample medians without relaxing the budgets.
 - The documentation site loads CSS, scripts and navigation from the custom domain root.
 
