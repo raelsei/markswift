@@ -56,3 +56,18 @@ jobs:
         run: tools/verify/npm-smoke.sh
       - name: Conformance pilot (capture, both modes, iOS typecheck)
         run: bun run pilot --renderer none --out "$RUNNER_TEMP/pilot"
+
+  site:
+    name: Documentation site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Build and verify documented source excerpts
+        working-directory: site
+        run: |
+          bun install --frozen-lockfile
+          bun run build

@@ -20,7 +20,7 @@ export const readRepo = (path: string) => readFileSync(resolve(process.cwd(), ".
 export const version: string = JSON.parse(readRepo("package.json")).version;
 export const layoutDocVersion = readRepo("src/model/layout.ts").match(/LAYOUT_DOC_VERSION = (\d+)/)![1];
 /** The repository revision every artifact in `src/artifacts/` was produced from. */
-export const artifactRevision = "90bba3d";
+export const artifactRevision = "4a0a48b";
 
 /** One recorded run from `artifacts/transcript.txt`: its `$ command` line and everything it printed. */
 export function run(transcript: string, command: string): string {

@@ -473,8 +473,8 @@ captured (a capture warning says so).
 - Swipe-to-dismiss and system presentation chrome: dialogs and popovers are drawn inside the component's frame (app
   mode), with no collision flip, scroll lock or focus trap beyond VoiceOver's modal containment, and placed as
   captured for the active width band. Menus, menubars and selects open native popups with their captured items (app
-  mode): the CSS look of the open list, shortcut text, item icons and submenu items are not drawn (a submenu is a
-  disabled entry), and a menu trigger has no tap action of its own; tooltips are described below.
+  mode), including nested submenus. The CSS look of the open list, shortcut text and item icons are not drawn,
+  and a menu trigger has no tap action of its own; tooltips are described below.
 - Tooltips are never drawn: `title` and captured tooltips (Radix/shadcn tooltip, `interestfor`) become `.help(…)`
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - Scroll-driven animations, keyframed colours/shadows/filters/layout properties, `@starting-style` and script

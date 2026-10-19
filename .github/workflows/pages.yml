@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "README.md"
+      - "package.json"
+      - "src/model/layout.ts"
+      - "tests/conformance/baselines/**"
+      - "tests/conformance/visual-policy-*.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
