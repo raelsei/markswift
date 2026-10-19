@@ -18,6 +18,7 @@ import {
   attachRelativePseudos,
   rawAt,
   type DomSnapshot,
+  type Raw,
 } from "./snapshot.ts";
 import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
@@ -454,6 +455,7 @@ export class BrowserCapture {
         const raw = rawAt(rootRaw, t.path)!;
         return { ...t, trigger: identity(raw.name, raw.attrs, t.path) ?? t.path };
       });
+      const nestedTriggers: Trigger[] = [];
       let opened: Capture["opened"];
       let candidates: DismissCandidate[] = [];
       if (spec.open && opening && roots.length) {
@@ -462,6 +464,9 @@ export class BrowserCapture {
           delete raw.attrs[LAYER_MARK];
           attachPreferredSizes(raw, layerSizes[i]!.sizes, layerSizes[i]!.pseudoStyles);
         });
+        const findBackend = (n: Raw): Raw | undefined =>
+          n.backend === opening.triggerBackend ? n : n.children.map(findBackend).find(Boolean);
+        const triggerRaw = findBackend(tree);
         const { layer, paths } = assembleLayer({
           trigger: spec.open,
           rootRaw,
@@ -471,12 +476,36 @@ export class BrowserCapture {
           identity,
           info: rootInfo,
           hiddenOnOpen,
+          triggerRaw,
         });
+        for (const [i, raw] of marked.entries()) {
+          const selector = await roots[i]!.evaluate((el) => {
+            const steps: string[] = [];
+            for (let n: Element | null = el; n && n !== document.documentElement; n = n.parentElement)
+              steps.unshift(`:nth-child(${Array.from(n.parentElement!.children).indexOf(n) + 1})`);
+            return "html > " + steps.join(" > ");
+          });
+          const found = await findTriggers(page, selector);
+          errors.push(...found.warnings);
+          for (const child of found.triggers) {
+            const at = rawAt(raw, child.path);
+            if (!at) continue;
+            const path = [paths[i], child.path].filter(Boolean).join("/");
+            nestedTriggers.push({
+              ...child,
+              id: `${spec.open.id}-${child.id}`,
+              trigger: identity(at.name, at.attrs, path) ?? path,
+              identityPath: path,
+              rootSelector: selector,
+              ancestors: [...(spec.open.ancestors ?? []), spec.open],
+            });
+          }
+        }
         // Enter attach — after layer assembly
         enter.lists.forEach((list, i) => {
           if (list.length) layer.nodes[i]!.motion = { ...layer.nodes[i]!.motion, enter: list };
         });
-        const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity);
+        const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity, triggerRaw);
         if (changed)
           errors.push(
             `${changed} element(s) inside trigger ${spec.open.id} appear or disappear while its layer is open; not reproduced`,
@@ -561,7 +590,7 @@ export class BrowserCapture {
         },
         png,
         fontFiles,
-        ...(triggers ? { triggers } : {}),
+        ...(triggers ? { triggers } : nestedTriggers.length ? { triggers: nestedTriggers } : {}),
         ...(opened ? { opened } : {}),
       };
     } finally {

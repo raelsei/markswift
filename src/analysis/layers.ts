@@ -14,11 +14,12 @@ import {
   confidenceOf,
   walk,
 } from "../model/semantic.ts";
-import { parseColor, round2 } from "../css/index.ts";
+import { parseColor, round2, resolveLength } from "../css/index.ts";
 import { type InferOptions } from "./context.ts";
 import { elementAction } from "./controls.ts";
 import { buildDetached, layerOverlays } from "./infer.ts";
 import { isTooltipLayer } from "./tooltips.ts";
+import { insetsOf } from "./geometry.ts";
 import { layerMotionOf, revealOf } from "./motion.ts";
 
 const REASON = {
@@ -36,6 +37,16 @@ const REASON = {
  */
 // ponytail: content goes into plain stacks only; measured/flex/grid parents report and keep today's output.
 export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOptions = {}): void {
+  for (const layer of doc.layers ?? []) {
+    const owner = doc.layers?.find(
+      (parent) => parent !== layer && parent.nodes.some((n) => find(n, (d) => d.id === layer.trigger)),
+    );
+    if (owner && menuOf(owner)) continue; // assembled recursively as a native submenu
+    applyLayer(screen, { ...doc, layers: [layer] }, options, doc.layers ?? []);
+  }
+}
+
+function applyLayer(screen: Screen, doc: LayoutDoc, options: InferOptions, allLayers: Layer[]): void {
   if (!doc.layers?.length) return;
   const menus = new Set(doc.layers.filter((l) => l.relation !== "details" && menuOf(l)));
   const layers = doc.layers.filter((l) => l.placement === "inflow" && !menus.has(l));
@@ -45,6 +56,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     n.children.forEach(index);
   };
   index(doc.root);
+  for (const layer of allLayers) layer.nodes.forEach(index);
   const sem = new Map<string, SemNode>();
   walk(screen.root, (n) => {
     if (n.id && !sem.has(n.id)) sem.set(n.id, n);
@@ -145,7 +157,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
     trigger.opens = { layer: layer.id, kind: "inflow" };
   }
   for (const layer of doc.layers) {
-    if (menus.has(layer)) menu(screen, layer, rest, sem);
+    if (menus.has(layer)) menu(screen, layer, rest, sem, allLayers);
     if (layer.placement === "inflow") continue;
     // A tooltip, a menu, a menubar alone, or a menu `<details>` shows, is no drawn popup.
     const native = isTooltipLayer(layer, doc.root)
@@ -153,7 +165,7 @@ export function applyLayers(screen: Screen, doc: LayoutDoc, options: InferOption
       : layer.nodes.some((n) => find(n, (d) => !!MENU_ROLES[d.attrs["role"] ?? ""]))
         ? "menu"
         : undefined;
-    if (!native) present(screen, doc, layer, rest, sem, options);
+    if (!native) present(screen, { ...doc, layers: allLayers }, layer, rest, sem, options);
     else if (layer.nodes.some((n) => n.motion?.enter || n.motion?.exit)) {
       const t = sem.get(layer.trigger) ?? screen.root;
       addDiagnostic(
@@ -195,7 +207,16 @@ const checked = (n: LayoutNode, aria: string) => n.attrs[aria] === "true" || n.a
  * Picker of its options — under a `Menu` on the trigger, or `.contextMenu` for a right-click layer. The trigger keeps
  * its CSS look; the open list is not drawn and has no `@open` capture.
  */
-function menu(screen: Screen, layer: Layer, rest: Map<string, LayoutNode>, sem: Map<string, SemNode>): void {
+function menu(
+  screen: Screen,
+  layer: Layer,
+  rest: Map<string, LayoutNode>,
+  sem: Map<string, SemNode>,
+  layers: Layer[] = [],
+  ancestors = new Set<string>(),
+): void {
+  if (ancestors.has(layer.id)) return;
+  ancestors = new Set([...ancestors, layer.id]);
   const trigger = sem.get(layer.trigger);
   const report = (n: SemNode, message: string) => {
     addDiagnostic(n.diagnostics, "approximated", "@role", message);
@@ -274,8 +295,12 @@ function menu(screen: Screen, layer: Layer, rest: Map<string, LayoutNode>, sem: 
         push({ kind: "divider" });
       } else if ((n.attrs["data-slot"] ?? "").endsWith("-label")) open(itemText(n));
       else if (role === "menuitem" && (n.attrs["aria-haspopup"] ?? "false") !== "false") {
-        push({ kind: "submenu", id: n.id!, label });
-        notes.add(`submenu ${label} items are not captured`);
+        const child = layers.find((l) => l.trigger === n.id && menuOf(l));
+        const nestedTrigger: SemNode = { ...trigger, id: n.id!, menu: undefined, action: elementAction(n, label) };
+        if (child) menu(screen, child, rest, new Map([[n.id!, nestedTrigger]]), layers, ancestors);
+        const children = nestedTrigger.menu?.items;
+        push({ kind: "submenu", id: n.id!, label, ...(children ? { items: children } : {}) });
+        if (!children) notes.add(`submenu ${label} items are not captured`);
       } else if (role === "menuitem")
         push({
           kind: "button",
@@ -445,6 +470,30 @@ function present(
   }
   // Centred and anchored content is placed by the runtime: the translation that placed it in CSS goes.
   if (pure && (placement.kind === "center" || placement.kind === "anchored")) delete first.node.style.transform;
+  // Admit only a linear authored width whose captured result proves this viewport is its containing block.
+  const authoredWidth = c.preferredSize?.width;
+  let width: Presentation["width"];
+  if (authoredWidth?.includes("%") && (placement.kind === "center" || placement.kind === "edge")) {
+    const zero = resolveLength(authoredWidth, 0),
+      hundred = resolveLength(authoredWidth, 100);
+    if (zero !== undefined && hundred !== undefined) {
+      const [, right, , left] = insetsOf(c.styles);
+      const inset = c.styles["box-sizing"] === "border-box" ? 0 : right + left;
+      const fraction = (hundred - zero) / 100,
+        offset = zero + inset;
+      const min = first.node.minWidth ?? right + left,
+        max = first.node.maxWidth;
+      // Percent/complex min/max constraints currently hold captured pixels: do not pretend those are fluid.
+      const constraints = [c.styles["min-width"], c.styles["max-width"]].filter(Boolean);
+      const simple = constraints.every((v) => v === "auto" || v === "none" || /^[-\d.]+px$/.test(v!));
+      const expected = Math.max(min, Math.min(max ?? Infinity, fraction * vp.w + offset));
+      if (simple && fraction > 0 && near(expected, c.bounds.w)) {
+        width = { fraction, offset, min, ...(max !== undefined ? { max } : {}) };
+        first.node.width = { kind: "fill" };
+        if (c.preferredSize?.height === "auto") first.node.height = { kind: "hug" };
+      }
+    }
+  }
   // Enter/exit on the placed roots (`overlays[i]` is `layer.nodes[i]`; later ones are hoisted fixed descendants).
   layer.nodes.forEach((ln, i) => {
     const o = overlays[i];
@@ -461,6 +510,13 @@ function present(
   for (const o of overlays) walk(o.node, (n) => inside.set(n.id, n));
   const presentation: Presentation = {
     id: layer.id,
+    ...(() => {
+      const parent = doc.layers?.find(
+        (l) => l !== layer && l.nodes.some((n) => find(n, (d) => d.id === layer.trigger)),
+      );
+      return parent ? { parentLayer: parent.id } : {};
+    })(),
+    ...(width ? { width } : {}),
     trigger: trigger.id,
     style: alert
       ? "alertdialog"

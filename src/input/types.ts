@@ -4,6 +4,10 @@ import type { Layer, Theme } from "../model/layout.ts";
 
 /** An element the open-state pass activates (`browser/layers.ts`). */
 export interface Trigger {
+  /** Nested triggers replay their ancestors before resolving this stable document selector. */
+  rootSelector?: string;
+  identityPath?: string;
+  ancestors?: Trigger[];
   /** Element path from the capture root. */
   path: string;
   activation: Layer["activation"];

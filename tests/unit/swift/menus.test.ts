@@ -69,7 +69,7 @@ nativeTest(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-menu-views-"));
     try {
-      for (const [i, d] of [DROPDOWN(), CONTEXT(), SELECT()].entries()) {
+      for (const [i, d] of [DROPDOWN(), CONTEXT(), SELECT(), repeatedMenus()].entries()) {
         const out = join(directory, String(i));
         for (const [file, content] of Object.entries(compile(d).files)) await Bun.write(join(out, file), content);
         const check = await typecheck(out);
@@ -81,3 +81,32 @@ nativeTest(
   },
   120_000,
 );
+
+function repeatedMenus(): LayoutDoc {
+  const d = DROPDOWN();
+  d.root.styles["padding-top"] = "8px";
+  const trigger = structuredClone(d.root.children[0]!);
+  trigger.id = "second-menu-trigger";
+  trigger.attrs.id = trigger.id;
+  trigger.bounds.y += 48;
+  d.root.children.push(trigger);
+  const layer = structuredClone(d.layers![0]!);
+  layer.id = "second-menu";
+  layer.trigger = trigger.id;
+  const rename = (n: typeof trigger): void => {
+    if (n.id) n.id += "-second";
+    n.children.forEach(rename);
+  };
+  layer.nodes.forEach(rename);
+  d.layers!.push(layer);
+  return d;
+}
+
+test("repeated native menus extract rows with independent toggle and picker values", () => {
+  const code = compile(repeatedMenus()).code;
+  expect(code).toContain("ForEach(");
+  expect(code).toContain("Menu {");
+  expect(code).toContain("@Binding var");
+  expect(code).toContain("Toggle(isOn:");
+  expect(code).toContain(".pickerStyle(.inline)");
+});

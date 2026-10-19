@@ -462,6 +462,10 @@ export interface Overlay {
 
 /** A layer drawn over the component while the screen's `is<Layer>Presented` is true. */
 export interface Presentation {
+  /** Closing this ancestor also dismisses the nested presentation. */
+  parentLayer?: string;
+  /** Authored border-box width of the first content root, resolved against the live component width. */
+  width?: { fraction: number; offset: number; min: number; max?: number };
   /** Layer id (`edit-profile`): joins light/dark and names the `@open:<id>` capture. */
   id: string;
   /** SemNode id of the trigger. */
@@ -489,7 +493,7 @@ export type MenuItem =
   | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
-  | { kind: "submenu"; id: string; label: string };
+  | { kind: "submenu"; id: string; label: string; items?: MenuItem[] };
 /** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;

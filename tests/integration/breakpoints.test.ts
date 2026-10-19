@@ -93,14 +93,14 @@ browserTest(
 );
 
 browserTest(
-  "layers: band 0's disclosure joins the merged view once; band captures carry no layers",
+  "layers: each band captures disclosures and shares one open state",
   async () => {
     const result = await convertHtml(
       `<style>.side{display:none} @media (min-width:768px){.side{display:block}}</style><main data-markswift-root><div class="wrap"><aside class="side">Side</aside><p>Text</p></div><details><summary>More</summary><p>Answer</p></details></main>`,
       { breakpoints: true, theme: "light" },
     );
     expect(result.layout.layers).toHaveLength(1);
-    expect(result.bands![1]!.layout.layers).toBeUndefined();
+    expect(result.bands![1]!.layout.layers).toHaveLength(1);
     expect(result.code.match(/@State private var isMoreExpanded\b/g)).toHaveLength(1);
     await typechecks(result);
   },

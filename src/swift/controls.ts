@@ -554,7 +554,14 @@ export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" |
       case "section":
         return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...label, "}"];
       default: // submenu
-        return ["Menu {", "} label: {", ...label, "}", ".disabled(true)"];
+        return [
+          "Menu {",
+          ...indent(menuExpr(i.items ?? [], deps), 1),
+          "} label: {",
+          ...label,
+          "}",
+          ...(i.items?.length ? [] : [".disabled(true)"]),
+        ];
     }
   });
 }
