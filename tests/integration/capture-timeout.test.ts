@@ -30,8 +30,8 @@ browserTest(
       root: "[data-markswift-root]",
     };
     try {
-      await expect(
-        browser.capture(
+      const error = await browser
+        .capture(
           {
             ...spec,
             prepare: async (page) => {
@@ -44,8 +44,12 @@ browserTest(
           },
           htmlIdentity,
           "timeout-fixture",
-        ),
-      ).rejects.toThrow("capture timeout-fixture/stalled/320/dark timed out after 5000ms during load / prepare");
+        )
+        .catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "capture timeout-fixture/stalled/320/dark timed out after 5000ms during load / prepare",
+      );
       const result = await browser.capture(spec, htmlIdentity, "recovered-fixture");
       expect(prepared).toBe(true);
       expect(closed).toBe(true);
