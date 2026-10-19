@@ -98,6 +98,15 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const hint = nameHintOf(n.tag, n.attrs);
   const field = fieldOf(n.attrs);
   const tooltip = titleOf(n);
+  const schemes = (n.styles["color-scheme"] ?? "").split(/\s+/).filter((v) => v && v !== "only");
+  const changedScheme = n !== ctx.root && n.styles["color-scheme"] !== ctx.parent?.styles["color-scheme"];
+  const colorScheme = changedScheme
+    ? schemes.length === 1 && (schemes[0] === "light" || schemes[0] === "dark")
+      ? schemes[0]
+      : schemes.includes("normal") || (schemes.includes("light") && schemes.includes("dark"))
+        ? "system"
+        : undefined
+    : undefined;
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -107,6 +116,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(selfAlign !== undefined ? { selfAlign } : {}),
     ...(selfAlignV !== undefined ? { selfAlignV } : {}),
     ...(rx || ry ? { relativeOffset: relative.offset } : {}),
+    ...(colorScheme ? { colorScheme } : {}),
     padding,
     style,
     confidence: "mapped",

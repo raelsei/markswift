@@ -134,6 +134,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       ? [`${bandsOpen(screen.breakpoints.edges)} { band in`, ...indent(top, 1), "}"]
       : top;
   const scheme = screen.colorScheme ? [`.environment(\\.colorScheme, .${screen.colorScheme})`] : [];
+  let restoresScheme = false;
+  visit(screen.root, (n) => {
+    if (n.colorScheme === "system") restoresScheme = true;
+  });
+  if (restoresScheme) scheme.push(".modifier(MarkswiftColorSchemeScope())");
   const body = [`${acc}var body: some View {`, ...indent([...wrapped, ...scheme], 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;

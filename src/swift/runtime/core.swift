@@ -484,3 +484,23 @@ enum MarkswiftFonts {
         }
     }
 }
+
+private struct MarkswiftBaseColorSchemeKey: EnvironmentKey {
+    static let defaultValue: ColorScheme? = nil
+}
+extension EnvironmentValues {
+    var markswiftBaseColorScheme: ColorScheme? {
+        get { self[MarkswiftBaseColorSchemeKey.self] }
+        set { self[MarkswiftBaseColorSchemeKey.self] = newValue }
+    }
+}
+/// Remember the caller's appearance before any CSS color-scheme boundary is applied.
+struct MarkswiftColorSchemeScope: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View { content.environment(\.markswiftBaseColorScheme, scheme) }
+}
+struct MarkswiftRestoreColorScheme: ViewModifier {
+    @Environment(\.markswiftBaseColorScheme) private var base
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View { content.environment(\.colorScheme, base ?? scheme) }
+}

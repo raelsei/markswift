@@ -481,7 +481,7 @@ captured (a capture warning says so).
   rounded to the pixel grid, iOS native line breaking that avoids a one-word last line, and `ui-monospace` drawn in
   the wider SF Mono.
 - Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
-  `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
+  `<summary>` markers are not mapped; single-scheme `color-scheme` values apply on the root and nested boxes; on system
   fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
   `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
   descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could

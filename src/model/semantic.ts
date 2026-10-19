@@ -531,6 +531,8 @@ export interface SemBase extends SizeConstraints {
    * box out without it). Absent when zero.
    */
   relativeOffset?: [number, number];
+  /** A non-root color-scheme boundary; system restores the appearance outside the generated component. */
+  colorScheme?: "light" | "dark" | "system";
   /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,
