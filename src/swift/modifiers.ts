@@ -315,7 +315,9 @@ export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx:
   const inner = ctx.renderNode(o.node);
   // App mode keeps the corner CSS anchored; fidelity reproduces the capture from the top-left.
   const anchored = ctx.mode === "app" ? o.anchor : undefined;
-  const [x, y] = anchored ? anchored.offset : o.offset;
+  const marker = ctx.mode === "app" && o.outsideMarker;
+  if (marker) inner.push(".alignmentGuide(.leading) { $0[.trailing] }");
+  const [x, y] = anchored ? anchored.offset : marker ? [o.offset[0] + o.node.frame.w, o.offset[1]] : o.offset;
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(x)}, y: ${num(y)})`];
   return [`.${mode}(alignment: .${anchored ? anchored.corner : "topLeading"}) {`, ...indent(body, 1), `}`];
 }

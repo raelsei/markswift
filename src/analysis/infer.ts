@@ -603,17 +603,21 @@ function buildOverlays(
   for (const c of host.children) {
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
     if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
+    const marker = build(c, {
+      root: ctx.root,
+      fixed: ctx.fixed,
+      bundledFamilies: ctx.bundledFamilies,
+      parent: host,
+      viewport: ctx.viewport,
+    });
     out.push({
-      node: build(c, {
-        root: ctx.root,
-        fixed: ctx.fixed,
-        bundledFamilies: ctx.bundledFamilies,
-        parent: host,
-        viewport: ctx.viewport,
-      }),
+      node: marker,
       layer: "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers: false,
+      ...(c.tag === "::marker" && marker.kind === "text" && marker.runs.some((r) => r.counter)
+        ? { outsideMarker: true as const }
+        : {}),
     });
   }
   return out;

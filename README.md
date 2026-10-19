@@ -489,9 +489,9 @@ captured (a capture warning says so).
 - `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
   or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
   drawn as offsets.
-- Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
-  Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
-  offset, so such lists stay unrolled instead of a `ForEach`.
+- Inline generated images (`content: url()`, inside `list-style-image`) scale with their text under Dynamic Type.
+  Generated images emitted as standalone blocks still keep their captured size. Outside counter markers align their
+  trailing edges, so unequal marker widths no longer prevent otherwise matching list rows from becoming a `ForEach`.
 - Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
 - Layout: bare text beside a float is not split around it; a `width: %` block inside a `dir=rtl` parent is drawn at
   the left edge; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
