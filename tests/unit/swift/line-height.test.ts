@@ -254,3 +254,19 @@ test("fractional uniform app text removes pixel rounding from its layout box", (
   expect(emit(paragraph({ "line-height": "19.25px" }, 19.25), "app").view).toContain("exactLineBox: true");
   expect(emit(paragraph({ "line-height": "19.25px" }, 19.25), "fidelity").view).not.toContain("exactLineBox");
 });
+
+test("clamped text retains the native line-count box", () => {
+  const doc = paragraph(
+    {
+      "line-height": "19.25px",
+      display: "-webkit-box",
+      "-webkit-line-clamp": "1",
+      "-webkit-box-orient": "vertical",
+      overflow: "hidden",
+    },
+    19.25,
+  );
+  const view = emit(doc, "app").view;
+  expect(view).toContain(".lineLimit(1)");
+  expect(view).not.toContain("exactLineBox: true");
+});
