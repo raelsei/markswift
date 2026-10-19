@@ -201,7 +201,9 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 
 ## Modes
 
-- `app` (default) is the product: native stacks, grids and `Text` with native line breaking.
+- `app` (default) is the product: native stacks, grids and text. Plain ASCII multiline paragraphs
+  use UIKit word wrapping on iOS 26+ to avoid SwiftUI orphan prevention, including multiline clamps.
+  Rich runs, other scripts, older iOS and macOS retain SwiftUI `Text` and native line breaking.
   System and custom fonts scale with Dynamic Type (`@ScaledMetric`, `relativeTo:`) and boxes grow
   with their text: a measured or authored height on anything that lays out text (text, stacks,
   grids, text-bearing controls) is a floor (content CSS lets overflow the box does not grow it),

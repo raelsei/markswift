@@ -2,6 +2,8 @@
 
 ## Unreleased — 3.0
 
+- Plain ASCII multiline app paragraphs use UIKit greedy word wrapping on iOS 26+, retaining CSS half-leading, multiline limits, accessibility labels and Dynamic Type. Rich text, other scripts, older iOS and macOS keep the existing SwiftUI text path.
+
 - LayoutDoc 5 captures `@font-face` stretch ranges and the installed face of uniform monospace text. Font packaging retains distinct width faces and selects them by CSS stretch matching order; Chrome-resolved Menlo remains Menlo on Apple targets.
 - Breaking: captures use LayoutDoc 5 to retain percentage transform translation and measured relative offsets. Saved LayoutDoc 4 captures must be recaptured.
 - Relative percentage insets now resolve against percentage-height and stretched flex/grid containing blocks using browser measurements.
