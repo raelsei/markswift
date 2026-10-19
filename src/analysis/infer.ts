@@ -287,6 +287,13 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     for (const g of groups) {
       const t = buildText(n, g, childCtx);
       if (t.runs.length === 0) continue;
+      // An anonymous block beside a float owns the whole content width, just like a <p>.
+      // Its glyph union spans the narrow and clearing lines; it is not the block's width.
+      if (!/flex|grid|inline/.test(display) && flow.some(floating)) {
+        const [, right, , left] = insetsOf(n.styles);
+        t.frame = { ...t.frame, x: n.bounds.x + left, w: n.bounds.w - left - right };
+        t.width = { kind: "fill" };
+      }
       // Only the text's own geometry and paint order: the host's float, margins, flex and
       // alignment styles belong to the host box, not to one of its text groups.
       const textItem: LayoutNode = {
@@ -294,7 +301,8 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
         attrs: {},
         styles: { display: "inline" },
         bounds: t.frame,
-        children: [],
+        // Preserve this group's line boxes so float splitting can locate the clearing line.
+        children: g.map((r) => r.node),
         ...(n.paint !== undefined ? { paint: n.paint } : {}),
       };
       items.push({ node: textItem, sem: t });
