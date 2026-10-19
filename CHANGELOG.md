@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 3.0
+
+- Breaking: captures use LayoutDoc 5 to retain percentage transform translation and measured relative offsets. Saved LayoutDoc 4 captures must be recaptured.
+- Relative percentage insets now resolve against percentage-height and stretched flex/grid containing blocks using browser measurements.
+- SVG images with cover/contain sizing rescale to their offered box in app mode.
+- App-mode percentage translations now follow the rendered box size, including composed 2D transforms.
+
 All notable changes to Markswift. Versions follow SemVer; the package is published to npm as `markswift`. A LayoutDoc schema change is a major version.
 
 ## [Unreleased]

@@ -171,7 +171,7 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
 
 - `convert(source, options)` takes `{ file }`, `{ url }` or `{ html, baseURL?, assetsDir? }`;
   `convertHtml(html, options)` is the string shorthand. `compileLayout(layout, { name, mode, dark })`
-  recompiles a saved `LayoutDoc` (version 4) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
+  recompiles a saved `LayoutDoc` (version 5) without Chrome; it does not package fonts. A saved `LayoutDoc` is a
   cache, not an interchange format: Markswift compiles only the LayoutDoc version it captures (`LAYOUT_DOC_VERSION`)
   and rejects any other with an error naming both versions — recapture the source. A change to the captured style
   list or the schema bumps the LayoutDoc version and is a breaking release. `compileLayout(layout, { variants,
@@ -486,16 +486,15 @@ captured (a capture warning says so).
   `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
   descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
   hit it.
-- `position: relative` with a `%` top/bottom resolves only against a px-height containing block (a `%`-height block
-  or a stretched flex/grid item lands at 0, reported); offsets of inline text runs and of `::before`/`::after` are not
-  drawn as offsets.
+- Relative offsets are measured in Chrome, including percentage-height and stretched containing blocks, and stay
+  pinned at those measured pixels. Offsets of merged inline text runs and inline `::before`/`::after` are not drawn.
 - Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
   Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
   offset, so such lists stay unrolled instead of a `ForEach`.
 - Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
 - Layout: bare text beside a float is not split around it; a `width: %` block inside a `dir=rtl` parent is drawn at
-  the left edge; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
-  `object-fit: cover` image does not refill its box.
+  the left edge; percentage 2D translations and SVG cover/contain images follow their rendered box in app mode;
+  percentage translations in flattened 3D transforms remain captured geometry.
 - Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
   repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width; with
   `--breakpoints`, layers come from the primary capture and apply in every band.

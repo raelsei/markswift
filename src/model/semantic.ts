@@ -204,7 +204,11 @@ export interface Style {
   blur?: number;
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
-  transform?: Transform2D & { origin?: [number, number] };
+  transform?: Transform2D & {
+    origin?: [number, number];
+    /** Translation correction per change in border-box width/height from the capture. */
+    responsive?: { x: [number, number]; y: [number, number] };
+  };
   /** `mix-blend-mode`, never `normal`. */
   blend?: BlendMode;
   /** `clip-path` basic shape. */

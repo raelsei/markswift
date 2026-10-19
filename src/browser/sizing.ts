@@ -26,6 +26,38 @@ export async function readPreferredSizes(
       const height = map?.get("height")?.toString();
       if (width !== undefined && height !== undefined) {
         const entry: (typeof out)[string] = { width, height };
+        // Typed OM retains percentages that getComputedStyle flattens into a matrix. Resolve
+        // that same transform at independent reference sizes to retain its affine translation.
+        const transform = map?.get("transform")?.toString();
+        if (transform?.includes("%")) {
+          const probe = document.createElement("div");
+          probe.style.setProperty("all", "initial", "important");
+          for (const [key, value] of Object.entries({
+            position: "fixed",
+            visibility: "hidden",
+            "pointer-events": "none",
+            transform,
+          }))
+            probe.style.setProperty(key, value, "important");
+          document.documentElement.appendChild(probe);
+          try {
+            const matrix = (w: number, h: number) => {
+              probe.style.setProperty("width", `${w}px`, "important");
+              probe.style.setProperty("height", `${h}px`, "important");
+              return new DOMMatrix(getComputedStyle(probe).transform);
+            };
+            const zero = matrix(0, 0),
+              wide = matrix(100, 0),
+              tall = matrix(0, 100);
+            if (zero.is2D && wide.is2D && tall.is2D) {
+              const x: [number, number] = [(wide.e - zero.e) / 100, (tall.e - zero.e) / 100];
+              const y: [number, number] = [(wide.f - zero.f) / 100, (tall.f - zero.f) / 100];
+              if ([...x, ...y].some((v) => Math.abs(v) > 1e-8)) entry.transformTranslation = { x, y };
+            }
+          } finally {
+            probe.remove();
+          }
+        }
         const position = map?.get("position")?.toString();
         if (position === "absolute" || position === "fixed" || position === "relative" || position === "sticky") {
           const inset = (k: string) => map?.get(k)?.toString() ?? "auto";
@@ -66,5 +98,27 @@ export async function readPreferredSizes(
     };
     walk(root, "");
     return { sizes: out, pseudoStyles };
+  }, selector);
+}
+
+/** Relative boxes in parent coordinates, measured with transforms disabled. Diffing before/after
+ * disabling relative insets preserves percentage-height and stretched flex/grid containing blocks. */
+export async function relativePositions(page: Page, selector: string): Promise<Record<string, [number, number]>> {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root) throw new Error(`capture root ${selector} not found`);
+    const out: Record<string, [number, number]> = {};
+    const walk = (el: Element, path: string) => {
+      if (getComputedStyle(el).position === "relative") {
+        const rect = el.getBoundingClientRect(),
+          parent = el.parentElement?.getBoundingClientRect();
+        out[path] = [rect.x - (parent?.x ?? 0), rect.y - (parent?.y ?? 0)];
+      }
+      Array.from(el.children).forEach((child, i) => {
+        walk(child, path ? `${path}/${i}` : String(i));
+      });
+    };
+    walk(root, "");
+    return out;
   }, selector);
 }

@@ -484,3 +484,19 @@ enum MarkswiftFonts {
         }
     }
 }
+
+/// Percentage translations follow the final border box without changing its layout slot.
+struct MarkswiftResponsiveTranslation: GeometryEffect {
+    var width: CGFloat
+    var height: CGFloat
+    var xWidth: CGFloat
+    var xHeight: CGFloat
+    var yWidth: CGFloat
+    var yHeight: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let dw = size.width - width, dh = size.height - height
+        return ProjectionTransform(CGAffineTransform(translationX: xWidth * dw + xHeight * dh,
+                                                     y: yWidth * dw + yHeight * dh))
+    }
+}

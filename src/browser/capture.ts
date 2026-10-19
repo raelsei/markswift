@@ -18,7 +18,7 @@ import {
   rawAt,
   type DomSnapshot,
 } from "./snapshot.ts";
-import { readPreferredSizes } from "./sizing.ts";
+import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
@@ -342,7 +342,20 @@ export class BrowserCapture {
         s.id = "__markswift_notransform";
         s.textContent = css;
         document.body.appendChild(s);
-      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
+      const selectors = [spec.root, ...roots.map((_, i) => `[${LAYER_MARK}="${i}"]`)];
+      const before = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      await page.evaluate((css) => {
+        document.getElementById("__markswift_notransform")!.textContent += css;
+      }, `\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      const after = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const captures = [sizes, ...layerSizes.map((layer) => layer.sizes)];
+      captures.forEach((captured, i) => {
+        for (const [path, [x, y]] of Object.entries(before[i]!)) {
+          const rest = after[i]![path];
+          if (captured[path] && rest) captured[path]!.relativeOffset = [x - rest[0], y - rest[1]];
+        }
+      });
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)

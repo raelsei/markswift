@@ -243,6 +243,12 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       if ((t.tx !== 0 || t.ty !== 0) && driven.tx === undefined) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
   }
+  if (ctx.mode === "app" && st.transform?.responsive && driven.tx === undefined) {
+    const { x, y } = st.transform.responsive;
+    m.push(
+      `.modifier(MarkswiftResponsiveTranslation(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, xWidth: ${num(x[0])}, xHeight: ${num(x[1])}, yWidth: ${num(y[0])}, yHeight: ${num(y[1])}))`,
+    );
+  }
   if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
   else if ((n.motion?.animations || n.motion?.reduced) && ctx.mode === "fidelity")
     note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");

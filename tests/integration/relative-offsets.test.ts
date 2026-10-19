@@ -26,8 +26,7 @@ browserTest(
     expect(result.code.split(".offset(x: 30.0, y: 7.0)").length - 1).toBe(1);
     const messages = result.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message);
     for (const m of [
-      "left 10% → offset pinned at 30px",
-      "top 10% → auto (no definite containing-block height)",
+      "relative percentage insets → offset pinned at (30, 7)px",
       "position: sticky (snapshot position)",
       "inline <span> relative offset (0, -4) dropped (merged into the paragraph's Text)",
     ])

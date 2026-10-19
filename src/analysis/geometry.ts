@@ -51,6 +51,12 @@ export function relativeOffset(
   const ins = n.preferredSize?.insets;
   const losses: string[] = [];
   if (n.styles["position"] !== "relative" || !ins) return { offset: [0, 0], losses };
+  if (n.preferredSize?.relativeOffset) {
+    const offset = n.preferredSize.relativeOffset.map((v) => round2(v) || 0) as [number, number];
+    if (Object.values(ins).some((v) => v.includes("%")) && offset.some((v) => v !== 0))
+      losses.push(`relative percentage insets → offset pinned at (${offset[0]}, ${offset[1]})px`);
+    return { offset, losses };
+  }
   const [pt, pr, pb, pl] = cb ? insetsOf(cb.styles) : [0, 0, 0, 0];
   // A grid item's containing block is its grid area, which the capture does not record.
   const known = cb !== undefined && !/grid/.test(cb.styles["display"] ?? "");
