@@ -26,6 +26,47 @@ function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number;
 
 export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   const runs = n.runs;
+  const plain = runs.length === 1 ? runs[0] : undefined;
+  if (
+    ctx.mode === "app" &&
+    n.lines > 1 &&
+    n.align === "leading" &&
+    n.layoutDirection !== "rtl" &&
+    !n.noWrap &&
+    !n.balance &&
+    !n.unbreakable &&
+    !n.truncate &&
+    n.lineLimit === undefined &&
+    !n.lineBoxGrowth &&
+    plain &&
+    plain.font.lineHeight !== undefined &&
+    plain.font.lineHeight >= plain.font.size * faceRatios(plain.font, ctx.fontMetrics).natural &&
+    !plain.kerning &&
+    !plain.italic &&
+    !plain.decoration &&
+    !plain.shadow &&
+    !plain.paint &&
+    !plain.tabularNums &&
+    !plain.baselineOffset &&
+    !plain.transform &&
+    !plain.relativeOffset &&
+    !plain.link &&
+    !plain.image &&
+    !plain.counter &&
+    plain.gap === undefined &&
+    /^[\x20-\x7E\n]+$/.test(plain.text)
+  ) {
+    const r = faceRatios(plain.font, ctx.fontMetrics);
+    const size = plain.font.size;
+    const ascent = Math.round(r.ascent * size);
+    const descent = Math.round(r.descent * size);
+    const leading = plain.font.lineHeight - ascent - descent;
+    const below = descent + leading - 2 * Math.floor(leading / 2);
+    return [
+      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)})`,
+    ];
+  }
+
   // Whole-text decisions (case, line height, shadow) come from the runs that carry glyphs.
   const glyphs = runs.filter((r) => r.gap === undefined && !r.image);
   // `.textCase` covers the whole Text: only a transform every run shares; otherwise (and for

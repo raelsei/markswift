@@ -1,0 +1,62 @@
+/// Plain wrapping paragraphs use UIKit's public word-wrap strategy on iOS 26+; SwiftUI Text
+/// enables orphan avoidance with no public switch. Rich runs retain the SwiftUI text pipeline.
+struct MarkswiftGreedyText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let size: CGFloat
+    let style: Font.TextStyle
+    let lineHeight: CGFloat
+    let ascent: CGFloat
+    let descent: CGFloat
+    let natural: CGFloat
+    var body: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight)
+        } else { fallback }
+        #else
+        fallback
+        #endif
+    }
+    private var fallback: some View {
+        Text(verbatim: text).font(font).foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
+                                 ascent: ascent, descent: descent, natural: natural)
+    }
+}
+#if os(iOS)
+@available(iOS 26.0, *)
+private struct MarkswiftGreedyLabel: UIViewRepresentable {
+    let text: String
+    let font: Font
+    let color: Color
+    let size: CGFloat
+    let lineHeight: CGFloat
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.numberOfLines = 0
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return label
+    }
+    func updateUIView(_ label: UILabel, context: Context) {
+        let resolved = font.resolve(in: context.environment.fontResolutionContext)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakStrategy = []
+        paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
+        paragraph.maximumLineHeight = paragraph.minimumLineHeight
+        let rgba = color.resolve(in: context.environment)
+        label.attributedText = NSAttributedString(string: text, attributes: [
+            .font: resolved.ctFont,
+            .foregroundColor: UIColor(red: CGFloat(rgba.red), green: CGFloat(rgba.green), blue: CGFloat(rgba.blue), alpha: CGFloat(rgba.opacity)),
+            .paragraphStyle: paragraph,
+        ])
+        label.accessibilityLabel = text
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+        uiView.sizeThatFits(CGSize(width: proposal.width ?? CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+    }
+}
+#endif

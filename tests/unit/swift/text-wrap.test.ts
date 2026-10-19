@@ -51,11 +51,11 @@ function paragraph(): LayoutDoc {
   };
 }
 
-test("app paragraph uses native Text in both modes", () => {
+test("plain app paragraphs select the native greedy wrapper; fidelity keeps Text", () => {
   const screen = inferScreen(paragraph(), "Paragraph");
   const app = emitSwift(screen, "ParagraphView", { mode: "app" }).view;
   const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity" }).view;
-  expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+  expect(app).toContain('MarkswiftGreedyText(text: "Measured text shifts nearby layout."');
   expect(fidelity).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
 });
 
