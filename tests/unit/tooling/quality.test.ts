@@ -600,3 +600,14 @@ test("ratchet raises configured feature floors without lifting unrelated family 
   expect(next.features).toEqual({ "x@app": { minSsim: 0.98 }, "x@fidelity": { minSsim: 0.99 } });
   expect(next.families["components@app"]).toEqual({ minSsim: 0.94 });
 });
+
+test("a feature-only ratchet preserves family floors from a partial run", () => {
+  const policy = { families: { "components@app": { minSsim: 0.94 } }, features: { "x@app": { minSsim: 0.94 } } };
+  const next = ratchetFamilies(
+    policy,
+    { a: { caseId: "x", mode: "app", fixture: "components/x.html", ssim: 0.969 } },
+    { featuresOnly: true },
+  );
+  expect(next.families).toEqual(policy.families);
+  expect(next.features).toEqual({ "x@app": { minSsim: 0.96 } });
+});

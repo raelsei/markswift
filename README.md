@@ -347,8 +347,6 @@ Exceptions (exempt from family floors and the 1.0 component target; the 0.005 dr
 - `motion-unmapped-320-light-fidelity`: the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion) — owner: @raelsei
 - `motion-unmapped-390-light-fidelity`: the unmapped background-position shimmer is the fixture's purpose: Chrome is captured with the gradient at its settled keyframe position, native draws the static authored gradient (unmapped motion) — owner: @raelsei
 - `shadcn-field@app`: items below the first input drift 0.5–1 pt down and the text is lighter — SwiftUI rounds the fractional CSS line boxes (19.25 pt labels, 21 pt descriptions) and the 32 pt field to the pixel grid, and Chrome rasterises the text heavier (the pinned fidelity captures score 0.938–0.949 too) — owner: @raelsei
-- `shadcn-item-320-dark-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking — owner: @raelsei
-- `shadcn-item-320-light-app`: the description wraps one word earlier ("Deploys, failures / and mentions.", "A summary every / Monday morning.") — iOS native line breaking avoids a one-word last line; app mode keeps native breaking — owner: @raelsei
 - `tw-cards-320-dark-app`: card descriptions wrap one word earlier ("members / and deploys.", "open / pull requests.") and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
 - `tw-cards-390-dark-app`: card descriptions wrap one word earlier and the light-on-dark text is lighter — iOS native line breaking avoids a one-word last line (app mode keeps native breaking), and Chrome rasterises light-on-dark text heavier (the light captures pass) — owner: @raelsei
 <!-- /quality-summary -->
@@ -372,6 +370,13 @@ The LayoutDoc 5 font-selection change has a separate reviewed iOS component run 
 Its six `overlay-collapsible@app` captures score 0.9897–0.9957; all five Menlo exceptions are removed
 and that feature's floor is ratcheted to 0.98. The table above retains the earlier full-corpus
 provenance; the scoped run does not replace unrelated family baselines or raise their floors.
+
+The greedy-wrapping follow-up removes the two narrow `shadcn-item@app` exceptions. Its eight-capture
+run is tracked in `tests/conformance/baselines/text-wrapping-v3-ios.json`; app scores are
+0.9688–0.9791 and the feature floor is 0.96. A full 358-capture run found two wide-title regressions
+from fractional normalization; clamped titles retain their native line-count box, with all four
+affected component cases rerun. `quality --ratchet ... --features-only` raises a scoped feature
+floor without deriving unrelated family floors from a partial run.
 
 Every pull request also runs the macOS gate (`tests/conformance/baselines/visual-{pilot,all}-mac.json`, rendered
 with `ImageRenderer` on macOS): the same per-capture 0.005 drop rule, anchors and family floors, plus the same-code
@@ -480,7 +485,7 @@ captured (a capture warning says so).
 
 ## Known gaps
 
-- 8 of the 198 `components@app` iOS captures remain listed exceptions (see the block above): fractional line boxes
+- 6 of the 198 `components@app` iOS captures remain listed exceptions (see the block above): fractional line boxes
   rounded to the pixel grid and iOS native line breaking that avoids a one-word last line.
 - Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
   `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
