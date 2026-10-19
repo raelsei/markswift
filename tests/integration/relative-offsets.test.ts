@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { inferScreen } from "../../src/analysis/infer.ts";
+import { visit } from "../../src/swift/traversal.ts";
+import type { TextNode } from "../../src/model/semantic.ts";
 import { convertHtml } from "../../src/index.ts";
 import type { LayoutNode } from "../../src/model/layout.ts";
 
@@ -36,13 +39,12 @@ browserTest(
   60_000,
 );
 
-browserTest(
-  "a float lift does not repeat the host's offset",
-  async () => {
-    // The text sits in a block `<p>`: the lift splits a block box whose line boxes the float shortened (a bare text run
-    // beside the float is built from a box without line boxes and stays a plain side-by-side row).
+browserTest.each([true, false])(
+  "a float lift preserves bare or wrapped text and does not repeat the host's offset (wrapped: %s)",
+  async (wrapped) => {
+    const text = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt";
     const result = await convertHtml(
-      `<main data-markswift-root style="width:200px;font:15px/20px system-ui"><div id="h" style="position:relative;top:5px"><div style="float:left;width:60px;height:40px;background:#0a0"></div><p style="margin:0">Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt</p></div></main>`,
+      `<main data-markswift-root style="width:200px;font:15px/20px system-ui"><div id="h" style="position:relative;top:5px"><div style="float:left;width:60px;height:40px;background:#0a0"></div>${wrapped ? `<p style="margin:0">${text}</p>` : text}</div></main>`,
       OPTIONS,
     );
     const messages = result.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message);
@@ -53,3 +55,29 @@ browserTest(
   },
   60_000,
 );
+
+for (const side of ["left", "right"] as const) {
+  browserTest(
+    `bare text clears a ${side} float without losing words or the available widths`,
+    async () => {
+      const text = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt";
+      const result = await convertHtml(
+        `<main data-markswift-root style="width:200px;padding:10px;font:15px/20px system-ui"><div style="float:${side};width:60px;height:40px;background:red"></div>${text}</main>`,
+        OPTIONS,
+      );
+      const texts: TextNode[] = [];
+      visit(inferScreen(result.layout, "Float").root, (n) => {
+        if (n.kind === "text") texts.push(n);
+      });
+      expect(texts).toHaveLength(2);
+      const [beside, cleared] = texts;
+      expect(beside!.frame.w).toBe(140);
+      expect(cleared!.frame.w).toBe(200);
+      expect(cleared!.frame.y).toBe(50);
+      expect(texts.map((n) => n.runs.map((r) => r.text).join("")).join(" ")).toBe(text);
+      expect(beside!.lines).toBe(2);
+      expect(cleared!.lines).toBeGreaterThan(0);
+    },
+    60_000,
+  );
+}

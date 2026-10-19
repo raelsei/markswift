@@ -493,7 +493,7 @@ captured (a capture warning says so).
   Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
   offset, so such lists stay unrolled instead of a `ForEach`.
 - Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
-- Layout: bare text beside a float is not split around it; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
+- Layout: at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
   `object-fit: cover` image does not refill its box.
 - Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
   repeated row keeps that row from becoming a `ForEach`; dialog content keeps its captured width; with
