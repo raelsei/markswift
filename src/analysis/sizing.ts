@@ -172,7 +172,13 @@ export function sizeOf(
   let width: Size;
   if (declW && /px$/.test(declW)) width = measuredW;
   else if (declW === "100%") width = fillsW && !abs ? { kind: "fill" } : measuredW;
-  else if (fraction !== undefined) width = { kind: "fraction", fraction, px: round2(n.bounds.w) };
+  else if (fraction !== undefined)
+    width = {
+      kind: "fraction",
+      fraction,
+      px: round2(n.bounds.w),
+      ...(ctx.parent?.styles["direction"] === "rtl" ? { right: true } : {}),
+    };
   else if (growthW) width = growthW;
   else if (ctx.parentAxis === "v" && align === "stretch" && !/inline/.test(s["display"] ?? "") && !abs) {
     width = fillsW ? { kind: "fill" } : hugsW ? { kind: "hug" } : measuredW;

@@ -60,7 +60,7 @@ export type Size =
   | { kind: "fill" }
   | { kind: "hug" }
   /** CSS percentage width of the containing block; `px` is the captured width (fidelity keeps it). */
-  | { kind: "fraction"; fraction: number; px: number };
+  | { kind: "fraction"; fraction: number; px: number; right?: boolean };
 
 /** Captured content extent and child border boxes for layouts whose native rules differ. */
 export interface MeasuredLayout {

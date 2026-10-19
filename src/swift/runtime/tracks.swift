@@ -189,9 +189,10 @@ struct MarkswiftTracks: Layout {
     }
 }
 
-/// CSS percentage width: the child takes `fraction` of the proposed width, leading-aligned; the wrapper keeps the full width.
+/// CSS percentage width: the child takes `fraction` of the proposed width, aligned to the containing block's start edge; the wrapper keeps the full width.
 struct MarkswiftFraction: Layout {
     var fraction: CGFloat
+    var right: Bool = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let width = proposal.width, width.isFinite else { return subviews.first?.sizeThatFits(.unspecified) ?? .zero }
@@ -200,12 +201,15 @@ struct MarkswiftFraction: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+        let x = bounds.minX + (right ? bounds.width * (1 - fraction) : 0)
+        subviews.first?.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
                               proposal: ProposedViewSize(width: bounds.width * fraction, height: bounds.height))
     }
 }
 
 extension View {
-    /// CSS percentage width: the box takes `fraction` of its container's width, leading-aligned.
-    func markswiftFraction(_ fraction: CGFloat) -> some View { MarkswiftFraction(fraction: fraction) { self } }
+    /// CSS percentage width: the box takes `fraction` of its container's width, aligned to the containing block's start edge.
+    func markswiftFraction(_ fraction: CGFloat, right: Bool = false) -> some View {
+        MarkswiftFraction(fraction: fraction, right: right) { self }
+    }
 }

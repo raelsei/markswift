@@ -192,7 +192,8 @@ export function boxModifiers(n: SemNode, ctx: EmitContext): string[] {
   // Emit-time notes on the copy land in the shared diagnostics; carry the regrade back.
   if (p !== n) n.confidence = p.confidence;
   // CSS percentage width: paint inside the fraction; margins (`placementModifiers`) outside.
-  if (ctx.mode === "app" && n.width.kind === "fraction") m.push(`.markswiftFraction(${num(n.width.fraction)})`);
+  if (ctx.mode === "app" && n.width.kind === "fraction")
+    m.push(`.markswiftFraction(${num(n.width.fraction)}${n.width.right ? ", right: true" : ""})`);
   return m;
 }
 
