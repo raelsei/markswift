@@ -14,7 +14,7 @@ struct MarkswiftGreedyText: View {
     var body: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, lineLimit: lineLimit)
+            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, ascent: ascent, descent: descent, lineLimit: lineLimit)
         } else { fallback }
         #else
         fallback
@@ -36,6 +36,8 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
     let color: Color
     let size: CGFloat
     let lineHeight: CGFloat
+    let ascent: CGFloat
+    let descent: CGFloat
     let lineLimit: Int?
     func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
@@ -51,11 +53,18 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         paragraph.lineBreakStrategy = []
         paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
         paragraph.maximumLineHeight = paragraph.minimumLineHeight
+        // A fixed-height UIKit paragraph places its baseline above the rounded native descent.
+        // CSS splits the extra leading around the rounded captured ascent/descent instead.
+        let scale = context.environment.displayScale
+        let nativeDescent = (CTFontGetDescent(resolved.ctFont) * scale).rounded(.down) / scale
+        let cssBaseline = (lineHeight / size + ascent - descent) * resolved.pointSize / 2
+        let baselineOffset = paragraph.minimumLineHeight - nativeDescent - cssBaseline
         let rgba = color.resolve(in: context.environment)
         label.attributedText = NSAttributedString(string: text, attributes: [
             .font: resolved.ctFont,
             .foregroundColor: UIColor(red: CGFloat(rgba.red), green: CGFloat(rgba.green), blue: CGFloat(rgba.blue), alpha: CGFloat(rgba.opacity)),
             .paragraphStyle: paragraph,
+            .baselineOffset: baselineOffset,
         ])
         label.accessibilityLabel = text
     }
