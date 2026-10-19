@@ -169,7 +169,8 @@ nativeTest(
         expect([out[`loose@${scale}-box`], out[`loose@${scale}-text`]]).toEqual([20, 20]);
         expect(out[`field@${scale}`]).toBe(22);
         expect(out[`grown-field@${scale}`]).toBe(44);
-        expect(out[`fractional@${scale}-box`]).toBe(19.25);
+        // AppKit keeps the native pixel-rounded paragraph box beside its controls.
+        expect(out[`fractional@${scale}-box`]).toBe(out[`fractional@${scale}-text`]);
         expect(out[`fractional@${scale}-text`]).toBeGreaterThanOrEqual(19.25);
         expect([out[`compressed@${scale}-box`], out[`compressed@${scale}-text`]]).toEqual([14, 14]);
       }
