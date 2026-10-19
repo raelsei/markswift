@@ -112,6 +112,10 @@ export type TableColumn =
  * `table-layout: fixed` columns.
  */
 export interface TableLayout {
+  /** Native accessibility header axes, one entry per cell (excluding paint bands). */
+  headers?: Array<"row" | "column" | "">;
+  /** Authored row-group header coverage, in one-based table rows. */
+  headerRows?: number[][];
   widths: number[];
   heights: number[];
   slots: Array<Pick<GridPlacement, "rowStart" | "colStart" | "rowSpan" | "colSpan">>;
@@ -545,6 +549,16 @@ export interface SemBase extends SizeConstraints {
   overlays: Overlay[];
   /** What assistive technology is told about this node, beyond what the element itself implies. */
   a11y?: {
+    /** Position and associated headers of an admitted table cell; kept on accessible leaves. */
+    tableCell?: {
+      row: number;
+      column: number;
+      rowSpan: number;
+      columnSpan: number;
+      rows: number;
+      columns: number;
+      headers: string[];
+    };
     /** `aria-labelledby` text, else `aria-label`, else the text of the `<label>` that names this control. */
     label?: string;
     /** A text-only element of a container role (tabpanel, region, …): `label` names a group around the Text, not its words. */

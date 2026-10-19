@@ -492,7 +492,7 @@ captured (a capture warning says so).
 - Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
   Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
   offset, so such lists stay unrolled instead of a `ForEach`.
-- Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
+- Native tables (`MarkswiftTable`): cells retain their controls and DOM reading order. App output exposes row/column positions and spans, explicit `headers`, `scope=col|row|rowgroup`, and simple first-row/column headers as high-importance accessibility content. Two-dimensional VoiceOver table navigation and `scope=colgroup` remain unsupported (`approximated table`).
 - Layout: bare text beside a float is not split around it; a `width: %` block inside a `dir=rtl` parent is drawn at
   the left edge; at other widths a percentage `transform: translateX(…%)` stays pinned at its captured px offset and an
   `object-fit: cover` image does not refill its box.

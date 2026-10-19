@@ -1,3 +1,4 @@
+import { applyTableCellContext, tableCellContext } from "./table-accessibility.ts";
 /** Layout tree traversal and semantic node dispatch. */
 import { type LayoutDoc, type LayoutNode, type Rect } from "../model/layout.ts";
 import {
@@ -423,7 +424,7 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
     base.diagnostics,
     "approximated",
     "table",
-    "VoiceOver table navigation (row/column position, header association) is not translated",
+    "iOS exposes native two-dimensional table navigation; other platforms retain cell positions and supported headers as accessibility content",
   );
   if (s.fixedRequested && !s.fixed)
     addDiagnostic(
@@ -458,6 +459,9 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
       textClip: [c.parent, c.group, box].find((e) => e && clipsText(e)) ?? ctx.textClip,
     }),
   );
+  cells.forEach((cell, i) => {
+    applyTableCellContext(cell, tableCellContext(s.cells[i]!, s));
+  });
   const children = [...bands, ...cells];
   // Fidelity keeps the captured lattice; app mode allocates every slot (emit.ts) and ignores these.
   for (const c of children) {
@@ -474,6 +478,28 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
     table: {
       widths: s.widths,
       heights: s.heights,
+      headers: s.cells.map((c) =>
+        c.node.tag !== "th"
+          ? ""
+          : c.node.attrs["scope"] === "row" ||
+              c.node.attrs["scope"] === "rowgroup" ||
+              (!c.node.attrs["scope"] && c.rowStart > 1 && c.colStart === 1)
+            ? "row"
+            : c.node.attrs["scope"] === "col" || (!c.node.attrs["scope"] && c.rowStart === 1)
+              ? "column"
+              : "",
+      ),
+      headerRows: s.cells.map((c) =>
+        c.node.tag === "th" && c.node.attrs["scope"] === "rowgroup" && c.group
+          ? [
+              ...new Set(
+                s.cells
+                  .filter((other) => other.group === c.group)
+                  .flatMap((other) => Array.from({ length: other.rowSpan }, (_, i) => other.rowStart + i)),
+              ),
+            ].sort((a, b) => a - b)
+          : [],
+      ),
       slots: [...s.bands, ...s.cells].map(({ rowStart, colStart, rowSpan, colSpan }) => ({
         rowStart,
         colStart,
