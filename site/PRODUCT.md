@@ -11,8 +11,7 @@ web
 
 ## Stack
 
-Astro, static output, deployed to GitHub Pages at https://koray.dev/markswift/ (base `/markswift`;
-raelsei.github.io/markswift redirects there).
+Astro, static output, deployed to GitHub Pages at https://markswift.koray.dev/ (root base `/`).
 
 ## Users
 
