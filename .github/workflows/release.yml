@@ -49,3 +49,25 @@ jobs:
         run: |
           npm install -g npm@^11.15
           npm publish --provenance --access public --tag "$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")"
+
+      - name: Verify the published version and distribution tag
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")"
+          # Registry metadata can take a short time to become visible after a successful publish.
+          for attempt in {1..12}; do
+            published="$(npm view "markswift@$version" version 2>/dev/null || true)"
+            tagged="$(npm view "markswift" "dist-tags.$tag" 2>/dev/null || true)"
+            if [ "$published" = "$version" ] && [ "$tagged" = "$version" ]; then break; fi
+            sleep 5
+          done
+          test "$published" = "$version"
+          test "$tagged" = "$version"
+      - name: Smoke test the registry package in an empty directory
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          smoke_dir="$(mktemp -d "$RUNNER_TEMP/markswift-registry.XXXXXX")"
+          trap 'rm -rf "$smoke_dir"' EXIT
+          cd "$smoke_dir"
+          actual="$(npx --yes --package="markswift@$version" markswift --version)"
+          test "$actual" = "$version"
