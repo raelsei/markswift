@@ -389,11 +389,17 @@ describe("enter frames", () => {
 
   browserTest("a frame that pauses no animation throws instead of returning the settled look", async () => {
     const trigger = (await cap(radix())).triggers![0]!;
-    await expect(browser.captureLayerFrame(spec(radix()), trigger, 50, clip)).rejects.toThrow(
-      "s@open:edit-profile@t:50: no animation to pause",
-    );
-    await expect(browser.captureFrame(spec(radix()), { t: 50, reduced: false }, clip)).rejects.toThrow(
-      "s@t:50: no animation to pause",
-    );
+    // Await the CDP work before entering Bun's matcher. Its async rejection matcher can starve
+    // Playwright's event loop, stretching these sub-second failures beyond CI's 60-second limit.
+    const layerError = await browser
+      .captureLayerFrame(spec(radix()), trigger, 50, clip)
+      .catch((error: unknown) => error);
+    expect(layerError).toBeInstanceOf(Error);
+    expect((layerError as Error).message).toContain("s@open:edit-profile@t:50: no animation to pause");
+    const frameError = await browser
+      .captureFrame(spec(radix()), { t: 50, reduced: false }, clip)
+      .catch((error: unknown) => error);
+    expect(frameError).toBeInstanceOf(Error);
+    expect((frameError as Error).message).toContain("s@t:50: no animation to pause");
   });
 });
