@@ -439,7 +439,7 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
     base.diagnostics,
     "approximated",
     "table",
-    "VoiceOver two-dimensional table navigation is not translated; cell positions and supported header associations are exposed as accessibility content",
+    "iOS exposes native two-dimensional table navigation; other platforms retain cell positions and supported headers as accessibility content",
   );
   if (s.fixedRequested && !s.fixed)
     addDiagnostic(
@@ -493,6 +493,28 @@ function tableGrid(box: LayoutNode, s: TableSlots, ctx: InferenceContext): GridN
     table: {
       widths: s.widths,
       heights: s.heights,
+      headers: s.cells.map((c) =>
+        c.node.tag !== "th"
+          ? ""
+          : c.node.attrs["scope"] === "row" ||
+              c.node.attrs["scope"] === "rowgroup" ||
+              (!c.node.attrs["scope"] && c.rowStart > 1 && c.colStart === 1)
+            ? "row"
+            : c.node.attrs["scope"] === "col" || (!c.node.attrs["scope"] && c.rowStart === 1)
+              ? "column"
+              : "",
+      ),
+      headerRows: s.cells.map((c) =>
+        c.node.tag === "th" && c.node.attrs["scope"] === "rowgroup" && c.group
+          ? [
+              ...new Set(
+                s.cells
+                  .filter((other) => other.group === c.group)
+                  .flatMap((other) => Array.from({ length: other.rowSpan }, (_, i) => other.rowStart + i)),
+              ),
+            ].sort((a, b) => a - b)
+          : [],
+      ),
       slots: [...s.bands, ...s.cells].map(({ rowStart, colStart, rowSpan, colSpan }) => ({
         rowStart,
         colStart,

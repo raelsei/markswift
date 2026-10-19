@@ -1,6 +1,7 @@
 import hitRegions from "./runtime/hit-regions.swift" with { type: "text" };
 import greedyText from "./runtime/greedy-text.swift" with { type: "text" };
 import textOffsets from "./runtime/text-offsets.swift" with { type: "text" };
+import tableAccessibility from "./runtime/table-accessibility.swift" with { type: "text" };
 import core from "./runtime/core.swift" with { type: "text" };
 import controls from "./runtime/controls.swift" with { type: "text" };
 import measuredLayout from "./runtime/measured-layout.swift" with { type: "text" };
@@ -26,6 +27,7 @@ export const SWIFT_RUNTIME =
     hitRegions,
     greedyText,
     textOffsets,
+    tableAccessibility,
     controls,
     measuredLayout,
     flow,

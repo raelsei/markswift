@@ -465,4 +465,23 @@ extension BehaviourTests {
         let large = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
         XCTAssertGreaterThan(large, normal)
     }
+
+    @MainActor
+    func testNativeTableNavigation() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_TABLE_PROBE"] = "1"
+        app.launch()
+        app.buttons["Inspect"].tap()
+        XCTAssertEqual(app.staticTexts["table-report"].label, "rows=3 columns=2 span=2 headers=2")
+        app.buttons["Count"].tap()
+        app.switches["Enabled"].coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(app.switches["Enabled"].value as? String, "1")
+        let field = app.textFields["Edit"]
+        field.tap(); field.typeText("Ada")
+        app.buttons["Resize"].tap()
+        app.buttons["Count"].tap()
+        app.buttons["Inspect"].tap()
+        XCTAssertEqual(app.staticTexts["table-report"].label, "rows=3 columns=2 span=2 headers=2")
+        XCTAssertEqual(app.staticTexts["table-values"].label, "taps=2 enabled=true value=Ada")
+    }
 }

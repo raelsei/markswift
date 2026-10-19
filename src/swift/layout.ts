@@ -1,7 +1,7 @@
 import type { BandEdge, StackNode, GridNode, GridRowTrack, TableColumn, TableLayout } from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
-import { horizontalAlignment, indent, num, verticalAlignment } from "./format.ts";
+import { horizontalAlignment, indent, num, str, verticalAlignment } from "./format.ts";
 import { fillAlignment } from "./frames.ts";
 import { decorate, overlayModifier, paddingModifiers } from "./modifiers.ts";
 import { measuredLayoutExpr } from "./measured-layout.ts";
@@ -59,7 +59,7 @@ function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
     ...(t.bands ? [`bands: ${t.bands}`] : []),
     ...(t.fixed && ctx.mode === "app" ? [`fixed: [${t.fixed.map(col).join(", ")}]`] : []),
   ];
-  return [
+  const body = [
     `MarkswiftTable(${args.join(", ")}) {`,
     ...n.children.flatMap((c, i) => {
       const s = t.slots[i]!;
@@ -67,9 +67,19 @@ function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
       // CSS paints collapsed borders over cell backgrounds: a band that only draws borders goes on top of the cells.
       // ponytail: a band with both a fill and borders stays under the cells; split it if a cell background hides its rule.
       const over = i < t.bands && !c.style.fills.length && !c.style.shadows.length;
+      const cell = ctx.renderNode(c);
+      const accessible = ctx.mode === "app" && i >= t.bands;
+      const header = t.headers?.[i - t.bands] ?? "";
+      const headerRows = t.headerRows?.[i - t.bands] ?? [];
       return indent(
         [
-          ...ctx.renderNode(c),
+          ...(accessible
+            ? [
+                `MarkswiftAccessibleCell(id: ${str(`${n.id}/cell-${i - t.bands}`)}, row: ${s.rowStart}, column: ${s.colStart}, rowSpan: ${s.rowSpan}, columnSpan: ${s.colSpan}, header: ${str(header)}, headerRows: [${headerRows.join(", ")}]) {`,
+                ...indent(cell, 1),
+                "}",
+              ]
+            : cell),
           ...(over ? [".zIndex(1)"] : []),
           `.markswiftGridCell(column: ${s.colStart}, row: ${s.rowStart}${span})`,
         ],
@@ -78,6 +88,9 @@ function tableExpr(n: GridNode, t: TableLayout, ctx: EmitContext): string[] {
     }),
     "}",
   ];
+  return ctx.mode === "app"
+    ? [`MarkswiftAccessibleTable(rows: ${t.heights.length}, columns: ${t.widths.length}) {`, ...indent(body, 1), "}"]
+    : body;
 }
 
 /**
