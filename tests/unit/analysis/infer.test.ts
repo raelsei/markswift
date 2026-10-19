@@ -363,8 +363,7 @@ describe("tables", () => {
       {
         level: "approximated",
         feature: "table",
-        message:
-          "iOS exposes native two-dimensional table navigation; other platforms retain cell positions and supported headers as accessibility content",
+        message: "VoiceOver table navigation (row/column position, header association) is not translated",
       },
     ]);
   });
@@ -375,7 +374,7 @@ describe("tables", () => {
       [
         "approximated",
         "table",
-        "iOS exposes native two-dimensional table navigation; other platforms retain cell positions and supported headers as accessibility content",
+        "VoiceOver table navigation (row/column position, header association) is not translated",
       ],
       [
         "approximated",

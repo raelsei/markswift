@@ -1,5 +1,3 @@
-import { compileLayout } from "../../../src/compiler/index.ts";
-import { doc, separated } from "../../helpers/tables.ts";
 /** `MarkswiftTable` compiles (iOS 18, Swift 6) and its column solver agrees with `solveTableColumns`. */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -120,22 +118,4 @@ nativeTest(
     }
   },
   300000,
-);
-
-nativeTest(
-  "table accessibility context compiles with native cells",
-  async () => {
-    const dir = await mkdtemp(join(tmpdir(), "markswift-table-ax-"));
-    try {
-      const result = compileLayout(doc(separated()), { name: "AccessibleTable", mode: "app" });
-      expect(result.code).toContain(".accessibilityCustomContent");
-      for (const [name, content] of Object.entries(result.files)) await Bun.write(join(dir, name), content);
-      const check = await typecheck(dir);
-      if (!check.ok) throw new Error(check.output);
-      expect(check.ok).toBe(true);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  },
-  60_000,
 );

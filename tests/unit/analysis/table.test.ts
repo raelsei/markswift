@@ -398,7 +398,7 @@ describe("MarkswiftTable emission", () => {
       ],
     });
     for (const mode of ["app", "fidelity"] as const)
-      expect(code(t, mode)).toMatch(/\.zIndex\(1\)\n\s*\.markswiftGridCell\(column: 1, row: 1, columnSpan: 2\)/);
+      expect(code(t, mode)).toContain(".zIndex(1)\n            .markswiftGridCell(column: 1, row: 1, columnSpan: 2)");
   });
 
   test("app: admitted fixed columns", () => {
