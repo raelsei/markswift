@@ -366,6 +366,7 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
     const d = p.dismiss;
     const exit = longestExit(overlays.map((o) => o.node));
     const backdropExit = first && longestExit([first.node]);
+    const parentState = p.parentLayer && ctx.control.openStates.get(p.parentLayer);
     return [
       `.markswiftPresentation(isPresented: $${state}, modal: ${p.modal}, dismissOnEscape: ${d.escape}, dismissOnOutside: ${d.outside}${exit ? `, exit: ${exit}` : ""}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
       ...indent(
@@ -382,6 +383,7 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
         1,
       ),
       "}",
+      ...(parentState ? [`.onChange(of: ${parentState}) { _, shown in if !shown { ${state} = false } }`] : []),
     ];
   });
 }

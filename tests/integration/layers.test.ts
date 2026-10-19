@@ -403,3 +403,70 @@ describe("enter frames", () => {
     expect((frameError as Error).message).toContain("s@t:50: no animation to pause");
   });
 });
+
+browserTest(
+  "a dialog trigger inside an open dialog is replayed and closes with its parent",
+  async () => {
+    const html = `<main data-markswift-root style="width:390px;height:600px">
+    <button commandfor="first" command="show-modal">First</button>
+    <dialog id="first" closedby="any"><button commandfor="second" command="show-modal">Second</button><form method="dialog"><button>Close first</button></form></dialog>
+    <dialog id="second" closedby="any"><p>Nested content</p><form method="dialog"><button>Close second</button></form></dialog>
+  </main>`;
+    const result = await convertHtml(html, { name: "NestedDialogs" });
+    expect(result.layout.layers?.map((l) => l.id)).toEqual(["first", "first-second"]);
+    expect(result.code.match(/\.markswiftPresentation\(/g)).toHaveLength(2);
+    expect(result.code).toContain("isFirstSecondPresented = true");
+    expect(result.code).toContain("NestedDialogs(isFirstSecondPresented: true, isFirstPresented: true)");
+    expect(result.code).toContain(
+      ".onChange(of: isFirstPresented) { _, shown in if !shown { isFirstSecondPresented = false } }",
+    );
+    expect(
+      result.diagnostics.flatMap((d) => d.diagnostics).some((d) => d.message.includes("trigger is not in the screen")),
+    ).toBe(false);
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { typecheck } = await import("../../tools/verify/typecheck.ts");
+    const dir = await mkdtemp(join(tmpdir(), "markswift-nested-dialog-"));
+    try {
+      for (const [file, content] of Object.entries(result.files)) await Bun.write(join(dir, file), content);
+      const check = await typecheck(dir);
+      if (!check.ok) throw new Error(check.output);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
+
+browserTest(
+  "portal submenu triggers are replayed outside the capture root and emit a native submenu",
+  async () => {
+    const html = `<main data-markswift-root style="width:390px;height:600px"><button aria-haspopup="menu" onclick="openMenu()">Actions</button></main>
+  <script>
+    function openMenu() {
+      if (document.getElementById('menu')) return;
+      const menu = document.createElement('div'); menu.id = 'menu'; menu.role = 'menu';
+      menu.style = 'position:fixed;top:40px;left:20px;background:white';
+      menu.innerHTML = '<button role="menuitem" aria-haspopup="menu" onclick="openSubmenu()">More</button>';
+      document.body.append(menu);
+    }
+    function openSubmenu() {
+      if (document.getElementById('submenu')) return;
+      const menu = document.createElement('div'); menu.id = 'submenu'; menu.role = 'menu';
+      menu.style = 'position:fixed;top:40px;left:150px;background:white';
+      menu.innerHTML = '<button role="menuitem" onclick="void(0)">Archive</button>';
+      document.body.append(menu);
+    }
+  </script>`;
+    const result = await convertHtml(html, { name: "NestedMenu" });
+    expect(result.layout.layers?.map((l) => l.id)).toEqual(["actions", "actions-more"]);
+    expect(result.code.match(/Menu \{/g)).toHaveLength(2);
+    expect(result.code).toContain('Text(verbatim: "Archive")');
+    expect(result.code).not.toContain(".disabled(true)");
+    expect(
+      result.diagnostics.flatMap((d) => d.diagnostics).some((d) => d.message.includes("items are not captured")),
+    ).toBe(false);
+  },
+  60_000,
+);

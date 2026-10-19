@@ -372,7 +372,7 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
 
 /** A menu's items with its sections opened, in order. */
 export const flatItems = (items: MenuItem[]): MenuItem[] =>
-  items.flatMap((i) => (i.kind === "section" ? flatItems(i.items) : [i]));
+  items.flatMap((i) => (i.kind === "section" || i.kind === "submenu" ? flatItems(i.items ?? []) : [i]));
 
 /** The control's value as a number, clamped into its range (the range's start when it has none). */
 export function numericValue(n: ControlNode): number {

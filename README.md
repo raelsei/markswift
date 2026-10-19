@@ -585,8 +585,7 @@ reviewed and committed by hand. GitHub Actions workflows:
 - Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Break characters (zero-width space, soft hyphen); `TextRenderer` justify and decorations.
 - Validation and `data-state` variants; iPad hover and keyboard.
-- Overlays: swipe-to-dismiss and an opt-in native `.sheet` for bottom drawers; nested triggers (submenus, dialogs
-  opened from a dialog); per-band layers with `--breakpoints`; menu item icons and shortcut text.
+- Overlays: swipe-to-dismiss and an opt-in native `.sheet` for bottom drawers; menu item icons and shortcut text.
 - Motion: scroll-driven animations; mid-flight frame gates for state transitions; author `prefers-reduced-motion`
   rules for overlay enter/exit.
 - Height and orientation media queries; sticky pinning while scrolling.

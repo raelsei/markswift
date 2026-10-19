@@ -22,6 +22,7 @@ import { recordAnimations } from "./motion.ts";
 import { settle } from "./settle.ts";
 
 /** Stamped through CDP on each layer root, valued by its paint-order index. */
+const TRIGGER_MARK = "data-markswift-open-trigger";
 export const LAYER_MARK = "data-markswift-layer-root";
 /** At most this many triggers are opened per conversion. */
 const MAX_TRIGGERS = 12;
@@ -207,15 +208,17 @@ export async function findTriggers(
  */
 export async function activate(page: Page, root: string, trigger: Trigger): Promise<boolean> {
   const at = await page.evaluate(
-    ({ root, path }) => {
+    ({ root, path, mark }) => {
       let el = document.querySelector(root) ?? undefined;
       for (const step of path ? path.split("/") : []) el = el?.children[Number(step)];
       if (!el) return undefined;
+      for (const previous of document.querySelectorAll(`[${mark}]`)) previous.removeAttribute(mark);
+      el.setAttribute(mark, "1");
       el.scrollIntoView({ block: "center", inline: "center" });
       const r = el.getBoundingClientRect();
       return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
     },
-    { root, path: trigger.path },
+    { root: trigger.rootSelector ?? root, path: trigger.path, mark: TRIGGER_MARK },
   );
   if (!at) return false;
   await recordAnimations(page);
@@ -260,6 +263,7 @@ export const rootHidden = (page: Page, root: string): Promise<boolean> =>
 export interface Opening {
   /** Paint of every node laid out before activation, by backend id. */
   rest: Map<number, Record<string, string>>;
+  triggerBackend?: number;
   /** The root (or an ancestor) was aria-hidden/inert before activation. */
   hidden: boolean;
   /** Backend ids of the layer roots in paint order (marked `LAYER_MARK="<i>"`); empty = nothing opened. */
@@ -278,9 +282,13 @@ export async function openLayer(
   page: Page,
   cdp: CDPSession,
   root: string,
-  rootMark: string,
+  _rootMark: string,
   trigger: Trigger,
 ): Promise<Opening | undefined> {
+  for (const ancestor of trigger.ancestors ?? []) {
+    if (!(await activate(page, root, ancestor))) return undefined;
+    await settle(page);
+  }
   const pre = await snapshot(cdp, PRE_ARGS);
   const before = laidOut(pre);
   const { nodes, layout } = pre.documents[0]!;
@@ -296,7 +304,10 @@ export async function openLayer(
   if (!(await activate(page, root, trigger))) return undefined;
   let open = await snapshot(cdp, ROOTS_ARGS);
   // Structure only: the tree's styles are misread (this snapshot carries opacity alone).
-  const triggerRaw = rawAt(findByAttr(snapshotToTree(open), rootMark, "1")!, trigger.path);
+  const triggerRaw = findByAttr(snapshotToTree(open), TRIGGER_MARK, "1");
+  await page.evaluate((mark) => {
+    for (const el of document.querySelectorAll(`[${mark}]`)) el.removeAttribute(mark);
+  }, TRIGGER_MARK);
   const exclude = new Set<number>();
   const collect = (r: Raw) => {
     if (r.backend !== undefined) exclude.add(r.backend);
@@ -325,6 +336,7 @@ export async function openLayer(
   };
   return {
     rest,
+    triggerBackend: triggerRaw?.backend,
     hidden,
     roots,
     isOpen,
@@ -388,6 +400,7 @@ export function assembleLayer(o: {
   info: Array<{ modal: boolean; anchored: boolean }>;
   /** The root (or an ancestor) became aria-hidden/inert on open. */
   hiddenOnOpen: boolean;
+  triggerRaw?: Raw;
 }): { layer: Layer; paths: string[] } {
   const { trigger, marked } = o;
   const inside = marked.map((raw) => pathOf(o.rootRaw, raw));
@@ -409,7 +422,7 @@ export function assembleLayer(o: {
         )
       ? "anchored"
       : "viewport";
-  const triggerAttrs = rawAt(o.rootRaw, trigger.path)?.attrs ?? {};
+  const triggerAttrs = (o.triggerRaw ?? rawAt(o.rootRaw, trigger.path))?.attrs ?? {};
   const inLayer = (attr: "aria-controls" | "aria-describedby") => {
     const ids = new Set(triggerAttrs[attr]?.split(/\s+/).filter(Boolean));
     return ids.size > 0 && nodes.some((n) => any(n, (d) => ids.has(d.attrs.id ?? "")));
@@ -451,6 +464,7 @@ export function triggerPaint(
   rootRaw: Raw,
   trigger: Trigger,
   identity: NodeIdentity,
+  triggerRaw?: Raw,
 ): { paint: Record<string, Record<string, string>>; changed: number } {
   const paint: Record<string, Record<string, string>> = {};
   let changed = 0;
@@ -464,8 +478,8 @@ export function triggerPaint(
     }
     for (const [k, c] of pathChildren(raw).entries()) walk(c, path ? `${path}/${k}` : String(k));
   };
-  const raw = rawAt(rootRaw, trigger.path);
-  if (raw) walk(raw, trigger.path);
+  const raw = triggerRaw ?? rawAt(rootRaw, trigger.path);
+  if (raw) walk(raw, trigger.identityPath ?? trigger.path);
   return { paint, changed };
 }
 
@@ -497,7 +511,13 @@ export async function probeDismiss(
       for (const step of path ? path.split("/") : []) el = el?.children[Number(step)];
       return el ? [...rs, box(el)] : rs;
     },
-    { mark: LAYER_MARK, root: o.root, path: o.trigger.path, vw: o.viewport.width, vh: o.viewport.height },
+    {
+      mark: LAYER_MARK,
+      root: o.trigger.rootSelector ?? o.root,
+      path: o.trigger.path,
+      vw: o.viewport.width,
+      vh: o.viewport.height,
+    },
   );
   const at = outsidePoint(rects, o.viewport);
   let outside = false;
@@ -541,7 +561,8 @@ export async function captureLayers(
   rest: Capture,
   { probeDismiss }: { probeDismiss: boolean },
 ): Promise<OpenShots> {
-  const triggers = rest.triggers ?? [];
+  const triggers = [...(rest.triggers ?? [])];
+  const seen = new Set(triggers.map((t) => t.trigger));
   const warn = (message: string) => rest.warnings.push({ source: "capture", message });
   if (triggers.length > MAX_TRIGGERS) {
     const skipped = triggers.slice(MAX_TRIGGERS);
@@ -561,17 +582,28 @@ export async function captureLayers(
   const layers: Layer[] = [];
   const shots: OpenShots = {};
   // ponytail: one trigger at a time (a page each, ~0.3 s); open them concurrently if many-trigger pages get slow.
-  for (const trigger of triggers.slice(0, MAX_TRIGGERS)) {
+  for (let i = 0; i < Math.min(triggers.length, MAX_TRIGGERS); i++) {
+    const trigger = triggers[i]!;
     const open = await capture({ ...spec, open: trigger, probeDismiss });
     for (const w of open.warnings) if (!rest.warnings.some((r) => r.message === w.message)) rest.warnings.push(w);
     if (!open.opened) continue;
     layers.push(open.opened.layer);
+    open.opened.layer.nodes.forEach(index);
+    for (const child of open.triggers ?? []) {
+      if (seen.has(child.trigger)) continue;
+      seen.add(child.trigger);
+      triggers.push(child);
+    }
     shots[open.opened.layer.id] = { ...(open.png ? { png: open.png } : {}), size: open.opened.size, trigger };
     for (const [id, delta] of Object.entries(open.opened.openPaint)) {
       const node = byId.get(id);
       if (node) node.states = { ...node.states, open: delta };
     }
   }
+  if (triggers.length > MAX_TRIGGERS && (rest.triggers?.length ?? 0) <= MAX_TRIGGERS)
+    warn(
+      `nested open-state trigger limit (${MAX_TRIGGERS}) reached; ${triggers.length - MAX_TRIGGERS} trigger(s) were not captured`,
+    );
   if (layers.length) rest.layout.layers = layers;
   return shots;
 }
