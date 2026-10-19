@@ -63,7 +63,7 @@ test("SVG chart labels and nested tspans use the conversion's bundled fonts", ()
     { kind: "custom", name: "Geist Variable" },
   ]);
   expect(fallback.root.texts?.every((t) => t.font.family.kind === "system")).toBe(true);
-  expect(emitSwift(custom, "ChartView", { mode: "app" }).view).toContain('.custom("Geist Variable"');
+  expect(emitSwift(custom, "ChartView", { mode: "app" }).view).toContain('.markswiftVariable("Geist Variable"');
 });
 
 describe("markup SVG paints like the browser", () => {
