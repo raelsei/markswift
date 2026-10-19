@@ -138,13 +138,11 @@ const BIDI_CONTROLS: Record<string, [string, string, string]> = {
  * The bidi controls of an element's computed `unicode-bidi`, in its computed `direction`. Only inline boxes count:
  * Blink's UA sheet gives every block `isolate`, which CSS ignores on a block container. A text host keeps only the
  * override of `bidi-override`/`isolate-override` (it applies to the host's inline content); isolating the whole
- * paragraph would hide its strong characters from the base-direction rule. ponytail: a host's `plaintext` (base
- * direction per paragraph from its first strong character) is not mapped; Core Text takes it from the layout
- * direction. Map it with an FSI around the host's runs if a design needs it. `::marker` boxes get nothing: their
- * UA `isolate` would wrap list and `<summary>` markers, which stay raw (`counterOf`, controls.ts `MARKER`).
+ * paragraph would hide its strong characters from the base-direction rule. A plaintext host instead lets
+ * Core Text resolve the first strong character in each paragraph, without the emitter's forced RTL mark.
  */
 function bidiOf(el: LayoutNode, host: boolean): { open: string; close: string } | undefined {
-  if (el.tag === "::marker") return undefined;
+  if (el.tag === "::marker") host = false;
   const value = el.styles["unicode-bidi"] ?? "normal";
   const c = host
     ? value.endsWith("override")

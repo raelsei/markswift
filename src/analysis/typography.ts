@@ -82,6 +82,10 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
     const v = tag === "wdth" ? stretch : fvs[tag];
     if (v !== undefined && (tag !== "wdth" || v !== 100)) axes[tag] = Math.min(r[1], Math.max(r[0], v));
   }
+  if (spec.family.kind === "system") {
+    Object.assign(axes, fvs);
+    if (stretch !== 100) axes.wdth = stretch;
+  }
   if (Object.keys(axes).length) spec.axes = axes;
   if (spec.family.kind === "system" && stretch !== 100) spec.stretch = stretch;
   const lh = s["line-height"];

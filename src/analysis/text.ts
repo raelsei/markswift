@@ -244,19 +244,13 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
         );
       }
     }
-    if (run.font.stretch !== undefined)
-      note(
-        "approximated",
-        "font-stretch",
-        `font-stretch ${run.font.stretch}% → SF's nearest width instance; glyph advances differ from the reference`,
-      );
     if (run.font.family.kind === "system")
       for (const tag of Object.keys(variationSettings(s["font-variation-settings"])))
-        if (tag !== "wght" && tag !== "wdth" && tag !== "opsz")
+        if (!["wght", "wdth", "opsz", "GRAD"].includes(tag))
           note(
             "approximated",
             "font-variation-settings",
-            `font-variation-settings axis ${tag} has no system-font mapping → dropped`,
+            `font-variation-settings axis ${tag} applies only if the installed system face exposes it; unsupported axes are ignored`,
           );
     const ls = s["letter-spacing"];
     if (ls && ls !== "normal") run.kerning = round2(px(ls));
@@ -340,8 +334,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     const u = PSEUDO[el.tag] ? undrawnImages(el) : undefined;
     if (u) note("approximated", u.feature, u.message);
   }
-  // Counters read the raw run text; markBidi's controls would not survive regeneration, so a wrapped one is dropped.
-  // Markers stay outside bidi controls (decision 7), so an inside marker keeps its counter.
+  // Recognise counters before adding controls, then retain the controls in the regenerated prefix/suffix.
   const before = built.map((b) => b.run.text);
   for (const b of built) {
     const c = counterOf(b.styleOf, b.run.text);
@@ -349,7 +342,15 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   }
   markBidi(built, host);
   built.forEach((b, i) => {
-    if (b.run.counter && b.run.text !== before[i]) delete b.run.counter;
+    const counter = b.run.counter,
+      raw = before[i]!;
+    if (counter && b.run.text !== raw) {
+      const at = b.run.text.indexOf(raw);
+      if (at >= 0) {
+        counter.prefix = b.run.text.slice(0, at) + counter.prefix;
+        counter.suffix += b.run.text.slice(at + raw.length);
+      } else delete b.run.counter;
+    }
   });
   const measured = leaf ? host.bounds : (union ?? host.bounds);
   // `start`/`end` follow the writing direction; the emitter has no direction, so resolve here.
@@ -483,6 +484,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // Only text needs the base writing direction: CoreText resolves neutral characters against it
   // (an RTL paragraph puts its trailing "." on the left). Container order is already measured,
   // so overriding the direction on a stack would mirror it a second time.
+  if (host.styles["unicode-bidi"] === "plaintext") node.plaintext = true;
   if (dir === "rtl") node.layoutDirection = "rtl";
   if (ta === "justify")
     note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");

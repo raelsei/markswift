@@ -98,6 +98,22 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
   const hint = nameHintOf(n.tag, n.attrs);
   const field = fieldOf(n.attrs);
   const tooltip = titleOf(n);
+  const hitTargets: string[] = [];
+  const targets = (child: LayoutNode): void => {
+    if (!renders(child)) return;
+    if (child.styles["pointer-events"] === "auto" && child.id !== undefined) hitTargets.push(child.id);
+    else child.children.forEach(targets);
+  };
+  if (n.styles["pointer-events"] === "none" && !passesTaps(n)) n.children.forEach(targets);
+  const schemes = (n.styles["color-scheme"] ?? "").split(/\s+/).filter((v) => v && v !== "only");
+  const changedScheme = n !== ctx.root && n.styles["color-scheme"] !== ctx.parent?.styles["color-scheme"];
+  const colorScheme = changedScheme
+    ? schemes.length === 1 && (schemes[0] === "light" || schemes[0] === "dark")
+      ? schemes[0]
+      : schemes.includes("normal") || (schemes.includes("light") && schemes.includes("dark"))
+        ? "system"
+        : undefined
+    : undefined;
   return {
     id: n.id ?? "",
     frame: n.bounds,
@@ -107,6 +123,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(selfAlign !== undefined ? { selfAlign } : {}),
     ...(selfAlignV !== undefined ? { selfAlignV } : {}),
     ...(rx || ry ? { relativeOffset: relative.offset } : {}),
+    ...(colorScheme ? { colorScheme } : {}),
     padding,
     style,
     confidence: "mapped",
@@ -120,6 +137,10 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     ...(states ? { states } : {}),
     ...(motion ? { motion } : {}),
     ...(passesTaps(n) ? { hitTesting: false as const } : {}),
+    ...(hitTargets.length ? { hitRegionTargets: hitTargets } : {}),
+    ...(n.styles["pointer-events"] === "auto" && ctx.parent?.styles["pointer-events"] === "none" && n.id !== undefined
+      ? { hitRegionTarget: n.id }
+      : {}),
     ...(tooltip ? { tooltip } : {}),
   };
 }

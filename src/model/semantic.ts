@@ -293,7 +293,7 @@ export interface FontSpec {
   opsz?: number;
   /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
   stretch?: number;
-  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  /** Bundled axes are clamped during analysis; system axes are clamped against the installed face at runtime. */
   axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
@@ -533,6 +533,8 @@ export interface SemBase extends SizeConstraints {
    * box out without it). Absent when zero.
    */
   relativeOffset?: [number, number];
+  /** A non-root color-scheme boundary; system restores the appearance outside the generated component. */
+  colorScheme?: "light" | "dark" | "system";
   /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,
@@ -588,6 +590,9 @@ export interface SemBase extends SizeConstraints {
    * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
    */
   hitTesting?: false;
+  /** Live descendant bounds which alone can receive taps in a pass-through container. */
+  hitRegionTargets?: string[];
+  hitRegionTarget?: string;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
   states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
@@ -668,6 +673,8 @@ export interface GridNode extends SemBase {
 }
 
 export interface TextNode extends SemBase {
+  /** CSS plaintext uses each paragraph's first strong character for its base direction. */
+  plaintext?: true;
   kind: "text";
   /** Source element, retained so emitters can scope text-layout strategies safely. */
   sourceTag?: string;

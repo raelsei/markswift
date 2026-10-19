@@ -44,7 +44,15 @@ export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[]
 
 /** App: a pass-through overlay (`pointer-events: none`), after the Button/tap gesture, so nothing inside answers a tap. */
 export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
-  return ctx.mode === "app" && n.hitTesting === false ? [".allowsHitTesting(false)"] : [];
+  if (ctx.mode !== "app") return [];
+  if (n.hitTesting === false) return [".allowsHitTesting(false)"];
+  return [
+    ...(n.hitRegionTarget ? [`.markswiftHitTarget(${str(n.hitRegionTarget)})`] : []),
+    ...(n.hitRegionTargets
+      ? [`.markswiftHitRegion(${str(n.id)}, targets: [${n.hitRegionTargets.map(str).join(", ")}])`]
+      : []),
+    ...(n.style.opacity === 0 && (n.action || n.kind === "control") ? [".contentShape(Rectangle())"] : []),
+  ];
 }
 
 function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
@@ -274,6 +282,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // Fidelity rows already place every child by measured offset (layout.ts `geometry`).
   if (n.selfAlignV && ctx.mode === "app")
     m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
+  if (n.colorScheme === "system") m.push(".modifier(MarkswiftRestoreColorScheme())");
+  else if (n.colorScheme) m.push(`.environment(\\.colorScheme, .${n.colorScheme})`);
   if (st.hidden) m.push(".hidden()");
   // A `<label>` tap changes its checkbox or radio, or focuses its text field, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;

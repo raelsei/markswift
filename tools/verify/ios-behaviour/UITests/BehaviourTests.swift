@@ -3,6 +3,22 @@ import XCTest
 
 /// Records what iOS exposes for every generated view in `cases.json`; `tools/verify/ios-behaviour.ts` judges it.
 final class BehaviourTests: XCTestCase {
+    @MainActor
+    func testPointerRiders() {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_POINTER_PROBE"] = "1"
+        app.launch()
+        let area = app.otherElements["pointer-area"]
+        XCTAssertTrue(area.waitForExistence(timeout: 10))
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8)).tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)).tap()
+        app.buttons["Resize"].tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8)).tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)).tap()
+        app.otherElements["hidden-area"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertEqual(app.staticTexts["pointer-result"].label, "under=2 live=2 hidden=1")
+    }
+
     struct Case: Decodable {
         struct Picker: Decodable { let current: String; let next: String }
         let view: String

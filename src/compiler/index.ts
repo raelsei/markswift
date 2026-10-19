@@ -373,6 +373,15 @@ function compileView(
   bands?: Array<[Screen, Screen | undefined]>,
 ): SwiftOutput & { warnings: ConversionWarning[] } {
   if (dark && dark.colorScheme !== screen.colorScheme) delete screen.colorScheme; // an adaptive pair forces a scheme only when both captures do
+  if (dark) {
+    const schemes = new Map<string, SemNode["colorScheme"]>();
+    visit(dark.root, (n) => {
+      schemes.set(n.id, n.colorScheme);
+    });
+    visit(screen.root, (n) => {
+      if (n.colorScheme !== schemes.get(n.id)) delete n.colorScheme;
+    });
+  }
   const lookup = screenTokens(
     tokens,
     screen,
