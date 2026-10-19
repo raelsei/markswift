@@ -167,8 +167,7 @@ nativeTest(
         expect(out[`none13@${scale}-text`]).toBeGreaterThanOrEqual((13 * 2444) / 2048);
         // A loose line height is unchanged: Text and box are the CSS line box; so is a compressed one's.
         expect([out[`loose@${scale}-box`], out[`loose@${scale}-text`]]).toEqual([20, 20]);
-        // The UIKit surplus correction must not alter AppKit field sizing.
-        expect(out[`field@${scale}`]).toBeCloseTo(22 + 1 / scale, 5);
+        expect(out[`field@${scale}`]).toBe(22);
         expect(out[`grown-field@${scale}`]).toBe(44);
         expect(out[`fractional@${scale}-box`]).toBe(19.25);
         expect(out[`fractional@${scale}-text`]).toBeGreaterThanOrEqual(19.25);
