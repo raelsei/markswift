@@ -134,6 +134,39 @@ export function attachPreferredSizes(root: Raw, sizes: PreferredSizes, pseudoSty
   walk(root, "");
 }
 
+/** Measure pseudo paint before/after cancelling relative insets, subtracting the host's own motion. */
+export function attachRelativePseudos(root: Raw, before: Raw): void {
+  const byBackend = new Map<number, Raw>();
+  const index = (n: Raw): void => {
+    if (n.backend !== undefined) byBackend.set(n.backend, n);
+    n.children.forEach(index);
+  };
+  index(before);
+  const walk = (n: Raw): void => {
+    if (n.pseudo && n.styles["position"] === "relative" && n.backend !== undefined) {
+      const old = byBackend.get(n.backend);
+      if (old?.bounds && n.bounds && old.parent?.bounds && n.parent?.bounds) {
+        n.preferredSize = {
+          width: "auto",
+          height: "auto",
+          insets: {
+            top: n.styles["top"] ?? "auto",
+            right: n.styles["right"] ?? "auto",
+            bottom: n.styles["bottom"] ?? "auto",
+            left: n.styles["left"] ?? "auto",
+          },
+          relativeOffset: [
+            old.bounds.x - old.parent.bounds.x - (n.bounds.x - n.parent.bounds.x),
+            old.bounds.y - old.parent.bounds.y - (n.bounds.y - n.parent.bounds.y),
+          ],
+        };
+      }
+    }
+    n.children.forEach(walk);
+  };
+  walk(root);
+}
+
 /** Join captured motion (browser/motion.ts) by element path; `<path>::before|::after` lands on that pseudo child. */
 export function attachMotion(root: Raw, motion: MotionByPath): void {
   const walk = (raw: Raw, path: string) => {
@@ -613,6 +646,7 @@ function pseudoElement(
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.states) node.states = raw.states;
   if (raw.motion) node.motion = raw.motion;
+  if (raw.preferredSize) node.preferredSize = raw.preferredSize;
   return node;
 }
 

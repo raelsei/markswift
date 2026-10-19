@@ -41,7 +41,12 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   // "\n" (each line takes its base direction from its own first strong character). Make every break U+2028 after a
   // corpus render shows it moves nothing else.
   const lineBreak = runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
-  const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx, lineBreak));
+  const parts = runs.map((r, i) => {
+    const text = runExpr(r, i, n, viewCase === undefined, ctx, lineBreak);
+    return r.relativeOffset
+      ? `(${text}).customAttribute(MarkswiftTextOffset(x: ${num(r.relativeOffset[0])}, y: ${num(r.relativeOffset[1])}))`
+      : text;
+  });
   if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
   // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time. A multi-line
@@ -50,6 +55,12 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     parts.length === 1
       ? parts[0]!.split("\n")
       : ["Text.markswiftRuns([", ...parts.flatMap((p) => `${p},`.split("\n").map((l) => `    ${l}`)), "])"];
+  const offsets = runs.flatMap((r) => (r.relativeOffset ? [r.relativeOffset] : []));
+  if (offsets.length) {
+    const x = Math.max(...offsets.map(([x]) => Math.abs(x)));
+    const y = Math.max(...offsets.map(([, y]) => Math.abs(y)));
+    out.push(`.textRenderer(MarkswiftOffsetTextRenderer(x: ${num(x)}, y: ${num(y)}))`);
+  }
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");

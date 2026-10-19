@@ -24,12 +24,9 @@ browserTest(
     expect(byId.get("b")!.bounds.y).toBe(50);
     expect(r.preferredSize?.insets).toEqual({ top: "7px", right: "auto", bottom: "auto", left: "10%" });
     expect(result.code.split(".offset(x: 30.0, y: 7.0)").length - 1).toBe(1);
+    expect(result.code).toContain(".customAttribute(MarkswiftTextOffset(x: 0.0, y: -4.0))");
     const messages = result.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message);
-    for (const m of [
-      "relative percentage insets → offset pinned at (30, 7)px",
-      "position: sticky (snapshot position)",
-      "inline <span> relative offset (0, -4) dropped (merged into the paragraph's Text)",
-    ])
+    for (const m of ["relative percentage insets → offset pinned at (30, 7)px", "position: sticky (snapshot position)"])
       expect(messages).toContain(m);
   },
   60_000,
@@ -49,6 +46,27 @@ browserTest(
       "float → row plus the lines that clear it; re-wrapped at another width the split lands elsewhere",
     );
     expect(result.code.split(".offset(x: 0.0, y: 5.0)").length - 1).toBe(1);
+  },
+  60_000,
+);
+
+browserTest(
+  "nested inline and generated text offsets preserve flow and add only their own translation",
+  async () => {
+    const result = await convertHtml(
+      `<style>
+    main { width: 300px; font: 16px/24px system-ui }
+    p { margin: 0; height: 80px; position: relative; top: 3px }
+    span { position: relative; left: 7px; top: 5px }
+    b { position: relative; left: -2px; top: -1px }
+    p::before { content: "before"; position: relative; left: 11px; top: 10% }
+    p::after { content: "after"; position: relative; right: 4px; bottom: 6px }
+  </style><main data-markswift-root><p>start <span>outer <b>inner</b></span> end</p></main>`,
+      OPTIONS,
+    );
+    for (const pair of ["7.0, y: 5.0", "5.0, y: 4.0", "11.0, y: 8.0", "-4.0, y: -6.0"])
+      expect(result.code).toContain(`MarkswiftTextOffset(x: ${pair})`);
+    expect(result.code.match(/\.offset\(x: 0.0, y: 3.0\)/g)).toHaveLength(1);
   },
   60_000,
 );

@@ -487,7 +487,7 @@ captured (a capture warning says so).
   descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
   hit it.
 - Relative offsets are measured in Chrome, including percentage-height and stretched containing blocks, and stay
-  pinned at those measured pixels. Offsets of merged inline text runs and inline `::before`/`::after` are not drawn.
+  pinned at those measured pixels. Inline text and generated pseudo-element offsets move paint without changing line layout.
 - Generated images (`content: url()`, inside `list-style-image`) are drawn at their captured size and do not scale with
   Dynamic Type; outside list markers whose captured widths differ (alphabetic, roman, decimal from 10) keep a per-row
   offset, so such lists stay unrolled instead of a `ForEach`.

@@ -142,7 +142,7 @@ describe("placement", () => {
     expect(nodes.flatMap((n) => n.diagnostics.map((d) => d.message))).toContain("position: sticky (snapshot position)");
   });
 
-  test("an inline run's offset is dropped and reported", () => {
+  test("an inline run paints its offset without changing line layout", () => {
     const span = {
       ...el("span", { x: 14, y: -1, w: 10, h: 14 }, { display: "inline", position: "relative" }, [
         textNode("b", { x: 14, y: -1, w: 10, h: 14 }),
@@ -160,11 +160,10 @@ describe("placement", () => {
     ]);
     const screen = inferScreen(doc(el("main", { x: 0, y: 0, w: 300, h: 20 }, { display: "block" }, [p])), "s");
     const t = flatten(screen.root).find((n): n is TextNode => n.kind === "text")!;
-    expect(t.diagnostics).toContainEqual({
-      level: "approximated",
-      feature: "position: relative",
-      message: "inline <span> relative offset (0, -4) dropped (merged into the paragraph's Text)",
-    });
-    expect(emitSwift(screen, "RelView", { mode: "app" }).view).not.toContain(".offset(x: 0.0, y: -4.0)");
+    expect(t.runs.find((r) => r.text === "b")?.relativeOffset).toEqual([0, -4]);
+    expect(t.diagnostics.some((d) => d.message.includes("relative offset"))).toBe(false);
+    expect(emitSwift(screen, "RelView", { mode: "app" }).view).toContain(
+      ".customAttribute(MarkswiftTextOffset(x: 0.0, y: -4.0))",
+    );
   });
 });

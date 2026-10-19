@@ -15,6 +15,7 @@ import {
   toLayout,
   attachPreferredSizes,
   attachMotion,
+  attachRelativePseudos,
   rawAt,
   type DomSnapshot,
 } from "./snapshot.ts";
@@ -68,15 +69,23 @@ function sniffImage(b: Buffer): string | undefined {
 }
 
 /** Marks every transformed element and every `position: relative` one (`TRANSFORMED_MARK`, `RELATIVE_MARK`). */
-async function markTransformed(page: Page): Promise<void> {
-  await page.evaluate(
+async function markTransformed(page: Page): Promise<boolean> {
+  return page.evaluate(
     ([transformed, relative]) => {
+      let pseudos = false;
       for (const el of document.querySelectorAll("*")) {
         const cs = getComputedStyle(el);
         if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
           el.setAttribute(transformed, "");
         if (cs.position === "relative") el.setAttribute(relative, "");
+        for (const pseudo of ["before", "after"]) {
+          if (getComputedStyle(el, `::${pseudo}`).position === "relative") {
+            el.setAttribute(`${relative}-${pseudo}`, "");
+            pseudos = true;
+          }
+        }
       }
+      return pseudos;
     },
     [TRANSFORMED_MARK, RELATIVE_MARK] as const,
   );
@@ -330,7 +339,7 @@ export class BrowserCapture {
       );
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
-      await markTransformed(page);
+      const relativePseudos = await markTransformed(page);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
       // <style> is appended last so node indices of everything else are unchanged. The individual
       // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
@@ -345,9 +354,12 @@ export class BrowserCapture {
       }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
       const selectors = [spec.root, ...roots.map((_, i) => `[${LAYER_MARK}="${i}"]`)];
       const before = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const pseudoBefore = relativePseudos
+        ? snapshotToTree((await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot)
+        : undefined;
       await page.evaluate((css) => {
         document.getElementById("__markswift_notransform")!.textContent += css;
-      }, `\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      }, `\n[${RELATIVE_MARK}], [${RELATIVE_MARK}-before]::before, [${RELATIVE_MARK}-after]::after { inset: auto !important; }`);
       const after = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
       const captures = [sizes, ...layerSizes.map((layer) => layer.sizes)];
       captures.forEach((captured, i) => {
@@ -360,6 +372,7 @@ export class BrowserCapture {
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
       const tree = snapshotToTree(snapA, snapB, states);
+      if (pseudoBefore) attachRelativePseudos(tree, pseudoBefore);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);

@@ -322,6 +322,8 @@ export type CounterStyle =
   | "upper-roman";
 
 export interface TextRun {
+  /** Paint-only translation; does not change glyph advances or line boxes. */
+  relativeOffset?: [number, number];
   text: string;
   font: FontSpec;
   color: Color;

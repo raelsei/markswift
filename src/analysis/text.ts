@@ -287,6 +287,14 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     if (paint && !hidden) run.paint = paint;
     const el = r.styleOf;
     const chain = inlineChain(host, el);
+    const offset: [number, number] = [0, 0];
+    for (const inline of chain) {
+      const relative = relativeOffset(inline, host);
+      offset[0] += relative.offset[0];
+      offset[1] += relative.offset[1];
+      for (const loss of relative.losses) note("approximated", "position: relative", loss);
+    }
+    if (offset.some((v) => v !== 0)) run.relativeOffset = offset;
     // An inline element painting its own box (`mark`'s background, `kbd`'s border) cannot be
     // carried by a run: SwiftUI has no per-run box. Every box on the chain is collected for a
     // background layer below — `<mark><b>x</b></mark>` paints mark's highlight behind bold text.
@@ -570,13 +578,6 @@ function reportInlineEffects(
           `inline <${el.tag}> ${prop}: ${v.slice(0, 40)} → not applied to its glyphs (merged into the paragraph's Text)`,
         );
     }
-    const [x, y] = relativeOffset(el, host).offset;
-    if (x || y)
-      note(
-        "approximated",
-        "position: relative",
-        `inline <${el.tag}> relative offset (${x}, ${y}) dropped (merged into the paragraph's Text)`,
-      );
   }
   const hv = host.styles["visibility"];
   if (!hidden && (hv === "hidden" || hv === "collapse"))
