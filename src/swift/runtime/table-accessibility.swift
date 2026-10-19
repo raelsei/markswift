@@ -1,10 +1,12 @@
 #if os(iOS)
 import UIKit
 
+@MainActor
 private final class MarkswiftWeakTableCell {
     weak var value: MarkswiftDataCellView?
     init(_ value: MarkswiftDataCellView) { self.value = value }
 }
+@MainActor
 private final class MarkswiftTableRegistry {
     weak var table: MarkswiftDataTableView?
     var cells: [String: MarkswiftWeakTableCell] = [:]
