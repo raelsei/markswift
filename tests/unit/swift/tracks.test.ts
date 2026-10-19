@@ -41,6 +41,7 @@ struct TracksFixture: View {
                 Text("Title").frame(maxWidth: .infinity, maxHeight: .infinity).markswiftGridCell(column: 1, row: 3)
             }
             Color.red.frame(maxWidth: .infinity).markswiftFraction(0.75)
+            Color.blue.frame(maxWidth: .infinity).markswiftFraction(0.5, right: true)
         }
         .frame(width: 390)
     }

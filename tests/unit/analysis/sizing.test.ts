@@ -242,45 +242,49 @@ test.each<[string, LayoutNode, InferenceContext]>([
   expect(sizing(n, context).width.kind).not.toBe("fraction");
 });
 
-test("app wraps a fraction box in markswiftFraction after its paint; fidelity pins the captured px", () => {
-  const doc: LayoutDoc = {
-    version: LAYOUT_DOC_VERSION,
-    source: "fraction.html",
-    combo: { screen: "fraction", theme: "light" },
-    size: { w: 300, h: 100 },
-    viewport: { x: 0, y: 0, w: 300, h: 100 },
-    conditions: [],
-    dpr: 1,
-    canvas: "white",
-    fonts: [],
-    root: {
-      id: "root",
-      tag: "main",
-      attrs: {},
-      styles: { display: "block" },
-      bounds: { x: 0, y: 0, w: 300, h: 100 },
-      preferredSize: { width: "300px", height: "100px" },
-      children: [
-        {
-          id: "half",
-          tag: "div",
-          attrs: {},
-          styles: { display: "block", "background-color": "rgb(220, 80, 60)" },
-          bounds: { x: 0, y: 0, w: 150, h: 40 },
-          preferredSize: { width: "50%", height: "40px" },
-          children: [],
-        },
-      ],
-    },
-  };
-  const app = compileLayout(doc, { name: "FractionView", mode: "app" }).code;
-  expect(app).toContain(".markswiftFraction(0.5)");
-  expect(app.indexOf(".background(")).toBeGreaterThan(-1);
-  expect(app.indexOf(".background(")).toBeLessThan(app.indexOf(".markswiftFraction(0.5)"));
-  const fidelity = compileLayout(doc, { name: "FractionView", mode: "fidelity" });
-  expect(fidelity.code).toContain(".frame(width: 150.0");
-  expect(fidelity.code).not.toContain("markswiftFraction");
-  expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message)).toContain(
-    "width 50% pinned at 150px; it does not follow the container at other widths",
-  );
-});
+test.each(["ltr", "rtl"])(
+  "app aligns a fraction to its %s parent, independently of the child's direction",
+  (direction) => {
+    const doc: LayoutDoc = {
+      version: LAYOUT_DOC_VERSION,
+      source: "fraction.html",
+      combo: { screen: "fraction", theme: "light" },
+      size: { w: 300, h: 100 },
+      viewport: { x: 0, y: 0, w: 300, h: 100 },
+      conditions: [],
+      dpr: 1,
+      canvas: "white",
+      fonts: [],
+      root: {
+        id: "root",
+        tag: "main",
+        attrs: {},
+        styles: { display: "block", direction },
+        bounds: { x: 0, y: 0, w: 300, h: 100 },
+        preferredSize: { width: "300px", height: "100px" },
+        children: [
+          {
+            id: "half",
+            tag: "div",
+            attrs: {},
+            styles: { display: "block", direction: "ltr", "background-color": "rgb(220, 80, 60)" },
+            bounds: { x: direction === "rtl" ? 150 : 0, y: 0, w: 150, h: 40 },
+            preferredSize: { width: "50%", height: "40px" },
+            children: [],
+          },
+        ],
+      },
+    };
+    const app = compileLayout(doc, { name: "FractionView", mode: "app" }).code;
+    const modifier = `.markswiftFraction(0.5${direction === "rtl" ? ", right: true" : ""})`;
+    expect(app).toContain(modifier);
+    expect(app.indexOf(".background(")).toBeGreaterThan(-1);
+    expect(app.indexOf(".background(")).toBeLessThan(app.indexOf(modifier));
+    const fidelity = compileLayout(doc, { name: "FractionView", mode: "fidelity" });
+    expect(fidelity.code).toContain(".frame(width: 150.0");
+    expect(fidelity.code).not.toContain("markswiftFraction");
+    expect(fidelity.diagnostics.flatMap((d) => d.diagnostics).map((d) => d.message)).toContain(
+      "width 50% pinned at 150px; it does not follow the container at other widths",
+    );
+  },
+);
