@@ -171,7 +171,14 @@ struct MarkswiftLineHeight: ViewModifier {
             // A Text's height is rounded up to the pixel, so the trim is too: the box is exactly the CSS line.
             let tight = factor < natural && !compressLines
             let overflow = tight ? (natural * size * scale).rounded(.up) / scale - factor * size : 0
-            MarkswiftLineBox(lineHeight: exactLineBox && !tight ? factor * size : nil, scale: scale) {
+            #if os(iOS)
+            let lineBoxHeight = exactLineBox && !tight ? factor * size : nil
+            #else
+            // AppKit lays out adjacent native controls on pixel-rounded baselines.
+            // Preserve that paragraph box so fractional labels do not shift the rest of the form.
+            let lineBoxHeight: CGFloat? = nil
+            #endif
+            MarkswiftLineBox(lineHeight: lineBoxHeight, scale: scale) {
                 content.lineHeight(.multiple(factor: tight ? natural : factor))
             }.padding(.top, shift - trim)
                 .padding(.bottom, -shift - trim - overflow)
