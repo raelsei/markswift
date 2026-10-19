@@ -160,7 +160,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       ...(alt
         ? {
             alt,
-            font: fontOf(n.styles, ctx.bundledFamilies),
+            font: fontOf(n.styles, ctx.bundledFamilies, n.resolvedFont),
             ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
           }
         : alt !== undefined
@@ -221,7 +221,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
             .map((g) => buildText(n, g, childCtx))
             .filter((t) => t.runs.length > 0)
         : [],
-      font: fontOf(n.styles, ctx.bundledFamilies),
+      font: fontOf(n.styles, ctx.bundledFamilies, n.resolvedFont),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
       ...(n.styles["appearance"] !== undefined ? { appearance: n.styles["appearance"] } : {}),
       ...(parseColor(n.styles["accent-color"]) ? { accent: parseColor(n.styles["accent-color"]) } : {}),

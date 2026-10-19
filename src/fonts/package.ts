@@ -31,7 +31,7 @@ export async function packageFonts(
   // same key are the same font cut up, and iOS can only hold one of them.
   const groups: Record<string, FontFace[]> = {};
   for (const f of faces) {
-    const k = `${f.family}|${f.style}|${f.weight.join("-")}`;
+    const k = `${f.family}|${f.style}|${f.weight.join("-")}|${(f.stretch ?? [100, 100]).join("-")}`;
     (groups[k] ??= []).push(f);
   }
   const claimed = new Map<string, string>();
@@ -73,7 +73,10 @@ export async function packageFonts(
     const weightName =
       staticWeight !== undefined && staticWeight !== 400 ? (WEIGHT_SUBFAMILY[staticWeight] ?? `W${staticWeight}`) : "";
     const subfamily = [weightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
-    const stem = fontFileStem(chosen.family, subfamily, claimed);
+    const stretch = chosen.stretch ?? [100, 100];
+    const family =
+      stretch[0] === 100 && stretch[1] === 100 ? chosen.family : `${chosen.family} Width ${stretch.join("-")}`;
+    const stem = fontFileStem(family, subfamily, claimed);
     if (stem === undefined) {
       note(
         "approximated",
@@ -82,7 +85,7 @@ export async function packageFonts(
       continue;
     }
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
-    const tool = await convert(bytes, chosen.family, subfamily, signal);
+    const tool = await convert(bytes, family, subfamily, signal);
     if (typeof tool === "string") {
       // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
       const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
@@ -104,7 +107,9 @@ export async function packageFonts(
       useTypoMetrics: tool.useTypoMetrics,
     };
     packaged.push({
-      family: chosen.family,
+      family,
+      sourceFamily: chosen.family,
+      stretch,
       file,
       style: chosen.style,
       weight: chosen.weight,
@@ -113,7 +118,7 @@ export async function packageFonts(
       converted: tool.converted,
       renamed: tool.renamed,
     });
-    claimed.set(stem.toLowerCase(), chosen.family);
+    claimed.set(stem.toLowerCase(), family);
     if (!chosen.loaded)
       note(
         "approximated",

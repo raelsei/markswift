@@ -16,6 +16,8 @@ import { surplusFloor } from "./frames.ts";
 function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number; descent: number; natural: number } {
   const m = f.family.kind === "custom" ? metrics[f.family.name.toLowerCase()] : undefined;
   // ponytail: SF metrics of the converting Mac's Chrome (macOS 27); other macOS versions ship other SF builds.
+  if (!m && f.family.kind === "custom" && f.family.name === "Menlo")
+    return { ascent: 1901 / 2048, descent: 483 / 2048, natural: 2384 / 2048 };
   if (!m) return { ascent: 1980 / 2048, descent: 432 / 2048, natural: SYSTEM_LINE_HEIGHT };
   return {
     ascent: m.ascent / m.upem,
@@ -132,7 +134,10 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     const leadingPx = lh - ascent - descent;
     const below = descent + leadingPx - 2 * Math.floor(leadingPx / 2);
     args.push(`ascent: ${num(ascent / s)}, descent: ${num(below / s)}`);
-    if (first.font.family.kind === "custom" && ctx.fontMetrics[first.font.family.name.toLowerCase()])
+    if (
+      first.font.family.kind === "custom" &&
+      (first.font.family.name === "Menlo" || ctx.fontMetrics[first.font.family.name.toLowerCase()])
+    )
       args.push(`natural: ${num(r.natural)}`);
     // Half-leading only when the measured box is the line box (not a clipped box or a glyph-box
     // union between flow children) — the same test the padding used.

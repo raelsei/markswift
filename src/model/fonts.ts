@@ -1,5 +1,7 @@
 /** Font data passed explicitly through one conversion. No process-wide state. */
 export interface BundledFamily {
+  /** Width-descriptor alternatives, registered with distinct native family names. */
+  widths?: Array<{ name: string; stretch: [number, number] }>;
   /** `font-weight` range the family covers; `[400, 400]` for a single static face. */
   weight: [number, number];
   /** `wght` axis range, when the file has one; without it each weight is its own static face. */

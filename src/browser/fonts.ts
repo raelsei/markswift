@@ -1,5 +1,6 @@
+import type { Raw } from "./snapshot.ts";
 import { createHash } from "node:crypto";
-import type { Page } from "playwright-core";
+import type { CDPSession, Page } from "playwright-core";
 import type { FontFace as FontFaceRecord } from "../model/layout.ts";
 
 /**
@@ -27,6 +28,25 @@ export async function collectFontFaces(
         .filter((n) => Number.isFinite(n));
       if (!nums.length) return [400, 400];
       return [Math.min(...nums), Math.max(...nums)];
+    };
+    const stretchRange = (s: string): [number, number] => {
+      const keywords: Record<string, number> = {
+        "ultra-condensed": 50,
+        "extra-condensed": 62.5,
+        condensed: 75,
+        "semi-condensed": 87.5,
+        normal: 100,
+        "semi-expanded": 112.5,
+        expanded: 125,
+        "extra-expanded": 150,
+        "ultra-expanded": 200,
+      };
+      const values = s
+        .trim()
+        .split(/\s+/)
+        .map((v) => keywords[v] ?? Number.parseFloat(v))
+        .filter(Number.isFinite);
+      return values.length ? [Math.min(...values), Math.max(...values)] : [100, 100];
     };
     // `src` is a comma list of `url(…) format(…)` / `local(…)`; commas inside url() or a
     // quoted string are not separators, so the split has to track depth and quotes.
@@ -94,6 +114,7 @@ export async function collectFontFaces(
           faces.push({
             family,
             weight: weightRange(st.getPropertyValue("font-weight") || "normal"),
+            stretch: stretchRange(st.getPropertyValue("font-stretch") || "normal"),
             style: styleDesc === "italic" || styleDesc === "oblique" ? styleDesc : "normal",
             ...(st.getPropertyValue("unicode-range") ? { unicodeRange: st.getPropertyValue("unicode-range") } : {}),
             src,
@@ -118,17 +139,20 @@ export async function collectFontFaces(
       if (f.status !== "loaded") return;
       const s = f.style.split(/\s+/)[0]!.toLowerCase();
       loaded.add(
-        `${unquote(f.family).toLowerCase()}|${s === "italic" || s === "oblique" ? s : "normal"}|${weightRange(f.weight).join(" ")}`,
+        `${unquote(f.family).toLowerCase()}|${s === "italic" || s === "oblique" ? s : "normal"}|${weightRange(f.weight).join(" ")}|${stretchRange(f.stretch).join(" ")}`,
       );
     });
     const seen = new Set<string>();
     const out: FontFaceRecord[] = [];
     for (const f of faces) {
       if (!f.src.length) continue;
-      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
+      const key = `${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.stretch?.join(" ")}|${f.unicodeRange ?? ""}|${f.src.map((s) => s.url).join(",")}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...f, loaded: loaded.has(`${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}`) });
+      out.push({
+        ...f,
+        loaded: loaded.has(`${f.family.toLowerCase()}|${f.style}|${f.weight.join(" ")}|${f.stretch?.join(" ")}`),
+      });
     }
     return { faces: out, unreadable };
   }, sheetText);
@@ -185,4 +209,39 @@ export async function readFontBytes(
     }
   }
   return files;
+}
+
+/** Query only monospace text hosts; a mixed fallback run must not be relabelled as one face. */
+export async function attachResolvedFonts(cdp: CDPSession, tree: Raw): Promise<void> {
+  const hosts: Raw[] = [];
+  const walk = (n: Raw): void => {
+    if (
+      n.type === 1 &&
+      n.backend &&
+      /monospace|menlo|monaco|courier|sfmono/i.test(n.styles["font-family"] ?? "") &&
+      n.children.some((c) => c.type === 3 && c.text?.trim())
+    )
+      hosts.push(n);
+    n.children.forEach(walk);
+  };
+  walk(tree);
+  if (!hosts.length) return;
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  try {
+    await cdp.send("DOM.getDocument", { depth: 0 });
+    const { nodeIds } = await cdp.send("DOM.pushNodesByBackendIdsToFrontend", {
+      backendNodeIds: hosts.map((n) => n.backend!),
+    });
+    for (const [i, nodeId] of nodeIds.entries()) {
+      if (!nodeId) continue;
+      const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+      const painted = fonts.filter((f) => f.glyphCount > 0);
+      if (painted.length && painted.every((f) => !f.isCustomFont && f.familyName === painted[0]!.familyName))
+        hosts[i]!.resolvedFont = painted[0]!.familyName;
+    }
+  } finally {
+    await cdp.send("CSS.disable");
+    await cdp.send("DOM.disable");
+  }
 }

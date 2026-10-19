@@ -473,7 +473,7 @@ captured (a capture warning says so).
 - Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
 - `<select multiple>` and `<datalist>`.
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
-- `ui-monospace` maps to a different native face (an explicit support boundary).
+- Installed monospace faces other than captured Menlo still use the native monospaced design (reported).
 
 ## Known gaps
 
@@ -483,7 +483,7 @@ captured (a capture warning says so).
 - Text and paint riders: a paragraph's own `unicode-bidi: plaintext` and the bidi isolation of list and
   `<summary>` markers are not mapped; `color-scheme` is read on the root only, when it names one scheme; on system
   fonts `font-stretch` snaps to SF's nearest width and other variation axes are dropped (reported); the `@font-face`
-  `font-stretch` descriptor does not select faces; a `pointer-events: none` overlay with a `pointer-events: auto`
+  `font-stretch` descriptor selects separately packaged width faces in LayoutDoc 5; a `pointer-events: none` overlay with a `pointer-events: auto`
   descendant stays hittable as a whole; an aria-hidden transparent control is dropped even when the pointer could
   hit it.
 - Relative offsets are measured in Chrome, including percentage-height and stretched containing blocks, and stay

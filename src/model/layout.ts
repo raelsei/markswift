@@ -105,6 +105,8 @@ export interface LayoutNode {
    * `currentSrc ?? attrs["src"]`.
    */
   currentSrc?: string;
+  /** Browser-resolved installed font for a uniformly painted monospace run; absent when mixed or unknown. */
+  resolvedFont?: string;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
   /** Authored/cascaded size intent, independent of measured bounds; absent for text and pseudo-element nodes. */
@@ -139,6 +141,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
     currentSrc: z.string().optional(),
+    resolvedFont: z.string().optional(),
     styles: z.record(z.string(), z.string()),
     preferredSize: PreferredSize.optional(),
     bounds: Rect,
@@ -176,6 +179,8 @@ export const FontFace = z.object({
   /** Resolved `font-weight` range; a single weight is `[w, w]`, a variable range `[100, 900]`. */
   weight: z.tuple([z.number(), z.number()]),
   style: z.enum(["normal", "italic", "oblique"]),
+  /** Resolved CSS font-stretch descriptor range; absent means normal (100%). */
+  stretch: z.tuple([z.number().positive(), z.number().positive()]).optional(),
   /** `unicode-range`, verbatim, when the face declares one — a subsetted face covers only part of the text. */
   unicodeRange: z.string().optional(),
   /**

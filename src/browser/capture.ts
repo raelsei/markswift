@@ -6,7 +6,7 @@
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
 import { settle, withFrozenProgress } from "./settle.ts";
-import { collectFontFaces, readFontBytes } from "./fonts.ts";
+import { collectFontFaces, readFontBytes, attachResolvedFonts } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
 import {
@@ -372,6 +372,7 @@ export class BrowserCapture {
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
       const tree = snapshotToTree(snapA, snapB, states);
+      await attachResolvedFonts(cdp, tree);
       if (pseudoBefore) attachRelativePseudos(tree, pseudoBefore);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);

@@ -69,6 +69,7 @@ export interface Raw {
   attrs: Record<string, string>;
   /** `<img>` only: see `LayoutNode.currentSrc`. */
   currentSrc?: string;
+  resolvedFont?: string;
   styles: Record<string, string>;
   preferredSize?: LayoutNode["preferredSize"];
   /** Snapshot bounds: border box for elements, line-box union for inline/text, the generated text's box for pseudo-elements. */
@@ -496,6 +497,7 @@ function element(raw: Raw, origin: { x: number; y: number }, identity: NodeIdent
   if (id !== undefined) node.id = id;
   if (raw.paint !== undefined) node.paint = raw.paint;
   if (raw.currentSrc !== undefined) node.currentSrc = raw.currentSrc;
+  if (raw.resolvedFont !== undefined) node.resolvedFont = raw.resolvedFont;
   if (raw.states) node.states = raw.states;
   if (raw.motion) node.motion = raw.motion;
   if (raw.pseudoStyles) node.pseudoStyles = raw.pseudoStyles;

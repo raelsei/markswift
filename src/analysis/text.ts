@@ -182,7 +182,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     }
     pendingSpace = false;
     prevRun = r;
-    const run: TextRun = { text, font: fontOf(s, ctx.bundledFamilies), color };
+    const run: TextRun = { text, font: fontOf(s, ctx.bundledFamilies, r.styleOf.resolvedFont), color };
     if (img) {
       // A replaced image: no font, decoration, shadow, link or opacity applies.
       const url = img.currentSrc ?? img.attrs["src"] ?? "";
@@ -230,7 +230,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
       // it does not implement `ui-rounded`, plain SF Pro. The glyphs are right for the platform
       // and different from the reference, so every comparison against one has to know.
       const design = SYSTEM_DESIGNS[resolved.toLowerCase()];
-      if (design && design !== "default") {
+      if (run.font.family.kind === "system" && design && design !== "default") {
         note(
           "approximated",
           /^ui-(monospace|rounded|serif)$/i.test(resolved) ? `font-family: ${resolved.toLowerCase()}` : "font-family",

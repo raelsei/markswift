@@ -5,6 +5,9 @@ import type { ConversionWarning } from "../model/semantic.ts";
 export interface PackagedFace {
   /** CSS family name — what `font-family` declarations say and what the emitter emits. */
   family: string;
+  /** Authored family when width faces are registered under distinct native names. */
+  sourceFamily?: string;
+  stretch?: [number, number];
   /** File name under `Fonts/`. */
   file: string;
   style: "normal" | "italic" | "oblique";

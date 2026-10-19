@@ -12,7 +12,7 @@ const FINGERPRINTS: Record<number, string> = {
   2: "cad15d763304e55bd3849ea25b46a4af44d2ba4d189bf6bb6ff4fd4fa78f6934",
   3: "de56c7ffecbd76f793281327e13bf2e64aa3f6260723ec8bf87d4c0a0f3ab2e8",
   4: "bc365965ab8703da96f5935ec0072b609c3412875bbfcf2e63c45604853b1896",
-  5: "4c1dd323755604c325ffb22c519dfe2c5df7dcc685af6918cf15734e69f59059",
+  5: "2db7f96f39ff7f92d21fd9cdd2af5dbbbcf54c2aa892777915ab4718ebed6876",
 };
 /** The LayoutDoc version not yet shipped in a `v*` tag, or null. The release commit sets it back to null. */
 const UNRELEASED_LAYOUT_DOC_VERSION: number | null = 5;
