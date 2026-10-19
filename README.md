@@ -497,7 +497,8 @@ captured (a capture warning says so).
 - Inline generated images (`content: url()`, inside `list-style-image`) scale with their text under Dynamic Type.
   Standalone generated images scale with their pseudo-element’s font as well. Outside counter markers align their
   trailing edges, so unequal marker widths no longer prevent otherwise matching list rows from becoming a `ForEach`.
-- Native tables (`MarkswiftTable`): cells read in DOM order and `<th>` announces as a header, but VoiceOver table navigation (row/column position, header association) is not translated (`approximated table` on every admitted table).
+- Native tables expose iOS row/column navigation, spans and header associations while preserving native controls.
+  `scope=colgroup` remains unsupported; macOS retains accessibility content without two-dimensional table navigation.
 - Layout: percentage 2D translations and SVG cover/contain images follow their rendered box in app mode;
   percentage translations in flattened 3D transforms remain captured geometry.
 - Overlays and menus: a trigger inside an open layer (nested dialog, submenu) is not opened; a trigger inside a
