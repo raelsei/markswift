@@ -4,7 +4,10 @@ import SwiftUI
 struct HostApp: App {
     init() { BehaviourRegistry.registerFonts() }
     var body: some Scene {
-        WindowGroup { HostRoot() }
+        WindowGroup {
+            if ProcessInfo.processInfo.environment["MARKSWIFT_GREEDY_PROBE"] == "1" { GreedyProbe() }
+            else { HostRoot() }
+        }
     }
 }
 
@@ -41,5 +44,22 @@ struct HostRoot: View {
         // Animations rest at the settled look unless a motion launch asks for the live clock.
         .environment(\.markswiftMotionTime, env["MARKSWIFT_MOTION"] == "live" ? nil : Double.infinity)
         .environment(\.markswiftForcedStates, env["MARKSWIFT_REDUCE_MOTION"] == "1" ? .reduceMotion : [])
+    }
+}
+
+
+private struct GreedyProbe: View {
+    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 14
+    @State private var narrow = false
+    @State private var height: CGFloat = 0
+    var body: some View {
+        VStack {
+            MarkswiftGreedyText(text: "Deploys, failures and mentions.", font: .system(size: size), color: .primary,
+                size: 14, style: .subheadline, lineHeight: 20, ascent: 1, descent: 0.286, natural: 2444.0 / 2048)
+                .frame(width: narrow ? 100 : 240)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            Button("Resize") { narrow.toggle() }
+            Text(String(Double(height))).accessibilityIdentifier("greedy-height")
+        }
     }
 }
