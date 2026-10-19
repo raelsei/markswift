@@ -34,7 +34,7 @@ Losses are reported per node as mapped, approximated or unmapped.
 
 - CLI `markswift convert`, `markswift build`; API `convert`, `convertHtml`, `compileLayout`, `buildLibrary`.
 - Two modes: `app` (the product, reflowing, Dynamic Type) and `fidelity` (pixel-pinned, for verification).
-- LayoutDoc 4 is a frozen, versioned capture schema; a cache, not an interchange format.
+- LayoutDoc 5 is a frozen, versioned capture schema; a cache, not an interchange format.
 - Requirements: Node ≥ 20 or Bun, Google Chrome, optional python3 fontTools/brotli, Xcode to compile output.
 
 ## Evidence on Hand

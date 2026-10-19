@@ -26,6 +26,49 @@ function faceRatios(f: TextRun["font"], metrics: FontMetrics): { ascent: number;
 
 export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   const runs = n.runs;
+  const plain = runs.length === 1 ? runs[0] : undefined;
+  if (
+    ctx.mode === "app" &&
+    n.lines > 1 &&
+    n.align === "leading" &&
+    n.layoutDirection !== "rtl" &&
+    !n.noWrap &&
+    !n.balance &&
+    !n.unbreakable &&
+    (!n.truncate || (n.lineLimit !== undefined && n.lineLimit > 1)) &&
+    (n.lineLimit === undefined || n.lineLimit > 1) &&
+    !n.lineBoxGrowth &&
+    plain &&
+    plain.font.family.kind === "custom" &&
+    ctx.fontMetrics[plain.font.family.name.toLowerCase()] !== undefined &&
+    plain.font.lineHeight !== undefined &&
+    plain.font.lineHeight >= plain.font.size * faceRatios(plain.font, ctx.fontMetrics).natural &&
+    !plain.kerning &&
+    !plain.italic &&
+    !plain.decoration &&
+    !plain.shadow &&
+    !plain.paint &&
+    !plain.tabularNums &&
+    !plain.baselineOffset &&
+    !plain.transform &&
+    !plain.relativeOffset &&
+    !plain.link &&
+    !plain.image &&
+    !plain.counter &&
+    plain.gap === undefined &&
+    /^[\x20-\x7E\n]+$/.test(plain.text)
+  ) {
+    const r = faceRatios(plain.font, ctx.fontMetrics);
+    const size = plain.font.size;
+    const ascent = Math.round(r.ascent * size);
+    const descent = Math.round(r.descent * size);
+    const leading = plain.font.lineHeight - ascent - descent;
+    const below = descent + leading - 2 * Math.floor(leading / 2);
+    return [
+      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)}, lineLimit: ${n.lineLimit ?? "nil"})`,
+    ];
+  }
+
   // Whole-text decisions (case, line height, shadow) come from the runs that carry glyphs.
   const glyphs = runs.filter((r) => r.gap === undefined && !r.image);
   // `.textCase` covers the whole Text: only a transform every run shares; otherwise (and for
@@ -40,9 +83,14 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   // resolves the paragraph once and reorders line by line. ponytail: only text with controls; plain RTL text keeps
   // "\n" (each line takes its base direction from its own first strong character). Make every break U+2028 after a
   // corpus render shows it moves nothing else.
-  const lineBreak = runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
-  const parts = runs.map((r, i) => runExpr(r, i, n, viewCase === undefined, ctx, lineBreak));
-  if (n.layoutDirection === "rtl") parts.unshift("Text.markswiftRTL");
+  const lineBreak = n.plaintext || runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
+  const parts = runs.map((r, i) => {
+    const text = runExpr(r, i, n, viewCase === undefined, ctx, lineBreak);
+    return r.relativeOffset
+      ? `(${text}).customAttribute(MarkswiftTextOffset(x: ${num(r.relativeOffset[0])}, y: ${num(r.relativeOffset[1])}))`
+      : text;
+  });
+  if (n.layoutDirection === "rtl" && !n.plaintext) parts.unshift("Text.markswiftRTL");
   // An array, not a `Text + Text + …` chain: the chain's typecheck cost is superlinear (14 runs
   // exhaust the solver on the iOS 18 SDK); array elements are checked one at a time. A multi-line
   // part (an image run's view) indents as a block.
@@ -50,6 +98,12 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     parts.length === 1
       ? parts[0]!.split("\n")
       : ["Text.markswiftRuns([", ...parts.flatMap((p) => `${p},`.split("\n").map((l) => `    ${l}`)), "])"];
+  const offsets = runs.flatMap((r) => (r.relativeOffset ? [r.relativeOffset] : []));
+  if (offsets.length) {
+    const x = Math.max(...offsets.map(([x]) => Math.abs(x)));
+    const y = Math.max(...offsets.map(([, y]) => Math.abs(y)));
+    out.push(`.textRenderer(MarkswiftOffsetTextRenderer(x: ${num(x)}, y: ${num(y)}))`);
+  }
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
   if (n.truncate) out.push(".truncationMode(.tail)");
@@ -129,6 +183,14 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     // Tight leading the browser shows between lines stays compressed on iOS 26+; one-line text keeps natural lines
     // (its glyphs overflow the CSS line box), so its Text never reads as clipped.
     if (leading <= -0.01 && n.lines > 1) args.push("compressLines: true");
+    // Uniform, unclamped runs have a line-height quantum. Native clamps own their line-count box;
+    // normalizing that box can move the clipped title and its surrounding stack across pixel boundaries.
+    if (
+      n.lineLimit === undefined &&
+      runs.every((r) => r.font.size === s && !r.baselineOffset && !r.image) &&
+      lh % 1 !== 0
+    )
+      args.push("exactLineBox: true");
     out.push(`.markswiftLineHeight(${args.join(", ")})`);
     // ponytail: the native growth model is the iOS/macOS 26 `.lineHeight(.multiple)` one; on iOS
     // 18–25 `.lineSpacing` grows less (6 vs 10 pt for H₂O/mc² at 15/20), so there the line ends up
@@ -192,13 +254,16 @@ function runExpr(
     const view = inlineImageView(r.image, n, ctx);
     if (!view) return `Text.markswiftGap(${num(r.image.w)})`;
     const label = r.image.alt !== undefined ? `, label: ${str(r.image.alt)}` : "";
+    const size = fontSizeExpr(r.font, ctx);
+    const ratio = ctx.mode === "app" && r.font.size > 0 ? `${size} / ${num(r.font.size)}` : undefined;
+    const scale = ratio ? `, scale: ${ratio}` : "";
     let e = [
-      `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${label}) {`,
+      `Text(Image.markswiftRendered(width: ${num(r.image.w)}, height: ${num(r.image.h)}${scale}${label}) {`,
       ...view.map((l) => `    ${l}`),
       `}).font(${fontExpr(r.font, ctx)})`,
     ].join("\n");
     if (ctx.mode === "fidelity" && r.breaks?.[0] === 0) e = `Text(verbatim: ${str(lineBreak)}) + ${e}`;
-    if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)})`;
+    if (r.baselineOffset !== undefined) e += `.baselineOffset(${num(r.baselineOffset)}${ratio ? ` * (${ratio})` : ""})`;
     return e;
   }
   let text = r.text;

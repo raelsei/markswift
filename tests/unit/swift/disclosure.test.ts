@@ -147,14 +147,19 @@ test("open paint: a ternary on the open state; an equal press shares it, a diffe
   expect(diagnostics(other)).toContain("pressed look of an open-state trigger is not reproduced");
 });
 
-test("extraction: key-equal items with their own in-flow layers stay unrolled", () => {
+function repeatedDisclosures() {
   const items = [0, 1, 2].map((n) => item(n, n * 40));
   const layers = [0, 1, 2].map((n) =>
     inflow(`answer-${n}`, `btn${n}`, `item${n}`, 1, [para(`c${n}`, n * 40 + 20, "Shown")]),
   );
-  const { code } = compile(doc(items, layers));
-  expect(code).not.toContain("ForEach");
-  for (const n of [0, 1, 2]) expect(code).toContain(`if isAnswer${n}Expanded {`);
+  return doc(items, layers);
+}
+
+test("extraction: repeated in-flow layers keep independent screen bindings", () => {
+  const { code } = compile(repeatedDisclosures());
+  expect(code).toContain("ForEach");
+  expect(code).toContain("@Binding var");
+  for (const n of [0, 1, 2]) expect(code).toContain(`$isAnswer${n}Expanded`);
 });
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
@@ -163,7 +168,11 @@ nativeTest(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "markswift-disclosure-"));
     try {
-      for (const [i, d] of [DETAILS, STACK({ open: fill(GREY), pressed: fill(GREY) })].entries()) {
+      for (const [i, d] of [
+        DETAILS,
+        STACK({ open: fill(GREY), pressed: fill(GREY) }),
+        repeatedDisclosures(),
+      ].entries()) {
         const out = join(directory, String(i));
         for (const [file, content] of Object.entries(compile(d).files)) await Bun.write(join(out, file), content);
         const check = await typecheck(out);

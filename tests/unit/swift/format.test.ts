@@ -59,8 +59,8 @@ test("a bundled family without a wght axis selects its static face in fidelity; 
   const variableFont = fontOf(bold, bundledFamilies(pkg([face(100, { wght: [100, 900] })])));
   expect(fontExpr(staticFont, { mode: "fidelity" })).toBe('.custom("Fam", fixedSize: 18.0).weight(.bold)');
   expect(fontExpr(variableFont, { mode: "fidelity" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
-  for (const f of [staticFont, variableFont])
-    expect(fontExpr(f, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
+  expect(fontExpr(staticFont, { mode: "app" })).toBe('.custom("Fam", size: 18.0, relativeTo: .body).weight(.bold)');
+  expect(fontExpr(variableFont, { mode: "app" })).toBe('.markswiftVariable("Fam", size: 18.0, weight: 700.0)');
 });
 
 describe("variation axes", () => {
@@ -85,7 +85,7 @@ describe("variation axes", () => {
   test("a wght variation sets the weight of a variable family, not of a static one", () => {
     expect(both({ "font-variation-settings": '"wght" 650' })).toEqual([
       '.markswiftVariable("Fam", size: 18.0, weight: 650.0)',
-      '.custom("Fam", size: 18.0, relativeTo: .body).weight(.semibold)',
+      '.markswiftVariable("Fam", size: 18.0, weight: 650.0)',
     ]);
     expect(fontOf({ ...base, "font-variation-settings": '"wght" 650' }, families({})).weight).toBe(400);
   });
@@ -107,12 +107,12 @@ describe("variation axes", () => {
     );
   });
 
-  test("a system family's font-stretch is SF's nearest width instance", () => {
+  test("a system family retains exact font-stretch as a native axis", () => {
     const sys = (stretch: string) =>
       fontExpr(fontOf({ "font-family": "system-ui", "font-size": "18px", "font-stretch": stretch }), {
         mode: "fidelity",
       });
-    expect(sys("75%")).toBe(".system(size: 18.0, weight: .regular, design: .default).width(Font.Width(-0.1))");
-    expect(sys("95%")).toBe(".system(size: 18.0, weight: .regular, design: .default)");
+    expect(sys("75%")).toBe('.markswiftSystem(size: 18.0, weight: 400.0, design: .default, axes: ["wdth": 75.0])');
+    expect(sys("95%")).toBe('.markswiftSystem(size: 18.0, weight: 400.0, design: .default, axes: ["wdth": 95.0])');
   });
 });

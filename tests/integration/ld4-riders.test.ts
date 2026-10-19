@@ -20,14 +20,14 @@ browserTest(
 );
 
 browserTest(
-  "font-stretch: condensed on system-ui is SF's nearest width, reported",
+  "font-stretch: condensed on system-ui retains its exact width axis",
   async () => {
     const result = await convertHtml(
       `<main data-markswift-root><p style="font:16px system-ui;font-stretch:condensed">x</p></main>`,
       { mode: "app", theme: "light", viewport: { width: 390, height: 800 } },
     );
-    expect(result.code).toContain(".width(Font.Width(-0.1))");
-    expect(result.diagnostics.flatMap((n) => n.diagnostics.map((d) => d.feature))).toContain("font-stretch");
+    expect(result.code).toContain('axes: ["wdth": 75.0]');
+    expect(result.diagnostics.flatMap((n) => n.diagnostics.map((d) => d.feature))).not.toContain("font-stretch");
   },
   30_000,
 );

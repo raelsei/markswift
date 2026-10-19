@@ -14,17 +14,17 @@ const output = lines.filter((l) => !l.startsWith("$ ")).join("\n");
 const hello = "$ npx markswift convert hello.html --name HelloCard --out ./generated-hello";
 const rows: Row[] = [
   ["## shell", "## output"],
-  ["$ npx markswift --version", "2.0.0"],
+  ["$ npx markswift --version", "3.0.0"],
   [hello, "Wrote 3 files for HelloCard to ./generated-hello"],
   [`${hello} --update`, "Updated 3 files for HelloCard in ./generated-hello"],
   ["$ npx markswift convert welcome.html --name WelcomeCard --out ./generated-welcome", "Wrote 3 files for WelcomeCard to ./generated-welcome"],
   ["$ npx markswift convert inbox.html --name InboxNote --theme light --out ./generated-inbox", "Wrote 3 files for InboxNote to ./generated-inbox"],
   ["", "…"],
-  ["$ npx markswift build markswift.json", "Wrote 5 files for CardKit (2 components) to /private/tmp/ms-src/CardKit"],
+  ["$ npx markswift build markswift.json", "Wrote 5 files for CardKit (2 components) to /private/tmp/markswift-site-release-3-final/CardKit"],
   ["", "…"],
   [
     `${hello} --update`,
-    "Refusing to overwrite hand-edited files in /private/tmp/ms-src/generated-hello: HelloCard.swift. Move your changes into your own files (Markswift never touches files it did not write) or rerun with --force to discard them.",
+    "Refusing to overwrite hand-edited files in /private/tmp/markswift-site-release-3-final/generated-hello: HelloCard.swift. Move your changes into your own files (Markswift never touches files it did not write) or rerun with --force to discard them.",
   ],
   ["", "exit 2"],
   ["## markswift.json", "## CardKit/Package.swift"],

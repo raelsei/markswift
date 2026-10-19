@@ -137,7 +137,7 @@ describe("text groups", () => {
     expect(runsOf([{ ...hello }], { direction: "rtl", "unicode-bidi": "isolate-override" })).toBe("\u202Ehello\u202C");
   });
 
-  test("an inside ::marker stays outside bidi controls despite its UA isolate", () => {
+  test("an inside ::marker isolates its punctuation from adjacent text", () => {
     const marker = el("::marker", { x: 0, y: 0, w: 20, h: 20 }, { display: "inline", "unicode-bidi": "isolate" }, [
       textNode("1. ", { x: 0, y: 3, w: 20, h: 14 }),
     ]);
@@ -149,7 +149,7 @@ describe("text groups", () => {
     const texts = flatten(inferScreen(doc(root), "s").root).filter((n): n is TextNode => n.kind === "text");
     const joined = texts.flatMap((t) => t.runs.map((r) => r.text)).join("");
     expect(joined).toContain("1.");
-    expect(joined).not.toMatch(/[\u202A-\u202E\u2066-\u2069]/);
+    expect(joined).toContain("\u20661. \u2069");
   });
 });
 
@@ -484,10 +484,10 @@ describe("paint invisible at rest", () => {
     expect(positioned(glow).overlays).toHaveLength(1);
   });
 
-  test("an aria-hidden transparent control is dropped: neither seen nor announced (Radix's form-value input)", () => {
+  test("an aria-hidden transparent control keeps its pointer action", () => {
     const input = (attrs: Record<string, string>) =>
       positioned(el("input", { x: 0, y: 0, w: 13, h: 13 }, { position: "absolute", opacity: "0" }, [], attrs));
-    expect(input({ type: "checkbox", "aria-hidden": "true", checked: "" }).overlays).toHaveLength(0);
+    expect(input({ type: "checkbox", "aria-hidden": "true", checked: "" }).overlays).toHaveLength(1);
     // Without aria-hidden Chrome still announces it (a visually hidden native input behind a drawn box).
     expect(input({ type: "checkbox" }).overlays).toHaveLength(1);
   });
@@ -514,9 +514,12 @@ describe("pointer-events", () => {
     expect(flatten(root).filter((n) => n.hitTesting === false)).toEqual([root.overlays[0]!.node]);
   });
 
-  test("a pointer-events: auto descendant keeps the container hittable", () => {
+  test("a pointer-events: auto descendant limits the container to its live bounds", () => {
     const live = el("div", { x: 10, y: 10, w: 20, h: 20 }, { display: "block", "pointer-events": "auto", ...paint });
+    live.id = "live";
     const root = positioned(el("div", box, none, [live]));
+    expect(root.overlays[0]?.node.hitRegionTargets).toEqual(["live"]);
+    expect(flatten(root).find((n) => n.id === "live")?.hitRegionTarget).toBe("live");
     expect(flatten(root).some((n) => n.hitTesting === false)).toBe(false);
   });
 

@@ -73,7 +73,10 @@ nativeTest(
           name: "AxesCard",
           mode,
         });
-        if (mode === "app") expect(result.code).toContain(".width(Font.Width(-0.1))");
+        if (mode === "app") {
+          expect(result.code).toContain(".markswiftSystem(");
+          expect(result.code).toContain('axes: ["wdth": 75.0]');
+        }
         const output = join(directory, mode);
         for (const [file, content] of Object.entries(result.files)) await Bun.write(join(output, file), content);
         await Bun.write(
@@ -726,7 +729,7 @@ const FAMILIES: Array<{
     assetsDir: ASSETS,
     html: "<p>Geist text</p>",
     css: '@font-face{font-family:Geist;src:url(geist-latin-wght-normal.woff2) format("woff2");font-weight:100 900} main{font-family:Geist}',
-    app: ["WebfontFamily+Fonts.swift", '.custom("Geist"'],
+    app: ["WebfontFamily+Fonts.swift", '.markswiftVariable("Geist"'],
   },
   {
     name: "EscapesFamily",

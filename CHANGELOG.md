@@ -1,8 +1,54 @@
 # Changelog
 
-All notable changes to Markswift. Versions follow SemVer; the package is published to npm as `markswift`. A LayoutDoc schema change is a major version.
+All notable changes to Markswift. Versions follow SemVer; the package is published to npm as `markswift`.
+A LayoutDoc schema change is a major version.
 
 ## [Unreleased]
+
+## [3.0.0] — 2026-10-20
+
+### Changed (breaking)
+
+- LayoutDoc 5 records responsive transform geometry, measured relative offsets, font-face stretch ranges and resolved
+  monospace faces. LayoutDoc 4 captures are rejected with a recapture instruction. LayoutDoc 5 is frozen with this release.
+- Regenerate every view and its shared runtime together; generated runtime interfaces have changed.
+
+### Fixed
+
+- Percentage-width blocks align correctly in RTL, and bare text splits around floats without losing words.
+- Percentage 2D translations and SVG cover/contain sizing follow the rendered box in app mode. Relative offsets
+  resolve against percentage-height and stretched containers; inline and pseudo-element offsets preserve text flow.
+- Nested overlays replay ancestor triggers, native menus retain submenus, repeated rows retain independent actions,
+  supported dialog widths resize, and breakpoint captures select their own layers.
+- Exact available system-font axes, distinct webfont width faces and Chrome-resolved monospace fonts are retained.
+  Variable font weights and native field heights preserve their captured metrics. iOS fractional text line boxes
+  avoid pixel-rounding drift; macOS retains its native paragraph sizing.
+- Plain ASCII multiline paragraphs with packaged font metrics use greedy UIKit wrapping on iOS 26+, with accessibility and Dynamic Type.
+  System-font fallbacks, rich text, other scripts, older iOS and macOS retain the SwiftUI path.
+- Nested colour schemes, paragraph/marker bidi isolation and pointer-enabled children of pass-through overlays work.
+  Transparent controls retain pointer actions independently of accessibility visibility.
+- Generated images scale with Dynamic Type; uneven counter widths no longer prevent repeated-list extraction.
+- Captures have bounded, contextual timeout diagnostics; page navigation uses the same capture deadline.
+  Browser rejection tests await their errors, and performance
+  tests use three-sample medians without relaxing the budgets.
+- The documentation site loads CSS, scripts and navigation from the custom domain root.
+
+### Validation and publishing
+
+- iPad breakpoint reflow is gated against a tracked baseline; native Menu pressed appearance has a live UI check.
+- Publishing verifies the registry version, distribution tag and installed CLI in a clean directory.
+- Six component app captures remain documented visual exceptions (four fields and two dark cards); existing
+  accessibility audit exceptions and unsupported CSS/interaction boundaries remain documented in README.
+- Native table navigation (#8 / draft #25) is held back after visual regression checks. The post-release roadmap
+  in #16 is outside this release.
+
+### Migrating from 2.x
+
+1. Upgrade `markswift` to 3.0.0. Saved LayoutDoc 4 files cannot be relabelled: recapture their HTML/CSS source.
+2. Rerun `markswift convert ... --update` or `markswift build ...` to regenerate all views and their shared runtime.
+   Keep custom code in caller-owned files; review generated initializer changes for repeated overlays and menus.
+3. Rebuild the Swift target and verify application callbacks. iOS 18+ remains supported; greedy paragraph wrapping
+   uses UIKit on iOS 26+ and falls back to SwiftUI on earlier systems.
 
 ## [2.0.0] — 2026-10-18
 

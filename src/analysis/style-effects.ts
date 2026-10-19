@@ -32,9 +32,38 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
   const bf = s["backdrop-filter"];
   if (bf && bf !== "none")
     addDiagnostic(diagnostics, "approximated", "backdrop-filter", "backdrop-filter → translucent fill only (no blur)");
-  const { transform, losses } = cssTransform(s, w, h);
+  const parsedTransform = cssTransform(s, w, h);
+  const { losses } = parsedTransform;
+  const transform =
+    parsedTransform.transform ??
+    (n.preferredSize?.transformTranslation || s["translate"]?.includes("%")
+      ? { tx: 0, ty: 0, rotate: 0, scaleX: 1, scaleY: 1 }
+      : undefined);
   for (const l of losses) addDiagnostic(diagnostics, l.level, l.feature, l.message);
-  if (transform) style.transform = transform;
+  if (transform) {
+    style.transform = transform;
+    const slopes = n.preferredSize?.transformTranslation;
+    const sample = (dw: number, dh: number) => {
+      const matrix = s["transform"]
+        ?.match(/^matrix\(([^)]+)\)$/)?.[1]
+        ?.split(",")
+        .map(Number);
+      const styles = { ...s };
+      if (slopes && matrix?.length === 6) {
+        matrix[4] = matrix[4]! + slopes.x[0] * dw + slopes.x[1] * dh;
+        matrix[5] = matrix[5]! + slopes.y[0] * dw + slopes.y[1] * dh;
+        styles["transform"] = `matrix(${matrix.join(",")})`;
+      }
+      return cssTransform(styles, w + dw, h + dh).transform;
+    };
+    if (slopes || s["translate"]?.includes("%")) {
+      const wide = sample(100, 0),
+        tall = sample(0, 100);
+      const x: [number, number] = [((wide?.tx ?? 0) - transform.tx) / 100, ((tall?.tx ?? 0) - transform.tx) / 100];
+      const y: [number, number] = [((wide?.ty ?? 0) - transform.ty) / 100, ((tall?.ty ?? 0) - transform.ty) / 100];
+      if ([...x, ...y].some((v) => Math.abs(v) > 1e-8)) style.transform.responsive = { x, y };
+    }
+  }
   if (style.shadows.some((sh) => sh.inset && sh.blur > 0))
     addDiagnostic(diagnostics, "approximated", "box-shadow: inset", "inset shadow blur → native Gaussian blur");
   // Every CSS `<blend-mode>` is a PDF blend function, and so is every SwiftUI `BlendMode`, so a

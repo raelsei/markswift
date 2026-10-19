@@ -1,7 +1,7 @@
 // Dump the WelcomeCard LayoutDoc and semantic IR, then recompile the saved LayoutDoc without Chrome.
 import { readFileSync, writeFileSync } from "node:fs";
-import { convert, compileLayout } from "/Users/raelsei/Dev/html2swift/src/index.ts";
-import { inferScreen } from "/Users/raelsei/Dev/html2swift/src/analysis/infer.ts";
+import { convert, compileLayout } from "../../../src/index.ts";
+import { inferScreen } from "../../../src/analysis/infer.ts";
 
 const r = await convert({ file: "welcome.html" }, { name: "WelcomeCard" });
 writeFileSync("WelcomeCard.layout.json", JSON.stringify(r.layout, null, 2));
@@ -13,7 +13,7 @@ const again = compileLayout(saved, { name: "WelcomeCard" });
 writeFileSync("WelcomeCard.recompiled.swift", again.code);
 console.log(Object.keys(again.files));
 try {
-  compileLayout({ ...saved, version: 3 }, { name: "WelcomeCard" });
+  compileLayout({ ...saved, version: 4 }, { name: "WelcomeCard" });
 } catch (error) {
   console.log((error as Error).message);
 }

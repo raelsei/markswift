@@ -117,13 +117,19 @@ export async function captureBands(
   timedOut: Promise<never>,
 ): Promise<BandCapture[]> {
   const bands: BandCapture[] = [];
-  for (const [i, capture] of plan.captures.entries())
+  for (const capture of plan.captures)
     bands.push(
       capture.width === first.viewport.width && capture.height === first.viewport.height
         ? first.captured
-        : await captureThemes(renderer, { ...req, viewport: capture, ...(i > 0 ? { layers: false } : {}) }, timedOut),
+        : await captureThemes(renderer, { ...req, viewport: capture }, timedOut),
     );
   for (const viewport of plan.extra)
-    bands.push({ ...(await captureThemes(renderer, { ...req, viewport, layers: false }, timedOut)), extra: true });
+    bands.push({ ...(await captureThemes(renderer, { ...req, viewport }, timedOut)), extra: true });
+  // An explicit empty inventory distinguishes a captured band from older documents that skipped layers.
+  if (req.layers)
+    for (const band of bands) {
+      band.primary.layout.layers ??= [];
+      if (band.dark) band.dark.layout.layers ??= [];
+    }
   return bands.sort((a, b) => a.primary.layout.viewport.w - b.primary.layout.viewport.w);
 }

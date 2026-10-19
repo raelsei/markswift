@@ -9,12 +9,22 @@ import { bigPageHtml } from "../conformance/perf/big-page.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 
+/** Fresh end-to-end conversions; the median rejects sustained regressions without a single runner scheduling spike. */
+async function measuredConversion(html: string, options: Parameters<typeof convertHtml>[1]) {
+  const samples: number[] = [];
+  let result: Awaited<ReturnType<typeof convertHtml>> | undefined;
+  for (let i = 0; i < 3; i++) {
+    const start = performance.now();
+    result = await convertHtml(html, options);
+    samples.push(performance.now() - start);
+  }
+  return { result: result!, convertMs: [...samples].sort((a, b) => a - b)[1]!, convertSamplesMs: samples };
+}
+
 nativeTest(
   "an 80-card product list converts, type-checks and builds within budget",
   async () => {
-    const t0 = performance.now();
-    const result = await convertHtml(bigPageHtml(), { name: "BigList" });
-    const convertMs = performance.now() - t0;
+    const { result, convertMs, convertSamplesMs } = await measuredConversion(bigPageHtml(), { name: "BigList" });
     const dir = await mkdtemp(join(tmpdir(), "markswift-perf-"));
     try {
       for (const [file, content] of Object.entries({ ...result.files, ...result.assets }))
@@ -39,7 +49,16 @@ nativeTest(
       const hiddenOpacity = (code.match(/\.opacity\(0\.0\)/g) ?? []).length;
       // One line per run, so CI logs carry the trend.
       console.log(
-        JSON.stringify({ convertMs, typecheckMs: check.ms, buildMs, bytes, images, compositingGroups, hiddenOpacity }),
+        JSON.stringify({
+          convertMs,
+          convertSamplesMs,
+          typecheckMs: check.ms,
+          buildMs,
+          bytes,
+          images,
+          compositingGroups,
+          hiddenOpacity,
+        }),
       );
       expect(convertMs).toBeLessThanOrEqual(5000);
       expect(check.ms).toBeLessThanOrEqual(8000);
@@ -60,9 +79,8 @@ nativeTest(
 nativeTest(
   "an 80-card product list with a 768px two-column breakpoint converts within its budget",
   async () => {
-    const t0 = performance.now();
     // Adaptive: 2 bands × 2 themes.
-    const result = await convertHtml(bigPageHtml(), {
+    const { result, convertMs, convertSamplesMs } = await measuredConversion(bigPageHtml(), {
       name: "BigListBands",
       css: "main{width:auto!important} @media (min-width:768px){main{display:grid!important;grid-template-columns:1fr 1fr}}",
       breakpoints: {
@@ -72,7 +90,6 @@ nativeTest(
         ],
       },
     });
-    const convertMs = performance.now() - t0;
     const dir = await mkdtemp(join(tmpdir(), "markswift-perf-bands-"));
     try {
       for (const [file, content] of Object.entries({ ...result.files, ...result.assets }))
@@ -89,7 +106,7 @@ nativeTest(
       expect(build.exitCode).toBe(0);
       const code = result.files["BigListBands.swift"]!;
       const bytes = Buffer.byteLength(code);
-      console.log(JSON.stringify({ convertMs, typecheckMs: check.ms, buildMs, bytes }));
+      console.log(JSON.stringify({ convertMs, convertSamplesMs, typecheckMs: check.ms, buildMs, bytes }));
       expect(code).toContain("MarkswiftBands(");
       expect(convertMs).toBeLessThanOrEqual(12000);
       expect(check.ms).toBeLessThanOrEqual(12000);

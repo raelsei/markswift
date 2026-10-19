@@ -2,6 +2,7 @@ import type { SemNode, Overlay, Presentation, StateField } from "../model/semant
 import type { EmitContext } from "./context.ts";
 import {
   colorArgs,
+  fontSizeExpr,
   colorExpr,
   edgeInsets,
   horizontalAlignment,
@@ -20,7 +21,15 @@ import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS, menuButton, menuExpr } from "./controls.ts";
 import { animated, animationModifier, longestExit, stateAnimation, transitionModifiers } from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
-  return [...boxModifiers(n, ctx), ...placementModifiers(n, ctx)];
+  const generated: string[] = [];
+  if (n.kind === "image" && n.generatedFont && n.generatedFont.size > 0 && ctx.mode === "app") {
+    const scale = `(${fontSizeExpr(n.generatedFont, ctx)} / ${num(n.generatedFont.size)})`;
+    generated.push(
+      `.scaleEffect(${scale}, anchor: .topLeading)`,
+      `.frame(width: ${num(n.frame.w)} * ${scale}, height: ${num(n.frame.h)} * ${scale}, alignment: .topLeading)`,
+    );
+  }
+  return [...boxModifiers(n, ctx), ...generated, ...placementModifiers(n, ctx)];
 }
 
 /**
@@ -35,7 +44,15 @@ export function decorate(n: SemNode, core: string[], ctx: EmitContext): string[]
 
 /** App: a pass-through overlay (`pointer-events: none`), after the Button/tap gesture, so nothing inside answers a tap. */
 export function hitTestingModifier(n: SemNode, ctx: EmitContext): string[] {
-  return ctx.mode === "app" && n.hitTesting === false ? [".allowsHitTesting(false)"] : [];
+  if (ctx.mode !== "app") return [];
+  if (n.hitTesting === false) return [".allowsHitTesting(false)"];
+  return [
+    ...(n.hitRegionTarget ? [`.markswiftHitTarget(${str(n.hitRegionTarget)})`] : []),
+    ...(n.hitRegionTargets
+      ? [`.markswiftHitRegion(${str(n.id)}, targets: [${n.hitRegionTargets.map(str).join(", ")}])`]
+      : []),
+    ...(n.style.opacity === 0 && (n.action || n.kind === "control") ? [".contentShape(Rectangle())"] : []),
+  ];
 }
 
 function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
@@ -244,6 +261,12 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       if ((t.tx !== 0 || t.ty !== 0) && driven.tx === undefined) m.push(`.offset(x: ${num(t.tx)}, y: ${num(t.ty)})`);
     }
   }
+  if (ctx.mode === "app" && st.transform?.responsive && driven.tx === undefined) {
+    const { x, y } = st.transform.responsive;
+    m.push(
+      `.modifier(MarkswiftResponsiveTranslation(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, xWidth: ${num(x[0])}, xHeight: ${num(x[1])}, yWidth: ${num(y[0])}, yHeight: ${num(y[1])}))`,
+    );
+  }
   if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
   else if ((n.motion?.animations || n.motion?.reduced) && ctx.mode === "fidelity")
     note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");
@@ -265,6 +288,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
   // Fidelity rows already place every child by measured offset (layout.ts `geometry`).
   if (n.selfAlignV && ctx.mode === "app")
     m.push(`.frame(maxHeight: .infinity, alignment: ${verticalAlignment(n.selfAlignV)})`);
+  if (n.colorScheme === "system") m.push(".modifier(MarkswiftRestoreColorScheme())");
+  else if (n.colorScheme) m.push(`.environment(\\.colorScheme, .${n.colorScheme})`);
   if (st.hidden) m.push(".hidden()");
   // A `<label>` tap changes its checkbox or radio, or focuses its text field, anywhere in the label's box.
   const tap = n.labelFor !== undefined ? ctx.control.activate.get(n.labelFor) : undefined;
@@ -316,7 +341,9 @@ export function overlayModifier(o: Overlay, mode: "background" | "overlay", ctx:
   const inner = ctx.renderNode(o.node);
   // App mode keeps the corner CSS anchored; fidelity reproduces the capture from the top-left.
   const anchored = ctx.mode === "app" ? o.anchor : undefined;
-  const [x, y] = anchored ? anchored.offset : o.offset;
+  const marker = ctx.mode === "app" && o.outsideMarker;
+  if (marker) inner.push(".alignmentGuide(.leading) { $0[.trailing] }");
+  const [x, y] = anchored ? anchored.offset : marker ? [o.offset[0] + o.node.frame.w, o.offset[1]] : o.offset;
   const body = o.covers ? inner : [...inner, `.offset(x: ${num(x)}, y: ${num(y)})`];
   return [`.${mode}(alignment: .${anchored ? anchored.corner : "topLeading"}) {`, ...indent(body, 1), `}`];
 }
@@ -353,7 +380,13 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
           ...transitionModifiers(o.node),
         ];
       return [
-        ...view,
+        ...(o === first && p.width
+          ? [
+              `MarkswiftPresentationWidth(fraction: ${num(p.width.fraction)}, offset: ${num(p.width.offset)}, minimum: ${num(p.width.min)}, maximum: ${p.width.max === undefined ? ".infinity" : num(p.width.max)}) {`,
+              ...indent(view, 1),
+              "}",
+            ]
+          : view),
         `.markswiftPlaced(${(o === first && placed) || `.offset(${size(o.offset)})`})`,
         ...transitionModifiers(o.node),
       ];
@@ -361,6 +394,7 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
     const d = p.dismiss;
     const exit = longestExit(overlays.map((o) => o.node));
     const backdropExit = first && longestExit([first.node]);
+    const parentState = p.parentLayer && ctx.control.openStates.get(p.parentLayer);
     return [
       `.markswiftPresentation(isPresented: $${state}, modal: ${p.modal}, dismissOnEscape: ${d.escape}, dismissOnOutside: ${d.outside}${exit ? `, exit: ${exit}` : ""}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
       ...indent(
@@ -377,6 +411,7 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
         1,
       ),
       "}",
+      ...(parentState ? [`.onChange(of: ${parentState}) { _, shown in if !shown { ${state} = false } }`] : []),
     ];
   });
 }

@@ -51,12 +51,41 @@ function paragraph(): LayoutDoc {
   };
 }
 
-test("app paragraph uses native Text in both modes", () => {
-  const screen = inferScreen(paragraph(), "Paragraph");
-  const app = emitSwift(screen, "ParagraphView", { mode: "app" }).view;
-  const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity" }).view;
-  expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+const metrics = { geist: { upem: 1000, ascent: 1000, descent: 286, lineGap: 0, useTypoMetrics: true } };
+function bundledParagraph(doc = paragraph()) {
+  doc.root.children[0]!.styles["font-family"] = "Geist";
+  return inferScreen(doc, "Paragraph", { bundledFamilies: { Geist: { weight: [100, 900], wght: [100, 900] } } });
+}
+
+test("plain app paragraphs with packaged metrics select greedy wrapping; fidelity keeps Text", () => {
+  const screen = bundledParagraph();
+  const app = emitSwift(screen, "ParagraphView", { mode: "app", fontMetrics: metrics }).view;
+  const fidelity = emitSwift(screen, "ParagraphView", { mode: "fidelity", fontMetrics: metrics }).view;
+  expect(app).toContain('MarkswiftGreedyText(text: "Measured text shifts nearby layout."');
   expect(fidelity).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+});
+
+test("system and missing-font fallbacks keep SwiftUI's native baseline", () => {
+  for (const family of ["system-ui", "MissingFace, system-ui"]) {
+    const doc = paragraph();
+    doc.root.children[0]!.styles["font-family"] = family;
+    const app = emitSwift(inferScreen(doc, "Paragraph"), "ParagraphView", { mode: "app" }).view;
+    expect(app).not.toContain("MarkswiftGreedyText(");
+    expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
+  }
+  expect(emitSwift(bundledParagraph(), "ParagraphView", { mode: "app" }).view).not.toContain("MarkswiftGreedyText(");
+});
+
+test("plain multiline clamps retain their limit in the native wrapping view", () => {
+  const doc = paragraph();
+  const host = doc.root.children[0]!;
+  host.styles["display"] = "-webkit-box";
+  host.styles["-webkit-line-clamp"] = "2";
+  host.styles["-webkit-box-orient"] = "vertical";
+  host.styles["overflow"] = "hidden";
+  const app = emitSwift(bundledParagraph(doc), "ParagraphView", { mode: "app", fontMetrics: metrics }).view;
+  expect(app).toContain("MarkswiftGreedyText(");
+  expect(app).toContain("lineLimit: 2)");
 });
 
 /** "Read the " then `<a>`: the browser wrapped exactly at the run boundary, so `a` starts line 2. */

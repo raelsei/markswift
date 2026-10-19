@@ -170,3 +170,28 @@ test("a root color-scheme naming one scheme forces the view's appearance; an ada
   );
   expect(compileLayout(scheme("light", "dark"), { dark: scheme("dark", "dark") }).code).toContain(forced);
 });
+
+test("nested single-scheme containers force only their subtree and adaptive pairs must agree", () => {
+  const scheme = (theme: "light" | "dark", value: string) => {
+    const doc = page(theme, "rgb(255,255,255)");
+    doc.root.children[0]!.styles["color-scheme"] = value;
+    return doc;
+  };
+  const forced = String.raw`.environment(\.colorScheme, .dark)`;
+  for (const mode of ["app", "fidelity"] as const) {
+    expect(compileLayout(scheme("light", "dark only"), { mode }).code.split(forced)).toHaveLength(2);
+    expect(compileLayout(scheme("light", "light dark"), { mode }).code).not.toContain(forced);
+  }
+  expect(compileLayout(scheme("light", "dark"), { dark: scheme("dark", "dark") }).code).toContain(forced);
+  expect(compileLayout(scheme("light", "dark"), { dark: scheme("dark", "light") }).code).not.toContain(forced);
+});
+
+test("a nested multi-scheme boundary restores the caller's appearance inside a dark-only root", () => {
+  const doc = page("light", "rgb(255,255,255)");
+  doc.root.styles["color-scheme"] = "dark";
+  doc.root.children[0]!.styles["color-scheme"] = "light dark";
+  const code = compileLayout(doc).code;
+  expect(code).toContain(".modifier(MarkswiftRestoreColorScheme())");
+  expect(code).toContain(".modifier(MarkswiftColorSchemeScope())");
+  expect(code).toContain(String.raw`.environment(\.colorScheme, .dark)`);
+});

@@ -15,7 +15,7 @@ import {
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
 import { svgFromDataUrl } from "./svg/markup.ts";
-import { generatedAlt } from "./generated.ts";
+import { generatedAlt, PSEUDO } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
@@ -154,13 +154,16 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
     const node = withBase(n, ctx, {
       kind: "image",
+      ...(ctx.parent && PSEUDO[ctx.parent.tag]
+        ? { generatedFont: fontOf(ctx.parent.styles, ctx.bundledFamilies) }
+        : {}),
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
       ...(alt
         ? {
             alt,
-            font: fontOf(n.styles, ctx.bundledFamilies),
+            font: fontOf(n.styles, ctx.bundledFamilies, n.resolvedFont),
             ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
           }
         : alt !== undefined
@@ -221,7 +224,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
             .map((g) => buildText(n, g, childCtx))
             .filter((t) => t.runs.length > 0)
         : [],
-      font: fontOf(n.styles, ctx.bundledFamilies),
+      font: fontOf(n.styles, ctx.bundledFamilies, n.resolvedFont),
       ...(parseColor(n.styles["color"]) ? { color: parseColor(n.styles["color"]) } : {}),
       ...(n.styles["appearance"] !== undefined ? { appearance: n.styles["appearance"] } : {}),
       ...(parseColor(n.styles["accent-color"]) ? { accent: parseColor(n.styles["accent-color"]) } : {}),
@@ -287,6 +290,13 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     for (const g of groups) {
       const t = buildText(n, g, childCtx);
       if (t.runs.length === 0) continue;
+      // An anonymous block beside a float owns the whole content width, just like a <p>.
+      // Its glyph union spans the narrow and clearing lines; it is not the block's width.
+      if (!/flex|grid|inline/.test(display) && flow.some(floating)) {
+        const [, right, , left] = insetsOf(n.styles);
+        t.frame = { ...t.frame, x: n.bounds.x + left, w: n.bounds.w - left - right };
+        t.width = { kind: "fill" };
+      }
       // Only the text's own geometry and paint order: the host's float, margins, flex and
       // alignment styles belong to the host box, not to one of its text groups.
       const textItem: LayoutNode = {
@@ -294,7 +304,8 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
         attrs: {},
         styles: { display: "inline" },
         bounds: t.frame,
-        children: [],
+        // Preserve this group's line boxes so float splitting can locate the clearing line.
+        children: g.map((r) => r.node),
         ...(n.paint !== undefined ? { paint: n.paint } : {}),
       };
       items.push({ node: textItem, sem: t });
@@ -603,17 +614,21 @@ function buildOverlays(
   for (const c of host.children) {
     if (c.tag === "#text" || c.tag === "br" || !renders(c) || isInlineText(c)) continue;
     if (outOfFlow(c) || !hangsLeading(c.bounds, contentLeft)) continue;
+    const marker = build(c, {
+      root: ctx.root,
+      fixed: ctx.fixed,
+      bundledFamilies: ctx.bundledFamilies,
+      parent: host,
+      viewport: ctx.viewport,
+    });
     out.push({
-      node: build(c, {
-        root: ctx.root,
-        fixed: ctx.fixed,
-        bundledFamilies: ctx.bundledFamilies,
-        parent: host,
-        viewport: ctx.viewport,
-      }),
+      node: marker,
       layer: "overlay",
       offset: [round2(c.bounds.x - host.bounds.x), round2(c.bounds.y - host.bounds.y)],
       covers: false,
+      ...(c.tag === "::marker" && marker.kind === "text" && marker.runs.some((r) => r.counter)
+        ? { outsideMarker: true as const }
+        : {}),
     });
   }
   return out;

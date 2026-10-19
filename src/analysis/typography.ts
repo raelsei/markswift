@@ -50,14 +50,32 @@ export const SYSTEM_DESIGNS: Record<string, "default" | "rounded" | "monospaced"
  * `wght` → weight, `opsz` → opsz, other axes the bundled file declares (`wdth` also from
  * `font-stretch`) → `axes`; a system family keeps `font-stretch`/`wdth` as `stretch`.
  */
-export function fontOf(s: Record<string, string>, families: BundledFamilies = {}): FontSpec {
+export function fontOf(s: Record<string, string>, families: BundledFamilies = {}, resolvedFont?: string): FontSpec {
   const size = round2(px(s["font-size"]));
   const spec: FontSpec = { family: { kind: "system", design: "default" }, size, weight: fontWeight(s["font-weight"]) };
+  const requestedStretch = fontStretch(s["font-stretch"]);
   let bundled: BundledFamily | undefined;
   for (const family of fontFamilies(s["font-family"])) {
     bundled = families[family];
     if (bundled) {
-      spec.family = bundled.wght ? { kind: "custom", name: family } : { kind: "custom", name: family, static: true };
+      const rank = ([lo, hi]: [number, number]): [number, number] => {
+        if (requestedStretch >= lo && requestedStretch <= hi) return [0, 0];
+        return requestedStretch <= 100
+          ? hi < requestedStretch
+            ? [1, requestedStretch - hi]
+            : [2, lo - requestedStretch]
+          : lo > requestedStretch
+            ? [1, lo - requestedStretch]
+            : [2, requestedStretch - hi];
+      };
+      const chosen = [...(bundled.widths ?? [])].sort((a, b) => {
+        const x = rank(a.stretch),
+          y = rank(b.stretch);
+        return x[0] - y[0] || x[1] - y[1];
+      })[0];
+      const name = chosen?.name ?? family;
+      bundled = families[name] ?? bundled;
+      spec.family = bundled.wght ? { kind: "custom", name } : { kind: "custom", name, static: true };
       break;
     }
     const design = SYSTEM_DESIGNS[family.toLowerCase()];
@@ -66,6 +84,9 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
       break;
     }
   }
+  // Menlo ships on the supported Apple targets. Only use it when the browser measured that face;
+  // a generic monospace stack on another platform retains the existing diagnosed fallback.
+  if (!bundled && resolvedFont === "Menlo") spec.family = { kind: "custom", name: "Menlo", static: true };
   const fvs = variationSettings(s["font-variation-settings"]);
   const stretch = fvs["wdth"] ?? fontStretch(s["font-stretch"]);
   const wght = fvs["wght"];
@@ -81,6 +102,10 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
   for (const [tag, r] of Object.entries(bundled?.axes ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const v = tag === "wdth" ? stretch : fvs[tag];
     if (v !== undefined && (tag !== "wdth" || v !== 100)) axes[tag] = Math.min(r[1], Math.max(r[0], v));
+  }
+  if (spec.family.kind === "system") {
+    Object.assign(axes, fvs);
+    if (stretch !== 100) axes.wdth = stretch;
   }
   if (Object.keys(axes).length) spec.axes = axes;
   if (spec.family.kind === "system" && stretch !== 100) spec.stretch = stretch;

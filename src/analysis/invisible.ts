@@ -6,9 +6,7 @@ import { type SemNode, walk } from "../model/semantic.ts";
  * keeps `opacity: 0` content in the accessibility tree (a visually hidden native `<input>` behind
  * a custom checkbox) unless `aria-hidden` removes it. So an `aria-hidden` box goes whatever it
  * holds — Radix's form-value `<input aria-hidden>` beside its toggle is neither seen nor announced.
- * ponytail: an aria-hidden transparent control the pointer can still hit (`pointer-events` not `none`)
- * goes too, losing that tap; keeping it would also need a hittable stand-in (`.contentShape`), since
- * SwiftUI does not hit-test `opacity(0)` content. Add both if a design relies on such a tap.
+ * Pointer-activatable content remains even when aria-hidden: visual and accessibility silence do not remove a tap.
  */
 function invisible(n: SemNode): boolean {
   if (n.style.opacity !== 0 || n.motion !== undefined || n.diagnostics.some((d) => d.feature.startsWith("animation-")))
@@ -17,6 +15,8 @@ function invisible(n: SemNode): boolean {
   let silent = true;
   walk(n, (d) => {
     if (d.states?.pressed || d.states?.focused) silent = false;
+    else if (d.hitTesting !== false && !d.a11y?.disabled && (d.action || (d.kind === "control" && !d.disabled)))
+      silent = false;
     else if (
       !muted &&
       (d.kind === "text" ||

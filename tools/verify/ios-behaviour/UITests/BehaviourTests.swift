@@ -3,6 +3,22 @@ import XCTest
 
 /// Records what iOS exposes for every generated view in `cases.json`; `tools/verify/ios-behaviour.ts` judges it.
 final class BehaviourTests: XCTestCase {
+    @MainActor
+    func testPointerRiders() {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_POINTER_PROBE"] = "1"
+        app.launch()
+        let area = app.otherElements["pointer-area"]
+        XCTAssertTrue(area.waitForExistence(timeout: 10))
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8)).tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)).tap()
+        app.buttons["Resize"].tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8)).tap()
+        area.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)).tap()
+        app.otherElements["hidden-area"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertEqual(app.staticTexts["pointer-result"].label, "under=2 live=2 hidden=1")
+    }
+
     struct Case: Decodable {
         struct Picker: Decodable { let current: String; let next: String }
         let view: String
@@ -32,6 +48,21 @@ final class BehaviourTests: XCTestCase {
         let widths: [Int]
         /// A root as tall as the capture viewport: the host frames it at least this tall (the screen the case models).
         let screenHeight: Double?
+    }
+
+    @MainActor
+    func testMenuPressedFrame() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_MENU_PRESS"] = "1"
+        app.launch()
+        let trigger = app.buttons["markswift.menu-press"]
+        XCTAssertTrue(trigger.waitForExistence(timeout: 5))
+        trigger.press(forDuration: 1)
+        // Dismiss the native popup before reading the persistent sample result below it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1)).tap()
+        let result = app.staticTexts["markswift.menu-press-result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.label, "pressed frame is red")
     }
 
     @MainActor
@@ -412,4 +443,26 @@ private func presentation(_ app: XCUIApplication, _ layer: BehaviourTests.Case.L
         "id": layer.id, "opened": opened, "modal": modal, "closers": closers, "outside": outside,
         "log": log.joined(separator: ","),
     ]
+}
+
+
+extension BehaviourTests {
+    @MainActor
+    func testGreedyTextReflowAndDynamicType() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["MARKSWIFT_GREEDY_PROBE"] = "1"
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Deploys, failures and mentions."].exists)
+        let normal = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        app.buttons["Resize"].tap()
+        let narrow = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        XCTAssertGreaterThan(narrow, normal)
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Deploys, failures and mentions."].exists)
+        let large = try XCTUnwrap(Double(app.staticTexts["greedy-height"].label))
+        XCTAssertGreaterThan(large, normal)
+    }
 }

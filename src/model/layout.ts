@@ -13,6 +13,12 @@ export const PreferredSize = z.object({
   height: z.string(),
   /** Typed-OM computed insets of a positioned box (`absolute`, `fixed`, `relative`, `sticky`): `auto` and `%` survive here (DOMSnapshot reports used px, and a relative `%` top against an auto-height containing block as a non-zero px it never applies). */
   insets: z.object({ top: z.string(), right: z.string(), bottom: z.string(), left: z.string() }).optional(),
+  /** Browser-measured relative offset with transforms disabled, excluding the parent's offset. */
+  relativeOffset: z.tuple([z.number(), z.number()]).optional(),
+  /** Change in the transform matrix's translation per CSS px of border-box width/height. */
+  transformTranslation: z
+    .object({ x: z.tuple([z.number(), z.number()]), y: z.tuple([z.number(), z.number()]) })
+    .optional(),
   /** Sides whose computed margin is `auto` (Typed OM; DOMSnapshot reports the used px). Absent when none. */
   autoMargins: z.array(z.enum(["top", "right", "bottom", "left"])).optional(),
   /** Typed-OM computed `grid-template-columns` as authored (`repeat(auto-fit, minmax(100px, 1fr))`, `1fr 2fr`); absent when `none`. */
@@ -99,6 +105,8 @@ export interface LayoutNode {
    * `currentSrc ?? attrs["src"]`.
    */
   currentSrc?: string;
+  /** Browser-resolved installed font for a uniformly painted monospace run; absent when mixed or unknown. */
+  resolvedFont?: string;
   /** Whitelisted computed styles, resolved by the browser (cascade, vars, color-mix). */
   styles: Record<string, string>;
   /** Authored/cascaded size intent, independent of measured bounds; absent for text and pseudo-element nodes. */
@@ -133,6 +141,7 @@ export const LayoutNode: z.ZodType<LayoutNode> = z.lazy(() =>
     tag: z.string(),
     attrs: z.record(z.string(), z.string()),
     currentSrc: z.string().optional(),
+    resolvedFont: z.string().optional(),
     styles: z.record(z.string(), z.string()),
     preferredSize: PreferredSize.optional(),
     bounds: Rect,
@@ -170,6 +179,8 @@ export const FontFace = z.object({
   /** Resolved `font-weight` range; a single weight is `[w, w]`, a variable range `[100, 900]`. */
   weight: z.tuple([z.number(), z.number()]),
   style: z.enum(["normal", "italic", "oblique"]),
+  /** Resolved CSS font-stretch descriptor range; absent means normal (100%). */
+  stretch: z.tuple([z.number().positive(), z.number().positive()]).optional(),
   /** `unicode-range`, verbatim, when the face declares one — a subsetted face covers only part of the text. */
   unicodeRange: z.string().optional(),
   /**
@@ -200,7 +211,7 @@ export type Theme = Combo["theme"];
 /** Version of the saved-capture format. Bump it with any STYLE_WHITELIST or schema change, or a change in what a
  * captured value means — once per release cycle: while the version is unreleased (see
  * tests/architecture/layout-doc.test.ts, which pins the schema to it) later changes re-pin its fingerprint. */
-export const LAYOUT_DOC_VERSION = 4;
+export const LAYOUT_DOC_VERSION = 5;
 
 /** Capture marks elements an author rule styles through :valid/:invalid (or :user-*); analysis reports them. */
 export const VALIDATION_MARK = "data-markswift-validation";

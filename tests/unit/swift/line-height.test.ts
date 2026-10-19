@@ -112,7 +112,7 @@ func label(_ tag: String, _ size: CGFloat, _ lineHeight: CGFloat, compress: Bool
     Report(label: "\\(tag)-box") {
         Report(label: "\\(tag)-text") { Text("Email me about deploys").font(.system(size: size, weight: .medium)) }
             .markswiftLineHeight(lineHeight, size: size, relativeTo: .subheadline, ascent: 1.0, descent: 0.286,
-                                 compressLines: compress)
+                                 compressLines: compress, exactLineBox: true)
     }
 }
 
@@ -120,10 +120,17 @@ if #available(macOS 26.0, *) { print("os26 1") }
 for scale in [1, 2, 3] as [CGFloat] {
     let s = "@\\(Int(scale))"
     for view in [label("none14" + s, 14, 14), label("none13" + s, 13, 13), label("loose" + s, 14, 20),
-                 label("compressed" + s, 14, 14, compress: true)] {
+                 label("compressed" + s, 14, 14, compress: true), label("fractional" + s, 14, 19.25)] {
         let renderer = ImageRenderer(content: view)
         renderer.scale = scale
         _ = renderer.nsImage
+    }
+    for (tag, height) in [("field", 22 + 1 / scale), ("grown-field", 44)] {
+        let view = Report(label: tag + s) {
+            Color.clear.frame(width: 100, height: height)
+                .markswiftFieldLineHeight(24, size: 16, relativeTo: .callout, natural: 1.3, capturedHeight: 22)
+        }.environment(\\.displayScale, scale)
+        _ = ImageRenderer(content: view).nsImage
     }
 }
 `;
@@ -160,6 +167,11 @@ nativeTest(
         expect(out[`none13@${scale}-text`]).toBeGreaterThanOrEqual((13 * 2444) / 2048);
         // A loose line height is unchanged: Text and box are the CSS line box; so is a compressed one's.
         expect([out[`loose@${scale}-box`], out[`loose@${scale}-text`]]).toEqual([20, 20]);
+        expect(out[`field@${scale}`]).toBe(22);
+        expect(out[`grown-field@${scale}`]).toBe(44);
+        // AppKit keeps the native pixel-rounded paragraph box beside its controls.
+        expect(out[`fractional@${scale}-box`]).toBe(out[`fractional@${scale}-text`]);
+        expect(out[`fractional@${scale}-text`]).toBeGreaterThanOrEqual(19.25);
         expect([out[`compressed@${scale}-box`], out[`compressed@${scale}-text`]]).toEqual([14, 14]);
       }
     } finally {
@@ -237,4 +249,25 @@ test("text-balance — balanced multi-line text balances its native lines in app
   expect(emit(doc, "fidelity").view).not.toContain("markswiftBalance");
   // One line has nothing to balance.
   expect(emit(paragraph({ "text-wrap-style": "balance" }, 20), "app").view).not.toContain("markswiftBalance");
+});
+
+test("fractional uniform app text removes pixel rounding from its layout box", () => {
+  expect(emit(paragraph({ "line-height": "19.25px" }, 19.25), "app").view).toContain("exactLineBox: true");
+  expect(emit(paragraph({ "line-height": "19.25px" }, 19.25), "fidelity").view).not.toContain("exactLineBox");
+});
+
+test("clamped text retains the native line-count box", () => {
+  const doc = paragraph(
+    {
+      "line-height": "19.25px",
+      display: "-webkit-box",
+      "-webkit-line-clamp": "1",
+      "-webkit-box-orient": "vertical",
+      overflow: "hidden",
+    },
+    19.25,
+  );
+  const view = emit(doc, "app").view;
+  expect(view).toContain(".lineLimit(1)");
+  expect(view).not.toContain("exactLineBox: true");
 });

@@ -1,5 +1,7 @@
 /** Font data passed explicitly through one conversion. No process-wide state. */
 export interface BundledFamily {
+  /** Width-descriptor alternatives, registered with distinct native family names. */
+  widths?: Array<{ name: string; stretch: [number, number] }>;
   /** `font-weight` range the family covers; `[400, 400]` for a single static face. */
   weight: [number, number];
   /** `wght` axis range, when the file has one; without it each weight is its own static face. */
@@ -27,3 +29,8 @@ export interface FaceMetrics {
 
 /** Lowercase CSS family name to packaged font metrics. */
 export type FontMetrics = Readonly<Record<string, FaceMetrics>>;
+
+/** Installed Apple faces retained when capture confirms their identity. */
+export const APPLE_FONT_METRICS: FontMetrics = {
+  menlo: { upem: 2048, ascent: 1901, descent: 483, lineGap: 0, useTypoMetrics: false },
+};

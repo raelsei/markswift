@@ -1,5 +1,5 @@
 $ npx markswift --version
-2.0.0
+3.0.0
 $ npx markswift convert hello.html --name HelloCard --out ./generated-hello
 Wrote 3 files for HelloCard to ./generated-hello
 $ npx markswift convert hello.html --name HelloCard --out ./generated-hello --update
@@ -14,12 +14,12 @@ Note approximated flex-grow: unequal flex-grow factors [1,2,1]; unequal measured
 Note approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size [1 node: 3]
 Note approximated position: sticky: position: sticky (snapshot position) [1 node: 0]
 $ npx markswift build markswift.json
-Wrote 5 files for CardKit (2 components) to /private/tmp/ms-src/CardKit
+Wrote 5 files for CardKit (2 components) to /private/tmp/markswift-site-release-3-final/CardKit
 Note [InboxNote] unmapped writing-mode: writing-mode vertical-rl → vertical text has no SwiftUI layout [1 node: 2]
 Note [InboxNote] approximated @onclick: inline <span> handler inside running text → styled text run, not tappable [1 node: 1]
 Note [InboxNote] approximated flex-grow: unequal flex-grow factors [1,2,1]; unequal measured widths [154,158,320] (basis, shrink or content constraints); measured width pinned [3 nodes: 3/0, 3/1, 3/2]
 Note [InboxNote] approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size [1 node: 3]
 Note [InboxNote] approximated position: sticky: position: sticky (snapshot position) [1 node: 0]
 $ npx markswift convert hello.html --name HelloCard --out ./generated-hello --update
-Refusing to overwrite hand-edited files in /private/tmp/ms-src/generated-hello: HelloCard.swift. Move your changes into your own files (Markswift never touches files it did not write) or rerun with --force to discard them.
+Refusing to overwrite hand-edited files in /private/tmp/markswift-site-release-3-final/generated-hello: HelloCard.swift. Move your changes into your own files (Markswift never touches files it did not write) or rerun with --force to discard them.
 exit 2

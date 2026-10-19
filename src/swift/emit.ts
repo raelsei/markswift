@@ -1,3 +1,4 @@
+import { APPLE_FONT_METRICS } from "../model/fonts.ts";
 /** Assemble a screen from cohesive Swift emission modules. */
 import type { Screen, SemNode, StackNode, GridNode } from "../model/semantic.ts";
 import type { Theme } from "../model/layout.ts";
@@ -104,7 +105,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
   const control = controlMembers(screen.root, opts.mode, !!screen.breakpoints);
   const scaledFonts = new Map<string, string>();
   const ctx: EmitContext = {
-    fontMetrics: opts.fontMetrics ?? {},
+    fontMetrics: { ...APPLE_FONT_METRICS, ...opts.fontMetrics },
     nameOf,
     contentMinWidth,
     allocated,
@@ -134,6 +135,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       ? [`${bandsOpen(screen.breakpoints.edges)} { band in`, ...indent(top, 1), "}"]
       : top;
   const scheme = screen.colorScheme ? [`.environment(\\.colorScheme, .${screen.colorScheme})`] : [];
+  let restoresScheme = false;
+  visit(screen.root, (n) => {
+    if (n.colorScheme === "system") restoresScheme = true;
+  });
+  if (restoresScheme) scheme.push(".modifier(MarkswiftColorSchemeScope())");
   const body = [`${acc}var body: some View {`, ...indent([...wrapped, ...scheme], 1), "}"];
   for (const p of props) {
     if (extraction?.absorbed.has(p.node)) continue;
@@ -197,6 +203,21 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     ),
     "}",
   ];
+  const layerParents = new Map<string, string>();
+  visit(screen.root, (n) => {
+    for (const overlay of n.overlays) {
+      const p = overlay.presentation;
+      if (p?.parentLayer) layerParents.set(p.id, p.parentLayer);
+    }
+  });
+  const openArguments = (layer: string): string => {
+    const open = new Set<string>();
+    for (let id: string | undefined = layer; id && !open.has(id); id = layerParents.get(id)) open.add(id);
+    return [...control.openStates]
+      .filter(([id]) => open.has(id))
+      .map(([, state]) => `${state}: true`)
+      .join(", ");
+  };
   const lines = [
     `// ${GENERATED_BY} — tool-owned: regenerate with \`markswift ${opts.regenerate === "build" ? "build" : "convert --update"}\`; customise through the initializer or your own files. Source: ` +
       comment(screen.source) +
@@ -226,9 +247,9 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
       ),
     ]),
     // One preview per layer (in-flow or presentation), shown open.
-    ...[...control.openStates].flatMap(([layer, state]) => [
+    ...[...control.openStates].flatMap(([layer]) => [
       "",
-      ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, `${state}: true`),
+      ...preview(opts.adaptive ? "light" : screen.theme, `${viewName} — ${layer} open`, openArguments(layer)),
     ]),
     ...(extraction?.previews.length ? ["", ...extraction.previews] : []),
   ];

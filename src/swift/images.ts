@@ -242,6 +242,23 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
   // picture by CSS's `(box − picture) × f` through its own alignment guides; the box size comes
   // from a GeometryReader because `.overlay` ignores the base view's explicit guides.
   const fit = n.contentMode;
+  // Vector paths are emitted at a concrete size. Recompute their visual scale from the offered
+  // box in app mode; a captured cover size leaves gaps when the container becomes wider.
+  if (ctx.mode === "app" && src.kind === "vector" && (fit === "cover" || fit === "contain")) {
+    const [w, h] = src.size;
+    const [x, y] = n.position ?? [0.5, 0.5];
+    return [
+      "GeometryReader { box in",
+      `    let scale = ${fit === "cover" ? "max" : "min"}(box.size.width / ${num(w)}, box.size.height / ${num(h)})`,
+      ...indent(src.view(w, h), 1),
+      "        .scaleEffect(scale, anchor: .topLeading)",
+      `        .offset(x: (box.size.width - ${num(w)} * scale) * ${num(x)}, y: (box.size.height - ${num(h)} * scale) * ${num(y)})`,
+      "        .frame(width: box.size.width, height: box.size.height, alignment: .topLeading)",
+      "}",
+      ".clipped()",
+      ...a11y,
+    ];
+  }
   let view: string[];
   if (src.kind === "raster") {
     view = [

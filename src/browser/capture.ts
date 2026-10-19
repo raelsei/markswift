@@ -6,7 +6,7 @@
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
 import { settle, withFrozenProgress } from "./settle.ts";
-import { collectFontFaces, readFontBytes } from "./fonts.ts";
+import { collectFontFaces, readFontBytes, attachResolvedFonts } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
 import {
@@ -15,10 +15,12 @@ import {
   toLayout,
   attachPreferredSizes,
   attachMotion,
+  attachRelativePseudos,
   rawAt,
   type DomSnapshot,
+  type Raw,
 } from "./snapshot.ts";
-import { readPreferredSizes } from "./sizing.ts";
+import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
@@ -68,15 +70,23 @@ function sniffImage(b: Buffer): string | undefined {
 }
 
 /** Marks every transformed element and every `position: relative` one (`TRANSFORMED_MARK`, `RELATIVE_MARK`). */
-async function markTransformed(page: Page): Promise<void> {
-  await page.evaluate(
+async function markTransformed(page: Page): Promise<boolean> {
+  return page.evaluate(
     ([transformed, relative]) => {
+      let pseudos = false;
       for (const el of document.querySelectorAll("*")) {
         const cs = getComputedStyle(el);
         if (cs.transform !== "none" || cs.translate !== "none" || cs.rotate !== "none" || cs.scale !== "none")
           el.setAttribute(transformed, "");
         if (cs.position === "relative") el.setAttribute(relative, "");
+        for (const pseudo of ["before", "after"]) {
+          if (getComputedStyle(el, `::${pseudo}`).position === "relative") {
+            el.setAttribute(`${relative}-${pseudo}`, "");
+            pseudos = true;
+          }
+        }
       }
+      return pseudos;
     },
     [TRANSFORMED_MARK, RELATIVE_MARK] as const,
   );
@@ -125,6 +135,8 @@ export interface CaptureOptions {
   channel?: string;
   restricted?: boolean;
   signal?: AbortSignal;
+  /** Deadline for each capture, including page creation and CDP calls. Defaults to 120 seconds. */
+  timeoutMs?: number;
 }
 
 export class BrowserCapture {
@@ -134,6 +146,8 @@ export class BrowserCapture {
   private readonly opts: CaptureOptions;
 
   constructor(opts: CaptureOptions) {
+    if (opts.timeoutMs !== undefined && (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs <= 0))
+      throw new Error("capture timeoutMs must be positive and finite");
     this.opts = opts;
   }
 
@@ -175,7 +189,54 @@ export class BrowserCapture {
    * LayoutDoc.source label. The page's `prefers-color-scheme` follows `spec.theme`.
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
+    const timeoutMs = this.opts.timeoutMs ?? 120_000;
+    const viewport = spec.viewport ?? this.opts.viewport;
+    const key = `${source}/${spec.screen}/${viewport.width}/${spec.theme}${spec.open ? `/open:${spec.open.id}` : ""}`;
+    let phase = "newPage";
+    let page: Page | undefined;
+    let expired = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        expired = true;
+        reject(new Error(`capture ${key} timed out after ${timeoutMs}ms during ${phase}`));
+        // Closing a page releases pending CDP work. A stuck newPage needs the browser closed.
+        void (page ? page.close() : this.stop()).catch(() => {});
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        this.capturePage(
+          spec,
+          identity,
+          source,
+          (next) => {
+            phase = next;
+          },
+          (created) => {
+            page = created;
+            if (expired) {
+              void page.close().catch(() => {});
+              throw new Error(`capture ${key} expired during newPage`);
+            }
+          },
+        ),
+        timedOut,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async capturePage(
+    spec: CaptureRequest,
+    identity: NodeIdentity,
+    source: string,
+    progress: (phase: string) => void,
+    openedPage: (page: Page) => void,
+  ): Promise<Capture> {
     const page = await this.context.newPage();
+    openedPage(page);
     const viewport = spec.viewport ?? this.opts.viewport;
     const errors: string[] = [];
     const images = new Map<string, string>();
@@ -223,16 +284,21 @@ export class BrowserCapture {
       }
     });
     try {
+      progress("load / prepare");
       await this.load(page, spec);
       // Static capture: transitions only interpolate towards the same end state, but a
       // running one makes computed values (and the transform:none probe) mid-flight.
       const noTransition = await noTransitions(page);
       // Motion is read before settle() finishes it (a finished CSSAnimation leaves getAnimations()).
+      progress("readMotion");
       const motion = await readMotion(page, spec.root);
       errors.push(...motion.warnings);
+      progress("settle");
       await settle(page);
+      progress("newCDPSession / stylesheets");
       const cdp = await this.context.newCDPSession(page);
       await Promise.all(sheetReads);
+      progress("collectFontFaces");
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
       for (const href of unreadable)
         errors.push(`Stylesheet could not be read: ${href}; its @font-face rules were not collected.`);
@@ -246,6 +312,7 @@ export class BrowserCapture {
         errors.push(
           `Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`,
         );
+      progress("readFontBytes");
       const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
       const canvas = await page.evaluate(
         ({ sel, mark }) => {
@@ -313,15 +380,18 @@ export class BrowserCapture {
           )
         : [];
       const hiddenOnOpen = !!opening && roots.length > 0 && !opening.hidden && (await rootHidden(page, rootSel));
+      progress("conditional rules / preferred sizes");
       const conditional = await readConditionalRules(page, spec.root, viewport.width, spec.breakpoints);
       const { sizes, pseudoStyles } = await readPreferredSizes(page, spec.root);
       const layerSizes = await Promise.all(roots.map((_, i) => readPreferredSizes(page, `[${LAYER_MARK}="${i}"]`)));
       const snapArgs = { computedStyles: [...STYLE_WHITELIST], includePaintOrder: true, includeDOMRects: true };
       // A: as painted (computed transform matrices, paint order).
+      progress("DOMSnapshot.captureSnapshot (paint)");
       const snapA = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       // Pressed/focused looks: paint-only snapshots of the same load and viewport (no script runs), plus the
       // CSSTransitions each state starts (rest page only: transitions are keyed by paths under `spec.root`).
       // In an open page, the layer's own buttons and fields.
+      progress("captureStates");
       const states = await captureStates(
         cdp,
         spec.open ? `[${LAYER_MARK}]` : rootSel,
@@ -330,7 +400,7 @@ export class BrowserCapture {
       );
       errors.push(...states.warnings);
       // Marked after A so the attribute never reaches the captured `attrs` (B's attributes are not read).
-      await markTransformed(page);
+      const relativePseudos = await markTransformed(page);
       // B: transforms disabled → true layout boxes. Transforms never affect layout, and the
       // <style> is appended last so node indices of everything else are unchanged. The individual
       // transform properties (Tailwind v4's rotate-*/scale-*/translate-*) are cancelled too.
@@ -342,11 +412,30 @@ export class BrowserCapture {
         s.id = "__markswift_notransform";
         s.textContent = css;
         document.body.appendChild(s);
-      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }\n[${RELATIVE_MARK}] { inset: auto !important; }`);
+      }, `* { ${NO_TRANSFORM} }\n[${TRANSFORMED_MARK}] { will-change: transform !important; }`);
+      const selectors = [spec.root, ...roots.map((_, i) => `[${LAYER_MARK}="${i}"]`)];
+      const before = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const pseudoBefore = relativePseudos
+        ? snapshotToTree((await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot)
+        : undefined;
+      await page.evaluate((css) => {
+        document.getElementById("__markswift_notransform")!.textContent += css;
+      }, `\n[${RELATIVE_MARK}], [${RELATIVE_MARK}-before]::before, [${RELATIVE_MARK}-after]::after { inset: auto !important; }`);
+      const after = await Promise.all(selectors.map((selector) => relativePositions(page, selector)));
+      const captures = [sizes, ...layerSizes.map((layer) => layer.sizes)];
+      captures.forEach((captured, i) => {
+        for (const [path, [x, y]] of Object.entries(before[i]!)) {
+          const rest = after[i]![path];
+          if (captured[path] && rest) captured[path]!.relativeOffset = [x - rest[0], y - rest[1]];
+        }
+      });
+      progress("DOMSnapshot.captureSnapshot (layout)");
       const snapB = (await cdp.send("DOMSnapshot.captureSnapshot", snapArgs)) as unknown as DomSnapshot;
       await page.evaluate(() => document.getElementById("__markswift_notransform")?.remove());
       // (the CDP session stays open for the dismiss probes)
       const tree = snapshotToTree(snapA, snapB, states);
+      await attachResolvedFonts(cdp, tree);
+      if (pseudoBefore) attachRelativePseudos(tree, pseudoBefore);
       const rootRaw = findByAttr(tree, ROOT_MARK, "1");
       if (!rootRaw) throw new Error(`capture root ${spec.root} not in snapshot`);
       attachPreferredSizes(rootRaw, sizes, pseudoStyles);
@@ -366,6 +455,7 @@ export class BrowserCapture {
         const raw = rawAt(rootRaw, t.path)!;
         return { ...t, trigger: identity(raw.name, raw.attrs, t.path) ?? t.path };
       });
+      const nestedTriggers: Trigger[] = [];
       let opened: Capture["opened"];
       let candidates: DismissCandidate[] = [];
       if (spec.open && opening && roots.length) {
@@ -374,6 +464,9 @@ export class BrowserCapture {
           delete raw.attrs[LAYER_MARK];
           attachPreferredSizes(raw, layerSizes[i]!.sizes, layerSizes[i]!.pseudoStyles);
         });
+        const findBackend = (n: Raw): Raw | undefined =>
+          n.backend === opening.triggerBackend ? n : n.children.map(findBackend).find(Boolean);
+        const triggerRaw = findBackend(tree);
         const { layer, paths } = assembleLayer({
           trigger: spec.open,
           rootRaw,
@@ -383,12 +476,36 @@ export class BrowserCapture {
           identity,
           info: rootInfo,
           hiddenOnOpen,
+          triggerRaw,
         });
+        for (const [i, raw] of marked.entries()) {
+          const selector = await roots[i]!.evaluate((el) => {
+            const steps: string[] = [];
+            for (let n: Element | null = el; n && n !== document.documentElement; n = n.parentElement)
+              steps.unshift(`:nth-child(${Array.from(n.parentElement!.children).indexOf(n) + 1})`);
+            return "html > " + steps.join(" > ");
+          });
+          const found = await findTriggers(page, selector);
+          errors.push(...found.warnings);
+          for (const child of found.triggers) {
+            const at = rawAt(raw, child.path);
+            if (!at) continue;
+            const path = [paths[i], child.path].filter(Boolean).join("/");
+            nestedTriggers.push({
+              ...child,
+              id: `${spec.open.id}-${child.id}`,
+              trigger: identity(at.name, at.attrs, path) ?? path,
+              identityPath: path,
+              rootSelector: selector,
+              ancestors: [...(spec.open.ancestors ?? []), spec.open],
+            });
+          }
+        }
         // Enter attach — after layer assembly
         enter.lists.forEach((list, i) => {
           if (list.length) layer.nodes[i]!.motion = { ...layer.nodes[i]!.motion, enter: list };
         });
-        const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity);
+        const { paint, changed } = triggerPaint(opening.rest, rootRaw, spec.open, identity, triggerRaw);
         if (changed)
           errors.push(
             `${changed} element(s) inside trigger ${spec.open.id} appear or disappear while its layer is open; not reproduced`,
@@ -398,6 +515,7 @@ export class BrowserCapture {
       }
       let png: Uint8Array | undefined;
       if (spec.screenshot) {
+        progress("screenshot");
         const { x, y, w, h } = box;
         if (!(size.w > 0 && size.h > 0) || x + w <= 0 || y + h <= 0)
           throw new Error(
@@ -424,6 +542,7 @@ export class BrowserCapture {
         });
         animated ||= exit.lists.some((l) => l.length);
       };
+      progress("dismiss probes");
       if (opened && opening && spec.open && spec.probeDismiss && opened.layer.placement !== "inflow") {
         await recordAnimations(page);
         await page.keyboard.press("Escape");
@@ -448,6 +567,7 @@ export class BrowserCapture {
         errors.push(
           "overlay enter/exit animations follow the Reduce Motion fallback (author prefers-reduced-motion rules for them are not captured)",
         );
+      progress("CDP detach / image responses");
       await cdp.detach();
       await Promise.all(imageReads);
       const baseURI = await page.evaluate(() => document.baseURI);
@@ -470,10 +590,11 @@ export class BrowserCapture {
         },
         png,
         fontFiles,
-        ...(triggers ? { triggers } : {}),
+        ...(triggers ? { triggers } : nestedTriggers.length ? { triggers: nestedTriggers } : {}),
         ...(opened ? { opened } : {}),
       };
     } finally {
+      progress("page.close");
       await page.close();
     }
   }
@@ -511,7 +632,8 @@ export class BrowserCapture {
               : route.continue(),
       );
     }
-    await page.goto(spec.url, { waitUntil: "load" });
+    // Navigation shares the configured capture budget instead of failing at Playwright's shorter default.
+    await page.goto(spec.url, { waitUntil: "load", timeout: this.opts.timeoutMs ?? 120_000 });
     await page.waitForSelector(spec.waitFor ?? spec.root, { state: "attached", timeout: 15_000 });
     await spec.prepare?.(page);
   }

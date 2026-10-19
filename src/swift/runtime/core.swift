@@ -131,9 +131,9 @@ extension View {
     /// above the first and below the last line.
     func markswiftLineHeight(_ lineHeight: CGFloat, size: CGFloat, relativeTo style: Font.TextStyle,
                              ascent: CGFloat, descent: CGFloat, natural: CGFloat = 2444.0 / 2048,
-                             halfLeading: Bool = true, compressLines: Bool = false) -> some View {
+                             halfLeading: Bool = true, compressLines: Bool = false, exactLineBox: Bool = false) -> some View {
         modifier(MarkswiftLineHeight(factor: lineHeight / size, ascent: ascent, descent: descent, natural: natural,
-                                     halfLeading: halfLeading, compressLines: compressLines, size: size, relativeTo: style))
+                                     halfLeading: halfLeading, compressLines: compressLines, exactLineBox: exactLineBox, size: size, relativeTo: style))
     }
 }
 
@@ -144,10 +144,11 @@ struct MarkswiftLineHeight: ViewModifier {
     let natural: CGFloat
     let halfLeading: Bool
     let compressLines: Bool
+    let exactLineBox: Bool
     @ScaledMetric private var size: CGFloat
     @Environment(\.displayScale) private var scale
 
-    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, compressLines: Bool,
+    init(factor: CGFloat, ascent: CGFloat, descent: CGFloat, natural: CGFloat, halfLeading: Bool, compressLines: Bool, exactLineBox: Bool,
          size: CGFloat, relativeTo style: Font.TextStyle) {
         self.factor = factor
         self.ascent = ascent
@@ -155,6 +156,7 @@ struct MarkswiftLineHeight: ViewModifier {
         self.natural = natural
         self.halfLeading = halfLeading
         self.compressLines = compressLines
+        self.exactLineBox = exactLineBox
         _size = ScaledMetric(wrappedValue: size, relativeTo: style)
     }
 
@@ -169,12 +171,40 @@ struct MarkswiftLineHeight: ViewModifier {
             // A Text's height is rounded up to the pixel, so the trim is too: the box is exactly the CSS line.
             let tight = factor < natural && !compressLines
             let overflow = tight ? (natural * size * scale).rounded(.up) / scale - factor * size : 0
-            content.lineHeight(.multiple(factor: tight ? natural : factor))
-                .padding(.top, shift - trim)
+            #if os(iOS)
+            let lineBoxHeight = exactLineBox && !tight ? factor * size : nil
+            #else
+            // AppKit lays out adjacent native controls on pixel-rounded baselines.
+            // Preserve that paragraph box so fractional labels do not shift the rest of the form.
+            let lineBoxHeight: CGFloat? = nil
+            #endif
+            MarkswiftLineBox(lineHeight: lineBoxHeight, scale: scale) {
+                content.lineHeight(.multiple(factor: tight ? natural : factor))
+            }.padding(.top, shift - trim)
                 .padding(.bottom, -shift - trim - overflow)
         } else {
             content.lineSpacing(max(0, leading)).padding(.vertical, leading / 2 - trim)
         }
+    }
+}
+
+/// SwiftUI rounds a uniform paragraph's total height up to a device pixel. Keep its natural
+/// text frame for painting, but return the fractional CSS line box to the surrounding layout.
+private struct MarkswiftLineBox: Layout {
+    let lineHeight: CGFloat?
+    let scale: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        var size = text.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        if let lineHeight, lineHeight > 0 {
+            let exact = (size.height / lineHeight).rounded() * lineHeight
+            let surplus = size.height - exact
+            if exact > 0 && surplus >= -0.001 && surplus < 1 / max(1, scale) + 0.001 { size.height = exact }
+        }
+        return size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
@@ -243,8 +273,10 @@ extension Image {
     /// A generated image (`content: url()`) drawn at its CSS size so it can sit inside a `Text` run, where
     /// SwiftUI accepts only an `Image`. `label` nil = decorative.
     // ponytail: rendered on every body evaluation; cache the CGImage by a key if a long list shows many.
-    @MainActor static func markswiftRendered<Content: View>(width: CGFloat, height: CGFloat, label: String? = nil, @ViewBuilder _ content: () -> Content) -> Image {
-        let renderer = ImageRenderer(content: content().frame(width: width, height: height))
+    @MainActor static func markswiftRendered<Content: View>(width: CGFloat, height: CGFloat, scale: CGFloat = 1, label: String? = nil, @ViewBuilder _ content: () -> Content) -> Image {
+        let renderer = ImageRenderer(content: content().frame(width: width, height: height)
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(width: width * scale, height: height * scale, alignment: .topLeading))
         renderer.scale = 3
         guard let image = renderer.cgImage else { return Image(systemName: "photo") }
         if let label { return Image(image, scale: 3, label: Text(verbatim: label)) }
@@ -482,5 +514,76 @@ enum MarkswiftFonts {
         for url in urls {
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
+    }
+}
+
+private struct MarkswiftBaseColorSchemeKey: EnvironmentKey {
+    static let defaultValue: ColorScheme? = nil
+}
+extension EnvironmentValues {
+    var markswiftBaseColorScheme: ColorScheme? {
+        get { self[MarkswiftBaseColorSchemeKey.self] }
+        set { self[MarkswiftBaseColorSchemeKey.self] = newValue }
+    }
+}
+/// Remember the caller's appearance before any CSS color-scheme boundary is applied.
+struct MarkswiftColorSchemeScope: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View { content.environment(\.markswiftBaseColorScheme, scheme) }
+}
+struct MarkswiftRestoreColorScheme: ViewModifier {
+    @Environment(\.markswiftBaseColorScheme) private var base
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View { content.environment(\.colorScheme, base ?? scheme) }
+}
+
+/// Apply only axes the installed system face actually exposes, clamped to its declared range.
+/// Font.width selects named SF instances; CoreText variation values retain intermediate widths.
+nonisolated func markswiftSystemFont(size: CGFloat, weight: CGFloat, design: Font.Design, axes requested: [String: CGFloat]) -> CTFont {
+    let index = (0..<9).min { abs(CGFloat($0 + 1) * 100 - weight) < abs(CGFloat($1 + 1) * 100 - weight) } ?? 3
+    #if canImport(UIKit)
+    let weights: [UIFont.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+    let base = UIFont.systemFont(ofSize: size, weight: weights[index])
+    let kind: UIFontDescriptor.SystemDesign = design == .serif ? .serif : design == .rounded ? .rounded : design == .monospaced ? .monospaced : .default
+    let font = UIFont(descriptor: base.fontDescriptor.withDesign(kind) ?? base.fontDescriptor, size: size) as CTFont
+    #else
+    let weights: [NSFont.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+    let base = NSFont.systemFont(ofSize: size, weight: weights[index])
+    let kind: NSFontDescriptor.SystemDesign = design == .serif ? .serif : design == .rounded ? .rounded : design == .monospaced ? .monospaced : .default
+    let font = (NSFont(descriptor: base.fontDescriptor.withDesign(kind) ?? base.fontDescriptor, size: size) ?? base) as CTFont
+    #endif
+    let values = requested.merging(["wght": weight]) { old, _ in old }
+    var selected: [Int: CGFloat] = [:]
+    for axis in CTFontCopyVariationAxes(font) as? [[CFString: Any]] ?? [] {
+        guard let id = axis[kCTFontVariationAxisIdentifierKey] as? Int,
+              let lo = axis[kCTFontVariationAxisMinimumValueKey] as? CGFloat,
+              let hi = axis[kCTFontVariationAxisMaximumValueKey] as? CGFloat else { continue }
+        for (tag, value) in values where tag.utf8.reduce(0, { $0 << 8 | Int($1) }) == id {
+            selected[id] = min(hi, max(lo, value))
+        }
+    }
+    guard !selected.isEmpty else { return font }
+    let descriptor = CTFontDescriptorCreateWithAttributes([kCTFontVariationAttribute: selected] as CFDictionary)
+    return CTFontCreateCopyWithAttributes(font, size, nil, descriptor)
+}
+extension Font {
+    nonisolated static func markswiftSystem(size: CGFloat, weight: CGFloat, design: Font.Design, axes: [String: CGFloat]) -> Font {
+        Font(markswiftSystemFont(size: size, weight: weight, design: design, axes: axes))
+    }
+}
+
+/// Percentage translations follow the final border box without changing its layout slot.
+struct MarkswiftResponsiveTranslation: GeometryEffect {
+    var width: CGFloat
+    var height: CGFloat
+    var xWidth: CGFloat
+    var xHeight: CGFloat
+    var yWidth: CGFloat
+    var yHeight: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let dw = size.width - width, dh = size.height - height
+        return ProjectionTransform(CGAffineTransform(translationX: xWidth * dw + xHeight * dh,
+                                                     y: yWidth * dw + yHeight * dh))
     }
 }

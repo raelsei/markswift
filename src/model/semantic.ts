@@ -204,7 +204,11 @@ export interface Style {
   blur?: number;
   /** Full CSS filter list; `blur` stays as the fast path when it is the only function. */
   filters?: Filter[];
-  transform?: Transform2D & { origin?: [number, number] };
+  transform?: Transform2D & {
+    origin?: [number, number];
+    /** Translation correction per change in border-box width/height from the capture. */
+    responsive?: { x: [number, number]; y: [number, number] };
+  };
   /** `mix-blend-mode`, never `normal`. */
   blend?: BlendMode;
   /** `clip-path` basic shape. */
@@ -293,7 +297,7 @@ export interface FontSpec {
   opsz?: number;
   /** System families: CSS `font-stretch` % (or a `wdth` variation) when not 100. */
   stretch?: number;
-  /** Bundled families: variation axes other than wght/opsz the file declares, clamped to its ranges (`wdth` from font-stretch). */
+  /** Bundled axes are clamped during analysis; system axes are clamped against the installed face at runtime. */
   axes?: Record<string, number>;
   /** CSS line-height in px when explicitly set; undefined = normal. */
   lineHeight?: number;
@@ -318,6 +322,8 @@ export type CounterStyle =
   | "upper-roman";
 
 export interface TextRun {
+  /** Paint-only translation; does not change glyph advances or line boxes. */
+  relativeOffset?: [number, number];
   text: string;
   font: FontSpec;
   color: Color;
@@ -441,6 +447,8 @@ export interface Overlay {
   layer: "background" | "overlay";
   /** Offset of the node's top-left from the host's top-left (px). */
   offset: [number, number];
+  /** Outside counter marker: app mode aligns its intrinsic trailing edge to the captured right edge. */
+  outsideMarker?: true;
   /** True when the node covers exactly the host box (inset: 0). */
   covers: boolean;
   /** `position: fixed`: attached to the screen, so app mode keeps it outside the root's ScrollView. */
@@ -454,6 +462,10 @@ export interface Overlay {
 
 /** A layer drawn over the component while the screen's `is<Layer>Presented` is true. */
 export interface Presentation {
+  /** Closing this ancestor also dismisses the nested presentation. */
+  parentLayer?: string;
+  /** Authored border-box width of the first content root, resolved against the live component width. */
+  width?: { fraction: number; offset: number; min: number; max?: number };
   /** Layer id (`edit-profile`): joins light/dark and names the `@open:<id>` capture. */
   id: string;
   /** SemNode id of the trigger. */
@@ -481,7 +493,7 @@ export type MenuItem =
   | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
-  | { kind: "submenu"; id: string; label: string };
+  | { kind: "submenu"; id: string; label: string; items?: MenuItem[] };
 /** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;
@@ -531,6 +543,8 @@ export interface SemBase extends SizeConstraints {
    * box out without it). Absent when zero.
    */
   relativeOffset?: [number, number];
+  /** A non-root color-scheme boundary; system restores the appearance outside the generated component. */
+  colorScheme?: "light" | "dark" | "system";
   /**
    * Base writing direction of a text node whose computed `direction` is `rtl`: CoreText resolves
    * neutral characters against it. Only text carries it — container order is already measured,
@@ -586,6 +600,9 @@ export interface SemBase extends SizeConstraints {
    * outermost such overlay only; its action stays (assistive technology still activates it, as in Chrome).
    */
   hitTesting?: false;
+  /** Live descendant bounds which alone can receive taps in a pass-through container. */
+  hitRegionTargets?: string[];
+  hitRegionTarget?: string;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
   states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
@@ -666,6 +683,8 @@ export interface GridNode extends SemBase {
 }
 
 export interface TextNode extends SemBase {
+  /** CSS plaintext uses each paragraph's first strong character for its base direction. */
+  plaintext?: true;
   kind: "text";
   /** Source element, retained so emitters can scope text-layout strategies safely. */
   sourceTag?: string;
@@ -707,6 +726,8 @@ export interface SvgNode extends SemBase {
 }
 
 export interface ImageNode extends SemBase {
+  /** A standalone generated image scales with its pseudo-element’s font in app mode. */
+  generatedFont?: FontSpec;
   kind: "image";
   src: string;
   /** A `data:image/svg+xml` source, parsed during analysis. */
