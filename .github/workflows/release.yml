@@ -54,11 +54,15 @@ jobs:
         run: |
           version="$(node -p "require('./package.json').version")"
           tag="$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")"
-          # Registry metadata can take a short time to become visible after a successful publish.
-          for attempt in {1..12}; do
+          # Registry metadata and provenance processing can take a few minutes to become visible after publish.
+          for attempt in {1..60}; do
             published="$(npm view "markswift@$version" version 2>/dev/null || true)"
             tagged="$(npm view "markswift" "dist-tags.$tag" 2>/dev/null || true)"
-            if [ "$published" = "$version" ] && [ "$tagged" = "$version" ]; then break; fi
+            if [ "$published" = "$version" ] && [ "$tagged" = "$version" ]; then
+              echo "Verified markswift@$published ($tag=$tagged) on attempt $attempt"
+              break
+            fi
+            echo "Attempt $attempt/60: waiting for markswift@$version (published='${published:-none}', $tag='${tagged:-none}')..."
             sleep 5
           done
           test "$published" = "$version"
