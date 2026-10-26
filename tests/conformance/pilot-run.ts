@@ -102,7 +102,8 @@ interface Job {
   /** iOS `@bp` job: the merged breakpoint view framed at this capture's size, rendered in the same batch as `reflow.png`. */
   reflow?: RenderResult;
 }
-// ponytail: fixed batch of 48 captures per app build (6 cases × 8 captures); tune if one batch build exceeds ~3 min.
+// ponytail: fixed batch of 48 renders per app build (6 cases × 8 captures; an `@bp` job's reflow.png counts); tune if
+// one batch build exceeds ~3 min.
 const IOS_BATCH = 48;
 const artifactFiles = [
   "browser.png",
@@ -152,7 +153,7 @@ async function outputOf(command: string[]): Promise<string> {
   if ((await run.exited) !== 0) throw new Error(`${command[0]} failed: ${stderr.trim()}`);
   return stdout.trim();
 }
-async function environment(cases: RunCase[], renderer: Renderer, chrome: string): Promise<RunEnvironment> {
+async function environment(cases: RunCase[], renderer: Renderer): Promise<Omit<RunEnvironment, "chrome">> {
   const [sourceRevision, sourceStatus, xcode] = await Promise.all([
     outputOf(["git", "rev-parse", "HEAD"]),
     outputOf(["git", "status", "--porcelain", "--", "src"]),
@@ -183,7 +184,6 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
     sourceRevision,
     fixtureHashes,
     harnessHash: harness.digest("hex"),
-    chrome,
     xcode,
     renderer: rendererName,
     simulatorUdid: selected?.udid ?? null,
@@ -276,6 +276,9 @@ async function run() {
     },
   });
   try {
+    // Preflight (clean src/, Xcode, iPhone boot) before any Chromium launches: on CI, browsers left idle across the
+    // simulator boot stopped answering CDP for minutes (Visual, Oct 2026: newPage / load timed out after 120 s).
+    const preflight = await environment(cases, renderer);
     for (const width of new Set(selected.flatMap((item) => widthsFor(item, reflow)))) {
       // Lockfile-pinned Chromium, never the auto-updating Chrome channel, so references reproduce on any machine.
       const browser = new BrowserCapture({ dpr: 2, viewport: { width, height: 2000 }, channel: "chromium" });
@@ -311,7 +314,7 @@ async function run() {
       }
     }
     const matrix = buildMatrix(selected, reflow, references);
-    const env = await environment(cases, renderer, `Chromium ${browsers.values().next().value!.version}`);
+    const env: RunEnvironment = { ...preflight, chrome: `Chromium ${browsers.values().next().value!.version}` };
     report = { expected: matrix.length, completed: 0, errors: [...bpErrors], environment: env, entries: [] };
     for (const error of bpErrors) console.error(error);
     console.log(
@@ -476,10 +479,16 @@ async function run() {
     const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
-    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of IOS_BATCH, then score each. */
+    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of at most IOS_BATCH renders, then
+     * score each. */
     const flush = async (queue = pending, udid = env.simulatorUdid!, work = "_ios-work") => {
       while (queue.length) {
-        const jobs = queue.splice(0, IOS_BATCH);
+        let take = 0;
+        for (let renders = 0; take < queue.length; take++) {
+          renders += queue[take]!.reflow ? 2 : 1;
+          if (renders > IOS_BATCH && take) break;
+        }
+        const jobs = queue.splice(0, take);
         const outputs = jobs.flatMap((j) => [
           { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
           ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
