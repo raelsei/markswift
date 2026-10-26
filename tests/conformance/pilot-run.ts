@@ -16,7 +16,8 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import { buildRenderApp, ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import { command } from "../../tools/verify/process.ts";
 import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
@@ -102,8 +103,7 @@ interface Job {
   /** iOS `@bp` job: the merged breakpoint view framed at this capture's size, rendered in the same batch as `reflow.png`. */
   reflow?: RenderResult;
 }
-// ponytail: fixed batch of 48 renders per app build (6 cases × 8 captures; an `@bp` job's reflow.png counts); tune if
-// one batch build exceeds ~3 min.
+// ponytail: fixed batch of 48 captures per app build (6 cases × 8 captures); tune if one batch build exceeds ~3 min.
 const IOS_BATCH = 48;
 const artifactFiles = [
   "browser.png",
@@ -479,31 +479,30 @@ async function run() {
     const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
-    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of at most IOS_BATCH renders, then
-     * score each. */
-    const flush = async (queue = pending, udid = env.simulatorUdid!, work = "_ios-work") => {
-      while (queue.length) {
-        let take = 0;
-        for (let renders = 0; take < queue.length; take++) {
-          renders += queue[take]!.reflow ? 2 : 1;
-          if (renders > IOS_BATCH && take) break;
-        }
-        const jobs = queue.splice(0, take);
-        const outputs = jobs.flatMap((j) => [
-          { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
-          ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
-        ]);
-        const errors = await renderIos(outputs, join(out, work), udid).catch(
-          (error) => new Map(outputs.map((o) => [o.output, String(error)])),
-        );
-        for (const j of jobs) {
-          const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
-          if (failed) {
-            report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
-            console.error(`${j.entry.key}: iOS render failed: ${failed}`);
-          } else await finish(j);
-        }
+    const outputsOf = (jobs: typeof pending) =>
+      jobs.flatMap((j) => [
+        { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
+        ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
+      ]);
+    /** Render one batch (`@bp` jobs with their merged view) in one app launch on `udid`, then score each job. `app`: the
+     * batch's build, when made before the simulator booted. */
+    const renderBatch = async (jobs: typeof pending, udid: string, work: string, app?: Promise<string>) => {
+      const outputs = outputsOf(jobs);
+      const errors = await renderIos(outputs, work, udid, app).catch(
+        (error) => new Map(outputs.map((o) => [o.output, String(error)])),
+      );
+      for (const j of jobs) {
+        const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
+        if (failed) {
+          report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
+          console.error(`${j.entry.key}: iOS render failed: ${failed}`);
+        } else await finish(j);
       }
+    };
+    /** Render queued iPhone captures in app builds of IOS_BATCH. */
+    const flush = async () => {
+      while (pending.length)
+        await renderBatch(pending.splice(0, IOS_BATCH), env.simulatorUdid!, join(out, "_ios-work"));
     };
     for (const item of selected) {
       // Rest captures, then the case's `@bp` references (bpBrowser, viewport per width).
@@ -768,11 +767,24 @@ async function run() {
     }
     await flush();
     if (ipadPending.length) {
-      // Wide `@bp` references need a window wider than the iPhone's: the iPad, booted only now (K5: one at a time).
+      // Wide `@bp` references need a window wider than the iPhone's: the iPad. K5, one simulator at a time, with nothing
+      // heavy beside its boot: on CI a swiftc build started right after it exceeded the 600 s limit (Visual, Oct 2026).
+      // So every iPad app is built first, then Chromium closes and the iPhone shuts down, then the iPad boots.
+      const batches: Array<{ jobs: typeof pending; work: string; app: Promise<string> }> = [];
+      for (let i = 0; ipadPending.length; i++) {
+        const jobs = ipadPending.splice(0, IOS_BATCH);
+        const work = join(out, "_ipad-work", String(i));
+        const app = buildRenderApp(outputsOf(jobs), work);
+        // A failed build is reported per job by renderBatch.
+        await app.catch(() => {});
+        batches.push({ jobs, work, app });
+      }
+      await Promise.all([...browsers.values(), ...(bpBrowser ? [bpBrowser] : [])].map((browser) => browser.stop()));
+      await command(["xcrun", "simctl", "shutdown", env.simulatorUdid!], undefined, 60_000);
       const ipad = await ensureSimulator(process.env.MARKSWIFT_SIMULATOR_IPAD ?? "iPad Pro 13-inch (M5)");
       env.ipadRenderer = `${ipad.name} ${ipad.runtime}`;
       env.ipadUdid = ipad.udid;
-      await flush(ipadPending, ipad.udid, "_ipad-work");
+      for (const { jobs, work, app } of batches) await renderBatch(jobs, ipad.udid, work, app);
     }
   } finally {
     await Promise.all([...browsers.values(), ...(bpBrowser ? [bpBrowser] : [])].map((browser) => browser.stop()));

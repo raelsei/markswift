@@ -164,13 +164,19 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
 }
 
 /**
- * Render a batch on the booted simulator `udid` in one app launch. Returns output path → error for every
- * job that produced no image (the app's `error <i>: …` line, else "no image produced").
+ * Render a batch on the booted simulator `udid` in one app launch (`app`: its `buildRenderApp` build, else built here).
+ * Returns output path → error for every job that produced no image (the app's `error <i>: …` line, else "no image
+ * produced").
  */
-export async function renderIos(jobs: RenderJob[], work: string, udid: string): Promise<Map<string, string>> {
+export async function renderIos(
+  jobs: RenderJob[],
+  work: string,
+  udid: string,
+  app?: Promise<string>,
+): Promise<Map<string, string>> {
   await Promise.all(jobs.map((job) => rm(job.output, { force: true })));
-  const app = await buildRenderApp(jobs, work);
-  await command(["xcrun", "simctl", "install", udid, app], undefined, 120_000);
+  const built = await (app ?? buildRenderApp(jobs, work));
+  await command(["xcrun", "simctl", "install", udid, built], undefined, 120_000);
   let log: string;
   try {
     log = await command(
