@@ -16,7 +16,7 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { buildRenderApp, ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
 import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
@@ -153,7 +153,7 @@ async function outputOf(command: string[]): Promise<string> {
   if ((await run.exited) !== 0) throw new Error(`${command[0]} failed: ${stderr.trim()}`);
   return stdout.trim();
 }
-async function environment(cases: RunCase[], renderer: Renderer): Promise<Omit<RunEnvironment, "chrome">> {
+async function environment(cases: RunCase[], renderer: Renderer, chrome: string): Promise<RunEnvironment> {
   const [sourceRevision, sourceStatus, xcode] = await Promise.all([
     outputOf(["git", "rev-parse", "HEAD"]),
     outputOf(["git", "status", "--porcelain", "--", "src"]),
@@ -184,6 +184,7 @@ async function environment(cases: RunCase[], renderer: Renderer): Promise<Omit<R
     sourceRevision,
     fixtureHashes,
     harnessHash: harness.digest("hex"),
+    chrome,
     xcode,
     renderer: rendererName,
     simulatorUdid: selected?.udid ?? null,
@@ -276,9 +277,6 @@ async function run() {
     },
   });
   try {
-    // Preflight (clean src/, Xcode, iPhone boot) before any Chromium launches: on CI, browsers left idle across the
-    // simulator boot stopped answering CDP for minutes (Visual, Oct 2026: newPage / load timed out after 120 s).
-    const preflight = await environment(cases, renderer);
     for (const width of new Set(selected.flatMap((item) => widthsFor(item, reflow)))) {
       // Lockfile-pinned Chromium, never the auto-updating Chrome channel, so references reproduce on any machine.
       const browser = new BrowserCapture({ dpr: 2, viewport: { width, height: 2000 }, channel: "chromium" });
@@ -314,7 +312,7 @@ async function run() {
       }
     }
     const matrix = buildMatrix(selected, reflow, references);
-    const env: RunEnvironment = { ...preflight, chrome: `Chromium ${browsers.values().next().value!.version}` };
+    const env = await environment(cases, renderer, `Chromium ${browsers.values().next().value!.version}`);
     report = { expected: matrix.length, completed: 0, errors: [...bpErrors], environment: env, entries: [] };
     for (const error of bpErrors) console.error(error);
     console.log(
@@ -479,30 +477,25 @@ async function run() {
     const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
-    const outputsOf = (jobs: typeof pending) =>
-      jobs.flatMap((j) => [
-        { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
-        ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
-      ]);
-    /** Render one batch (`@bp` jobs with their merged view) in one app launch on `udid`, then score each job. `app`: the
-     * batch's build, when made before the simulator booted. */
-    const renderBatch = async (jobs: typeof pending, udid: string, work: string, app?: Promise<string>) => {
-      const outputs = outputsOf(jobs);
-      const errors = await renderIos(outputs, work, udid, app).catch(
-        (error) => new Map(outputs.map((o) => [o.output, String(error)])),
-      );
-      for (const j of jobs) {
-        const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
-        if (failed) {
-          report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
-          console.error(`${j.entry.key}: iOS render failed: ${failed}`);
-        } else await finish(j);
+    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of IOS_BATCH, then score each. */
+    const flush = async (queue = pending, udid = env.simulatorUdid!, work = "_ios-work") => {
+      while (queue.length) {
+        const jobs = queue.splice(0, IOS_BATCH);
+        const outputs = jobs.flatMap((j) => [
+          { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
+          ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
+        ]);
+        const errors = await renderIos(outputs, join(out, work), udid).catch(
+          (error) => new Map(outputs.map((o) => [o.output, String(error)])),
+        );
+        for (const j of jobs) {
+          const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
+          if (failed) {
+            report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
+            console.error(`${j.entry.key}: iOS render failed: ${failed}`);
+          } else await finish(j);
+        }
       }
-    };
-    /** Render queued iPhone captures in app builds of IOS_BATCH. */
-    const flush = async () => {
-      while (pending.length)
-        await renderBatch(pending.splice(0, IOS_BATCH), env.simulatorUdid!, join(out, "_ios-work"));
     };
     for (const item of selected) {
       // Rest captures, then the case's `@bp` references (bpBrowser, viewport per width).
@@ -767,24 +760,12 @@ async function run() {
     }
     await flush();
     if (ipadPending.length) {
-      // Wide `@bp` references need a window wider than the iPhone's: the iPad. K5, one simulator at a time, with nothing
-      // heavy beside its boot: on CI a swiftc build started right after it exceeded the 600 s limit (Visual, Oct 2026).
-      // So every iPad app is built first, then Chromium closes and the iPhone shuts down, then the iPad boots.
-      const batches: Array<{ jobs: typeof pending; work: string; app: Promise<string> }> = [];
-      for (let i = 0; ipadPending.length; i++) {
-        const jobs = ipadPending.splice(0, IOS_BATCH);
-        const work = join(out, "_ipad-work", String(i));
-        const app = buildRenderApp(outputsOf(jobs), work);
-        // A failed build is reported per job by renderBatch.
-        await app.catch(() => {});
-        batches.push({ jobs, work, app });
-      }
-      await Promise.all([...browsers.values(), ...(bpBrowser ? [bpBrowser] : [])].map((browser) => browser.stop()));
+      // Wide `@bp` references need a window wider than the iPhone's: the iPad, booted only now (K5: one at a time).
       await command(["xcrun", "simctl", "shutdown", env.simulatorUdid!], undefined, 60_000);
       const ipad = await ensureSimulator(process.env.MARKSWIFT_SIMULATOR_IPAD ?? "iPad Pro 13-inch (M5)");
       env.ipadRenderer = `${ipad.name} ${ipad.runtime}`;
       env.ipadUdid = ipad.udid;
-      for (const { jobs, work, app } of batches) await renderBatch(jobs, ipad.udid, work, app);
+      await flush(ipadPending, ipad.udid, "_ipad-work");
     }
   } finally {
     await Promise.all([...browsers.values(), ...(bpBrowser ? [bpBrowser] : [])].map((browser) => browser.stop()));

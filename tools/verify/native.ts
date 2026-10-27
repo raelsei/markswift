@@ -1,4 +1,5 @@
 import { mkdir, rm } from "node:fs/promises";
+import { availableParallelism, loadavg } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { ConversionResult } from "../../src/index.ts";
 import { command } from "./process.ts";
@@ -43,6 +44,12 @@ export interface RenderJob {
 
 const FORCED_RAW: Record<ForcedState, number> = { pressed: 1, focused: 2, reduceMotion: 4 };
 
+// ponytail: calibration knobs, measured on the 3-core xcode-27 CI runner (#34). Every simulator boot, first or warm,
+// drove the 1-minute load to 300–600 for 4–9 min; Chromium pages and swiftc stalled meanwhile and ran normally once it
+// fell below ~120 (40 per core). Lower the factor if stalls return; the cap keeps a busy host from waiting forever.
+const QUIET_LOAD_PER_CPU = 40;
+const QUIET_CAP_MS = 15 * 60_000;
+
 /**
  * Boot the pinned simulator (`preferred`: name or UDID), creating a device of that name on the newest
  * installed iOS runtime when none exists.
@@ -82,6 +89,14 @@ export async function ensureSimulator(preferred = process.env.MARKSWIFT_SIMULATO
     device = selectSimulator(await devices(), preferred);
   }
   await command(["xcrun", "simctl", "bootstatus", device.udid, "-b"], undefined, 300_000);
+  if (device.state !== "Booted") {
+    const start = Date.now();
+    while (loadavg()[0]! > availableParallelism() * QUIET_LOAD_PER_CPU && Date.now() - start < QUIET_CAP_MS)
+      await Bun.sleep(5_000);
+    console.log(
+      `${device.name} booted; host quiet after ${Math.round((Date.now() - start) / 1000)} s (1-min load ${loadavg()[0]!.toFixed(0)})`,
+    );
+  }
   return { udid: device.udid, name: device.name, runtime: device.runtime };
 }
 
@@ -164,19 +179,13 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
 }
 
 /**
- * Render a batch on the booted simulator `udid` in one app launch (`app`: its `buildRenderApp` build, else built here).
- * Returns output path → error for every job that produced no image (the app's `error <i>: …` line, else "no image
- * produced").
+ * Render a batch on the booted simulator `udid` in one app launch. Returns output path → error for every
+ * job that produced no image (the app's `error <i>: …` line, else "no image produced").
  */
-export async function renderIos(
-  jobs: RenderJob[],
-  work: string,
-  udid: string,
-  app?: Promise<string>,
-): Promise<Map<string, string>> {
+export async function renderIos(jobs: RenderJob[], work: string, udid: string): Promise<Map<string, string>> {
   await Promise.all(jobs.map((job) => rm(job.output, { force: true })));
-  const built = await (app ?? buildRenderApp(jobs, work));
-  await command(["xcrun", "simctl", "install", udid, built], undefined, 120_000);
+  const app = await buildRenderApp(jobs, work);
+  await command(["xcrun", "simctl", "install", udid, app], undefined, 120_000);
   let log: string;
   try {
     log = await command(
