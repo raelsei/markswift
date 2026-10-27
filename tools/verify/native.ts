@@ -46,8 +46,10 @@ const FORCED_RAW: Record<ForcedState, number> = { pressed: 1, focused: 2, reduce
 
 // ponytail: calibration knobs, measured on the 3-core xcode-27 CI runner (#34). Every simulator boot, first or warm,
 // drove the 1-minute load to 300–600 for 4–9 min; Chromium pages and swiftc stalled meanwhile and ran normally once it
-// fell below ~120 (40 per core). Lower the factor if stalls return; the cap keeps a busy host from waiting forever.
+// fell below ~120 (40 per core). The load lags the boot (it can still read ~80 when bootstatus returns), so it must stay
+// below that for a whole window. Lower the factor if stalls return; the cap keeps a busy host from waiting forever.
 const QUIET_LOAD_PER_CPU = 40;
+const QUIET_WINDOW_MS = 2 * 60_000;
 const QUIET_CAP_MS = 15 * 60_000;
 
 /**
@@ -91,8 +93,11 @@ export async function ensureSimulator(preferred = process.env.MARKSWIFT_SIMULATO
   await command(["xcrun", "simctl", "bootstatus", device.udid, "-b"], undefined, 300_000);
   if (device.state !== "Booted") {
     const start = Date.now();
-    while (loadavg()[0]! > availableParallelism() * QUIET_LOAD_PER_CPU && Date.now() - start < QUIET_CAP_MS)
+    let quietSince = start;
+    while (Date.now() - quietSince < QUIET_WINDOW_MS && Date.now() - start < QUIET_CAP_MS) {
       await Bun.sleep(5_000);
+      if (loadavg()[0]! > availableParallelism() * QUIET_LOAD_PER_CPU) quietSince = Date.now();
+    }
     console.log(
       `${device.name} booted; host quiet after ${Math.round((Date.now() - start) / 1000)} s (1-min load ${loadavg()[0]!.toFixed(0)})`,
     );
