@@ -16,7 +16,7 @@ import { packageFonts } from "../../src/fonts/package.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
-import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import { ensureSimulator, renderIos, renderMacBatch } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
 import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
@@ -100,11 +100,13 @@ interface Job {
   layout: LayoutDoc;
   textMetrics: ReturnType<typeof browserTextMetrics> | undefined;
   result: RunEntry;
-  /** iOS `@bp` job: the merged breakpoint view framed at this capture's size, rendered in the same batch as `reflow.png`. */
+  /** The reflow view (the case's 390 conversion, or an `@bp` job's merged breakpoint view) framed at this capture's
+   * size, rendered in the same batch as `reflow.png`. */
   reflow?: RenderResult;
 }
-// ponytail: fixed batch of 48 captures per app build (6 cases × 8 captures); tune if one batch build exceeds ~3 min.
-const IOS_BATCH = 48;
+// ponytail: fixed batch of 48 captures per native build, macOS or iOS (6 cases × 8 captures); tune if one batch
+// build exceeds ~3 min.
+const BATCH = 48;
 const artifactFiles = [
   "browser.png",
   "native.png",
@@ -380,12 +382,8 @@ async function run() {
         }
       }
     }
-    const render = (conversion: ConversionResult, png: string) =>
-      renderer === "mac"
-        ? renderMac(conversion, join(out, "_mac-work"), png)
-        : renderNative(conversion, join(out, "_native-work"), png, () => {}, env.simulatorUdid ?? undefined);
     /** Score a rendered capture: text ink, compare, anchors, artifact hashes, `compare.json`, status line. */
-    const finish = async ({ entry, item, dir, layout, textMetrics, result, reflow: queued }: Job) => {
+    const finish = async ({ entry, item, dir, layout, textMetrics, result }: Job) => {
       try {
         const browserPng = join(dir, "browser.png"),
           nativePng = join(dir, "native.png");
@@ -423,8 +421,7 @@ async function run() {
           if (!source) throw new Error(`reflow source ${reflowSource} missing`);
           const reflowPng = join(dir, "reflow.png");
           // Same compiled Swift (390, or the merged breakpoint view), framed at this capture's size: only the proposal
-          // width changes. An iOS `@bp` job rendered it in its batch already.
-          if (!queued) await render({ ...source, layout: { ...source.layout, size: layout.size } }, reflowPng);
+          // width changes. It rendered in this capture's batch.
           const r = await compare(browserPng, reflowPng, join(dir, "reflow-diff.png"), layout.dpr);
           reflowFields = {
             reflowTag,
@@ -477,22 +474,24 @@ async function run() {
     const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
-    /** Render queued iOS captures (`@bp` jobs with their merged view) in app builds of IOS_BATCH, then score each. */
-    const flush = async (queue = pending, udid = env.simulatorUdid!, work = "_ios-work") => {
+    /** Render queued captures (with their reflow views) in native builds of BATCH, then score each. */
+    const flush = async (queue = pending, udid = env.simulatorUdid!, work = `_${renderer}-work`) => {
+      const label = renderer === "mac" ? "macOS" : "iOS";
       while (queue.length) {
-        const jobs = queue.splice(0, IOS_BATCH);
+        const jobs = queue.splice(0, BATCH);
         const outputs = jobs.flatMap((j) => [
           { result: j.conversion, output: join(j.dir, "native.png"), time: j.time, forced: j.forced },
           ...(j.reflow ? [{ result: j.reflow, output: join(j.dir, "reflow.png") }] : []),
         ]);
-        const errors = await renderIos(outputs, join(out, work), udid).catch(
-          (error) => new Map(outputs.map((o) => [o.output, String(error)])),
-        );
+        const errors = await (renderer === "mac"
+          ? renderMacBatch(outputs, join(out, work))
+          : renderIos(outputs, join(out, work), udid)
+        ).catch((error) => new Map(outputs.map((o) => [o.output, String(error)])));
         for (const j of jobs) {
           const failed = errors.get(join(j.dir, "native.png")) ?? errors.get(join(j.dir, "reflow.png"));
           if (failed) {
-            report!.errors.push(`${j.entry.key}: iOS render failed: ${failed}`);
-            console.error(`${j.entry.key}: iOS render failed: ${failed}`);
+            report!.errors.push(`${j.entry.key}: ${label} render failed: ${failed}`);
+            console.error(`${j.entry.key}: ${label} render failed: ${failed}`);
           } else await finish(j);
         }
       }
@@ -583,12 +582,9 @@ async function run() {
                 if (!source) {
                   report!.completed++;
                   console.log(`${entry.key}: captured (${report!.completed}/${report!.expected})`);
-                } else if (renderer === "mac") {
-                  await renderMac(source, join(out, "_mac-work"), join(dir, "native.png"), forced, frame.t / 1000);
-                  await finish(job);
                 } else {
                   pending.push({ ...job, conversion: source, time: frame.t / 1000, forced });
-                  if (pending.length === IOS_BATCH) await flush();
+                  if (pending.length >= BATCH) await flush();
                 }
               } catch (error) {
                 report!.errors.push(`${entry.key}: ${String(error)}`);
@@ -696,19 +692,23 @@ async function run() {
                 };
                 if (reflow && item.reflow && width === 390)
                   reflowSources.set(`${item.id}/${theme}/${entry.mode}`, conversion);
-                if (renderer === "mac") {
-                  await renderMac(conversion, join(out, "_mac-work"), join(dir, "native.png"));
-                  await finish(job);
-                } else if (entry.arm) {
-                  const merged = bpSources.get(`${item.id}/${theme}`);
-                  ipadPending.push({
-                    ...job,
-                    conversion,
-                    reflow: merged && { ...merged, layout: { ...merged.layout, size: captured.layout.size } },
-                  });
-                } else {
-                  pending.push({ ...job, conversion });
-                  if (pending.length >= IOS_BATCH) await flush();
+                const reflowSource = entry.arm
+                  ? bpSources.get(`${item.id}/${theme}`)
+                  : reflow && item.reflow && width !== 390
+                    ? reflowSources.get(`${item.id}/${theme}/${entry.mode}`)
+                    : undefined;
+                const queued = {
+                  ...job,
+                  conversion,
+                  reflow: reflowSource && {
+                    ...reflowSource,
+                    layout: { ...reflowSource.layout, size: captured.layout.size },
+                  },
+                };
+                if (entry.arm && renderer === "ios") ipadPending.push(queued);
+                else {
+                  pending.push(queued);
+                  if (pending.length >= BATCH) await flush();
                 }
                 // The same view with each in-flow layer shown, against the browser's open shot.
                 for (const [layer, openArg] of Object.entries(compiled.openStates ?? {})) {
@@ -737,13 +737,8 @@ async function run() {
                     result: opened,
                   };
                   const openConversion = { ...conversion, layout, openArg };
-                  if (renderer === "mac") {
-                    await renderMac(openConversion, join(out, "_mac-work"), join(openDir, "native.png"));
-                    await finish(openJob);
-                  } else {
-                    pending.push({ ...openJob, conversion: openConversion });
-                    if (pending.length >= IOS_BATCH) await flush();
-                  }
+                  pending.push({ ...openJob, conversion: openConversion });
+                  if (pending.length >= BATCH) await flush();
                   if (entry.mode === "app") await captureFrames(openDir, openConversion, { layer, shot, openArg });
                 }
                 if (entry.mode === "app") await captureFrames(dir, conversion);
