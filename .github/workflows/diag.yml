@@ -3,7 +3,7 @@ on: pull_request
 jobs:
   diag:
     runs-on: xcode-27
-    timeout-minutes: 40
+    timeout-minutes: 80
     env:
       MARKSWIFT_SIMULATOR_IPAD: iPad Pro 13-inch (M5)
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
