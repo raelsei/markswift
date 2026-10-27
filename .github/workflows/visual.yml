@@ -23,7 +23,9 @@ concurrency:
 jobs:
   visual:
     runs-on: xcode-27
-    timeout-minutes: 180 # iOS all scope (924 captures): 40 min measured 2026-10-11 (plan 021)
+    # iOS all scope (924 captures): 40 min measured 2026-10-11 (plan 021). macOS all scope (1419 captures, one swiftc per
+    # capture): 2h57m–3h+ on nightly runs in Oct 2026 (#34), which overran the former 180.
+    timeout-minutes: 240
     env:
       RENDERER: ${{ inputs.renderer || (startsWith(github.ref, 'refs/tags/v') && 'ios') || 'mac' }}
       SCOPE: ${{ inputs.scope || ((github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v')) && 'all') || 'pilot' }}
