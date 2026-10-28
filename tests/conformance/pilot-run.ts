@@ -17,6 +17,7 @@ import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { ensureSimulator, renderIos, renderMac, renderNative } from "../../tools/verify/native.ts";
+import { command } from "../../tools/verify/process.ts";
 import type { RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
@@ -760,6 +761,7 @@ async function run() {
     await flush();
     if (ipadPending.length) {
       // Wide `@bp` references need a window wider than the iPhone's: the iPad, booted only now (K5: one at a time).
+      await command(["xcrun", "simctl", "shutdown", env.simulatorUdid!], undefined, 60_000);
       const ipad = await ensureSimulator(process.env.MARKSWIFT_SIMULATOR_IPAD ?? "iPad Pro 13-inch (M5)");
       env.ipadRenderer = `${ipad.name} ${ipad.runtime}`;
       env.ipadUdid = ipad.udid;
