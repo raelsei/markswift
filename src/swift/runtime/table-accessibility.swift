@@ -145,7 +145,9 @@ private final class MarkswiftTableHost: UIViewController {
         if correction.size != requested.size { correction.size = requested.size }
     }
     func measure(_ proposal: ProposedViewSize) -> CGSize {
-        hosting.sizeThatFits(in: CGSize(width: proposal.width ?? UIView.layoutFittingExpandedSize.width,
+        // An unspecified width asks for the ideal size: `.infinity` (as SwiftUI proposes it), not UIKit's large finite
+        // expanded size, which an auto-layout table would fill.
+        hosting.sizeThatFits(in: CGSize(width: proposal.width ?? .infinity,
                                         height: proposal.height ?? UIView.layoutFittingCompressedSize.height))
     }
 }
