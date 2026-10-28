@@ -307,7 +307,7 @@ not by editing generated files. From code: `buildLibrary({ library, components, 
 Numbers come from the tracked iOS baseline `tests/conformance/baselines/visual-all-ios.json`:
 1304 captures (every conformance fixture at 320 and 390 px, light and dark where the fixture has
 both, in both modes, plus 52 `app` captures at 390 px of open layers (`@open:`) and animation frames (`@t:`)),
-captured 2026-10-27 (UTC) from source revision `d698b58` with Playwright's pinned Chromium 153.0.8010.12 and rendered on
+captured 2026-10-28 (UTC) from source revision `1336a44` with Playwright's pinned Chromium 153.0.8010.12 and rendered on
 the iOS runtime (`iPhone 17 com.apple.CoreSimulator.SimRuntime.iOS-27-0`, Xcode 27.1,
 `UIHostingController` + `drawHierarchy`, so text fields, editors and scroll views are drawn natively). The
 `components` family is 40 shadcn/ui and Tailwind component pages, 13 of them overlays opened by a trigger

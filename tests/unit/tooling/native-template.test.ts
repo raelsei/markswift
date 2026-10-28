@@ -17,13 +17,9 @@ const result = (files: Record<string, string>, openArg?: string): RenderResult =
 });
 
 test("render templates call the view with its open label set", () => {
-  expect(renderAppMain([result({}), result({}, "isMoreExpanded")])).toContain(
-    "    case 0: AnyView(V())\n    case 1: AnyView(V(isMoreExpanded: true))",
-  );
-  expect(macRenderMain(result({}, "isMoreExpanded"), "/fonts", "/out.png")).toContain(
-    "let content = V(isMoreExpanded: true)\n",
-  );
-  expect(macRenderMain(result({}), "/fonts", "/out.png")).toContain("let content = V()\n");
+  const results = [result({}), result({}, "isMoreExpanded")];
+  for (const main of [renderAppMain(results), macRenderMain(results)])
+    expect(main).toContain("    case 0: AnyView(V())\n    case 1: AnyView(V(isMoreExpanded: true))");
 });
 
 test("one render app takes identical files twice and refuses a differing duplicate", async () => {

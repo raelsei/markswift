@@ -1,6 +1,5 @@
 import type { ConversionResult } from "../../src/index.ts";
 import { parseColor } from "../../src/css/color.ts";
-import { num } from "../../src/swift/format.ts";
 
 /** States a harness forces on every element at once (`MarkswiftForcedStates` members). */
 export type ForcedState = "pressed" | "focused" | "reduceMotion";
@@ -59,21 +58,13 @@ export const renderAppPlist = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-/**
- * `RenderApp.swift` of the iOS render app: hosts each job's view in a `UIHostingController` inside the
- * key window and captures it with `drawHierarchy`, which (unlike ImageRenderer) draws UIKit-backed
- * controls. Jobs come from the JSON file passed as the first launch argument; view `i` is `results[i]`.
- */
-export function renderAppMain(results: RenderResult[]): string {
+/** `RenderJob` (one `jobs.json` entry) and `jobView(i)` (view `i` is `results[i]`), shared by both render mains. */
+function jobDeclarations(results: RenderResult[]): string {
   for (const result of results) canvas(result);
   const cases = results
     .map((result, i) => `    case ${i}: AnyView(${result.name}(${result.openArg ? `${result.openArg}: true` : ""}))`)
     .join("\n");
-  return `import CoreText
-import SwiftUI
-import UIKit
-
-struct RenderJob: Decodable {
+  return `struct RenderJob: Decodable {
     let view: Int, w: Double, h: Double, dark: Bool, r: Double, g: Double, b: Double, a: Double
     let assets: String, output: String
     /// Seconds into every animation (absent = settled); MarkswiftForcedStates raw value.
@@ -86,7 +77,20 @@ ${cases}
     default: fatalError("unknown view \\(index)")
     }
 }
+`;
+}
 
+/**
+ * `RenderApp.swift` of the iOS render app: hosts each job's view in a `UIHostingController` inside the
+ * key window and captures it with `drawHierarchy`, which (unlike ImageRenderer) draws UIKit-backed
+ * controls. Jobs come from the JSON file passed as the first launch argument; view `i` is `results[i]`.
+ */
+export function renderAppMain(results: RenderResult[]): string {
+  return `import CoreText
+import SwiftUI
+import UIKit
+
+${jobDeclarations(results)}
 @main
 final class RenderApp: UIResponder, UIApplicationDelegate {}
 
@@ -166,34 +170,35 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 
 /**
- * `main.swift` of a macOS command-line renderer: SwiftUI `ImageRenderer`, without a simulator. Fonts register from `fontsDir`; `Images/` resolves next to it.
- * `forced` draws every pressed (or focused) look at once, as the browser reference forces the same pseudo-classes, or
- * Reduce Motion. `motionTime`: seconds into every animation; `Infinity` = the settled look the rest capture shows.
+ * `main.swift` of the macOS command-line renderer: SwiftUI `ImageRenderer`, without a simulator. One build serves a
+ * whole batch; each run renders one job (`render <jobs.json> <index>`), so nothing carries over from another job's
+ * render. Fonts register from the job's `Fonts/`; `Images/` resolves next to it. ImageRenderer cannot draw
+ * UIKit/AppKit-backed controls.
  */
-export function macRenderMain(
-  result: RenderResult,
-  fontsDir: string,
-  output: string,
-  forced?: ForcedState,
-  motionTime = Infinity,
-): string {
-  const { w, h, color, dark } = canvas(result);
-  return `import SwiftUI
-import AppKit
-let fontsURL = URL(fileURLWithPath: ${JSON.stringify(fontsDir)})
-let fonts = (try? FileManager.default.contentsOfDirectory(at: fontsURL, includingPropertiesForKeys: nil)) ?? []
+export function macRenderMain(results: RenderResult[]): string {
+  return `import AppKit
+import SwiftUI
+
+${jobDeclarations(results)}
+let jobs = try JSONDecoder().decode([RenderJob].self, from: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])))
+let job = jobs[Int(CommandLine.arguments[2])!]
+let assets = URL(fileURLWithPath: job.assets)
+let fonts = (try? FileManager.default.contentsOfDirectory(at: assets.appendingPathComponent("Fonts"), includingPropertiesForKeys: nil)) ?? []
 MarkswiftFonts.register(urls: fonts.filter { $0.pathExtension == "ttf" || $0.pathExtension == "otf" })
-MarkswiftAssets.bundle = Bundle(url: fontsURL.deletingLastPathComponent()) ?? .main
-NSApplication.shared.appearance = NSAppearance(named: .${dark ? "darkAqua" : "aqua"})
-let content = ${result.name}(${result.openArg ? `${result.openArg}: true` : ""})
-    .frame(width: ${w}, height: ${h}, alignment: .topLeading)
-    .background(Color(.sRGB, red: ${color.r}, green: ${color.g}, blue: ${color.b}, opacity: ${color.a}))
-    .environment(\\.colorScheme, .${dark ? "dark" : "light"})
-    .environment(\\.markswiftMotionTime, ${motionTime === Infinity ? ".infinity" : num(motionTime)})${forced ? `\n    .environment(\\.markswiftForcedStates, .${forced})` : ""}
-let renderer = ImageRenderer(content: content)
+MarkswiftAssets.bundle = Bundle(url: assets) ?? .main
+NSApplication.shared.appearance = NSAppearance(named: job.dark ? .darkAqua : .aqua)
+let renderer = ImageRenderer(content: jobView(job.view)
+    .frame(width: job.w, height: job.h, alignment: .topLeading)
+    .background(Color(.sRGB, red: job.r, green: job.g, blue: job.b, opacity: job.a))
+    .environment(\\.colorScheme, job.dark ? .dark : .light)
+    .environment(\\.markswiftMotionTime, job.time ?? .infinity)
+    .environment(\\.markswiftForcedStates, MarkswiftForcedStates(rawValue: job.forced ?? 0)))
 renderer.scale = 2
-renderer.proposedSize = ProposedViewSize(width: ${w}, height: ${h})
-guard let image = renderer.cgImage else { fatalError("SwiftUI produced no image") }
-try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: ${JSON.stringify(output)}))
+renderer.proposedSize = ProposedViewSize(width: job.w, height: job.h)
+guard let image = renderer.cgImage else {
+    print("error \\(job.view): SwiftUI produced no image")
+    exit(1)
+}
+try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: job.output))
 `;
 }

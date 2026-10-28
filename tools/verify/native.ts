@@ -105,14 +105,15 @@ export async function ensureSimulator(preferred = process.env.MARKSWIFT_SIMULATO
   return { udid: device.udid, name: device.name, runtime: device.runtime };
 }
 
-/** Compile every job's view into one ad-hoc-signed simulator app (no simulator needed); returns the `.app` path. */
-export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<string> {
-  work = resolve(work);
+/**
+ * Write a render batch under `work` (emptied first): every job's generated Swift once into `src/` (a duplicate file
+ * must be identical), `main` as `src/<mainFile>`, each job's assets under `jobs/<i>/`, and `jobs.json`. Returns the
+ * Swift sources to compile.
+ */
+async function writeBatch(jobs: RenderJob[], work: string, mainFile: string, main: string): Promise<string[]> {
   const src = join(work, "src");
-  const app = join(work, "Render.app");
   await rm(work, { recursive: true, force: true });
   await mkdir(src, { recursive: true });
-  await mkdir(app, { recursive: true });
   const written = new Map<string, string>();
   for (const [i, { result }] of jobs.entries()) {
     for (const [file, value] of Object.entries(result.files)) {
@@ -129,14 +130,12 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
       await Bun.write(join(assets, file), value);
     }
   }
+  written.set(mainFile, main);
   const sources: string[] = [];
   for (const [file, value] of written) {
     await Bun.write(join(src, file), value);
     sources.push(join(src, file));
   }
-  await Bun.write(join(src, "RenderApp.swift"), renderAppMain(jobs.map((job) => job.result)));
-  sources.push(join(src, "RenderApp.swift"));
-  await Bun.write(join(app, "Info.plist"), renderAppPlist);
   await Bun.write(
     join(work, "jobs.json"),
     JSON.stringify(
@@ -156,6 +155,30 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
       }),
     ),
   );
+  return sources;
+}
+
+/** Output path → error for every job that produced no image: the renderer's `error <i>: …` line, else its output tail. */
+async function missingImages(jobs: RenderJob[], log: string): Promise<Map<string, string>> {
+  const errors = new Map<string, string>();
+  for (const [i, job] of jobs.entries()) {
+    if (await Bun.file(job.output).exists()) continue;
+    const line = log.split("\n").find((text) => text.startsWith(`error ${i}: `));
+    errors.set(
+      job.output,
+      line?.slice(`error ${i}: `.length).trim() ?? `no image produced; renderer output: ${log.slice(-500)}`,
+    );
+  }
+  return errors;
+}
+
+/** Compile every job's view into one ad-hoc-signed simulator app (no simulator needed); returns the `.app` path. */
+export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<string> {
+  work = resolve(work);
+  const app = join(work, "Render.app");
+  const sources = await writeBatch(jobs, work, "RenderApp.swift", renderAppMain(jobs.map((job) => job.result)));
+  await mkdir(app, { recursive: true });
+  await Bun.write(join(app, "Info.plist"), renderAppPlist);
   await command(
     [
       "xcrun",
@@ -185,7 +208,7 @@ export async function buildRenderApp(jobs: RenderJob[], work: string): Promise<s
 
 /**
  * Render a batch on the booted simulator `udid` in one app launch. Returns output path → error for every
- * job that produced no image (the app's `error <i>: …` line, else "no image produced").
+ * job that produced no image.
  */
 export async function renderIos(jobs: RenderJob[], work: string, udid: string): Promise<Map<string, string>> {
   await Promise.all(jobs.map((job) => rm(job.output, { force: true })));
@@ -211,16 +234,7 @@ export async function renderIos(jobs: RenderJob[], work: string, udid: string): 
     // A crash or non-zero exit still leaves the images written before it; report per job below.
     log = String(error);
   }
-  const errors = new Map<string, string>();
-  for (const [i, job] of jobs.entries()) {
-    if (await Bun.file(job.output).exists()) continue;
-    const line = log.split("\n").find((text) => text.startsWith(`error ${i}: `));
-    errors.set(
-      job.output,
-      line?.slice(`error ${i}: `.length).trim() ?? `no image produced; app output: ${log.slice(-500)}`,
-    );
-  }
-  return errors;
+  return missingImages(jobs, log);
 }
 
 /** Playground entry point: one conversion rendered through the batched iOS app on the selected simulator. */
@@ -241,30 +255,16 @@ export async function renderNative(
 }
 
 /**
- * Simulator-free render: the generated Swift plus a `main.swift` built for macOS with `swiftc` and
- * run once. ImageRenderer on macOS matches the iOS runtime closely except for text line heights,
- * which macOS rounds to whole points, but cannot draw UIKit/AppKit controls (yellow placeholder); the
- * iOS renderer uses drawHierarchy and can.
+ * Simulator-free render of a batch: the generated Swift plus one `main.swift`, built once for macOS with `swiftc`,
+ * then run once per job (a fresh process each: several jobs in one process shifted pixels depending on the jobs
+ * rendered before). ImageRenderer on macOS matches the iOS runtime closely except for text line heights, which macOS
+ * rounds to whole points, but cannot draw UIKit/AppKit controls (yellow placeholder); the iOS renderer uses
+ * drawHierarchy and can. Returns output path → error for every job that produced no image.
  */
-// ponytail: one swiftc build per capture (≈ 3–5 s); batch captures per build if the per-PR job outgrows ~20 min.
-export async function renderMac(
-  result: RenderResult,
-  work: string,
-  output: string,
-  forced?: ForcedState,
-  motionTime?: number,
-): Promise<void> {
-  await rm(work, { recursive: true, force: true });
-  await mkdir(work, { recursive: true });
-  const sources: string[] = [];
-  for (const [file, value] of Object.entries(result.files)) {
-    if (!file.endsWith(".swift")) continue;
-    await Bun.write(join(work, file), value);
-    sources.push(join(work, file));
-  }
-  for (const [file, value] of Object.entries(result.assets)) await Bun.write(join(work, file), value);
-  await Bun.write(join(work, "main.swift"), macRenderMain(result, join(work, "Fonts"), output, forced, motionTime));
-  sources.push(join(work, "main.swift"));
+export async function renderMacBatch(jobs: RenderJob[], work: string): Promise<Map<string, string>> {
+  work = resolve(work);
+  await Promise.all(jobs.map((job) => rm(job.output, { force: true })));
+  const sources = await writeBatch(jobs, work, "main.swift", macRenderMain(jobs.map((job) => job.result)));
   const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
   await command(
     [
@@ -284,9 +284,24 @@ export async function renderMac(
       ...sources,
     ],
     work,
-    240_000,
+    600_000,
   );
-  await rm(output, { force: true });
-  await command([join(work, "render")], work, 60_000);
-  if (!(await Bun.file(output).exists())) throw new Error("macOS render produced no image");
+  const logs: string[] = [];
+  for (const i of jobs.keys()) {
+    // A failed run still reports through its `error <i>:` line or output tail below.
+    logs.push(await command([join(work, "render"), join(work, "jobs.json"), String(i)], work, 60_000).catch(String));
+  }
+  return missingImages(jobs, logs.join("\n"));
+}
+
+/** One conversion through `renderMacBatch`; throws when it produced no image. */
+export async function renderMac(
+  result: RenderResult,
+  work: string,
+  output: string,
+  forced?: ForcedState,
+  motionTime?: number,
+): Promise<void> {
+  const failed = (await renderMacBatch([{ result, output, time: motionTime, forced }], work)).get(output);
+  if (failed) throw new Error(`macOS render produced no image: ${failed}`);
 }
