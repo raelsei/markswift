@@ -83,12 +83,21 @@ private final class MarkswiftPixelCorrection: ObservableObject {
     @Published var offset = CGSize.zero
     @Published var size: CGSize?
 }
-/// Measures as its content does; places it at `offset` with the requested `size`.
+/// `UIHostingController.sizeThatFits` rounds up to whole device pixels. While `factor` is above 1 the root reports its
+/// content `factor` times larger, so dividing the rounded result recovers the fractional size SwiftUI measured.
+nonisolated private final class MarkswiftMeasureScale: @unchecked Sendable {
+    var factor: CGFloat = 1
+}
+/// Measures as its content does (scaled by `scale.factor`); places it at `offset` with the requested `size`.
 private struct MarkswiftPixelCorrected: Layout {
     let offset: CGSize
     let size: CGSize?
+    let scale: MarkswiftMeasureScale
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        subviews.first?.sizeThatFits(proposal) ?? .zero
+        let k = scale.factor
+        let fits = subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width.map { $0 / k },
+                                                                 height: proposal.height.map { $0 / k })) ?? .zero
+        return CGSize(width: fits.width * k, height: fits.height * k)
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: CGPoint(x: bounds.minX + offset.width, y: bounds.minY + offset.height),
@@ -97,28 +106,35 @@ private struct MarkswiftPixelCorrected: Layout {
 }
 private struct MarkswiftCorrectedRoot: View {
     @ObservedObject var correction: MarkswiftPixelCorrection
+    let scale: MarkswiftMeasureScale
     let content: AnyView
-    var body: some View { MarkswiftPixelCorrected(offset: correction.offset, size: correction.size) { content } }
+    var body: some View {
+        MarkswiftPixelCorrected(offset: correction.offset, size: correction.size, scale: scale) { content }
+    }
 }
 
 private final class MarkswiftTableHost: UIViewController {
     let hosting: UIHostingController<MarkswiftCorrectedRoot>
+    let scale: MarkswiftMeasureScale
     let container: UIView
     let correction: MarkswiftPixelCorrection
     /// The frame SwiftUI laid the representable out at, in its global space.
     var requested: CGRect? { didSet { if requested != oldValue { view.setNeedsLayout() } } }
     init(container: UIView, content: AnyView) {
         self.container = container
-        let correction = MarkswiftPixelCorrection()
+        let correction = MarkswiftPixelCorrection(), scale = MarkswiftMeasureScale()
         self.correction = correction
-        hosting = UIHostingController(rootView: MarkswiftCorrectedRoot(correction: correction, content: content))
+        self.scale = scale
+        hosting = UIHostingController(rootView: MarkswiftCorrectedRoot(correction: correction, scale: scale, content: content))
         // A nested host is placed by SwiftUI; insetting its content by the window's safe area shifted every cell under
         // the status bar or a navigation bar.
         hosting.safeAreaRegions = []
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-    func update(_ content: AnyView) { hosting.rootView = MarkswiftCorrectedRoot(correction: correction, content: content) }
+    func update(_ content: AnyView) {
+        hosting.rootView = MarkswiftCorrectedRoot(correction: correction, scale: scale, content: content)
+    }
     override func loadView() {
         view = container
         addChild(hosting)
@@ -145,10 +161,14 @@ private final class MarkswiftTableHost: UIViewController {
         if correction.size != requested.size { correction.size = requested.size }
     }
     func measure(_ proposal: ProposedViewSize) -> CGSize {
+        let k: CGFloat = 256
+        scale.factor = k
+        defer { scale.factor = 1 }
         // An unspecified width asks for the ideal size: `.infinity` (as SwiftUI proposes it), not UIKit's large finite
         // expanded size, which an auto-layout table would fill.
-        hosting.sizeThatFits(in: CGSize(width: proposal.width ?? .infinity,
-                                        height: proposal.height ?? UIView.layoutFittingCompressedSize.height))
+        let fits = hosting.sizeThatFits(in: CGSize(width: (proposal.width ?? .infinity) * k,
+                                                   height: (proposal.height ?? UIView.layoutFittingCompressedSize.height) * k))
+        return CGSize(width: fits.width / k, height: fits.height / k)
     }
 }
 
@@ -240,7 +260,6 @@ struct MarkswiftAccessibleCell<Content: View>: View {
     @ViewBuilder let content: () -> Content
     #if os(iOS)
     @Environment(\.markswiftTableRegistry) private var registry
-    @Environment(\.displayScale) private var displayScale
     @State private var requested: CGRect?
     #endif
     var body: some View {
@@ -248,7 +267,6 @@ struct MarkswiftAccessibleCell<Content: View>: View {
         MarkswiftNativeCell(id: id, row: row, column: column, rowSpan: rowSpan, columnSpan: columnSpan, header: header,
                             headerRows: headerRows, content: content(), registry: registry, requested: requested)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { requested = $0 }
-            .layoutValue(key: MarkswiftMeasureGranularityKey.self, value: 1 / displayScale)
         #else
         content()
         #endif

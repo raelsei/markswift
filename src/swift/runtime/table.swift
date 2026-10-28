@@ -2,9 +2,6 @@
 /// horizontal padding and border, or an equal share of what is left.
 enum MarkswiftTableColumn: Sendable { case px(CGFloat), percent(CGFloat, plus: CGFloat), auto }
 
-/// The rounding step of a subview's measured size: a hosted UIKit cell measures rounded up to whole device pixels.
-nonisolated struct MarkswiftMeasureGranularityKey: LayoutValueKey { static let defaultValue: CGFloat = 0 }
-
 /// A CSS table. Every subview carries `.markswiftGridCell(column:row:columnSpan:rowSpan:)` (1-based,
 /// tracks.swift); the first `bands` subviews paint row groups and rows and are never measured (under the cells; a
 /// band that only draws collapsed borders carries `.zIndex(1)` and draws over them, as CSS paints borders last).
@@ -59,17 +56,14 @@ struct MarkswiftTable: Layout {
         func need(_ c: MarkswiftGridCell, _ s: LayoutSubview) -> CGFloat {
             s.sizeThatFits(ProposedViewSize(width: Self.span(cols, c.column - 1, c.columnSpan, hSpacing), height: nil)).height
         }
-        // A hosted cell measures rounded up to the next device pixel: an excess below one pixel is that rounding.
-        func grows(_ s: LayoutSubview, _ excess: CGFloat) -> Bool { excess >= s[MarkswiftMeasureGranularityKey.self] && excess > 0 }
         for (c, s) in cells where c.rowSpan == 1 && c.row >= 1 && c.row <= rows.count {
-            let n = need(c, s)
-            if grows(s, n - rows[c.row - 1]) { rows[c.row - 1] = n }
+            rows[c.row - 1] = max(rows[c.row - 1], need(c, s))
         }
         // ponytail: a rowspan cell taller than its rows grows only its last row; CSS spreads the excess over them.
         for (c, s) in cells where c.rowSpan > 1 && c.row >= 1 && c.row <= rows.count {
             let last = min(rows.count, c.row - 1 + c.rowSpan) - 1
             let excess = need(c, s) - Self.span(rows, c.row - 1, c.rowSpan, vSpacing)
-            if grows(s, excess) { rows[last] += excess }
+            if excess > 0 { rows[last] += excess }
         }
         return rows
     }
