@@ -82,6 +82,9 @@ private final class MarkswiftTableHost<Content: View>: UIViewController {
     init(container: UIView, content: Content) {
         self.container = container
         hosting = UIHostingController(rootView: content)
+        // A nested host is placed by SwiftUI; insetting its content by the window's safe area shifted every cell under
+        // the status bar or a navigation bar.
+        hosting.safeAreaRegions = []
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
