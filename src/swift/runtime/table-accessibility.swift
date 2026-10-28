@@ -245,6 +245,7 @@ struct MarkswiftAccessibleCell<Content: View>: View {
     @ViewBuilder let content: () -> Content
     #if os(iOS)
     @Environment(\.markswiftTableRegistry) private var registry
+    @Environment(\.displayScale) private var displayScale
     @State private var requested: CGRect?
     #endif
     var body: some View {
@@ -252,6 +253,7 @@ struct MarkswiftAccessibleCell<Content: View>: View {
         MarkswiftNativeCell(id: id, row: row, column: column, rowSpan: rowSpan, columnSpan: columnSpan, header: header,
                             headerRows: headerRows, content: content(), registry: registry, requested: requested)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { requested = $0 }
+            .layoutValue(key: MarkswiftMeasureGranularityKey.self, value: 1 / displayScale)
         #else
         content()
         #endif
