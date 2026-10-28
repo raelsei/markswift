@@ -143,17 +143,10 @@ private final class MarkswiftTableHost: UIViewController {
         let offset = CGSize(width: residue(requested.minX - actual.minX), height: residue(requested.minY - actual.minY))
         if correction.offset != offset { correction.offset = offset }
         if correction.size != requested.size { correction.size = requested.size }
-        // TMP probe (#25): remove before merge.
-        let line = "host \(type(of: container)) requested=\(requested) actual=\(actual) offset=\(offset)\n"
-        if let h = FileHandle(forWritingAtPath: "/tmp/markswift-table-probe.txt") { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); h.closeFile() }
     }
     func measure(_ proposal: ProposedViewSize) -> CGSize {
-        let size = hosting.sizeThatFits(in: CGSize(width: proposal.width ?? UIView.layoutFittingExpandedSize.width,
-                                                   height: proposal.height ?? UIView.layoutFittingCompressedSize.height))
-        // TMP probe (#25): remove before merge.
-        let line = "measure \(type(of: container)) proposal=\(proposal) size=\(size)\n"
-        if let h = FileHandle(forWritingAtPath: "/tmp/markswift-table-probe.txt") { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); h.closeFile() }
-        return size
+        hosting.sizeThatFits(in: CGSize(width: proposal.width ?? UIView.layoutFittingExpandedSize.width,
+                                        height: proposal.height ?? UIView.layoutFittingCompressedSize.height))
     }
 }
 
