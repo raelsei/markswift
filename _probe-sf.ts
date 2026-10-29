@@ -1,66 +1,62 @@
-// Throwaway CI probe: iOS SF metrics and where the greedy UILabel and the SwiftUI fallback put the baseline.
+// Throwaway CI probe: where the greedy UILabel path and the SwiftUI fallback put a system-font baseline, measured in the
+// render app's own PNG, against the CSS baseline text.ts targets.
+import sharp from "sharp";
 import { ensureSimulator, renderIos } from "./tools/verify/native.ts";
 import { SWIFT_RUNTIME } from "./src/swift/runtime.ts";
 import type { RenderResult } from "./tools/verify/native-template.ts";
 
+const configs: Array<[number, number]> = [[14, 24], [16, 24], [16, 28], [18, 28], [15, 22.5], [17, 26]];
+const SLOT = 40;
+const ratios = (size: number, lh: number) => {
+  const a = Math.round((1980 / 2048) * size), d = Math.round((432 / 2048) * size), lead = lh - a - d;
+  const below = d + lead - 2 * Math.floor(lead / 2);
+  return { a: a / size, below: below / size, css: (lh / size + a / size - below / size) * size / 2 };
+};
+const slots = configs.flatMap(([size, lh]) => {
+  const { a, below } = ratios(size, lh);
+  return [
+    `MarkswiftGreedyText(text: "H", font: .system(size: ${size}), color: .black, size: ${size}, style: .body, lineHeight: ${lh}, ascent: ${a}, descent: ${below}, natural: 2444.0 / 2048)
+                .frame(width: 200, height: ${SLOT}, alignment: .topLeading)`,
+    `Text(verbatim: "H").font(.system(size: ${size})).foregroundStyle(.black).fixedSize(horizontal: false, vertical: true)
+                .markswiftLineHeight(${lh}, size: ${size}, relativeTo: .body, ascent: ${a}, descent: ${below})
+                .frame(width: 200, height: ${SLOT}, alignment: .topLeading)`,
+  ];
+});
 const probe = `import SwiftUI
-import UIKit
-
-private func log(_ line: String) {
-    if let h = FileHandle(forWritingAtPath: "/tmp/markswift-sf.txt") { h.seekToEndOfFile(); h.write((line + "\\n").data(using: .utf8)!); h.closeFile() }
-}
-/// Lowest row with ink in a rendered view: the baseline of a glyph without a descender.
-@MainActor private func inkBottom(_ view: UIView, scale: CGFloat) -> CGFloat {
-    let format = UIGraphicsImageRendererFormat(); format.scale = scale
-    let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in view.drawHierarchy(in: view.bounds, afterScreenUpdates: true) }
-    guard let cg = image.cgImage, let data = cg.dataProvider?.data, let p = CFDataGetBytePtr(data) else { return -1 }
-    let bpr = cg.bytesPerRow, bpp = cg.bitsPerPixel / 8
-    var bottom = -1
-    for y in 0..<cg.height { for x in 0..<cg.width { if p[y * bpr + x * bpp] < 128 { bottom = y; break } } }
-    return CGFloat(bottom + 1) / scale
-}
 struct Probe: View {
     var body: some View {
-        Color.white.onAppear { MainActor.assumeIsolated {
-            guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first?.windows.first else { return }
-            for (size, lineHeight) in [(14.0, 24.0), (16.0, 24.0), (16.0, 28.0), (18.0, 28.0)] as [(CGFloat, CGFloat)] {
-                let ui = UIFont.systemFont(ofSize: size)
-                let ct = ui as CTFont
-                log("size \\(size) lh \\(lineHeight): UIFont asc \\(ui.ascender) desc \\(ui.descender) leading \\(ui.leading) lineHeight \\(ui.lineHeight); CT asc \\(CTFontGetAscent(ct)) desc \\(CTFontGetDescent(ct)) leading \\(CTFontGetLeading(ct)) upem \\(CTFontGetUnitsPerEm(ct))")
-                // CSS baseline from the top with Chrome's macOS SF ratios, as text.ts emits them.
-                let a = (0.966796875 * size).rounded(), d = (0.2109375 * size).rounded(), lead = lineHeight - a - d
-                let below = d + lead - 2 * (lead / 2).rounded(.down)
-                let css = (lineHeight / size + a / size - below / size) * size / 2
-                for scale in [2.0, 3.0] as [CGFloat] {
-                    // Greedy label without baselineOffset: where UIKit puts the baseline on its own.
-                    let label = UILabel(frame: CGRect(x: 0, y: 0, width: 200, height: lineHeight))
-                    let paragraph = NSMutableParagraphStyle(); paragraph.minimumLineHeight = lineHeight; paragraph.maximumLineHeight = lineHeight
-                    label.attributedText = NSAttributedString(string: "H", attributes: [.font: ui, .paragraphStyle: paragraph])
-                    label.backgroundColor = .white; window.addSubview(label); label.layoutIfNeeded()
-                    let uikit = inkBottom(label, scale: scale); label.removeFromSuperview()
-                    // SwiftUI fallback as generated.
-                    let host = UIHostingController(rootView: Text("H").font(.system(size: size)).foregroundStyle(.black)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .markswiftLineHeight(lineHeight, size: size, relativeTo: .body, ascent: a / size, descent: below / size)
-                        .frame(width: 200, alignment: .topLeading).background(.white))
-                    host.safeAreaRegions = []; host.view.frame = CGRect(x: 0, y: 0, width: 200, height: 80); window.addSubview(host.view); host.view.layoutIfNeeded()
-                    let swiftui = inkBottom(host.view, scale: scale); host.view.removeFromSuperview()
-                    log("  scale \\(scale): css baseline \\(css), UILabel ink bottom \\(uikit) (L - |CT desc| = \\(lineHeight - CTFontGetDescent(ct))), SwiftUI fallback ink bottom \\(swiftui)")
-                }
-            }
-        } }
+        VStack(alignment: .leading, spacing: 0) {
+            ${slots.join("\n            ")}
+        }
+        .frame(width: 200, alignment: .topLeading)
     }
 }
 `;
+const height = slots.length * SLOT;
 const result = {
   name: "Probe",
   files: { "Probe.swift": probe, "MarkswiftRuntime.swift": SWIFT_RUNTIME },
   assets: {},
-  layout: { size: { w: 200, h: 120 }, canvas: "white", combo: { screen: "probe", theme: "light" } },
+  layout: { size: { w: 200, h: height }, canvas: "white", combo: { screen: "probe", theme: "light" } },
 } as unknown as RenderResult;
-await Bun.write("/tmp/markswift-sf.txt", "");
+const out = "/tmp/markswift-sf.png";
 const device = await ensureSimulator();
-const errors = await renderIos([{ result, output: "/tmp/markswift-sf.png" }], "/tmp/markswift-sf-work", device.udid);
+const errors = await renderIos([{ result, output: out }], "/tmp/markswift-sf-work", device.udid);
 console.log("render errors:", [...errors.values()]);
-await Bun.sleep(3000);
-console.log(await Bun.file("/tmp/markswift-sf.txt").text());
+const { data, info } = await sharp(await sharp(out).withIccProfile("srgb").png().toBuffer())
+  .greyscale()
+  .raw()
+  .toBuffer({ resolveWithObject: true });
+const scale = info.height / height;
+for (const [i, [size, lh]] of configs.entries()) {
+  for (const [j, path] of ["greedy UILabel", "SwiftUI fallback"].entries()) {
+    const top = (i * 2 + j) * SLOT * scale;
+    let bottom = -1;
+    for (let y = top; y < top + SLOT * scale; y++)
+      for (let x = 0; x < info.width; x++) if (data[y * info.width + x]! < 128) { bottom = y; break; }
+    const baseline = (bottom + 1 - top) / scale;
+    console.log(
+      `size ${size} lh ${lh} ${path.padEnd(16)} ink bottom ${baseline.toFixed(3)} pt, css ${ratios(size, lh).css.toFixed(3)} pt, Δ ${(baseline - ratios(size, lh).css).toFixed(3)}`,
+    );
+  }
+}
