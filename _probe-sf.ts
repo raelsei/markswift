@@ -5,7 +5,7 @@ import { ensureSimulator, renderIos } from "./tools/verify/native.ts";
 import { SWIFT_RUNTIME } from "./src/swift/runtime.ts";
 import type { RenderResult } from "./tools/verify/native-template.ts";
 
-const configs: Array<[number, number]> = [[14, 24], [16, 24], [16, 28], [18, 28], [15, 22.5], [17, 26]];
+const configs: Array<[number, number]> = [12, 13, 14, 15, 16, 17, 18, 20, 22, 24].map((s) => [s, Math.ceil(s * 1.5)]);
 const SLOT = 40;
 const ratios = (size: number, lh: number) => {
   const a = Math.round((1980 / 2048) * size), d = Math.round((432 / 2048) * size), lead = lh - a - d;
