@@ -1,43 +1,43 @@
-// Throwaway CI probe: the SwiftUI fallback's drawn baseline over a size × line-height matrix, next to the CSS target
-// and the UILabel first-baseline model round3(L − descent), to fit the rule the greedy path must reproduce.
+// Throwaway CI probe: greedy UILabel vs SwiftUI fallback baselines at fractional origins (they must coincide).
 import sharp from "sharp";
 import { ensureSimulator, renderIos } from "./tools/verify/native.ts";
 import { SWIFT_RUNTIME } from "./src/swift/runtime.ts";
 import type { RenderResult } from "./tools/verify/native-template.ts";
 
-const sizes = [11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24];
-const factors = [1.25, 1.3333, 1.4, 1.5, 1.6, 1.75];
-const configs = sizes.flatMap((s) => factors.map((f) => [s, Math.round(s * f * 4) / 4] as [number, number]));
-const SLOT = 48;
+const configs = [12, 14, 15, 16, 18, 22].flatMap((s) => [1.3333, 1.5].map((f) => [s, Math.round(s * f * 4) / 4] as [number, number]));
+const offsets = [0, 0.25, 1 / 3, 0.5, 2 / 3, 0.75];
+const SLOT = 48, W = 30;
 const ratios = (size: number, lh: number) => {
   const a = Math.round((1980 / 2048) * size), d = Math.round((432 / 2048) * size), lead = lh - a - d;
   const below = d + lead - 2 * Math.floor(lead / 2);
-  return { a: a / size, below: below / size, css: (lh + a - below) / 2 };
+  return { a: a / size, below: below / size };
 };
-const slots = configs.map(([size, lh]) => {
+const cell = (size: number, lh: number, dy: number, greedy: boolean) => {
   const { a, below } = ratios(size, lh);
-  return `Text(verbatim: "H").font(.system(size: ${size})).foregroundStyle(.black).fixedSize(horizontal: false, vertical: true)
-                .markswiftLineHeight(${lh}, size: ${size}, relativeTo: .body, ascent: ${a}, descent: ${below})
-                .frame(width: 60, height: ${SLOT}, alignment: .topLeading)`;
-});
-const COLS = factors.length, W = 60;
-const rowsSwift = sizes.map((_, r) => `HStack(alignment: .top, spacing: 0) {\n            ${slots.slice(r * COLS, (r + 1) * COLS).join("\n            ")}\n        }`);
+  const view = greedy
+    ? `MarkswiftGreedyText(text: "H", font: .system(size: ${size}), color: .black, size: ${size}, style: .body, lineHeight: ${lh}, ascent: ${a}, descent: ${below}, natural: 2444.0 / 2048)`
+    : `Text(verbatim: "H").font(.system(size: ${size})).foregroundStyle(.black).fixedSize(horizontal: false, vertical: true).markswiftLineHeight(${lh}, size: ${size}, relativeTo: .body, ascent: ${a}, descent: ${below})`;
+  return `VStack(alignment: .leading, spacing: 0) { Color.clear.frame(height: ${dy}); ${view} }.frame(width: ${W}, height: ${SLOT}, alignment: .topLeading)`;
+};
+const rows = configs.map(([s, lh]) =>
+  `HStack(alignment: .top, spacing: 0) {\n            ${offsets.flatMap((dy) => [cell(s, lh, dy, true), cell(s, lh, dy, false)]).join("\n            ")}\n        }`,
+);
 const probe = `import SwiftUI
 struct Probe: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ${rowsSwift.join("\n            ")}
+            ${rows.join("\n            ")}
         }
-        .frame(width: ${COLS * W}, alignment: .topLeading)
+        .frame(width: ${offsets.length * 2 * W}, alignment: .topLeading)
     }
 }
 `;
-const height = sizes.length * SLOT;
+const width = offsets.length * 2 * W, height = configs.length * SLOT;
 const result = {
   name: "Probe",
   files: { "Probe.swift": probe, "MarkswiftRuntime.swift": SWIFT_RUNTIME },
   assets: {},
-  layout: { size: { w: COLS * W, h: height }, canvas: "white", combo: { screen: "probe", theme: "light" } },
+  layout: { size: { w: width, h: height }, canvas: "white", combo: { screen: "probe", theme: "light" } },
 } as unknown as RenderResult;
 const out = "/tmp/markswift-sf.png";
 const device = await ensureSimulator();
@@ -46,16 +46,20 @@ console.log("render errors:", [...errors.values()]);
 const { data, info } = await sharp(await sharp(out).withIccProfile("srgb").png().toBuffer())
   .greyscale().raw().toBuffer({ resolveWithObject: true });
 const scale = info.height / height;
-const r3 = (v: number) => Math.round(v * 3) / 3;
-for (const [i, [size, lh]] of configs.entries()) {
-  const top = Math.floor(i / COLS) * SLOT * scale, left = (i % COLS) * W * scale, h = SLOT * scale;
-  let col = left, best = 0;
-  for (let x = left; x < left + 30 * scale; x++) { let s = 0; for (let y = top; y < top + h; y++) s += 255 - data[y * info.width + x]!; if (s > best) { best = s; col = x; } }
-  const rows = Array.from({ length: h }, (_, k) => (255 - data[(top + k) * info.width + col]!) / 255);
-  const first = rows.findIndex((d) => d > 0.5), last = rows.length - 1 - [...rows].reverse().findIndex((d) => d > 0.5);
+const ink = (row: number, col: number) => {
+  const top = row * SLOT * scale, left = col * W * scale, h = SLOT * scale;
+  let c = left, best = 0;
+  for (let x = left; x < left + W * scale; x++) { let s = 0; for (let y = top; y < top + h; y++) s += 255 - data[y * info.width + x]!; if (s > best) { best = s; c = x; } }
+  const r = Array.from({ length: h }, (_, k) => (255 - data[(top + k) * info.width + c]!) / 255);
+  const first = r.findIndex((d) => d > 0.5), last = r.length - 1 - [...r].reverse().findIndex((d) => d > 0.5);
   const mid = Math.floor((first + last) / 2);
-  let sum = 0; for (let k = mid; k < rows.length; k++) sum += rows[k]!;
-  const ink = (mid + sum) / scale;
-  const desc = (494 / 2048) * size;
-  console.log(`CSV,${size},${lh},${ink.toFixed(3)},${ratios(size, lh).css},${r3(lh - desc).toFixed(3)}`);
+  let sum = 0; for (let k = mid; k < r.length; k++) sum += r[k]!;
+  return (mid + sum) / scale;
+};
+let worst = 0;
+for (const [i, [size, lh]] of configs.entries()) {
+  const deltas = offsets.map((_, j) => ink(i, j * 2) - ink(i, j * 2 + 1));
+  worst = Math.max(worst, ...deltas.map(Math.abs));
+  console.log(`size ${size} lh ${lh}: greedy − fallback at offsets ${deltas.map((d) => d.toFixed(3)).join(" ")}`);
 }
+console.log(`worst |Δ| ${worst.toFixed(3)} pt`);
