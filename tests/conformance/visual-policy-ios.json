@@ -60,7 +60,7 @@
       "minSsim": 0.78
     },
     "motion@app": {
-      "minSsim": 0.92
+      "minSsim": 0.97
     },
     "svg@app": {
       "minSsim": 0.92

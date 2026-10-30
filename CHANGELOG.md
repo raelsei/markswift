@@ -5,6 +5,17 @@ A LayoutDoc schema change is a major version.
 
 ## [Unreleased]
 
+### Changed
+
+- iOS 26+ app output: plain multiline paragraphs in the default system font now wrap greedily like the browser,
+  as packaged fonts already did (SwiftUI `Text` avoids one-word last lines). Across the iOS corpus 65 captures
+  improve and none drop beyond the regression allowance; regenerate views to pick it up.
+
+### Fixed
+
+- Greedy native paragraphs sit on the browser's baseline: the UIKit baseline is taken after its device-pixel rounding
+  and the CSS baseline as the whole CSS px Blink uses, so they no longer land ⅓ pt off depending on size and position.
+
 ## [3.0.0] — 2026-10-20
 
 ### Changed (breaking)
