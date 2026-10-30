@@ -61,6 +61,12 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         let nativeBaseline = ((paragraph.minimumLineHeight - CTFontGetDescent(resolved.ctFont)) * scale).rounded() / scale
         let cssBaseline = (lineHeight / size + ascent - descent) * resolved.pointSize / 2
         let baselineOffset = nativeBaseline - cssBaseline
+        // TMP probe: remove before merge.
+        if let h = FileHandle(forWritingAtPath: "/tmp/markswift-greedy.txt") {
+            h.seekToEndOfFile()
+            h.write("\(text.prefix(24)) pt \(resolved.pointSize) size \(size) lh \(lineHeight) desc \(CTFontGetDescent(resolved.ctFont)) scale \(scale) native \(nativeBaseline) css \(cssBaseline) offset \(baselineOffset) frame \(label.convert(label.bounds, to: nil))\n".data(using: .utf8)!)
+            h.closeFile()
+        }
         let rgba = color.resolve(in: context.environment)
         label.attributedText = NSAttributedString(string: text, attributes: [
             .font: resolved.ctFont,
