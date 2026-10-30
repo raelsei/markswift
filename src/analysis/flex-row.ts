@@ -80,22 +80,37 @@ export function admitFlexRow(n: LayoutNode, atProbe = false): FlexRow | undefine
 const hasText = (n: LayoutNode): boolean =>
   n.tag === "#text" ? !!(n.text ?? "").trim() : n.children.some((c) => c.styles.display !== "none" && hasText(c));
 
-/** Captured max-content width: in-flow descendants are text and inline elements, every text on one line. */
+/**
+ * Captured max-content width: every in-flow descendant sits on one line (single-line text, inline elements, or boxes
+ * whose own content does not wrap), so the captured extent is the content's natural width.
+ */
 function maxContent(item: LayoutNode): number | undefined {
   let left = Infinity;
   let right = -Infinity;
+  const extend = (b: LayoutNode["bounds"]) => {
+    if (b.w <= 0) return;
+    left = Math.min(left, b.x);
+    right = Math.max(right, b.x + b.w);
+  };
+  const oneLine = (n: LayoutNode): boolean =>
+    n.children.every((c) =>
+      c.tag === "#text"
+        ? (c.lines?.length ?? 0) <= 1
+        : c.styles.display === "none" || outOfFlow(c) || (c.tag !== "svg" ? oneLine(c) : true),
+    );
   const walk = (n: LayoutNode): boolean =>
     n.children.every((c) => {
       if (c.tag === "#text") {
         if ((c.lines?.length ?? 0) > 1) return false;
-        if (c.bounds.w > 0) {
-          left = Math.min(left, c.bounds.x);
-          right = Math.max(right, c.bounds.x + c.bounds.w);
-        }
+        extend(c.bounds);
         return true;
       }
       if (c.styles.display === "none" || outOfFlow(c)) return true;
-      return c.styles.display === "inline" && walk(c);
+      if (c.styles.display === "inline") return walk(c);
+      // An atomic box (inline-flex badge, icon button) that keeps its content on one line spans its own border box.
+      if (!oneLine(c)) return false;
+      extend(c.bounds);
+      return true;
     });
   if (!walk(item)) return undefined;
   const [, r, , l] = insetsOf(item.styles);
@@ -105,13 +120,18 @@ function maxContent(item: LayoutNode): number | undefined {
 function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined {
   const s = n.styles;
   // 1. Container.
-  if (s.display !== "flex" || (s["flex-direction"] ?? "row") !== "row" || (s["flex-wrap"] ?? "nowrap") !== "nowrap")
+  const wrap = s["flex-wrap"] ?? "nowrap";
+  if (s.display !== "flex" || (s["flex-direction"] ?? "row") !== "row" || (wrap !== "nowrap" && wrap !== "wrap"))
     return undefined;
   if (s.direction === "rtl") return undefined;
   // 2. Items; a bare text run would be an anonymous item.
   if (n.children.some((c) => c.tag === "#text" && (c.text ?? "").trim())) return undefined;
   const nodes = n.children.filter((c) => c.tag !== "#text" && c.styles.display !== "none" && !outOfFlow(c));
   if (nodes.length < 2) return undefined;
+  // `flex-wrap: wrap` is admitted when the capture holds a single line: every item shares one horizontal band.
+  const wraps = wrap === "wrap";
+  if (wraps && Math.max(...nodes.map((c) => c.bounds.y)) >= Math.min(...nodes.map((c) => c.bounds.y + c.bounds.h)))
+    return undefined;
   // 3–4. Per item, and its basis: border-box px (CSS adds padding and border to the flex base size), a percentage
   // of the row, or content. px min/max-width clamp a definite basis; on a content basis SwiftUI's measure would
   // already include them.
@@ -125,7 +145,8 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
     const shrink = Number(t["flex-shrink"]);
     if (!Number.isFinite(grow) || !Number.isFinite(shrink)) return undefined;
     if (px(t["margin-left"]) !== 0 || px(t["margin-right"]) !== 0 || px(t.order) !== 0) return undefined;
-    if (!SELF[t["align-self"] ?? "auto"]) return undefined;
+    const self = t["align-self"] ?? "auto";
+    if (!SELF[self] && !ALIGN[self]) return undefined;
     const width = node.preferredSize?.width ?? "auto";
     if ((width !== "auto" && !PX.test(width) && !PCT.test(width)) || !BASIS.test(basis)) return undefined;
     const pct = PCT.test(basis) ? basis : basis === "auto" && PCT.test(width) ? width : undefined;
@@ -142,6 +163,7 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
       shrink,
       basis: raw === undefined ? null : box ? Math.max(raw, fraction === undefined ? inset : 0) : raw + inset,
     };
+    if (!SELF[self]) item.align = ALIGN[self];
     const min = t["min-width"] ?? "auto";
     const max = t["max-width"] ?? "none";
     if (min !== "auto" && min !== "0px") {
@@ -172,10 +194,12 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
   const c3 = shrinkable.includes(true) && nodes.some((node, i) => items[i]!.basis === null && hasText(node));
   // A percentage basis follows the row; the HStack would pin it.
   const c4 = items.some((i) => i.fraction !== undefined);
-  const candidate = c1 || c2 || c3 || c4;
+  // A captured single line of a wrapping row has no native counterpart: MarkswiftFlexRow reflows it.
+  const candidate = c1 || c2 || c3 || c4 || wraps;
   // 6. Container alignment.
   const align = ALIGN[s["align-items"] ?? "normal"];
   if (!align) return undefined;
+  for (const item of items) if (item.align === align) delete item.align;
   // 7. Content bases.
   const insets = insetsOf(s);
   const W = n.bounds.w - insets[1] - insets[3];
@@ -216,5 +240,8 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
               "percentage flex bases pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
           }
         : undefined;
-  return { row: { items, align, ...(fidelityNote ? { fidelityNote } : {}) }, candidate };
+  return {
+    row: { items, align, ...(wraps ? { wraps: true } : {}), ...(fidelityNote ? { fidelityNote } : {}) },
+    candidate,
+  };
 }

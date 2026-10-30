@@ -100,7 +100,8 @@ function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: Em
       const v = i[k];
       return v === undefined ? "" : `, ${k}: ${num(v)}`;
     });
-    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")})`;
+    const align = i.align ? `, align: .${i.align}` : "";
+    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")}${align})`;
   });
   const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;

@@ -417,10 +417,13 @@ mapped, approximated or unmapped in `diagnostics`.
 In `app` mode these patterns keep the captured pixel geometry instead of reflowing, and say so in
 `diagnostics` (one quoted note each):
 
-- Flex-wrap outside the native-wrap subset: `approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size`.
+- Flex-wrap outside the native-wrap subset (which holds `fit-content`/`max-content` items at their captured width): `approximated flex-wrap: flex-wrap flex grow allocation → captured child positions; cannot reflow at another size`.
+  A wrapping row captured on one line reflows as a `MarkswiftFlexRow` instead, but never breaks onto a second line:
+  `approximated flex-wrap: flex-wrap captured on one line → reflowing row; it does not break onto a second line when its items no longer fit`.
 - Unequal flex growth outside the `MarkswiftFlexRow` subset (unequal grow, px/0/%/content bases and shrink with CSS's
-  freeze loop and px min/max-width clamps, admitted when its solver reproduces Chrome; a second capture at 320 px
-  confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
+  freeze loop, px min/max-width clamps and `align-self` start/center/end/stretch, admitted when its solver reproduces
+  Chrome; a second capture at 320 px confirms it): `approximated flex-grow: unequal measured widths [146,146,300] (basis, shrink or content constraints); measured width pinned`.
+  Column growers as tall as their content took no free space and hug it.
 - Grids outside the `MarkswiftTracks` subset (`fr`, `minmax(px, fr)`, `auto`, px, `repeat(auto-fill|auto-fit, minmax(px, 1fr))`
   or one implicit `auto` column; line, negative-line, `span <n>` and named-area placement inside the explicit
   columns; `auto`/px rows and one `grid-auto-rows` value; `justify-self`/`justify-items`) whose items overlap, use

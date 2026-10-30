@@ -24,7 +24,7 @@ import { fontOf } from "./typography.ts";
 import { isInlineText, collectRuns, groupRuns } from "./text-runs.ts";
 import { linesOf, stackOf } from "./flow-layout.ts";
 import { buildGrid } from "./grid.ts";
-import { buildWrapping } from "./wrapping.ts";
+import { buildWrapping, wrapFallback } from "./wrapping.ts";
 import { admitFlexRow } from "./flex-row.ts";
 import { crossAlign, distributionOf } from "./alignment.ts";
 import { buildText } from "./text.ts";
@@ -336,7 +336,14 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   const lines = axis === "h" ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
   let stack: StackNode;
   const multi = lines.some((l) => l.length > 1);
-  if (wraps) {
+  // A wrapping row MarkswiftFlow cannot re-wrap keeps captured positions, unless it was captured on one line (it
+  // reflows as an admitted flex row) or holds a lone grower (it fills its line like any flex item, flexGrowthSize).
+  const loneGrower = items.length === 1 && px(items[0]!.node.styles["flex-grow"]) > 0;
+  const oneLine =
+    wraps &&
+    wrapFallback(n, base, items, axis, align, distribution) !== undefined &&
+    (loneGrower || admitFlexRow(n)?.wraps);
+  if (wraps && !oneLine) {
     stack = buildWrapping(n, base, items, axis, align, distribution);
   } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
@@ -376,6 +383,13 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     if (axis === "h") {
       const flex = admitFlexRow(n);
       if (flex && flex.items.length === stack.children.length) stack.flex = flex;
+      if (stack.flex?.wraps)
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "flex-wrap",
+          "flex-wrap captured on one line → reflowing row; it does not break onto a second line when its items no longer fit",
+        );
     }
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);

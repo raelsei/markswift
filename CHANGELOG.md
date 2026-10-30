@@ -10,6 +10,9 @@ A LayoutDoc schema change is a major version.
 - iOS 26+ app output: plain multiline paragraphs in the default system font now wrap greedily like the browser,
   as packaged fonts already did (SwiftUI `Text` avoids one-word last lines). Across the iOS corpus 65 captures
   improve and none drop beyond the regression allowance; regenerate views to pick it up.
+- App output reflows more flex layouts: a `flex-wrap` row captured on one line, rows with `align-self`, a lone
+  growing item in a wrapping row, and `fit-content`/`max-content` wrap items (held at their captured width).
+  `flex-1` items of a column as tall as its content now hug it instead of pinning their captured height.
 
 ### Fixed
 
