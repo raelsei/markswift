@@ -66,7 +66,10 @@ function unsupported(
       )
         return "stretch-dependent child heights";
     }
-    if (item.sem.width.kind === "fill" || item.sem.height.kind === "fill") return "filling child sizes";
+    // Stretch fills a uniform line with items already as tall as it (a one-line row of equal chips): benign.
+    const stretchFill = item.sem.height.kind === "fill" && align === "stretch" && uniformHeight;
+    if (item.sem.width.kind === "fill" || (item.sem.height.kind === "fill" && !stretchFill))
+      return "filling child sizes";
     if (EDGES.some((edge) => Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
     if (![undefined, "", "auto", "normal"].includes(s["align-self"])) return `align-self ${s["align-self"]}`;
     if (px(s.order) !== 0) return "CSS order allocation";
