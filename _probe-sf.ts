@@ -5,11 +5,11 @@ import { ensureSimulator, renderIos } from "./tools/verify/native.ts";
 import { SWIFT_RUNTIME } from "./src/swift/runtime.ts";
 import type { RenderResult } from "./tools/verify/native-template.ts";
 
-const configs = [11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24].flatMap((s) =>
-  [1.3333, 1.5, 1.4].map((f) => [s, Math.round(s * f * 4) / 4] as [number, number]),
+const configs = [11, 12, 13, 14, 15, 16, 17, 18, 22, 24].flatMap((s) =>
+  [1.3333, 1.5].map((f) => [s, Math.round(s * f * 4) / 4] as [number, number]),
 );
 const offsets = [0, 0.25, 1 / 3, 0.5, 2 / 3, 0.75];
-const SLOT = 44, W = 22;
+const SLOT = 40, W = 22;
 const ratios = (size: number, lh: number) => {
   const a = Math.round((1980 / 2048) * size), d = Math.round((432 / 2048) * size), lead = lh - a - d;
   const below = d + lead - 2 * Math.floor(lead / 2);
