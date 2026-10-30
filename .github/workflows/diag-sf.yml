@@ -22,7 +22,7 @@ jobs:
         run: |
           : > /tmp/markswift-greedy.txt
           bun run pilot --renderer ios --all --only animation-name --out "$RUNNER_TEMP/an" || true
-          cat /tmp/markswift-greedy.txt | sort -u
+
           for d in "$RUNNER_TEMP"/an/animation-name-*-app; do k=$(basename "$d"); echo "$k $(jq .ssim "$d/compare.json") base $(jq --arg k "$k" '.[$k].ssim' tests/conformance/baselines/visual-all-ios.json)"; done
       - uses: actions/upload-artifact@v7
         if: always()

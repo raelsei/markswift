@@ -54,19 +54,14 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
         paragraph.maximumLineHeight = paragraph.minimumLineHeight
         // A fixed-height UIKit paragraph puts its baseline at the line height minus the native descent, rounded to the
-        // nearest device pixel; the offset then moves it to the CSS baseline (Blink's rounded ascent/descent around the
-        // split leading). Measured on iOS 27 (SF 11–24 pt, six line-height ratios, fractional origins): this lands
-        // within 0.01 pt of the SwiftUI fallback, which draws on the CSS baseline.
+        // nearest device pixel; the offset then moves it to the CSS baseline. Blink's baseline is a whole CSS px (the
+        // rounded ascent plus the floored half-leading), so rounding it drops the 3-decimal noise of the emitted ratios,
+        // which UIKit would otherwise snap a pixel down. Measured on iOS 27 (SF 11–24 pt, one and two lines, fractional
+        // origins): this lands where the SwiftUI fallback draws.
         let scale = context.environment.displayScale
         let nativeBaseline = ((paragraph.minimumLineHeight - CTFontGetDescent(resolved.ctFont)) * scale).rounded() / scale
-        let cssBaseline = (lineHeight / size + ascent - descent) * resolved.pointSize / 2
+        let cssBaseline = ((lineHeight + (ascent - descent) * size) / 2).rounded() * resolved.pointSize / size
         let baselineOffset = nativeBaseline - cssBaseline
-        // TMP probe: remove before merge.
-        if let h = FileHandle(forWritingAtPath: "/tmp/markswift-greedy.txt") {
-            h.seekToEndOfFile()
-            h.write("\(text.prefix(24)) pt \(resolved.pointSize) size \(size) lh \(lineHeight) desc \(CTFontGetDescent(resolved.ctFont)) scale \(scale) native \(nativeBaseline) css \(cssBaseline) offset \(baselineOffset) frame \(label.convert(label.bounds, to: nil))\n".data(using: .utf8)!)
-            h.closeFile()
-        }
         let rgba = color.resolve(in: context.environment)
         label.attributedText = NSAttributedString(string: text, attributes: [
             .font: resolved.ctFont,
