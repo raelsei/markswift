@@ -65,14 +65,15 @@ test("plain app paragraphs with packaged metrics select greedy wrapping; fidelit
   expect(fidelity).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
 });
 
-test("system and missing-font fallbacks keep SwiftUI's native baseline", () => {
-  for (const family of ["system-ui", "MissingFace, system-ui"]) {
+test("default system-font paragraphs wrap greedily; other designs and unmeasured bundled faces keep Text", () => {
+  const app = (family: string) => {
     const doc = paragraph();
     doc.root.children[0]!.styles["font-family"] = family;
-    const app = emitSwift(inferScreen(doc, "Paragraph"), "ParagraphView", { mode: "app" }).view;
-    expect(app).not.toContain("MarkswiftGreedyText(");
-    expect(app).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
-  }
+    return emitSwift(inferScreen(doc, "Paragraph"), "ParagraphView", { mode: "app" }).view;
+  };
+  for (const family of ["system-ui", "MissingFace, system-ui"])
+    expect(app(family)).toContain('MarkswiftGreedyText(text: "Measured text shifts nearby layout."');
+  expect(app("ui-serif")).toContain('Text(verbatim: "Measured text shifts nearby layout.")');
   expect(emitSwift(bundledParagraph(), "ParagraphView", { mode: "app" }).view).not.toContain("MarkswiftGreedyText(");
 });
 

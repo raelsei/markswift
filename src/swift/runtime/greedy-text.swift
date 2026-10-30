@@ -53,12 +53,15 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         paragraph.lineBreakStrategy = []
         paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
         paragraph.maximumLineHeight = paragraph.minimumLineHeight
-        // A fixed-height UIKit paragraph places its baseline above the rounded native descent.
-        // CSS splits the extra leading around the rounded captured ascent/descent instead.
+        // A fixed-height UIKit paragraph puts its baseline at the line height minus the native descent, rounded to the
+        // nearest device pixel; the offset then moves it to the CSS baseline. Blink's baseline is a whole CSS px (the
+        // rounded ascent plus the floored half-leading), so rounding it drops the 3-decimal noise of the emitted ratios,
+        // which UIKit would otherwise snap a pixel down. Measured on iOS 27 (SF 11–24 pt, one and two lines, fractional
+        // origins): this lands where the SwiftUI fallback draws.
         let scale = context.environment.displayScale
-        let nativeDescent = (CTFontGetDescent(resolved.ctFont) * scale).rounded(.down) / scale
-        let cssBaseline = (lineHeight / size + ascent - descent) * resolved.pointSize / 2
-        let baselineOffset = paragraph.minimumLineHeight - nativeDescent - cssBaseline
+        let nativeBaseline = ((paragraph.minimumLineHeight - CTFontGetDescent(resolved.ctFont)) * scale).rounded() / scale
+        let cssBaseline = ((lineHeight + (ascent - descent) * size) / 2).rounded() * resolved.pointSize / size
+        let baselineOffset = nativeBaseline - cssBaseline
         let rgba = color.resolve(in: context.environment)
         label.attributedText = NSAttributedString(string: text, attributes: [
             .font: resolved.ctFont,
