@@ -20,22 +20,24 @@ const slots = configs.map(([size, lh]) => {
                 .markswiftLineHeight(${lh}, size: ${size}, relativeTo: .body, ascent: ${a}, descent: ${below})
                 .frame(width: 60, height: ${SLOT}, alignment: .topLeading)`;
 });
+const COLS = factors.length, W = 60;
+const rowsSwift = sizes.map((_, r) => `HStack(alignment: .top, spacing: 0) {\n            ${slots.slice(r * COLS, (r + 1) * COLS).join("\n            ")}\n        }`);
 const probe = `import SwiftUI
 struct Probe: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ${slots.join("\n            ")}
+            ${rowsSwift.join("\n            ")}
         }
-        .frame(width: 60, alignment: .topLeading)
+        .frame(width: ${COLS * W}, alignment: .topLeading)
     }
 }
 `;
-const height = slots.length * SLOT;
+const height = sizes.length * SLOT;
 const result = {
   name: "Probe",
   files: { "Probe.swift": probe, "MarkswiftRuntime.swift": SWIFT_RUNTIME },
   assets: {},
-  layout: { size: { w: 60, h: height }, canvas: "white", combo: { screen: "probe", theme: "light" } },
+  layout: { size: { w: COLS * W, h: height }, canvas: "white", combo: { screen: "probe", theme: "light" } },
 } as unknown as RenderResult;
 const out = "/tmp/markswift-sf.png";
 const device = await ensureSimulator();
@@ -46,9 +48,9 @@ const { data, info } = await sharp(await sharp(out).withIccProfile("srgb").png()
 const scale = info.height / height;
 const r3 = (v: number) => Math.round(v * 3) / 3;
 for (const [i, [size, lh]] of configs.entries()) {
-  const top = i * SLOT * scale, h = SLOT * scale;
-  let col = 0, best = 0;
-  for (let x = 0; x < 30 * scale; x++) { let s = 0; for (let y = top; y < top + h; y++) s += 255 - data[y * info.width + x]!; if (s > best) { best = s; col = x; } }
+  const top = Math.floor(i / COLS) * SLOT * scale, left = (i % COLS) * W * scale, h = SLOT * scale;
+  let col = left, best = 0;
+  for (let x = left; x < left + 30 * scale; x++) { let s = 0; for (let y = top; y < top + h; y++) s += 255 - data[y * info.width + x]!; if (s > best) { best = s; col = x; } }
   const rows = Array.from({ length: h }, (_, k) => (255 - data[(top + k) * info.width + col]!) / 255);
   const first = rows.findIndex((d) => d > 0.5), last = rows.length - 1 - [...rows].reverse().findIndex((d) => d > 0.5);
   const mid = Math.floor((first + last) / 2);
