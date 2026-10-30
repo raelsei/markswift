@@ -128,6 +128,21 @@ for (const axis of ["h", "v"] as const) {
   });
 }
 
+test("column growers as tall as their content took no free space and hug it", () => {
+  const tall = (h: number, pad: number): LayoutNode => ({
+    ...item("v", h, 1, { "padding-top": `${pad}px`, "padding-bottom": `${pad}px` }),
+    children: [{ ...item("v", h - 2 * pad, 0), bounds: { x: 0, y: pad, w: 300, h: h - 2 * pad } }],
+  });
+  const a = tall(215.5, 24),
+    b = tall(148.75, 24);
+  const diagnostics: Diagnostic[] = [];
+  expect(flexGrowthSize(a, "v", context("v", [a, b]), diagnostics)).toBeUndefined();
+  expect(diagnostics).toEqual([]);
+  // One grower taller than its content did take free space: the allocation stays pinned.
+  const grown = { ...tall(215.5, 24), bounds: { x: 0, y: 0, w: 300, h: 260 } };
+  expect(flexGrowthSize(grown, "v", context("v", [grown, b]), [])).toEqual({ kind: "fixed", px: 260 });
+});
+
 test("unequal shrink allocation pins the browser's fractional measured size", () => {
   const a = item("h", 166.66667, 1, { "flex-basis": "200px", "flex-shrink": "1" });
   const b = item("h", 133.33333, 1, { "flex-basis": "200px", "flex-shrink": "2" });

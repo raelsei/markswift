@@ -291,13 +291,26 @@ test("N1 captured widths 2px off the solver are rejected", () =>
       { w: 219.33, flex: [2, 0, "0px"] },
     ]),
   ));
-test("N2 flex-wrap: wrap is rejected", () => expectRejected(flexDoc(P1, { "flex-wrap": "wrap" })));
+test("P10 a flex-wrap row captured on one line is admitted as a reflowing row", () => {
+  const row = expectAdmitted(flexDoc(P1, { "flex-wrap": "wrap" }));
+  expect(row.flex!.wraps).toBe(true);
+  expect(row.diagnostics.map((d) => d.feature)).toContain("flex-wrap");
+});
+test("N2 a flex-wrap row that broke onto a second line is rejected", () => {
+  const doc = flexDoc(P1, { "flex-wrap": "wrap" });
+  doc.root.children[0]!.children[1]!.bounds = { x: 0, y: 48, w: 200, h: 40 };
+  expectRejected(doc);
+});
 test("N3 row-reverse is rejected", () => expectRejected(flexDoc(P1, { "flex-direction": "row-reverse" })));
 test("N4 direction: rtl is rejected", () => expectRejected(flexDoc(P1, { direction: "rtl" })));
 test("N5 inline-flex is rejected", () => expectRejected(flexDoc(P1, { display: "inline-flex" })));
 test("N6 a horizontal item margin is rejected", () => expectRejected(flexDoc(with_(P1, 1, { "margin-left": "8px" }))));
 test("N7 order is rejected", () => expectRejected(flexDoc(with_(P1, 0, { order: "1" }))));
-test("N8 align-self is rejected", () => expectRejected(flexDoc(with_(P1, 0, { "align-self": "center" }))));
+test("P11 align-self is kept on the item that differs from align-items", () => {
+  const row = expectAdmitted(flexDoc(with_(P1, 0, { "align-self": "center" })));
+  expect(row.flex!.items.map((i) => i.align)).toEqual(["center", undefined]);
+});
+test("N8 align-self: baseline is rejected", () => expectRejected(flexDoc(with_(P1, 0, { "align-self": "baseline" }))));
 test("N9 a percentage min-width is rejected", () => expectRejected(flexDoc(with_(P1, 0, { "min-width": "10%" }))));
 test("N10 a percentage max-width is rejected", () => expectRejected(flexDoc(with_(P1, 1, { "max-width": "50%" }))));
 test("N11 a percentage basis on a padded item is rejected (a % padding is invisible in the capture)", () =>

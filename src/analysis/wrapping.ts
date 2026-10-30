@@ -19,6 +19,15 @@ function gap(value: string | undefined): number | undefined {
   return /^(?:0|\d*\.?\d+px)$/.test(value) ? Math.max(0, px(value)) : undefined;
 }
 
+/** Intrinsic main sizes MarkswiftFlow can place: the item at its captured width, re-wrapped as lines run out. */
+const INTRINSIC: Record<string, true> = { "fit-content": true, "max-content": true };
+
+function mainSizeOf(item: AnalyzedChild): string | undefined {
+  const basis = item.node.styles["flex-basis"];
+  const preferred = item.node.preferredSize?.width ?? parseDeclared(item.node.attrs.style)["width"];
+  return basis && basis !== "auto" && basis !== "content" ? basis : preferred;
+}
+
 function unsupported(
   n: LayoutNode,
   base: SemBase,
@@ -57,14 +66,15 @@ function unsupported(
       )
         return "stretch-dependent child heights";
     }
-    if (item.sem.width.kind === "fill" || item.sem.height.kind === "fill") return "filling child sizes";
+    // Stretch fills a uniform line with items already as tall as it (a one-line row of equal chips): benign.
+    const stretchFill = item.sem.height.kind === "fill" && align === "stretch" && uniformHeight;
+    if (item.sem.width.kind === "fill" || (item.sem.height.kind === "fill" && !stretchFill))
+      return "filling child sizes";
     if (EDGES.some((edge) => Math.abs(px(s[`margin-${edge}`])) > 0.5)) return "child margins";
     if (![undefined, "", "auto", "normal"].includes(s["align-self"])) return `align-self ${s["align-self"]}`;
     if (px(s.order) !== 0) return "CSS order allocation";
-    const preferred = item.node.preferredSize?.width ?? parseDeclared(item.node.attrs.style)["width"];
-    const basis = s["flex-basis"];
-    const mainSize = basis && basis !== "auto" && basis !== "content" ? basis : preferred;
-    if (mainSize && mainSize !== "auto" && !/^(?:0|\d*\.?\d+px)$/.test(mainSize))
+    const mainSize = mainSizeOf(item);
+    if (mainSize && mainSize !== "auto" && !INTRINSIC[mainSize] && !/^(?:0|\d*\.?\d+px)$/.test(mainSize))
       return "relative or intrinsic child width";
   }
 
@@ -123,6 +133,20 @@ function unsupported(
   return undefined;
 }
 
+/** Why a wrapping container keeps its captured positions instead of re-wrapping natively (MarkswiftFlow), if it does. */
+export function wrapFallback(
+  n: LayoutNode,
+  base: SemBase,
+  all: AnalyzedChild[],
+  axis: Axis,
+  align: CrossAlign,
+  distribution: Distribution,
+): string | undefined {
+  const plain: SemBase = { ...base, padding: insetsOf(n.styles) };
+  const items = all.filter((item) => renders(item.node));
+  return unsupported(n, plain, items, axis, align, distribution, gap(n.styles["column-gap"]), gap(n.styles["row-gap"]));
+}
+
 export function buildWrapping(
   n: LayoutNode,
   base: SemBase,
@@ -136,7 +160,7 @@ export function buildWrapping(
   const items = all.filter((item) => renders(item.node));
   const columnGap = gap(n.styles["column-gap"]),
     rowGap = gap(n.styles["row-gap"]);
-  const reason = unsupported(n, plain, items, axis, align, distribution, columnGap, rowGap);
+  const reason = wrapFallback(n, base, all, axis, align, distribution);
   const ordered = reason ? paintOrder(items) : linesOf(items).flat();
   const stack: StackNode = {
     ...plain,
@@ -158,6 +182,10 @@ export function buildWrapping(
     );
   } else {
     stack.wrap = { columnGap: round2(columnGap!), rowGap: round2(rowGap!) };
+    // An intrinsic item keeps Chrome's width: a native control's own ideal width differs from the browser's
+    // fit-content (a select's chevron and padding), which would change where the lines break.
+    for (const item of items)
+      if (INTRINSIC[mainSizeOf(item) ?? ""]) item.sem.width = { kind: "fixed", px: round2(item.sem.frame.w) };
   }
   return stack;
 }

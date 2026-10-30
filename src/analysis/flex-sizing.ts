@@ -2,11 +2,24 @@ import type { LayoutNode } from "../model/layout.ts";
 import { type Axis, type Size, type Diagnostic, addDiagnostic } from "../model/semantic.ts";
 import type { InferenceContext } from "./context.ts";
 import { px, round2 } from "../css/index.ts";
-import { isFlex, outOfFlow } from "./geometry.ts";
+import { insetsOf, isFlex, outOfFlow } from "./geometry.ts";
 import { admitFlexRow } from "./flex-row.ts";
 
 function inFlow(node: LayoutNode): boolean {
   return node.tag !== "#text" && node.styles.display !== "none" && !outOfFlow(node);
+}
+
+/** A box exactly as tall as its in-flow content (margins included: a flex item's margins do not collapse). */
+function contentTall(n: LayoutNode): boolean {
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const c of n.children) {
+    if (c.styles.display === "none" || outOfFlow(c)) continue;
+    top = Math.min(top, c.bounds.y - px(c.styles["margin-top"]));
+    bottom = Math.max(bottom, c.bounds.y + c.bounds.h + px(c.styles["margin-bottom"]));
+  }
+  const [t, , b] = insetsOf(n.styles);
+  return Math.abs(n.bounds.h - Math.max(0, bottom - top) - t - b) <= 1;
 }
 
 /** Native stacks can share equal leftover space, but cannot reproduce arbitrary CSS allocation. */
@@ -21,6 +34,9 @@ export function flexGrowthSize(
   if (!inFlow(n) || px(n.styles["flex-grow"]) <= 0) return undefined;
   const growers = parent.children.filter((child) => inFlow(child) && px(child.styles["flex-grow"]) > 0);
   if (!growers.length) return undefined;
+  // Growers at their content height took no free space (a column as tall as its content has none): CSS grow is a
+  // no-op there, so they hug their content like any column item.
+  if (axis === "v" && growers.every(contentTall)) return undefined;
   const factors = growers.map((child) => px(child.styles["flex-grow"]));
   const sizes = growers.map((child) => (axis === "h" ? child.bounds.w : child.bounds.h));
   const total = factors.reduce((sum, grow) => sum + grow, 0);

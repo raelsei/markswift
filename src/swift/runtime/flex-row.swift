@@ -1,4 +1,5 @@
-/// CSS flex row: grow / shrink / basis (px, nil = content, or a fraction of the row), min/max clamps, gaps; no wrap.
+/// CSS flex row: grow / shrink / basis (px, nil = content, or a fraction of the row), min/max clamps, gaps, per-item
+/// `align-self`; one line (a `flex-wrap` row captured on one line reflows here but never breaks).
 struct MarkswiftFlexRow: Layout {
     struct Item: Sendable {
         var grow: CGFloat
@@ -10,6 +11,8 @@ struct MarkswiftFlexRow: Layout {
         var inset: CGFloat = 0
         /// Percentage basis: `basis + fraction × width`.
         var fraction: CGFloat? = nil
+        /// `align-self`, when it differs from the row's `align-items`.
+        var align: Align? = nil
     }
     enum Align: Sendable { case start, center, end, stretch }
     var items: [Item]
@@ -74,16 +77,17 @@ struct MarkswiftFlexRow: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let w = Self.widths(width: bounds.width, items: items, bases: bases(subviews), spacing: spacing)
-        let h = align == .stretch ? [] : heights(w, proposal.height, subviews)
+        let h = heights(w, proposal.height, subviews)
         var x = bounds.minX
         for i in subviews.indices {
-            let y = switch align {
+            let a = items[i].align ?? align
+            let y = switch a {
             case .start, .stretch: bounds.minY
             case .center: bounds.minY + (bounds.height - h[i]) / 2
             case .end: bounds.maxY - h[i]
             }
             subviews[i].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
-                              proposal: ProposedViewSize(width: w[i], height: align == .stretch ? bounds.height : h[i]))
+                              proposal: ProposedViewSize(width: w[i], height: a == .stretch ? bounds.height : h[i]))
             x += w[i] + spacing
         }
     }
