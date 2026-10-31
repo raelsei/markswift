@@ -291,15 +291,34 @@ test("N1 captured widths 2px off the solver are rejected", () =>
       { w: 219.33, flex: [2, 0, "0px"] },
     ]),
   ));
-test("P10 a flex-wrap row captured on one line is admitted as a reflowing row", () => {
-  const row = expectAdmitted(flexDoc(P1, { "flex-wrap": "wrap" }));
-  expect(row.flex!.wraps).toBe(true);
-  expect(row.diagnostics.map((d) => d.feature)).toContain("flex-wrap");
+test("P10 a flex-wrap row captured on one line is admitted as a wrapping row", () => {
+  const row = expectAdmitted(flexDoc(P1, { "flex-wrap": "wrap", "row-gap": "8px" }));
+  expect(row.flex!.rowGap).toBe(8);
+  expect(row.flex!.fidelityNote?.feature).toBe("flex-wrap");
 });
-test("N2 a flex-wrap row that broke onto a second line is rejected", () => {
+test("P12 growers on two lines are admitted when CSS line breaking and per-line allocation reproduce them", () => {
+  const twoLines = (secondY: number) => {
+    const doc = flexDoc(Array(3).fill({ w: 166, flex: [1, 1, "150px"] }), { "flex-wrap": "wrap", "row-gap": "8px" });
+    const row = doc.root.children[0]!;
+    row.bounds.h = secondY + 40;
+    row.children[2]!.bounds = { x: 0, y: secondY, w: 340, h: 40 };
+    return doc;
+  };
+  expect(expectAdmitted(twoLines(48)).flex!.items).toEqual(Array(3).fill({ grow: 1, shrink: 1, basis: 150 }));
+  // A second line below a gap other than the row gap (align-content spacing) is rejected.
+  expectRejected(twoLines(60));
+});
+test("N2 a flex-wrap row whose captured lines differ from CSS line breaking is rejected", () => {
   const doc = flexDoc(P1, { "flex-wrap": "wrap" });
   doc.root.children[0]!.children[1]!.bounds = { x: 0, y: 48, w: 200, h: 40 };
   expectRejected(doc);
+});
+test("P13 unbreakable items keep their min-content (automatic minimum) and hold an overflowing row open", () => {
+  const chip = { w: 150, text: 126, pad: 12, styles: { "white-space": "nowrap" } };
+  const row = rowOf(flexDoc([chip, chip, chip], { "overflow-x": "hidden" }));
+  expect(row.flex!.items).toEqual(Array(3).fill({ grow: 0, shrink: 1, basis: null, min: 150, inset: 24 }));
+  // Without nowrap the text run has a break opportunity, so its min-content is unknown: CSS shrink is not reproduced.
+  expect(rowOf(flexDoc([{ ...chip, styles: {} }, chip, chip], { "overflow-x": "hidden" })).flex).toBeUndefined();
 });
 test("N3 row-reverse is rejected", () => expectRejected(flexDoc(P1, { "flex-direction": "row-reverse" })));
 test("N4 direction: rtl is rejected", () => expectRejected(flexDoc(P1, { direction: "rtl" })));

@@ -139,16 +139,16 @@ export interface FlexItem {
   align?: FlexRow["align"];
 }
 /**
- * An admitted flex row (nowrap, or `flex-wrap: wrap` captured on one line); app mode emits MarkswiftFlexRow,
- * fidelity keeps the children's captured widths.
+ * An admitted flex row (nowrap, or `flex-wrap: wrap` whose captured lines CSS line breaking reproduces); app mode
+ * emits MarkswiftFlexRow, fidelity keeps the children's captured geometry.
  */
 export interface FlexRow {
   items: FlexItem[];
   align: "start" | "center" | "end" | "stretch";
-  /** `flex-wrap: wrap` captured on one line: the row reflows but never breaks onto a second line. */
-  wraps?: true;
+  /** `flex-wrap: wrap`: the gap between lines; absent on a nowrap row. */
+  rowGap?: number;
   /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
-  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis"; message: string };
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis" | "flex-wrap"; message: string };
 }
 
 export type Axis = "v" | "h";

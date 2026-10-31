@@ -105,24 +105,30 @@ function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: Em
   });
   const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
+  const rowGap = flex.rowGap === undefined ? "" : `, rowGap: ${num(flex.rowGap)}`;
   return [
-    `MarkswiftFlexRow(items: [${items.join(", ")}], spacing: ${num(spacing)}${align}) {`,
+    `MarkswiftFlexRow(items: [${items.join(", ")}], spacing: ${num(spacing)}${align}${rowGap}) {`,
     ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
     "}",
+    // A row that hugs its content in CSS (`inline-flex`, `w-fit`) takes its max-content width, never more than offered.
+    ...(n.width.kind === "hug" ? [".markswiftFitWidth()"] : []),
     ...(hugsRowHeight(n, ctx) ? [".fixedSize(horizontal: false, vertical: true)"] : []),
   ];
 }
 
 export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string[] {
   const out: string[] = [];
-  // Fidelity keeps an admitted grid's captured geometry and reports what app mode reconstructs.
+  // Fidelity keeps an admitted grid's or flex row's captured geometry and reports what app mode reconstructs.
   if (n.kind === "grid" && n.template && ctx.mode === "fidelity")
     note(n, "approximated", n.measured ? "display: grid" : "grid-template-columns", n.template.fidelityNote);
+  if (n.kind === "stack" && n.flex?.fidelityNote && ctx.mode === "fidelity")
+    note(n, "approximated", n.flex.fidelityNote.feature, n.flex.fidelityNote.message);
   if (n.kind === "grid" && n.table) out.push(...tableExpr(n, n.table, ctx));
   else if (n.kind === "grid" && n.template && ctx.mode === "app") out.push(...tracksExpr(n, n.template, ctx));
+  // An admitted wrapping row also holds its captured positions (`measured`) for fidelity.
+  else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
   else if (n.measured) out.push(...measuredLayoutExpr(n, ctx));
   else if (n.kind === "stack" && n.wrap) out.push(...wrappingExpr(n, ctx));
-  else if (n.kind === "stack" && n.flex && ctx.mode === "app") out.push(...flexRowExpr(n, n.flex, ctx));
   else if (n.kind === "grid") {
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
@@ -134,8 +140,6 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     }
     out.push("}");
   } else {
-    // Fidelity keeps an admitted flex row's captured widths and reports what app mode reconstructs.
-    if (n.flex?.fidelityNote) note(n, "approximated", n.flex.fidelityNote.feature, n.flex.fidelityNote.message);
     const kids = n.children;
     const uniform = typeof n.spacing === "number";
     const spacers = n.distribution === "between" || n.distribution === "around" || n.distribution === "evenly";
