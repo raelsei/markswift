@@ -280,7 +280,6 @@ describe("measured wrapping fallback", () => {
     [{ "align-items": "baseline" }, {}, "align-items"],
     [{}, { "flex-grow": "1" }, "allocation"],
     [{}, { "margin-left": "5px" }, "margin"],
-    [{}, { "align-self": "center" }, "align-self"],
   ] as const)(
     "unsupported alignment/allocation remains a diagnosed measured layout",
     (hostStyles, childStyles, reason) => {
@@ -311,7 +310,7 @@ describe("measured wrapping fallback", () => {
     expect(node.measured).toBeUndefined();
   });
 
-  test("stretch-dependent auto heights fall back because merged rows can change their height", () => {
+  test("stretch-dependent heights MarkswiftFlow cannot place reflow as an admitted flex row, captured for fidelity", () => {
     const fixed = child("a", 0, 0);
     const short = child("b", 90, 0, {}, { width: "80px", height: "20px" });
     short.bounds.h = 20;
@@ -319,9 +318,16 @@ describe("measured wrapping fallback", () => {
     stretched.bounds.h = 20;
     const node = root([fixed, short, stretched], { "align-items": "stretch" }, { x: 0, y: 0, w: 200, h: 70 });
     expect(node.wrap).toBeUndefined();
+    expect(node.flex?.rowGap).toBeDefined();
     expect(measuredFrames(node)["#c"]).toEqual({ x: 0, y: 50, w: 80, h: 20 });
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("stretch-dependent");
-    expect(node.diagnostics.map((d) => d.message).join(" ")).toContain("cannot reflow");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).not.toContain("cannot reflow");
+  });
+
+  test("align-self reflows as an admitted flex row", () => {
+    const node = root([child("a", 0, 0, { "align-self": "center" }), child("b", 90, 0), child("c", 0, 50)], {});
+    expect(node.wrap).toBeUndefined();
+    expect(node.flex?.items[0]?.align).toBe("center");
+    expect(node.diagnostics.map((d) => d.message).join(" ")).not.toContain("cannot reflow");
   });
 
   test("captured row breaks that disagree with fixed-size native fitting use fallback", () => {

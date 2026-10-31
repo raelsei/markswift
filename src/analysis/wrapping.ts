@@ -4,6 +4,7 @@ import {
   type Axis,
   type CrossAlign,
   type Distribution,
+  type FlexRow,
   type SemBase,
   type StackNode,
   addDiagnostic,
@@ -147,6 +148,10 @@ export function wrapFallback(
   return unsupported(n, plain, items, axis, align, distribution, gap(n.styles["column-gap"]), gap(n.styles["row-gap"]));
 }
 
+/**
+ * `flex`: the row's admission (`admitFlexRow`) when MarkswiftFlow cannot re-wrap it; the captured positions then
+ * serve fidelity only, and app mode reflows it with MarkswiftFlexRow.
+ */
 export function buildWrapping(
   n: LayoutNode,
   base: SemBase,
@@ -154,6 +159,7 @@ export function buildWrapping(
   axis: Axis,
   align: CrossAlign,
   distribution: Distribution,
+  flex?: FlexRow,
 ): StackNode {
   // Wrapping owns its whole content box. Trailing alignment slack is geometry, never padding.
   const plain: SemBase = { ...base, padding: insetsOf(n.styles) };
@@ -161,7 +167,9 @@ export function buildWrapping(
   const columnGap = gap(n.styles["column-gap"]),
     rowGap = gap(n.styles["row-gap"]);
   const reason = wrapFallback(n, base, all, axis, align, distribution);
-  const ordered = reason ? paintOrder(items) : linesOf(items).flat();
+  // An admitted row's items never overlap (admission placed them all), so they stay in flex (DOM) order.
+  const admitted = reason !== undefined && flex !== undefined && flex.items.length === items.length;
+  const ordered = admitted ? items : reason ? paintOrder(items) : linesOf(items).flat();
   const stack: StackNode = {
     ...plain,
     kind: "stack",
@@ -174,12 +182,14 @@ export function buildWrapping(
   };
   if (reason) {
     stack.measured = measuredLayoutOf(plain, stack.children);
-    addDiagnostic(
-      stack.diagnostics,
-      "approximated",
-      "flex-wrap",
-      `flex-wrap ${reason} → captured child positions; cannot reflow at another size`,
-    );
+    if (admitted) stack.flex = flex;
+    else
+      addDiagnostic(
+        stack.diagnostics,
+        "approximated",
+        "flex-wrap",
+        `flex-wrap ${reason} → captured child positions; cannot reflow at another size`,
+      );
   } else {
     stack.wrap = { columnGap: round2(columnGap!), rowGap: round2(rowGap!) };
     // An intrinsic item keeps Chrome's width: a native control's own ideal width differs from the browser's

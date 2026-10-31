@@ -1,5 +1,5 @@
 /// CSS flex row: grow / shrink / basis (px, nil = content, or a fraction of the row), min/max clamps, gaps, per-item
-/// `align-self`; one line (a `flex-wrap` row captured on one line reflows here but never breaks).
+/// `align-self`; with `rowGap` (`flex-wrap: wrap`) items break into lines, each allocated on its own.
 struct MarkswiftFlexRow: Layout {
     struct Item: Sendable {
         var grow: CGFloat
@@ -18,6 +18,31 @@ struct MarkswiftFlexRow: Layout {
     var items: [Item]
     var spacing: CGFloat
     var align: Align = .stretch
+    /// `flex-wrap: wrap`: the gap between lines; nil keeps one line (nowrap).
+    var rowGap: CGFloat? = nil
+
+    /// Line breaks (css-flexbox §9.3), mirroring `flexLines` (src/analysis/flex-row.ts): an item starts a new line
+    /// when its clamped base no longer fits after the previous ones and their gaps.
+    static func lines(width: CGFloat, items: [Item], bases: [CGFloat], spacing: CGFloat) -> [Range<Int>] {
+        var out: [Range<Int>] = []
+        var start = 0
+        var used: CGFloat = 0
+        for i in bases.indices {
+            let it = items[i]
+            let base = it.fraction.map { Swift.max(it.inset, bases[i] + $0 * width) } ?? bases[i]
+            let size = Swift.max(it.min, it.inset, Swift.min(it.max ?? .infinity, base))
+            let next = i == start ? size : used + spacing + size
+            if i > start && next > width + 0.01 {
+                out.append(start..<i)
+                start = i
+                used = size
+            } else {
+                used = next
+            }
+        }
+        if start < bases.count { out.append(start..<bases.count) }
+        return out
+    }
 
     /// Pure allocation, the CSS flex freeze loop; `MarkswiftFlexRow.widths` and `solveFlexRow`
     /// (src/analysis/flex-row.ts) must agree.
@@ -65,30 +90,57 @@ struct MarkswiftFlexRow: Layout {
         subviews.indices.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w[$0], height: height)).height }
     }
 
+    /// Widths, heights and lines at `width`; a wrapping row's items are measured without the row's height.
+    private func plan(_ width: CGFloat, _ height: CGFloat?, _ subviews: Subviews)
+        -> (w: [CGFloat], h: [CGFloat], lines: [Range<Int>], lineHeights: [CGFloat]) {
+        let b = bases(subviews)
+        let lines = rowGap == nil ? [0..<b.count] : Self.lines(width: width, items: items, bases: b, spacing: spacing)
+        var w = [CGFloat](repeating: 0, count: b.count)
+        for l in lines {
+            let lw = Self.widths(width: width, items: Array(items[l]), bases: Array(b[l]), spacing: spacing)
+            for (k, i) in l.enumerated() { w[i] = lw[k] }
+        }
+        let h = heights(w, rowGap == nil ? height : nil, subviews)
+        return (w, h, lines, lines.map { l in l.map { h[$0] }.max() ?? 0 })
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let b = bases(subviews)
-        // Without a width a percentage basis is indefinite: CSS sizes that item by its content.
-        let ideal = subviews.indices.map { items[$0].fraction == nil ? b[$0] : subviews[$0].sizeThatFits(.unspecified).width }
+        // Without a width the row is as wide as its items' max-content contributions (CSS fit-content): a growing or
+        // content-sized item its content, never less than its clamped base; a percentage basis is indefinite there.
+        let ideal = subviews.indices.map { i -> CGFloat in
+            let it = items[i]
+            let content = subviews[i].sizeThatFits(.unspecified).width
+            if it.fraction != nil { return content }
+            let base = Swift.max(it.min, it.inset, Swift.min(it.max ?? .infinity, b[i]))
+            return it.grow > 0 || it.basis == nil ? Swift.max(base, Swift.min(it.max ?? .infinity, content)) : base
+        }
         let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil }
             ?? ideal.reduce(0, +) + CGFloat(max(0, b.count - 1)) * spacing
-        let w = Self.widths(width: width, items: items, bases: b, spacing: spacing)
-        return CGSize(width: width, height: heights(w, proposal.height, subviews).max() ?? 0)
+        let p = plan(width, proposal.height, subviews)
+        guard let rowGap else { return CGSize(width: width, height: p.h.max() ?? 0) }
+        return CGSize(width: width, height: p.lineHeights.reduce(0, +) + CGFloat(max(0, p.lines.count - 1)) * rowGap)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let w = Self.widths(width: bounds.width, items: items, bases: bases(subviews), spacing: spacing)
-        let h = heights(w, proposal.height, subviews)
-        var x = bounds.minX
-        for i in subviews.indices {
-            let a = items[i].align ?? align
-            let y = switch a {
-            case .start, .stretch: bounds.minY
-            case .center: bounds.minY + (bounds.height - h[i]) / 2
-            case .end: bounds.maxY - h[i]
+        let p = plan(bounds.width, proposal.height, subviews)
+        var y = bounds.minY
+        for (n, l) in p.lines.enumerated() {
+            // One nowrap line is the row's height; a wrapping line its tallest item's.
+            let lineHeight = rowGap == nil ? bounds.height : p.lineHeights[n]
+            var x = bounds.minX
+            for i in l {
+                let a = items[i].align ?? align
+                let dy: CGFloat = switch a {
+                case .start, .stretch: 0
+                case .center: (lineHeight - p.h[i]) / 2
+                case .end: lineHeight - p.h[i]
+                }
+                subviews[i].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
+                                  proposal: ProposedViewSize(width: p.w[i], height: a == .stretch ? lineHeight : p.h[i]))
+                x += p.w[i] + spacing
             }
-            subviews[i].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
-                              proposal: ProposedViewSize(width: w[i], height: a == .stretch ? bounds.height : h[i]))
-            x += w[i] + spacing
+            y += lineHeight + (rowGap ?? 0)
         }
     }
 }

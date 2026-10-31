@@ -336,15 +336,12 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
   const lines = axis === "h" ? [[...items].sort((a, b) => a.sem.frame.x - b.sem.frame.x)] : linesOf(items);
   let stack: StackNode;
   const multi = lines.some((l) => l.length > 1);
-  // A wrapping row MarkswiftFlow cannot re-wrap keeps captured positions, unless it was captured on one line (it
-  // reflows as an admitted flex row) or holds a lone grower (it fills its line like any flex item, flexGrowthSize).
-  const loneGrower = items.length === 1 && px(items[0]!.node.styles["flex-grow"]) > 0;
-  const oneLine =
-    wraps &&
-    wrapFallback(n, base, items, axis, align, distribution) !== undefined &&
-    (loneGrower || admitFlexRow(n)?.wraps);
-  if (wraps && !oneLine) {
-    stack = buildWrapping(n, base, items, axis, align, distribution);
+  // A wrapping row MarkswiftFlow cannot re-wrap keeps captured positions (fidelity) and, when admitted, reflows as a
+  // MarkswiftFlexRow (app); a lone grower fills its line like any flex item (flexGrowthSize).
+  const loneGrower = wraps && items.length === 1 && px(items[0]!.node.styles["flex-grow"]) > 0;
+  if (wraps && !loneGrower) {
+    const flex = wrapFallback(n, base, items, axis, align, distribution) ? admitFlexRow(n) : undefined;
+    stack = buildWrapping(n, base, items, axis, align, distribution, flex);
   } else if (multi && lines.length === 1 && axis === "v") {
     // One measured line of side-by-side blocks (table cells, inline-blocks, a float and its text).
     if (lines[0]!.some((i) => floating(i.node)))
@@ -383,13 +380,6 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     if (axis === "h") {
       const flex = admitFlexRow(n);
       if (flex && flex.items.length === stack.children.length) stack.flex = flex;
-      if (stack.flex?.wraps)
-        addDiagnostic(
-          diagnostics,
-          "approximated",
-          "flex-wrap",
-          "flex-wrap captured on one line → reflowing row; it does not break onto a second line when its items no longer fit",
-        );
     }
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);

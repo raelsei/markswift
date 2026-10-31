@@ -15,6 +15,9 @@ A LayoutDoc schema change is a major version.
   one-line wrap rows whose equal-height items stretch. `flex-1` items of a column as tall as its content now hug it
   instead of pinning their captured height. Rows that used to keep captured positions now follow native text
   widths, so a few one-line chip rows sit up to 0.5 pt off at their own capture width (macOS SSIM drops up to 0.0096).
+- Wrapping flex rows with growing, shrinking or `align-self` items reflow across lines: `MarkswiftFlexRow` breaks
+  lines like CSS and allocates each line on its own, and a fit-content row takes its items' max-content width.
+  Overflowing rows of unbreakable items keep their min-content (CSS's automatic minimum).
 
 ### Fixed
 
