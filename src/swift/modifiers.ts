@@ -327,6 +327,17 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       m.push(`.accessibilityValue(${opened.state} ? "expanded" : "collapsed")`);
     else if (chosen) m.push(`.accessibilityValue(${chosen})`);
     else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
+    if (a.tableCell && ctx.mode === "app") {
+      const t = a.tableCell;
+      const range = (start: number, span: number, count: number) =>
+        `${start}${span > 1 ? `–${start + span - 1}` : ""} of ${count}`;
+      m.push(
+        `.accessibilityCustomContent("Row", ${str(range(t.row, t.rowSpan, t.rows))}, importance: .high)`,
+        `.accessibilityCustomContent("Column", ${str(range(t.column, t.columnSpan, t.columns))}, importance: .high)`,
+      );
+      if (t.headers.length)
+        m.push(`.accessibilityCustomContent("Headers", ${str(t.headers.join(", "))}, importance: .high)`);
+    }
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
   }
