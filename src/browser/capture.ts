@@ -13,7 +13,6 @@ import {
   getBrowserVersion,
   hashLinkedResources,
   readCaptureCache,
-  setCachedBrowserVersion,
   writeCaptureCache,
 } from "./cache.ts";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
@@ -32,6 +31,7 @@ import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
+import { htmlIdentity } from "../input/identity.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
 import { captureStates, forceStates } from "./states.ts";
@@ -51,6 +51,8 @@ import {
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
+/** A resource the capture cache cannot hash: a remote stylesheet, image, font or import. */
+const REMOTE_RESOURCE = /(?:\b(?:href|src|srcset)\s*=\s*["']?|url\(\s*["']?|@import\s+["'])(?:https?:)?\/\//i;
 /** Stamped (after snapshot A) on every element whose `transform`/`translate`/`rotate`/`scale` is not `none`. */
 const TRANSFORMED_MARK = "data-markswift-transformed";
 /** Stamped (after snapshot A) on every `position: relative` element: snapshot B and the screenshot drop its offset. */
@@ -148,7 +150,7 @@ export interface CaptureOptions {
   timeoutMs?: number;
   /** Use an isolated browser process instead of the shared browser. Default: false. */
   isolated?: boolean;
-  /** Cache captures on disk under the user cache directory. Default: true. */
+  /** Cache captures on disk under the user cache directory (`convert`/`build` turn it on). Default: false. */
   cache?: boolean;
 }
 
@@ -211,7 +213,6 @@ export async function getSharedBrowser(opts: { channel?: string; restricted?: bo
         browser.on("disconnected", () => {
           if (sharedBrowsers.get(key)?.browser === browser) sharedBrowsers.delete(key);
         });
-        setCachedBrowserVersion(browser.version());
         entry!.browser = browser;
         entry!.promise = undefined;
         return browser;
@@ -276,7 +277,7 @@ export class BrowserCapture {
 
   async start(): Promise<void> {
     this.started = true;
-    if (this.opts.cache === false || process.env.MARKSWIFT_NO_CACHE === "1") {
+    if (!this.opts.cache || process.env.MARKSWIFT_NO_CACHE === "1") {
       await this.ensureContext();
     }
   }
@@ -294,7 +295,6 @@ export class BrowserCapture {
       });
       this.ownsBrowser = false;
     }
-    setCachedBrowserVersion(this.browser.version());
     this.context = await this.browser.newContext({
       viewport: this.opts.viewport,
       deviceScaleFactor: this.opts.dpr,
@@ -305,7 +305,7 @@ export class BrowserCapture {
 
   /** Version of the browser (e.g. `153.0.8010.12`). */
   get version(): string {
-    return this.browser ? this.browser.version() : getBrowserVersion(this.opts.channel);
+    return this.browser?.version() ?? getBrowserVersion(this.opts.channel) ?? "unknown";
   }
 
   async discard(): Promise<void> {
@@ -351,18 +351,30 @@ export class BrowserCapture {
    * LayoutDoc.source label. The page's `prefers-color-scheme` follows `spec.theme`.
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
-    const useCache = this.opts.cache !== false && process.env.MARKSWIFT_NO_CACHE !== "1" && spec.html !== undefined;
+    // Cached only when the capture is a pure function of hashed inputs: the document and its local resources, no
+    // remote resource (its bytes are not hashed), the standard node identity, a known browser.
+    const browserVersion = getBrowserVersion(this.opts.channel);
+    const useCache =
+      this.opts.cache === true &&
+      process.env.MARKSWIFT_NO_CACHE !== "1" &&
+      spec.html !== undefined &&
+      identity === htmlIdentity &&
+      browserVersion !== undefined &&
+      !REMOTE_RESOURCE.test(`${spec.html}\n${spec.css ?? ""}`);
     let cacheKey: string | undefined;
     if (useCache) {
       const viewport = spec.viewport ?? this.opts.viewport;
-      const browserVer = this.version;
       const linked = await hashLinkedResources(spec.html!, spec.baseDir, spec.css);
       cacheKey = computeCacheKey({
         html: spec.html!,
         linkedResources: linked,
         viewport,
         theme: spec.theme,
-        browserVersion: browserVer,
+        browserVersion,
+        source,
+        screen: spec.screen,
+        dpr: this.opts.dpr,
+        restricted: !!this.opts.restricted,
         root: spec.root,
         waitFor: spec.waitFor,
         css: spec.css,

@@ -1,12 +1,35 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright-core";
 import { LAYOUT_DOC_VERSION } from "../model/layout.ts";
 import { VERSION } from "../model/version.ts";
 import type { Capture } from "./capture.ts";
 
-export const CAPTURE_CODE_VERSION = `v${VERSION}-ld${LAYOUT_DOC_VERSION}`;
+/**
+ * The capture code's identity: the package version plus a hash of the code next to this module (src/browser/* from
+ * source, the bundle in dist/), so an edit to the capture scripts invalidates entries even within one version.
+ */
+function codeHash(): string {
+  try {
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const hash = createHash("sha256");
+    for (const name of readdirSync(dir)
+      .filter((f) => /\.(ts|js)$/.test(f))
+      .sort())
+      hash.update(name).update(readFileSync(join(dir, name)));
+    return hash.digest("hex").slice(0, 16);
+  } catch {
+    // ponytail: a compiled binary's embedded files cannot be listed; its release version already pins the code.
+    return "release";
+  }
+}
+
+export const CAPTURE_CODE_VERSION = `v${VERSION}-ld${LAYOUT_DOC_VERSION}-${codeHash()}`;
 
 /** Root directory for cached DOMSnapshot captures. */
 export function getCacheDir(): string {
@@ -17,28 +40,38 @@ export function getCacheDir(): string {
   return join(base, "markswift", "captures");
 }
 
-let cachedBrowserVersion: string | undefined;
+const browserVersions = new Map<string, string | undefined>();
 
-/** Memoized browser executable version string (e.g. "153.0.8010.12"). */
-export function getBrowserVersion(channel = "chrome"): string {
-  if (cachedBrowserVersion) return cachedBrowserVersion;
-  try {
-    const { chromium } = require("playwright-core");
-    const exe = chromium.executablePath(channel === "chrome" ? "chrome" : undefined);
-    const proc = Bun.spawnSync([exe, "--version"]);
-    const out = proc.stdout.toString().trim();
-    const ver = out.split(/\s+/).pop();
-    if (ver && /^\d+/.test(ver)) {
-      cachedBrowserVersion = ver;
-      return ver;
-    }
-  } catch {}
-  cachedBrowserVersion = "chromium";
-  return cachedBrowserVersion;
-}
+/** Stable Google Chrome's install path (Playwright's `chrome` channel); other channels are not resolved. */
+const CHROME: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  linux: "/opt/google/chrome/chrome",
+  win32: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+};
 
-export function setCachedBrowserVersion(ver: string): void {
-  if (ver) cachedBrowserVersion = ver;
+/**
+ * Version of the browser a capture would launch (`launchBrowser`'s choice: the channel, default Chrome on macOS with
+ * Playwright's Chromium as fallback), read without launching it. Undefined when no executable answers, or for a
+ * channel other than `chrome`: the capture then skips the cache rather than key entries by an unknown browser.
+ */
+export function getBrowserVersion(channel?: string): string | undefined {
+  const key = channel ?? "";
+  if (browserVersions.has(key)) return browserVersions.get(key);
+  const preferred = channel ?? (process.platform === "darwin" ? "chrome" : undefined);
+  const candidates = [preferred, ...(channel === undefined && preferred ? [undefined] : [])];
+  let version: string | undefined;
+  for (const c of candidates) {
+    const exe = c === undefined ? chromium.executablePath() : c === "chrome" ? CHROME[process.platform] : undefined;
+    if (!exe) continue;
+    try {
+      const out = execFileSync(exe, ["--version"], { encoding: "utf8", timeout: 10_000 });
+      version = out.trim().split(/\s+/).pop();
+      if (version && /^\d/.test(version)) break;
+      version = undefined;
+    } catch {}
+  }
+  browserVersions.set(key, version);
+  return version;
 }
 
 /**
@@ -110,6 +143,11 @@ export interface CacheKeyParams {
   theme: string;
   browserVersion: string;
   captureCodeVersion?: string;
+  /** `LayoutDoc.source` label and screen name: both are written into the capture. */
+  source?: string;
+  screen?: string;
+  dpr?: number;
+  restricted?: boolean;
   root?: string;
   waitFor?: string;
   css?: string;
@@ -137,6 +175,10 @@ export function computeCacheKey(p: CacheKeyParams): string {
     p.probeDismiss ? "1" : "0",
     p.screenshot ? "1" : "0",
     p.breakpoints ? "1" : "0",
+    p.source ?? "",
+    p.screen ?? "",
+    String(p.dpr ?? ""),
+    p.restricted ? "1" : "0",
   ];
   return createHash("sha256").update(parts.join("\0")).digest("hex");
 }

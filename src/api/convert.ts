@@ -47,7 +47,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     restricted: options.untrustedInput,
     signal: deadline,
     isolated: options.isolated,
-    cache: options.cache,
+    // A `prepare` callback is code the cache key cannot hash.
+    cache: options.cache ?? !options.prepare,
   });
   // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
   // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.

@@ -115,7 +115,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       const key = `${viewport.width}x${viewport.height}`;
       let renderer = renderers.get(key);
       if (!renderer) {
-        const capture = new BrowserCapture({ viewport, dpr: 1, signal: deadline, cache: options.cache });
+        const capture = new BrowserCapture({ viewport, dpr: 1, signal: deadline, cache: options.cache ?? true });
         renderer = { capture, started: capture.start() };
         renderers.set(key, renderer);
       }
