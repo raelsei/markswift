@@ -117,7 +117,11 @@ TeamCards(onMessage: { card in print("message", card.title) }) // card: TeamCard
 - Per-row buttons collapse into one `on<Name>: (<Type>) -> Void` that receives the tapped row (`on<Type>` when the
   buttons were named after their own captions); other actions are `() -> Void`.
 - State: rows with controls are owned by the screen as `@State` seeded through `init`; the subview takes `@Binding var <type>: <Type>`.
-  Grids and measured, wrapping or distributed stacks call the subview per element from `Self.<types>[i]` and are not parameters.
+  Grid cells (`MarkswiftTracks` and native `Grid`) are a `ForEach` over their data array, which is an `init`
+  parameter like any other; measured, wrapping or distributed stacks call the subview per element from
+  `Self.<types>[i]` and are not parameters.
+- Rows that differ only by an optional child (a badge, an icon) share one row type with an optional field the subview
+  draws with `if let`; rows with two looks (an active and an inactive tab) get a `variant` enum the subview `switch`es on.
 - Extracted ordered-list rows derive their marker from the row index: the marker string field is gone from the row
   type and the row subview takes `ordinal: Int`.
 - Names come from the markup, first match wins: `data-markswift-component`, `id`, `data-slot`, `aria-label`, the first
@@ -496,11 +500,11 @@ same one without movement. `scroll()` timelines are not translated.
 ## Not translated
 
 - JavaScript behaviour and business logic; scripts only run in Chrome during capture.
-- Height and orientation media queries (reported; landscape is a wider width band), and width breakpoints without
-  `--breakpoints` (one viewport and one layout per capture). With it, CSS width media queries switch the view at the
-  root's proposed width and container queries switch at the container's width (stack and grid containers; height,
-  style and scroll-state queries are reported); a fixed-width root gets no breakpoints, and script-driven DOM
-  differences are emitted once per band.
+- Width breakpoints without `--breakpoints` (one viewport and one layout per capture). With it, CSS width, height
+  (`min-height`/`max-height`) and `orientation` media queries switch the view at the root's proposed size, and
+  container queries switch at the container's width (stack and grid containers; style and scroll-state queries are
+  reported); a threshold no device viewport reaches is reported, a fixed-width root gets no breakpoints, and
+  script-driven DOM differences are emitted once per band.
 - States other than pressed, focused and open: paint-only pressed and focused deltas *are* captured, and so is the
   open state of a `<details>`, collapsible, accordion item, dialog, sheet, popover, hover card or menu (app mode);
   hover-only states other than tooltips (`.help`) and hover cards (long-press), and disabled, validation, checked and
@@ -517,7 +521,9 @@ same one without movement. `scroll()` timelines are not translated.
   (shown with a pointer on iPad and Mac) and a VoiceOver hint; nothing visible on iPhone.
 - `scroll()` timelines, keyframed colours/shadows/filters/layout properties, `@starting-style` and script
   animations (reported).
-- Sticky pinning while scrolling (`position: sticky` stays at its rest position, reported).
+- Sticky pinning other than a top-sticky header inside a vertical scroll view (which pins natively as a pinned
+  `Section` header in app mode): bottom, horizontal and non-scrolling `position: sticky` stay at their rest position
+  (reported).
 - Inline handlers on non-link elements inside running text (`<span onclick>`): they stay styled text and are reported.
 - Installed monospace faces other than captured Menlo still use the native monospaced design (reported).
 
@@ -632,12 +638,11 @@ reviewed and committed by hand. GitHub Actions workflows:
 
 ## Roadmap after 2.0
 
-- Looser extraction: optional children, variants, `ForEach` over grid cells.
 - Justification in SwiftUI `Text` (rich runs, older iOS, macOS); only the UIKit paragraphs justify.
 - Validation and `data-state` variants and hover looks: LayoutDoc 5 records no hover or invalid look (LayoutDoc 6).
 - Motion: `scroll()` timelines and the `view()` cover range; author `prefers-reduced-motion` rules for overlay
   enter/exit (not captured by LayoutDoc 5).
-- Height and orientation media queries; sticky pinning while scrolling.
+- Bottom, horizontal and non-scrolling sticky pinning.
 - A Homebrew tap (the formula ships as a release asset); static variable-font instances (smaller font bundles) that
   render like the variable face.
 - A Compose target over the target-independent IR.

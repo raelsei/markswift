@@ -25,7 +25,13 @@ A LayoutDoc schema change is a major version.
   shortcut (`.keyboardShortcut`, else trailing text). `aria-keyshortcuts` reaches buttons and links, and
   `aria-pressed` buttons are toggles.
 - Flex: columns allocate grow/shrink in a definite height, wrapping rows distribute lines by `align-content`, and
-  wrapping text gets its automatic minimum from a native min-content probe.
+  wrapping text gets its automatic minimum from a native min-content probe. A wrapping container's single line is
+  placed by `align-content` too.
+- Extraction: rows differing by an optional child share one row type (an optional field, `if let`), rows with two
+  looks get a `variant` enum, and grid cells (`MarkswiftTracks`, `Grid`) are a `ForEach` over a data array the
+  screen's `init` takes. Regenerate views: row types and `init` parameters change where these patterns occur.
+- With `--breakpoints`, `min-height`/`max-height` and `orientation` media queries switch the view like width queries;
+  thresholds no device viewport reaches are reported. A top-sticky header inside a vertical scroll view pins natively.
 - Motion: `animation-timeline: view()` follows the view's scroll transition (approximated: CSS uses the cover range);
   `markswift-motion-pressed` fixtures gate pressed transitions mid-flight, and overlay transitions play in the
   reference's `@open` frames.
