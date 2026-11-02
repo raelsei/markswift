@@ -393,8 +393,6 @@ nonisolated struct MarkswiftForcedStates: OptionSet, Sendable {
     static let focused = MarkswiftForcedStates(rawValue: 2)
     /// Reduce Motion for harnesses (`accessibilityReduceMotion` has no public setter).
     static let reduceMotion = MarkswiftForcedStates(rawValue: 4)
-    static let invalid = MarkswiftForcedStates(rawValue: 8)
-    static let hover = MarkswiftForcedStates(rawValue: 16)
 }
 
 extension EnvironmentValues {
@@ -421,78 +419,6 @@ extension EnvironmentValues {
         nonmutating set { live = newValue }
     }
     var projectedValue: FocusState<Bool>.Binding { $live }
-}
-/// Whether one field is in an invalid state: driven by live validation after editing, or forced by a harness.
-@propertyWrapper struct MarkswiftInvalid: DynamicProperty {
-    @State private var live: Bool
-    @Environment(\.markswiftForcedStates) private var forced
-    init(wrappedValue: Bool = false) {
-        _live = State(initialValue: wrappedValue)
-    }
-    var wrappedValue: Bool {
-        get { live || forced.contains(.invalid) }
-        nonmutating set { live = newValue }
-    }
-    var projectedValue: Binding<Bool> { $live }
-}
-
-/// Whether one element is hovered by pointer: live hover bound by `.onHover`, or forced by a harness.
-@propertyWrapper struct MarkswiftHovered: DynamicProperty {
-    @State private var live = false
-    @Environment(\.markswiftForcedStates) private var forced
-    init() {}
-    var wrappedValue: Bool {
-        get { live || forced.contains(.hover) }
-        nonmutating set { live = newValue }
-    }
-    var projectedValue: Binding<Bool> { $live }
-}
-
-nonisolated func markswiftValidate(text: String, required: Bool = false, type: String? = nil, pattern: String? = nil) -> Bool {
-    if required && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        return true
-    }
-    if !text.isEmpty {
-        if type == "email" {
-            let emailRegex = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
-            if text.range(of: emailRegex, options: .regularExpression) == nil {
-                return true
-            }
-        }
-        if let pattern = pattern, !pattern.isEmpty {
-            if text.range(of: pattern, options: .regularExpression) == nil {
-                return true
-            }
-        }
-    }
-    return false
-}
-
-nonisolated func markswiftValidating(
-    _ text: Binding<String>,
-    isInvalid: Binding<Bool>,
-    required: Bool = false,
-    type: String? = nil,
-    pattern: String? = nil
-) -> Binding<String> {
-    Binding(
-        get: { text.wrappedValue },
-        set: { newValue in
-            text.wrappedValue = newValue
-            isInvalid.wrappedValue = markswiftValidate(text: newValue, required: required, type: type, pattern: pattern)
-        }
-    )
-}
-
-extension View {
-    @ViewBuilder
-    nonisolated func markswiftHoverEffect() -> some View {
-        #if os(iOS)
-        self.hoverEffect()
-        #else
-        self
-        #endif
-    }
 }
 
 /// A plain button that reports its press, so the label can draw the design's pressed look instead of system dimming.

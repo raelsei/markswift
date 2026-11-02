@@ -10,12 +10,10 @@ import { note } from "./diagnostics.ts";
 
 const IDENTITY = { rotate: 0, scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
 /** The feature a look's losses are reported under. */
-const FEATURE: Record<"pressed" | "focused" | "open" | "invalid" | "hover", string> = {
+const FEATURE: Record<"pressed" | "focused" | "open", string> = {
   pressed: ":active",
   focused: ":focus-visible",
   open: "@aria-*",
-  invalid: ":invalid",
-  hover: ":hover",
 };
 const clear = (c: Color): Color => ({ ...c, a: 0 });
 
@@ -23,13 +21,12 @@ export function pairStyle(
   n: SemNode,
   state: StateStyle,
   cond: string,
-  kind: "pressed" | "focused" | "open" | "invalid" | "hover",
+  kind: "pressed" | "focused" | "open",
 ): StatePaint {
   // ponytail: keyed by colour value, so two slots of one node painting the same rest colour flip together; key by slot when a design needs them apart.
   const colors: StatePaint["colors"] = new Map();
   const style: Style = { ...n.style };
-  const transitions =
-    kind === "open" || kind === "invalid" || kind === "hover" ? undefined : n.motion?.transitions?.[kind];
+  const transitions = kind === "open" ? undefined : n.motion?.transitions?.[kind];
   const out: StatePaint = {
     cond,
     style,

@@ -54,10 +54,6 @@ export interface ControlDeps extends ColorCtx {
   shapes?: Record<string, string>;
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
-  /** Validated text field → its `@MarkswiftInvalid` member; built by `controlMembers`. */
-  invalidOf?: Map<SemNode, string>;
-  /** Hoverable control → its `@MarkswiftHovered` member; built by `controlMembers`. */
-  hoverOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
   fontMetrics?: FontMetrics;
 }
@@ -127,48 +123,6 @@ export function controlExpr(n: ControlNode, deps: ControlDeps): string[] {
   return out;
 }
 
-function validationArgs(n: ControlNode): string {
-  const parts: string[] = [];
-  if (n.required) parts.push("required: true");
-  if (n.inputType) parts.push(`type: ${str(n.inputType)}`);
-  if (n.pattern) parts.push(`pattern: ${str(n.pattern)}`);
-  return parts.length ? `, ${parts.join(", ")}` : "";
-}
-
-function keyboardShortcuts(n: ControlNode): string[] {
-  if (n.a11y?.shortcut) {
-    const sc = parseKeyboardShortcut(n.a11y.shortcut);
-    if (sc) return [sc];
-  }
-  return [];
-}
-
-function parseKeyboardShortcut(shortcut: string): string | undefined {
-  const parts = shortcut.split("+").map((s) => s.trim().toLowerCase());
-  const key = parts[parts.length - 1];
-  if (!key) return undefined;
-  const mods: string[] = [];
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i]!;
-    if (p === "meta" || p === "cmd" || p === "command") mods.push(".command");
-    else if (p === "ctrl" || p === "control") mods.push(".control");
-    else if (p === "alt" || p === "opt" || p === "option") mods.push(".option");
-    else if (p === "shift") mods.push(".shift");
-  }
-  let keyExpr: string;
-  if (key === "enter" || key === "return") keyExpr = ".return";
-  else if (key === "escape" || key === "esc") keyExpr = ".escape";
-  else if (key === "space") keyExpr = ".space";
-  else if (key === "tab") keyExpr = ".tab";
-  else if (key === "delete" || key === "backspace") keyExpr = ".delete";
-  else if (key.length === 1) keyExpr = JSON.stringify(key);
-  else return undefined;
-
-  if (mods.length === 0) return `.keyboardShortcut(${keyExpr}, modifiers: [])`;
-  if (mods.length === 1) return `.keyboardShortcut(${keyExpr}, modifiers: ${mods[0]})`;
-  return `.keyboardShortcut(${keyExpr}, modifiers: [${mods.join(", ")}])`;
-}
-
 function core(n: ControlNode, deps: ControlDeps): string[] {
   const state = deps.stateOf.get(n);
   const tag = deps.radioTag.get(n);
@@ -186,15 +140,6 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   // Fidelity draws the field's text, so nothing takes focus; the member still drives the box.
   const focus = deps.focusOf?.get(n);
   const focused = focus ? [`.focused($${focus})`] : [];
-  const invalid = deps.invalidOf?.get(n);
-  const textBinding = invalid ? `markswiftValidating(${binding}, isInvalid: $${invalid}${validationArgs(n)})` : binding;
-  const buttonMods = [
-    buttonStyle,
-    ".markswiftHoverEffect()",
-    ...(deps.hoverOf?.get(n) ? [`.onHover { ${deps.hoverOf.get(n)} = $0 }`] : []),
-    ...(focus ? [".focusable()", `.focused($${focus})`, ".focusEffectDisabled()"] : []),
-    ...keyboardShortcuts(n),
-  ];
   switch (n.control) {
     case "button": {
       const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
@@ -209,7 +154,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "} label: {",
           ...indent(pressable(n, deps), 1),
           "}",
-          ...buttonMods,
+          buttonStyle,
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
@@ -219,9 +164,8 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
       // changes the screen's state and acts.
       const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap ?? deps.closeOf?.get(n);
-      if (tap)
-        return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", ...buttonMods];
-      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ...buttonMods]);
+      if (tap) return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
+      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -233,7 +177,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
         return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), [
           "}",
-          ...buttonMods,
+          buttonStyle,
           // An in-app `<a>` emitted as a Button is still a link.
           ".accessibilityRemoveTraits(.isButton)",
           ".accessibilityAddTraits(.isLink)",
@@ -244,7 +188,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     case "textField":
       if (still) return painted(n.value ?? n.placeholder ?? "", ".leading");
       return [
-        `TextField(${str(n.placeholder ?? "")}, text: ${textBinding}${promptArg(n, deps)})`,
+        `TextField(${str(n.placeholder ?? "")}, text: ${binding}${promptArg(n, deps)})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...focused,
@@ -258,7 +202,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // The browser paints one bullet per character of the value.
       if (still) return painted(n.value ? "\u2022".repeat(n.value.length) : (n.placeholder ?? ""), ".leading");
       return [
-        `SecureField(${str(n.placeholder ?? "")}, text: ${textBinding}${promptArg(n, deps)})`,
+        `SecureField(${str(n.placeholder ?? "")}, text: ${binding}${promptArg(n, deps)})`,
         // `.plain`: the CSS box is the field's chrome; macOS would otherwise draw its bezel inside it.
         ".textFieldStyle(.plain)",
         ...focused,
@@ -274,7 +218,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // placeholder) at the native font, so Dynamic Type grows it; the captured height stays the minimum
       // (`frameModifier`).
       return [
-        `TextEditor(text: ${textBinding})`,
+        `TextEditor(text: ${binding})`,
         ".scrollContentBackground(.hidden)",
         ".markswiftScrollEdgeEffectHidden()",
         ".markswiftTextEditorInsets()",

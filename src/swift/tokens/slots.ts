@@ -71,8 +71,8 @@ function pushRun(out: Slot[], r: TextRun, i: number): void {
 function colorSlots(n: SemNode): Slot[] {
   const out: Slot[] = [];
   pushStyle(out, n.style);
-  // State colours are design colours too: they become tokens the ternaries name.
-  for (const key of ["pressed", "focused", "open", "invalid", "hover"] as const) {
+  // Pressed/focused colours are design colours too: they become tokens the ternaries name.
+  for (const key of ["pressed", "focused"] as const) {
     const s = n.states?.[key];
     if (!s) continue;
     pushStyle(out, s, `${key}.`);
