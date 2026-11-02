@@ -21,19 +21,13 @@ struct MarkswiftGreedyText: View {
         fallback
         #endif
     }
+    /// Before iOS 26 (and on macOS): SwiftUI Text, ragged right even when `justify` (no public API).
     private var fallback: some View {
-        let base = Text(verbatim: text).font(font).foregroundStyle(color)
-        return Group {
-            if justify {
-                base.textRenderer(MarkswiftTextRenderer(justify: true))
-            } else {
-                base
-            }
-        }
-        .lineLimit(lineLimit)
-        .fixedSize(horizontal: false, vertical: true)
-        .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
-                             ascent: ascent, descent: descent, natural: natural)
+        Text(verbatim: text).font(font).foregroundStyle(color)
+            .lineLimit(lineLimit)
+            .fixedSize(horizontal: false, vertical: true)
+            .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
+                                 ascent: ascent, descent: descent, natural: natural)
     }
 }
 #if os(iOS)

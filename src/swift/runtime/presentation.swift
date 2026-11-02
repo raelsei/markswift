@@ -40,7 +40,9 @@ private struct MarkswiftPlaced: ViewModifier {
             let alignment: Alignment = e == .bottom ? .bottom : e == .top ? .top : e == .leading ? .leading : .trailing
             content
                 .offset(dragOffset)
-                .simultaneousGesture(edgeDragGesture(for: e))
+                // Swipe-to-dismiss only where the design dismisses (outside tap or Escape). `.gesture`, not a
+                // simultaneous one: a ScrollView inside the drawer keeps its own drags.
+                .gesture(edgeDragGesture(for: e), including: dismiss == nil ? .subviews : .all)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
         case .offset(let o): content.offset(x: o.width, y: o.height)
         case .anchored(let id, let from, let to, let gap):
@@ -124,7 +126,7 @@ private struct MarkswiftPresentationContainer<C: View>: View {
         }
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         .environment(\.markswiftAnchors, anchors)
-        .environment(\.markswiftDismiss, dismiss)
+        .environment(\.markswiftDismiss, dismissOnOutside || dismissOnEscape ? dismiss : nil)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(modal && shown ? .isModal : [])
         .accessibilityHidden(!shown)
