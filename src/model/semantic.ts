@@ -269,8 +269,9 @@ export interface KeyframeMotion {
   tracks: Partial<Record<MotionChannel, MotionTrack>>;
 }
 /** One scroll-position or view-progress driven animation. */
+/** An `animation-timeline: view()` animation: progress follows the view's scroll transition phase. */
 export interface ScrollMotion {
-  timeline: "scroll" | "view";
+  timeline: "view";
   tracks: Partial<Record<MotionChannel, MotionTrack>>;
 }
 export interface Motion {
@@ -278,8 +279,10 @@ export interface Motion {
   animations?: KeyframeMotion[];
   /** Under Reduce Motion: absent = same as `animations`; `[]` = the base look. */
   reduced?: KeyframeMotion[];
-  /** Scroll-driven animation (animation-timeline: scroll() or view()). */
+  /** `animation-timeline: view()` animation. */
   scroll?: ScrollMotion;
+  /** Its Reduce Motion variant (the author's, else without movement channels). */
+  reducedScroll?: ScrollMotion;
   /** `transform-origin` as fractions of the border box; absent = centre. */
   anchor?: [number, number];
   /** Static values of the driven channels (the settled computed look); the emitter drops their static modifiers. */

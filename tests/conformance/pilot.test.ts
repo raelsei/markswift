@@ -135,6 +135,7 @@ test("markswift-viewport-height sets a case's capture height; other cases and th
       .map((item) => item.id)
       .sort(),
   ).toEqual([
+    "drawer",
     "overlay-alert-dialog",
     "overlay-dialog",
     "overlay-hover-card",

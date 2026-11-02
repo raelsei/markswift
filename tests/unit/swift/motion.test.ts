@@ -143,7 +143,7 @@ test("app: ViewTimeline emits MarkswiftViewTransition", () => {
   );
 });
 
-test("app: ScrollTimeline emits MarkswiftScrollDrivenAnimation", () => {
+test("app: a view() timeline emits MarkswiftViewTransition with its Reduce Motion tracks", () => {
   const slide: Anim = {
     name: "slide",
     duration: 0,
@@ -151,12 +151,14 @@ test("app: ScrollTimeline emits MarkswiftScrollDrivenAnimation", () => {
     iterations: 1,
     direction: "normal",
     fill: "both",
-    timeline: "ScrollTimeline",
+    timeline: "ViewTimeline",
     keyframes: [kf(0, { transform: "translateY(40px)" }), kf(1, { transform: "translateY(0px)" })],
   };
   const { code } = compile("app", [box("s", {}, { animations: [slide] })]);
-  expect(code).toContain(".modifier(MarkswiftScrollDrivenAnimation(tracks: MarkswiftScrollTracks(");
+  expect(code).toContain(".modifier(MarkswiftViewTransition(tracks: MarkswiftScrollTracks(");
   expect(code).toContain(
     "y: MarkswiftMotionTrack(40.0, [MarkswiftSegment(0.0, 1.0, .points([0.0, 1.0], [0.0, 1.0]))])",
   );
+  // Movement only: Reduce Motion plays nothing.
+  expect(code).toContain("reduced: MarkswiftScrollTracks()");
 });

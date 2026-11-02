@@ -262,33 +262,8 @@ nonisolated struct MarkswiftScrollTracks: Sendable {
     }
 }
 
-/// Scroll-position-driven animation (`animation-timeline: scroll()`).
-struct MarkswiftScrollDrivenAnimation: ViewModifier {
-    let tracks: MarkswiftScrollTracks
-    var reduced: MarkswiftScrollTracks? = nil
-    var base = MarkswiftMotionValue()
-    var anchor = UnitPoint.center
-    @Environment(\.markswiftMotionTime) private var harnessTime
-    @Environment(\.accessibilityReduceMotion) private var systemReduce
-    @Environment(\.markswiftForcedStates) private var forced
-    @State private var progress: Double = 0
-
-    func body(content: Content) -> some View {
-        let reduce = systemReduce || forced.contains(.reduceMotion)
-        let active = reduce ? (reduced ?? tracks) : tracks
-        let p = harnessTime.map { t in t.isFinite ? min(max(t, 0), 1) : 1.0 } ?? progress
-        content
-            .modifier(MarkswiftMotionFrame(value: active.value(at: p, base: base), anchor: anchor))
-            .onScrollGeometryChange(for: Double.self) { geo in
-                let max = geo.contentSize.height - geo.containerSize.height
-                return max > 0 ? geo.contentOffset.y / max : 0
-            } action: { _, new in
-                progress = min(max(new, 0), 1)
-            }
-    }
-}
-
-/// View-progress-driven animation (`animation-timeline: view()`).
+/// `animation-timeline: view()`: progress follows the view's scroll transition phase, complete once it is visible
+/// (CSS runs the cover range; reported). A harness capture (`markswiftMotionTime`) shows the settled look.
 struct MarkswiftViewTransition: ViewModifier {
     let tracks: MarkswiftScrollTracks
     var reduced: MarkswiftScrollTracks? = nil

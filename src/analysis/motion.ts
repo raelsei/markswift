@@ -140,7 +140,8 @@ export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[])
   const base = baseOf(style);
   const { animations, scroll } = mapAnimations(captured.animations ?? [], n, base, diagnostics);
   let reduced: KeyframeMotion[];
-  if (captured.reduced) reduced = mapAnimations(captured.reduced, n, base, diagnostics).animations;
+  let reducedScroll: ScrollMotion | undefined;
+  if (captured.reduced) ({ animations: reduced, scroll: reducedScroll } = mapAnimations(captured.reduced, n, base, []));
   else if (STATUS_ROLES[n.attrs["role"] ?? ""] || n.attrs["aria-busy"] === "true") reduced = animations;
   else
     reduced = animations
@@ -160,6 +161,19 @@ export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[])
     ...(animations.length ? { animations } : {}),
     ...(JSON.stringify(reduced) !== JSON.stringify(animations) ? { reduced } : {}),
     ...(scroll ? { scroll } : {}),
+    // Under Reduce Motion: the author's reduced view-timeline animation, else the same one without movement.
+    ...(scroll
+      ? {
+          reducedScroll: captured.reduced
+            ? (reducedScroll ?? { timeline: "view" as const, tracks: {} })
+            : {
+                timeline: "view" as const,
+                tracks: Object.fromEntries(
+                  Object.entries(scroll.tracks).filter(([c]) => !MOVEMENT.includes(c as MotionChannel)),
+                ),
+              },
+        }
+      : {}),
     base: baseFor(driven, base),
   };
   const anchor = anchorOf(n);
@@ -310,7 +324,9 @@ function mapAnimations(
   let scroll: ScrollMotion | undefined;
   for (const a of list) {
     if (a.timeline) {
-      if (a.timeline === "ScrollTimeline" || a.timeline === "ViewTimeline") {
+      // A view timeline maps to SwiftUI's scroll transition phase; a scroll() timeline (container scroll progress)
+      // has no per-view counterpart and stays reported below.
+      if (a.timeline === "ViewTimeline") {
         if (a.iterations === "infinite") {
           addDiagnostic(
             diagnostics,
@@ -350,7 +366,14 @@ function mapAnimations(
           continue;
         }
         for (const c of Object.keys(tracks)) driven.add(c);
-        scroll = { timeline: a.timeline === "ViewTimeline" ? "view" : "scroll", tracks };
+        // Several view-timeline animations on disjoint channels share one transition.
+        scroll = { timeline: "view", tracks: { ...scroll?.tracks, ...tracks } };
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "animation-timeline",
+          `view() animation ${a.name} follows the scroll transition phase: it completes as the view enters the scroll view (CSS: the cover range)`,
+        );
       } else {
         addDiagnostic(
           diagnostics,

@@ -95,8 +95,8 @@ export function scrollAnimationModifier(motion: Motion): string {
   const anchorArg = motion.anchor
     ? `, anchor: UnitPoint(x: ${num(motion.anchor[0])}, y: ${num(motion.anchor[1])})`
     : "";
-  const modifier = scroll.timeline === "view" ? "MarkswiftViewTransition" : "MarkswiftScrollDrivenAnimation";
-  return `.modifier(${modifier}(tracks: ${tracks}${baseArg}${anchorArg}))`;
+  const reduced = motion.reducedScroll ? `, reduced: ${scrollTracksExpr(motion.reducedScroll.tracks)}` : "";
+  return `.modifier(MarkswiftViewTransition(tracks: ${tracks}${reduced}${baseArg}${anchorArg}))`;
 }
 
 /** A transition's SwiftUI `Animation` (`nil` = jump): bezier as `.timingCurve`, steps()/linear() via `MarkswiftEasing`. */

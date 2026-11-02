@@ -228,18 +228,19 @@ test("scroll-driven animation: ViewTimeline maps opacity and transform tracks", 
   expect(n!.motion!.scroll!.timeline).toBe("view");
   expect(Object.keys(n!.motion!.scroll!.tracks)).toEqual(["opacity", "sx", "sy"]);
   expect(n!.motion!.base).toEqual({ opacity: 1, sx: 1, sy: 1 });
-  expect(diag(n!, "animation-timeline")).toEqual([]);
+  // The phase mapping is an approximation of the cover range, and says so.
+  expect(diag(n!, "animation-timeline")[0]).toMatchObject({ level: "approximated" });
+  // Reduce Motion keeps the fade, not the movement.
+  expect(Object.keys(n!.motion!.reducedScroll!.tracks)).toEqual(["opacity"]);
 });
 
-test("scroll-driven animation: ScrollTimeline maps translateY", () => {
+test("scroll-driven animation: a scroll() timeline has no per-view counterpart and is reported", () => {
   const slide = anim("slide", [kf(0, { transform: "translateY(50px)" }), kf(1, { transform: "translateY(0px)" })], {
     timeline: "ScrollTimeline",
   });
   const { n } = infer(box("n", { animations: [slide] }));
-  expect(n!.motion?.scroll).toBeDefined();
-  expect(n!.motion!.scroll!.timeline).toBe("scroll");
-  expect(Object.keys(n!.motion!.scroll!.tracks)).toEqual(["ty"]);
-  expect(n!.motion!.base).toEqual({ tx: 0, ty: 0 });
+  expect(n!.motion?.scroll).toBeUndefined();
+  expect(diag(n!, "animation-timeline")[0]).toMatchObject({ level: "unmapped" });
 });
 
 test("scroll-driven animation: ScrollTimeline(self) reports unmapped", () => {
