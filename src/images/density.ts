@@ -46,15 +46,16 @@ export function select2xCandidate(candidates: SrcsetCandidate[]): SrcsetCandidat
  * captured natural size vs rendered bounds.
  */
 export function determineScale(n: LayoutNode, src: string): number {
+  // Set by `downloadRemoteImages` when it bundled a remote 2x candidate.
   if (n.attrs["data-markswift-scale"]) {
     const s = parseFloat(n.attrs["data-markswift-scale"]);
     if (Number.isFinite(s) && s > 0) return s;
   }
-  // Check if srcset candidate matched
-  if (n.attrs.srcset) {
-    const candidates = parseSrcset(n.attrs.srcset);
-    const cand2x = candidates.find((c) => c.density !== undefined && Math.abs(c.density - 2) < 0.2);
-    if (cand2x && (n.currentSrc?.includes(cand2x.url) || cand2x.url.includes(n.currentSrc ?? ""))) return 2;
+  // The 2x `srcset` candidate is the one the browser chose (`currentSrc` is its resolved URL).
+  const current = n.currentSrc;
+  if (n.attrs.srcset && current) {
+    const cand2x = parseSrcset(n.attrs.srcset).find((c) => c.density !== undefined && Math.abs(c.density - 2) < 0.2);
+    if (cand2x && (current === cand2x.url || current.endsWith(`/${cand2x.url.replace(/^\.?\//, "")}`))) return 2;
   }
   // Natural vs rendered bounds
   const natural = rasterSize(src);

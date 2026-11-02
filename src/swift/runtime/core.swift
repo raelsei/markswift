@@ -257,7 +257,9 @@ extension Image {
         let cacheKey = (scale == 1 ? file : "\(file)@\(scale)x") as NSString
         if let cached = MarkswiftAssets.cache.object(forKey: cacheKey) { return Image(uiImage: cached) }
         let bundle = MarkswiftAssets.bundle
+        // An asset catalog names the imageset without the `@2x` of the loose file; it picks the scale itself.
         let nameWithoutExt = (file as NSString).deletingPathExtension
+            .replacingOccurrences(of: #"@[1-3]x$"#, with: "", options: .regularExpression)
         let image: UIImage? = {
             if let img = UIImage(named: nameWithoutExt, in: bundle, with: nil) ?? UIImage(named: file, in: bundle, with: nil) {
                 return img
@@ -278,6 +280,7 @@ extension Image {
         if let cached = MarkswiftAssets.cache.object(forKey: cacheKey) { return Image(nsImage: cached) }
         let bundle = MarkswiftAssets.bundle
         let nameWithoutExt = (file as NSString).deletingPathExtension
+            .replacingOccurrences(of: #"@[1-3]x$"#, with: "", options: .regularExpression)
         let image: NSImage? = {
             if let img = bundle.image(forResource: nameWithoutExt) ?? bundle.image(forResource: file) {
                 return img

@@ -38,7 +38,14 @@ export async function fetchImageBytes(
   const timeoutMs = options.timeoutMs ?? IMAGE_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? MAX_IMAGE_BYTES;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
+  // Either the caller's deadline or this download's timeout aborts (`AbortSignal.any` needs Node 20.3).
+  const both = new AbortController();
+  for (const s of [options.signal, timeoutSignal]) {
+    if (!s) continue;
+    if (s.aborted) both.abort(s.reason);
+    else s.addEventListener("abort", () => both.abort(s.reason), { once: true });
+  }
+  const signal = both.signal;
 
   try {
     const res = await fetch(url, { signal, redirect: "follow" });
@@ -205,6 +212,7 @@ export async function downloadRemoteImages(
     };
 
     await visit(doc.root);
+    for (const layer of doc.layers ?? []) for (const node of layer.nodes) await visit(node);
   }
 
   return warnings;

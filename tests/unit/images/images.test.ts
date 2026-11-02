@@ -121,6 +121,16 @@ describe("density selection", () => {
       expect(determineScale(node, png1x1)).toBe(2);
     });
 
+    test("a 2x srcset candidate counts only when the browser chose it", () => {
+      const srcset = { srcset: "a.png 1x, a@2x.png 2x" };
+      expect(determineScale({ ...makeNode({ w: 100, h: 100 }, srcset), currentSrc: "http://x/a@2x.png" }, png1x1)).toBe(
+        2,
+      );
+      expect(determineScale({ ...makeNode({ w: 100, h: 100 }, srcset), currentSrc: "http://x/a.png" }, png1x1)).toBe(1);
+      // No currentSrc: nothing says which candidate is shown.
+      expect(determineScale(makeNode({ w: 100, h: 100 }, srcset), png1x1)).toBe(1);
+    });
+
     test("detects 2x scale from natural dimensions vs rendered bounds", () => {
       // 2x2 natural pixels in 1x1 bounds -> scale 2
       const node = makeNode({ w: 1, h: 1 });
