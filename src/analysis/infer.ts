@@ -377,11 +377,9 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
-    // Admission excludes reverse rows and `order`, so the x-sorted children are the items in order.
-    if (axis === "h") {
-      const flex = admitFlexRow(n);
-      if (flex && flex.items.length === stack.children.length) stack.flex = flex;
-    }
+    // Admission excludes reverse rows and `order`, so the sorted children are the items in order.
+    const flex = admitFlexRow(n);
+    if (flex && flex.items.length === stack.children.length && (flex.axis ?? "h") === axis) stack.flex = flex;
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
       if (g > 0) stack.minGap = round2(g);

@@ -107,6 +107,16 @@ function hugsRowHeight(n: StackNode, ctx: EmitContext): boolean {
 }
 
 /** App mode: an admitted flex row (`StackNode.flex`) laid out by the runtime `MarkswiftFlexRow`. */
+const ALIGN_CONTENT_MAP: Record<string, string> = {
+  start: ".start",
+  end: ".end",
+  center: ".center",
+  between: ".spaceBetween",
+  around: ".spaceAround",
+  evenly: ".spaceEvenly",
+  stretch: ".stretch",
+};
+
 function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: EmitContext): string[] {
   const items = flex.items.map((i) => {
     const extra = (["min", "max", "inset", "fraction"] as const).map((k) => {
@@ -114,13 +124,19 @@ function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: Em
       return v === undefined ? "" : `, ${k}: ${num(v)}`;
     });
     const align = i.align ? `, align: .${i.align}` : "";
-    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")}${align})`;
+    const autoMin = i.autoMin ? ", autoMin: true" : "";
+    return `.init(grow: ${num(i.grow)}, shrink: ${num(i.shrink)}, basis: ${i.basis === null ? "nil" : num(i.basis)}${extra.join("")}${align}${autoMin})`;
   });
   const spacing = typeof n.spacing === "number" ? n.spacing : (n.spacing[0] ?? 0);
+  const axis = flex.axis === "v" ? "axis: .vertical, " : "";
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
+  const alignContent =
+    flex.alignContent && flex.alignContent !== "stretch" && ALIGN_CONTENT_MAP[flex.alignContent]
+      ? `, alignContent: ${ALIGN_CONTENT_MAP[flex.alignContent]}`
+      : "";
   const rowGap = flex.rowGap === undefined ? "" : `, rowGap: ${num(flex.rowGap)}`;
   return [
-    `MarkswiftFlexRow(items: [${items.join(", ")}], spacing: ${num(spacing)}${align}${rowGap}) {`,
+    `MarkswiftFlexRow(${axis}items: [${items.join(", ")}], spacing: ${num(spacing)}${align}${alignContent}${rowGap}) {`,
     ...n.children.flatMap((c) => indent(ctx.renderNode(c), 1)),
     "}",
     // A row that hugs its content in CSS (`inline-flex`, `w-fit`) takes its max-content width, never more than offered.

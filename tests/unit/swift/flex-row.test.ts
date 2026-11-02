@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { flexLines, solveFlexRow } from "../../../src/analysis/flex-row.ts";
+import { flexAlignContent, flexLines, solveFlexRow } from "../../../src/analysis/flex-row.ts";
 import type { FlexItem } from "../../../src/model/semantic.ts";
 import flexRowRuntime from "../../../src/swift/runtime/flex-row.swift" with { type: "text" };
 import { command } from "../../../tools/verify/process.ts";
@@ -40,6 +40,14 @@ struct FlexRowFixture: View {
             MarkswiftFlexRow(items: [.init(grow: 0.0, shrink: 2.0, basis: 160.0, min: 88.0, max: 200.0, inset: 10.0), .init(grow: 0.0, shrink: 1.0, basis: 0.0, fraction: 0.25)], spacing: 12.0) {
                 Text("e")
                 Text("f")
+            }
+            MarkswiftFlexRow(axis: .vertical, items: [.init(grow: 1.0, shrink: 1.0, basis: 0.0), .init(grow: 2.0, shrink: 1.0, basis: 0.0)], spacing: 8.0) {
+                Color.red.frame(maxWidth: .infinity, maxHeight: .infinity)
+                Color.blue.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            MarkswiftFlexRow(items: [.init(grow: 0.0, shrink: 1.0, basis: 100.0, autoMin: true), .init(grow: 0.0, shrink: 1.0, basis: 100.0)], spacing: 8.0, alignContent: .spaceBetween, rowGap: 8.0) {
+                Text("x")
+                Text("y")
             }
         }
         .frame(width: 390)
@@ -94,7 +102,7 @@ const CASES: Array<{ items: FlexItem[]; bases: number[]; width: number; gap: num
   ]),
 ];
 const swiftItem = (i: FlexItem) =>
-  `.init(grow: ${i.grow}, shrink: ${i.shrink}, basis: nil${(["min", "max", "inset", "fraction"] as const).map((k) => (i[k] === undefined ? "" : `, ${k}: ${i[k]}`)).join("")})`;
+  `.init(grow: ${i.grow}, shrink: ${i.shrink}, basis: nil${(["min", "max", "inset", "fraction"] as const).map((k) => (i[k] === undefined ? "" : `, ${k}: ${i[k]}`)).join("")}${i.autoMin ? ", autoMin: true" : ""})`;
 
 nativeTest(
   "MarkswiftFlexRow.widths and .lines agree with solveFlexRow and flexLines",
@@ -106,9 +114,25 @@ nativeTest(
         `width: ${c.width}, items: [${c.items.map(swiftItem).join(", ")}], bases: [${c.bases.join(", ")}], spacing: ${c.gap}`;
       const calls = CASES.map((c) => `    MarkswiftFlexRow.widths(${args(c)}),`);
       const breaks = CASES.map((c) => `    MarkswiftFlexRow.lines(${args(c)}).map { CGFloat($0.lowerBound) },`);
+      const modes: Array<{
+        swift: string;
+        ts: "start" | "end" | "center" | "between" | "around" | "evenly" | "stretch";
+      }> = [
+        { swift: ".start", ts: "start" },
+        { swift: ".end", ts: "end" },
+        { swift: ".center", ts: "center" },
+        { swift: ".spaceBetween", ts: "between" },
+        { swift: ".spaceAround", ts: "around" },
+        { swift: ".spaceEvenly", ts: "evenly" },
+        { swift: ".stretch", ts: "stretch" },
+      ];
+      const alignContentCalls = modes.map(
+        (m) =>
+          `    MarkswiftFlexRow.alignContentDistribution(alignContent: ${m.swift}, lineCrossSizes: [30, 40], availableCross: 150, gap: 10).offsets,`,
+      );
       await Bun.write(
         join(directory, "main.swift"),
-        `import SwiftUI\n\nlet results: [[CGFloat]] = [\n${[...calls, ...breaks].join("\n")}\n]\nfor w in results { print("[" + w.map { "\\(Double($0))" }.joined(separator: ",") + "]") }\n`,
+        `import SwiftUI\n\nlet results: [[CGFloat]] = [\n${[...calls, ...breaks, ...alignContentCalls].join("\n")}\n]\nfor w in results { print("[" + w.map { "\\(Double($0))" }.joined(separator: ",") + "]") }\n`,
       );
       const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
       await command(
@@ -133,7 +157,7 @@ nativeTest(
         240_000,
       );
       const lines = (await command([join(directory, "parity")], directory, 30_000)).trim().split("\n");
-      expect(lines).toHaveLength(2 * CASES.length);
+      expect(lines).toHaveLength(2 * CASES.length + modes.length);
       CASES.forEach((c, i) => {
         const swift = JSON.parse(lines[i]!) as number[];
         const ts = solveFlexRow(c.items, c.bases, c.width, c.gap);
@@ -141,6 +165,12 @@ nativeTest(
         for (const [j, w] of swift.entries()) expect(Math.abs(w - ts[j]!)).toBeLessThanOrEqual(0.001);
         const starts = flexLines(c.items, c.bases, c.width, c.gap).map(([a]) => a);
         expect(JSON.parse(lines[CASES.length + i]!)).toEqual(starts);
+      });
+      modes.forEach((m, i) => {
+        const swiftOffsets = JSON.parse(lines[2 * CASES.length + i]!) as number[];
+        const tsOffsets = flexAlignContent(m.ts, [30, 40], 150, 10).offsets;
+        expect(swiftOffsets).toHaveLength(tsOffsets.length);
+        for (const [j, off] of swiftOffsets.entries()) expect(Math.abs(off - tsOffsets[j]!)).toBeLessThanOrEqual(0.001);
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
