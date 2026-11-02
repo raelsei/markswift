@@ -2,6 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import { text } from "node:stream/consumers";
 import { buildLibrary } from "../api/build.ts";
 import { convert } from "../api/convert.ts";
+import { clearCaptureCache } from "../browser/cache.ts";
 import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
 import type { BuildCommand, ConversionCommand } from "./args.ts";
@@ -11,10 +12,14 @@ import { ensureVacant, formatDiagnostics, formatWarning, updatable, updateBundle
 
 /** `markswift build`: capture every component of the config and regenerate one Swift package in its `out`. */
 export async function runBuild(command: BuildCommand): Promise<void> {
+  if (command.clearCache) await clearCaptureCache();
   const config = await loadBuildConfig(command.configPath);
   // Refuse an unwritable `out` (no manifest, hand edits) before minutes of captures; `updateBundle` checks again.
   await updatable(config.out, command.force);
-  const result = await buildLibrary(config.options);
+  const result = await buildLibrary({
+    ...config.options,
+    ...(command.cache !== undefined ? { cache: command.cache } : {}),
+  });
   const files = await updateBundle(result, config.out, { version: VERSION, force: command.force });
   process.stdout.write(
     `Wrote ${files.length} files for ${config.options.library} (${config.options.components.length} components) to ${config.out}\n`,
@@ -26,6 +31,7 @@ export async function runBuild(command: BuildCommand): Promise<void> {
 }
 
 export async function runConversion(command: ConversionCommand): Promise<void> {
+  if (command.clearCache) await clearCaptureCache();
   if (command.update) await updatable(command.outDir, command.force);
   else await ensureVacant(command.outDir);
   if (

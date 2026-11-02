@@ -11,15 +11,21 @@ export interface ConversionCommand {
   palettePath?: string;
   update: boolean;
   force: boolean;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints">;
+  cache?: boolean;
+  clearCache?: boolean;
+  options: Pick<
+    ConvertOptions,
+    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "cache"
+  >;
 }
 
 export interface BuildCommand {
   kind: "build";
   configPath: string;
   force: boolean;
+  cache?: boolean;
+  clearCache?: boolean;
 }
-
 export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand | BuildCommand;
 
 export const HELP = `Markswift — convert rendered HTML and CSS to SwiftUI.
@@ -56,9 +62,10 @@ Options:
   --palette <file>  JSON map from CSS variables or hex colours to app colours
                     (e.g. {"--primary": "Color.accentColor"})
   --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
+  --no-cache        Do not use or write to the capture cache
+  --clear-cache     Delete all cached captures before running
   -h, --help        Show this help
   -v, --version     Show version
-
 Requires Node.js 20+ (or Bun 1.4.2+) and Google Chrome; webfonts need python3 with fontTools and brotli. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
@@ -94,7 +101,10 @@ export function parseArgs(args: string[]): Command {
       afterDoubleDash = true;
       continue;
     }
-    if (!afterDoubleDash && (arg === "--update" || arg === "--force")) {
+    if (
+      !afterDoubleDash &&
+      (arg === "--update" || arg === "--force" || arg === "--no-cache" || arg === "--clear-cache")
+    ) {
       if (flags.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       flags.add(arg);
     } else if (!afterDoubleDash && valueFlags.has(arg)) {
@@ -162,6 +172,8 @@ export function parseArgs(args: string[]): Command {
     palettePath: values.get("--palette"),
     update: flags.has("--update"),
     force: flags.has("--force"),
+    cache: flags.has("--no-cache") ? false : undefined,
+    clearCache: flags.has("--clear-cache") ? true : undefined,
     options: {
       name,
       root: values.get("--root"),
@@ -169,6 +181,7 @@ export function parseArgs(args: string[]): Command {
       darkClass,
       mode,
       viewport: { width, height },
+      cache: flags.has("--no-cache") ? false : undefined,
       ...(breakpoints ? { breakpoints } : {}),
     },
   };
@@ -178,16 +191,30 @@ export function parseArgs(args: string[]): Command {
 function parseBuild(args: string[]): Command {
   if (args.some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
   let force = false;
+  let noCache = false;
+  let clearCache = false;
   const positional: string[] = [];
   for (const arg of args) {
     if (arg === "--force") {
       if (force) throw new UsageError("Repeated option: --force");
       force = true;
+    } else if (arg === "--no-cache") {
+      if (noCache) throw new UsageError("Repeated option: --no-cache");
+      noCache = true;
+    } else if (arg === "--clear-cache") {
+      if (clearCache) throw new UsageError("Repeated option: --clear-cache");
+      clearCache = true;
     } else if (arg.startsWith("-")) throw new UsageError(`Unknown option: ${arg}`);
     else positional.push(arg);
   }
   if (positional.length > 1) throw new UsageError("Choose at most one config file");
-  return { kind: "build", configPath: positional[0] ?? "markswift.json", force };
+  return {
+    kind: "build",
+    configPath: positional[0] ?? "markswift.json",
+    force,
+    cache: noCache ? false : undefined,
+    clearCache: clearCache ? true : undefined,
+  };
 }
 
 function dimension(value: string | undefined, flag: string, fallback: number): number {

@@ -19,3 +19,5 @@ export type {
 } from "./compiler/index.ts";
 export { HTML_ELEMENTS, INPUT_CONTROLS, classifyElement } from "./html/index.ts";
 export type { ElementPolicy, ElementRoute, ElementSupport } from "./html/index.ts";
+export { getCacheDir, clearCaptureCache } from "./browser/cache.ts";
+export { stopSharedBrowser } from "./browser/capture.ts";

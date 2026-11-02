@@ -44,6 +44,10 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
    * band 0 and the configured `viewport`'s at its lower bound, keeping its device as one more capture (within the six).
    */
   breakpoints?: true | { devices?: Array<{ width: number; height: number }>; max?: number };
+  /** Cache captures on disk under the user cache directory. Defaults to true. */
+  cache?: boolean;
+  /** Launch an isolated browser process instead of reusing a shared browser. Defaults to false. */
+  isolated?: boolean;
 }
 
 export interface ConversionResult extends CompileResult {
