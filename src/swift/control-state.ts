@@ -290,6 +290,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
   const statePaint = new Map<string, StatePaint>();
   const pressOf = new Map<SemNode, string>();
   const focusOf = new Map<SemNode, string>();
+  const invalidOf = new Map<SemNode, string>();
+  const hoverOf = new Map<SemNode, string>();
   const visit = (n: SemNode, owner: SemNode | undefined, openOwner: SemNode | undefined): void => {
     const pressable =
       n.kind === "control"
@@ -309,15 +311,28 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
         statePaint.set(n.id, pairStyle(n, pressed, name, "pressed"));
       } else note(n, "approximated", ":active", "pressed-state paint outside a button is not reproduced");
     }
+    const hover = n.states?.hover;
+    if (hover && n.id) {
+      if (own) {
+        let name = hoverOf.get(own) ?? hoverOf.get(canon(own));
+        if (name === undefined) {
+          name = memberName("is", own.action?.words ?? own.id, seen, "Control", "Hovered");
+          members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftHovered private var ${name}`] });
+        }
+        hoverOf.set(own, name);
+        statePaint.set(n.id, pairStyle(n, hover, name, "hover"));
+      } else note(n, "approximated", ":hover", "hover-state paint outside a button is not reproduced");
+    }
     // The open look follows the layer's state; without an owner (fidelity, a skipped layer) it is not drawn.
     const open = n.states?.open;
-    const shown = opens && opener.get(opens);
-    if (open && n.id && shown) {
+    const toggle = (own && toggleOf.get(own)) ?? toggleOf.get(n);
+    const cond = (opens && opener.get(opens)) ?? toggle?.on;
+    if (open && n.id && cond) {
       const press = statePaint.get(n.id);
-      if (press && isDeepStrictEqual(pressed, open)) press.cond = `(${press.cond} || ${shown})`;
+      if (press && isDeepStrictEqual(pressed, open)) press.cond = `(${press.cond} || ${cond})`;
       else {
         if (press) note(n, "approximated", ":active", "pressed look of an open-state trigger is not reproduced");
-        statePaint.set(n.id, pairStyle(n, open, shown, "open"));
+        statePaint.set(n.id, pairStyle(n, open, cond, "open"));
       }
     }
     const focused = n.states?.focused;
@@ -325,8 +340,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
       n.kind === "control" &&
       !n.disabled &&
       (n.control === "textField" || n.control === "secureField" || n.control === "textEditor");
-    if (focused && n.id && !field)
-      note(n, "approximated", ":focus-visible", "focused-state paint outside a text field is not reproduced");
+    if (focused && n.id && !field && !own)
+      note(n, "approximated", ":focus-visible", "focused-state paint outside a control is not reproduced");
     if (field && n.id && (focused || labelled.has(n.id))) {
       let name = focusOf.get(canon(n));
       if (name === undefined) {
@@ -336,6 +351,33 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
       focusOf.set(n, name);
       if (focused) statePaint.set(n.id, pairStyle(n, focused, name, "focused"));
       if (labelled.has(n.id)) activate.set(n.id, `${name} = true`);
+    } else if (own && n.id && focused) {
+      let name = focusOf.get(own) ?? focusOf.get(canon(own));
+      if (name === undefined) {
+        name = memberName("is", own.action?.words ?? own.id, seen, "Control", "Focused");
+        members.push({ name, kind: "ephemeral", type: "Bool", decl: [`@MarkswiftFocused private var ${name}`] });
+      }
+      focusOf.set(own, name);
+      statePaint.set(n.id, pairStyle(n, focused, name, "focused"));
+    }
+    const invalid = n.states?.invalid;
+    const hasValidation =
+      field &&
+      (n.required || n.pattern !== undefined || n.inputType === "email" || n.a11y?.invalid || invalid !== undefined);
+    if (field && n.id && hasValidation) {
+      let name = invalidOf.get(canon(n));
+      if (name === undefined) {
+        name = memberName("is", n.a11y?.label ?? n.placeholder ?? n.id, seen, "Field", "Invalid");
+        const initVal = n.a11y?.invalid ? "(wrappedValue: true)" : "";
+        members.push({
+          name,
+          kind: "ephemeral",
+          type: "Bool",
+          decl: [`@MarkswiftInvalid${initVal} private var ${name}`],
+        });
+      }
+      invalidOf.set(n, name);
+      if (invalid) statePaint.set(n.id, pairStyle(n, invalid, name, "invalid"));
     }
     for (const a of n.alternatives ?? []) visit(a, own, opens);
     for (const o of n.overlays) visit(o.node, own, opens);
@@ -367,6 +409,8 @@ export function controlMembers(root: SemNode, mode: EmitMode, byId = false): Con
     statePaint,
     pressOf,
     focusOf,
+    invalidOf,
+    hoverOf,
   };
 }
 

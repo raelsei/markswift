@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
+import { emitSwift } from "../../../src/swift/emit.ts";
+import { extractTokens, screenTokens } from "../../../src/swift/tokens.ts";
 import { walk, type ControlNode, type SemNode, type TextNode } from "../../../src/model/semantic.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
 
@@ -32,7 +34,7 @@ function el(
 ): LayoutNode {
   return {
     tag,
-    id: `n${++ids}`,
+    id: attrs.id ?? `n${++ids}`,
     attrs,
     styles: { ...FONT, display: "block", ...styles },
     bounds: { x: 0, y: 0, w: 120, h: 40 },
@@ -63,6 +65,12 @@ function doc(children: LayoutNode[]): LayoutDoc {
 function compile(children: LayoutNode[], mode: "app" | "fidelity" = "app") {
   const result = compileLayout(doc(children), { mode });
   return { code: result.code, diagnostics: result.diagnostics.flatMap((d) => d.diagnostics) };
+}
+function compileSem(children: LayoutNode[], mode: "app" | "fidelity" = "app") {
+  const screen = inferScreen(doc(children), "States");
+  const tokens = extractTokens([screen]);
+  const lookup = screenTokens(tokens, screen);
+  return emitSwift(screen, "ConvertedView", { mode, tokens: lookup }).view;
 }
 
 const button = (states: LayoutNode["states"], styles: Record<string, string> = { "background-color": BLUE }) =>
@@ -179,4 +187,110 @@ test("an unstyled theme-painted button gets Chrome's pressed theme without any c
   // Fill 239 → 245, edge 118 → 141 (measured under a real press at DPR 2).
   expect(code).toContain("isSavePressed ? Color.markswift(0.961, 0.961, 0.961) : Color.markswift(0.937, 0.937, 0.937)");
   expect(code).toContain("isSavePressed ? Color.markswift(0.553, 0.553, 0.553) : Color.markswift(0.463, 0.463, 0.463)");
+});
+
+test("a required text field gets @MarkswiftInvalid and a markswiftValidating binding", () => {
+  const field = el("input", { id: "name", placeholder: "Name", required: "" }, [], BORDER(BLUE));
+  const { code } = compile([field]);
+  expect(code).toContain("@MarkswiftInvalid private var isNameInvalid");
+  expect(code).toContain("markswiftValidating($s_name, isInvalid: $isNameInvalid, required: true)");
+});
+
+test("a field with pattern and type=email gets native validity bindings", () => {
+  const field = el(
+    "input",
+    { id: "email", placeholder: "Email", type: "email", pattern: "^[a-z]+@[a-z]+\\.[a-z]+$" },
+    [],
+    BORDER(BLUE),
+  );
+  const { code } = compile([field]);
+  expect(code).toContain("@MarkswiftInvalid private var isEmailInvalid");
+  expect(code).toContain(
+    'markswiftValidating($s_email, isInvalid: $isEmailInvalid, type: "email", pattern: "^[a-z]+@[a-z]+\\\\.[a-z]+$")',
+  );
+});
+
+test("a field with aria-invalid='true' initializes @MarkswiftInvalid to true", () => {
+  const field = el("input", { id: "email", placeholder: "Email", "aria-invalid": "true" }, [], BORDER(BLUE));
+  const { code } = compile([field]);
+  expect(code).toContain("@MarkswiftInvalid(wrappedValue: true) private var isEmailInvalid");
+});
+
+test("an invalid field style delta emits an invalid member and colour ternary", () => {
+  const RED = "rgb(239, 68, 68)";
+  const field = el("input", { id: "email", placeholder: "Email", required: "" }, [], BORDER(BLUE), {
+    invalid: {
+      ...Object.fromEntries(["top", "right", "bottom", "left"].map((e) => [`border-${e}-color`, RED])),
+    },
+  } as unknown as LayoutNode["states"]);
+  const code = compileSem([field]);
+  expect(code).toContain("@MarkswiftInvalid private var isEmailInvalid");
+  expect(code).toContain(
+    "(isEmailInvalid ? Color.markswift(0.937, 0.267, 0.267) : Color.markswift(0.145, 0.388, 0.922))",
+  );
+});
+
+test("data-state variants map to view state and toggle accessibility values", () => {
+  const btn = el(
+    "button",
+    { id: "details", "data-state": "open", "data-slot": "accordion-trigger" },
+    [text("Details")],
+    { "background-color": BLUE },
+    {
+      open: { "background-color": DARK_BLUE },
+    },
+  );
+  const { code } = compile([btn]);
+  expect(code).toContain("@State private var s_details: Bool = true");
+  expect(code).toContain('.accessibilityValue(s_details ? "expanded" : "collapsed")');
+  expect(code).toContain("(s_details ? Color.markswift(0.114, 0.306, 0.847) : Color.markswift(0.145, 0.388, 0.922))");
+});
+
+test("buttons get .markswiftHoverEffect, and a hover look emits @MarkswiftHovered and .onHover", () => {
+  const btn = el("button", { id: "save" }, [text("Save")], { "background-color": BLUE }, {
+    hover: { "background-color": DARK_BLUE },
+  } as unknown as LayoutNode["states"]);
+  const code = compileSem([btn]);
+  expect(code).toContain("@MarkswiftHovered private var isSaveHovered");
+  expect(code).toContain(".markswiftHoverEffect()");
+  expect(code).toContain(".onHover { isSaveHovered = $0 }");
+  expect(code).toContain(
+    "(isSaveHovered ? Color.markswift(0.114, 0.306, 0.847) : Color.markswift(0.145, 0.388, 0.922))",
+  );
+});
+
+test("a focused button gets @MarkswiftFocused, .focusable, .focused and .focusEffectDisabled", () => {
+  const btn = el(
+    "button",
+    { id: "save" },
+    [text("Save")],
+    { "background-color": BLUE },
+    {
+      focused: { "background-color": DARK_BLUE },
+    },
+  );
+  const { code } = compile([btn]);
+  expect(code).toContain("@MarkswiftFocused private var isSaveFocused");
+  expect(code).toContain(".focusable()");
+  expect(code).toContain(".focused($isSaveFocused)");
+  expect(code).toContain(".focusEffectDisabled()");
+  expect(code).toContain(
+    "(isSaveFocused ? Color.markswift(0.114, 0.306, 0.847) : Color.markswift(0.145, 0.388, 0.922))",
+  );
+});
+
+test("buttons with keyboard shortcuts emit .keyboardShortcut", () => {
+  const save = el("button", { "aria-keyshortcuts": "Meta+S" }, [text("Save")]);
+  const cancel = el("button", { accesskey: "Escape" }, [text("Cancel")]);
+  const { code } = compile([save, cancel]);
+  expect(code).toContain('.keyboardShortcut("s", modifiers: .command)');
+  expect(code).toContain(".keyboardShortcut(.escape, modifiers: [])");
+});
+
+test("tabindex order maps to .focusable(false) and .accessibilitySortPriority", () => {
+  const skip = el("button", { tabindex: "-1" }, [text("Skip")]);
+  const primary = el("button", { tabindex: "2" }, [text("Primary")]);
+  const { code } = compile([skip, primary]);
+  expect(code).toContain(".focusable(false)");
+  expect(code).toContain(".accessibilitySortPriority(2)");
 });

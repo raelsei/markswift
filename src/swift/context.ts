@@ -165,6 +165,10 @@ export interface ControlMembers {
   statePaint: Map<string, StatePaint>;
   /** Pressable owner → its `@MarkswiftPressed` member. */
   pressOf: Map<SemNode, string>;
-  /** Text field → its `@MarkswiftFocused` member. */
+  /** Text field or focusable control → its `@MarkswiftFocused` member. */
   focusOf: Map<SemNode, string>;
+  /** Validated text field → its `@MarkswiftInvalid` member. */
+  invalidOf: Map<SemNode, string>;
+  /** Hoverable control → its `@MarkswiftHovered` member. */
+  hoverOf: Map<SemNode, string>;
 }

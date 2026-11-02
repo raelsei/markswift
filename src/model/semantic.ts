@@ -609,6 +609,12 @@ export interface SemBase extends SizeConstraints {
     group?: string;
     /** `aria-disabled="true"`. */
     disabled?: true;
+    /** `aria-invalid="true"`. */
+    invalid?: true;
+    /** `@accesskey` or `aria-keyshortcuts`. */
+    shortcut?: string;
+    /** `@tabindex` integer (-1 or >= 0). */
+    tabIndex?: number;
   };
   /** `title`, inline-run titles and captured tooltip layers: `.help` + an accessibility hint; never drawn. */
   tooltip?: string;
@@ -633,7 +639,7 @@ export interface SemBase extends SizeConstraints {
   hitRegionTarget?: string;
   /** Paint deltas of an interaction state on top of `style` (pressed: `:hover`+`:active`; focused: `:focus-visible`;
    * open: while a layer this node or an ancestor `opens` is shown). */
-  states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle };
+  states?: { pressed?: StateStyle; focused?: StateStyle; open?: StateStyle; invalid?: StateStyle; hover?: StateStyle };
   /** App mode: this node's tap toggles the in-flow layer `layer`, or presents the drawn presentation `layer`
    * (`longPress`: a hover/context-menu layer opens on long-press; `anchor`: the content is anchored to this node). */
   opens?: { layer: string; kind: "inflow" } | { layer: string; kind: "presentation"; longPress?: true; anchor?: true };
@@ -829,6 +835,10 @@ export interface ControlNode extends SemBase {
   inputMode?: string;
   /** `@enterkeyhint`: the Return key's label. */
   enterKey?: string;
+  /** `@required` or `aria-required="true"`: field must not be empty. */
+  required?: boolean;
+  /** `@pattern`: regex pattern the value must match. */
+  pattern?: string;
   /** `@checked`: initial on state of a toggle/radio. */
   checked?: boolean;
   /** Radio `@name`; radios with the same `form` and group share one selection. */

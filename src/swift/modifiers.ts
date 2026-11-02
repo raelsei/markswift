@@ -332,8 +332,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     // `.accessibilityValue` replaces the "1"/"0" a toggle trait derives from `.isSelected`, so it spells them out.
     if (state?.mixed) m.push(`.accessibilityValue(${state.mixed} ? "mixed" : ${state.on} ? "1" : "0")`);
     // `aria-expanded` of a trigger whose layer the screen shows follows that state (only where the design states it).
-    else if (opened && (a.value === "expanded" || a.value === "collapsed"))
-      m.push(`.accessibilityValue(${opened.state} ? "expanded" : "collapsed")`);
+    else if ((opened || state) && (a.value === "expanded" || a.value === "collapsed"))
+      m.push(`.accessibilityValue(${opened ? opened.state : state!.on} ? "expanded" : "collapsed")`);
     else if (chosen) m.push(`.accessibilityValue(${chosen})`);
     else if (a.value && !ownsValue) m.push(`.accessibilityValue(${str(a.value)})`);
     if (a.tableCell && ctx.mode === "app") {
@@ -349,6 +349,10 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     }
     if (a.hint) m.push(`.accessibilityHint(${str(a.hint)})`);
     if (a.hidden) m.push(".accessibilityHidden(true)");
+    if (a.tabIndex !== undefined) {
+      if (a.tabIndex === -1) m.push(".focusable(false)");
+      else if (a.tabIndex > 0) m.push(`.accessibilitySortPriority(${a.tabIndex})`);
+    }
   }
   // A pointer shows `.help` (iPad, Mac); VoiceOver reads the hint. An author `aria-describedby` hint wins.
   if (n.tooltip) {
