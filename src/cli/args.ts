@@ -11,7 +11,15 @@ export interface ConversionCommand {
   palettePath?: string;
   update: boolean;
   force: boolean;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints">;
+  options: Pick<
+    ConvertOptions,
+    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "browserChannel"
+  >;
+}
+
+export interface InstallBrowserCommand {
+  kind: "install-browser";
+  withDeps: boolean;
 }
 
 export interface BuildCommand {
@@ -20,7 +28,7 @@ export interface BuildCommand {
   force: boolean;
 }
 
-export type Command = { kind: "help" } | { kind: "version" } | ConversionCommand | BuildCommand;
+export type Command = { kind: "help" } | { kind: "version" } | InstallBrowserCommand | ConversionCommand | BuildCommand;
 
 export const HELP = `Markswift — convert rendered HTML and CSS to SwiftUI.
 
@@ -30,6 +38,9 @@ Usage:
   markswift build [markswift.json] [--force]
                     Build every component of the config into one Swift package
                     (directory "out" of the config; replaces only files it wrote)
+  markswift install-browser [--with-deps]
+                    Download Playwright's Chromium browser for headless capture
+                    (--with-deps installs Linux system dependencies via apt)
   markswift --help | --version
 
 Inputs:
@@ -56,10 +67,12 @@ Options:
   --palette <file>  JSON map from CSS variables or hex colours to app colours
                     (e.g. {"--primary": "Color.accentColor"})
   --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
+  --browser-channel <name>
+                    Playwright browser channel (e.g. chrome, chromium)
   -h, --help        Show this help
   -v, --version     Show version
 
-Requires Node.js 20+ (or Bun 1.4.2+) and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
+Requires Node.js 20+ (or Bun 1.4.2+) and Chromium (or Google Chrome). CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
 const valueFlags = new Set([
@@ -75,12 +88,14 @@ const valueFlags = new Set([
   "--mode",
   "--palette",
   "--breakpoints",
+  "--browser-channel",
 ]);
 
 export function parseArgs(args: string[]): Command {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) return { kind: "help" };
   if (args.length === 1 && ["--version", "-v"].includes(args[0]!)) return { kind: "version" };
   if (args[0] === "build") return parseBuild(args.slice(1));
+  if (args[0] === "install-browser") return parseInstallBrowser(args.slice(1));
   if (args[0] !== "convert") throw new UsageError(`Unknown command: ${args[0]}`);
   if (args.slice(1).some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
 
@@ -169,6 +184,7 @@ export function parseArgs(args: string[]): Command {
       darkClass,
       mode,
       viewport: { width, height },
+      ...(values.get("--browser-channel") ? { browserChannel: values.get("--browser-channel") } : {}),
       ...(breakpoints ? { breakpoints } : {}),
     },
   };
@@ -196,4 +212,15 @@ function dimension(value: string | undefined, flag: string, fallback: number): n
   if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0)
     throw new UsageError(`${flag} must be a positive integer`);
   return parsed;
+}
+
+/** `markswift install-browser [--with-deps]`: installs Chromium for capture. */
+function parseInstallBrowser(args: string[]): Command {
+  if (args.some((arg) => arg === "--help" || arg === "-h")) return { kind: "help" };
+  let withDeps = false;
+  for (const arg of args) {
+    if (arg === "--with-deps") withDeps = true;
+    else throw new UsageError(`Unknown option for install-browser: ${arg}`);
+  }
+  return { kind: "install-browser", withDeps };
 }

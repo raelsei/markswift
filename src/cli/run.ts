@@ -1,10 +1,11 @@
 import { access, readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { text } from "node:stream/consumers";
 import { buildLibrary } from "../api/build.ts";
 import { convert } from "../api/convert.ts";
 import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
-import type { BuildCommand, ConversionCommand } from "./args.ts";
+import type { BuildCommand, ConversionCommand, InstallBrowserCommand } from "./args.ts";
 import { loadBuildConfig, loadPalette } from "./config.ts";
 import { inlineRelativeUrls } from "./css.ts";
 import { ensureVacant, formatDiagnostics, formatWarning, updatable, updateBundle, writeBundle } from "./output.ts";
@@ -59,4 +60,16 @@ export async function runConversion(command: ConversionCommand): Promise<void> {
   );
   for (const warning of result.warnings) process.stderr.write(`Warning: ${formatWarning(warning)}\n`);
   for (const line of formatDiagnostics(result.diagnostics)) process.stderr.write(`Note ${line}\n`);
+}
+
+/** `markswift install-browser [--with-deps]`: installs Chromium using Playwright's CLI. */
+export async function runInstallBrowser(command: InstallBrowserCommand): Promise<void> {
+  const req = createRequire(import.meta.url);
+  const { libCli } = req("playwright-core/lib/coreBundle");
+  const { program } = req("playwright-core/lib/utilsBundle");
+  libCli.decorateProgram(program);
+  const args = ["node", "playwright-core", "install"];
+  if (command.withDeps) args.push("--with-deps");
+  args.push("--no-shell", "chromium");
+  await program.parseAsync(args);
 }

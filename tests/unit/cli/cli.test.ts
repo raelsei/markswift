@@ -208,3 +208,15 @@ test("--css url()s relative to the CSS file are inlined as data URLs", async () 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("install-browser parses with and without --with-deps", () => {
+  expect(parseArgs(["install-browser"])).toEqual({ kind: "install-browser", withDeps: false });
+  expect(parseArgs(["install-browser", "--with-deps"])).toEqual({ kind: "install-browser", withDeps: true });
+  expect(parseArgs(["install-browser", "--help"])).toEqual({ kind: "help" });
+  expect(() => parseArgs(["install-browser", "--unknown"])).toThrow(UsageError);
+});
+
+test("--browser-channel option is passed to conversion options", () => {
+  const parsed = parseArgs(["convert", "card.html", "--out", "gen", "--browser-channel", "chromium"]);
+  expect(parsed.kind === "convert" && parsed.options.browserChannel).toBe("chromium");
+});
