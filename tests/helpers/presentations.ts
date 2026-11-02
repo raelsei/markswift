@@ -160,6 +160,27 @@ export const SHEET = () =>
     ],
   });
 
+/** A bottom drawer: inset-x-0 bottom-0, top auto. */
+export const DRAWER = (h = 320) =>
+  presentationDoc({
+    id: "open-drawer",
+    modal: true,
+    nodes: [
+      SCRIM(),
+      fixed(
+        "div",
+        "drawer",
+        [0, 844 - h, 390, h],
+        [text("Drawer Content", [16, 844 - h + 16, 120, 20])],
+        ["auto", "0px", "0px", "0px"],
+        {
+          role: "dialog",
+        },
+        { "background-color": "white" },
+      ),
+    ],
+  });
+
 /** A popper: a fixed 0,0 wrapper translated 4 px under the trigger. */
 export const POPOVER = (activation: Layer["activation"] = "click", side?: string) =>
   presentationDoc(

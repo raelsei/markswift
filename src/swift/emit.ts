@@ -121,6 +121,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     control,
     tokens: opts.tokens,
     adaptive: opts.adaptive,
+    nativeSheet: opts.nativeSheet,
     scaledFonts,
     statePaint: control.statePaint,
     renderNode: (node) => extraction?.call(node) ?? refOf(node, ctx),

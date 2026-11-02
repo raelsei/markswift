@@ -61,6 +61,8 @@ export interface CompileOptions {
   visibility?: "internal" | "public";
   /** App colours for captured tokens (`--palette`); views keep referencing `Palette.x`. */
   palette?: PaletteMap;
+  /** Present bottom drawers with a native `.sheet` and detents. Default false: the captured presentation. */
+  nativeSheet?: boolean;
 }
 
 export interface CompileResult {
@@ -202,6 +204,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
       fontMetrics: options.fontMetrics,
       extract: options.extract,
       visibility: options.visibility,
+      nativeSheet: options.nativeSheet,
     },
     bands,
   );

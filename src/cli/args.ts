@@ -13,7 +13,7 @@ export interface ConversionCommand {
   force: boolean;
   options: Pick<
     ConvertOptions,
-    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "browserChannel"
+    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "browserChannel" | "nativeSheet"
   >;
 }
 
@@ -69,6 +69,7 @@ Options:
   --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
   --browser-channel <name>
                     Playwright browser channel (e.g. chrome, chromium)
+  --native-sheet    Present bottom drawers with a native .sheet and detents (default: the captured presentation)
   -h, --help        Show this help
   -v, --version     Show version
 
@@ -109,7 +110,7 @@ export function parseArgs(args: string[]): Command {
       afterDoubleDash = true;
       continue;
     }
-    if (!afterDoubleDash && (arg === "--update" || arg === "--force")) {
+    if (!afterDoubleDash && (arg === "--update" || arg === "--force" || arg === "--native-sheet")) {
       if (flags.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       flags.add(arg);
     } else if (!afterDoubleDash && valueFlags.has(arg)) {
@@ -186,6 +187,7 @@ export function parseArgs(args: string[]): Command {
       viewport: { width, height },
       ...(values.get("--browser-channel") ? { browserChannel: values.get("--browser-channel") } : {}),
       ...(breakpoints ? { breakpoints } : {}),
+      ...(flags.has("--native-sheet") ? { nativeSheet: true } : {}),
     },
   };
 }
