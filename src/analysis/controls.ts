@@ -106,6 +106,8 @@ export interface ControlSpec {
   group?: string;
   form?: string;
   disabled?: boolean;
+  required?: boolean;
+  pattern?: string;
   range?: { min: number; max: number; step?: number };
   level?: ControlNode["level"];
   options?: PickerOption[];
@@ -197,6 +199,7 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         const prompt = promptColorOf(n);
         if (prompt) spec.promptColor = prompt;
       }
+      if ("required" in a || a["aria-required"] === "true") spec.required = true;
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -350,6 +353,8 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         if (mode && Object.hasOwn(INPUT_MODES, mode)) spec.inputMode = mode;
         const enter = a["enterkeyhint"]?.trim().toLowerCase();
         if (enter && Object.hasOwn(ENTER_KEYS, enter)) spec.enterKey = enter;
+        if ("required" in a || a["aria-required"] === "true") spec.required = true;
+        if (a["pattern"]) spec.pattern = a["pattern"];
       }
       if (disabled) spec.disabled = true;
       return spec;
@@ -466,8 +471,9 @@ export function labelIndex(root: LayoutNode): LabelIndex {
     const fieldset = n.tag === "fieldset" && "disabled" in n.attrs;
     const legend = fieldset ? n.children.find((c) => c.tag === "legend") : undefined;
     const role = n.attrs["role"]?.trim().toLowerCase();
-    if (role === "radio" && group) radioGroups.set(n, group.id ?? "");
-    for (const c of n.children) index(c, owner, role === "radiogroup" ? n : group, off || (fieldset && c !== legend));
+    if ((role === "radio" || role === "tab") && group) radioGroups.set(n, group.id ?? "");
+    for (const c of n.children)
+      index(c, owner, role === "radiogroup" || role === "tablist" ? n : group, off || (fieldset && c !== legend));
   };
   index(root);
   for (const n of external) {

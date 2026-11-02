@@ -14,7 +14,7 @@ function invisible(n: SemNode): boolean {
   const muted = !!n.a11y?.hidden;
   let silent = true;
   walk(n, (d) => {
-    if (d.states?.pressed || d.states?.focused) silent = false;
+    if (d.states && Object.keys(d.states).length > 0) silent = false;
     else if (d.hitTesting !== false && !d.a11y?.disabled && (d.action || (d.kind === "control" && !d.disabled)))
       silent = false;
     else if (

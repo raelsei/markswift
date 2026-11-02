@@ -166,23 +166,39 @@ function a11yOf(n: LayoutNode, ctx: InferenceContext): SemBase["a11y"] {
   const value =
     clean(a["aria-valuetext"]) ||
     clean(a["aria-valuenow"]) ||
-    (a["aria-checked"] === "mixed"
+    (a["aria-checked"] === "mixed" || a["data-state"] === "indeterminate"
       ? "mixed"
-      : a["aria-expanded"] === "true"
+      : a["aria-expanded"] === "true" || a["data-state"] === "open"
         ? "expanded"
-        : a["aria-expanded"] === "false"
+        : a["aria-expanded"] === "false" || a["data-state"] === "closed"
           ? "collapsed"
-          : "");
+          : clean(a["data-state"]) || "");
   if (value) out.value = value;
   if (
     [a["aria-selected"], a["aria-checked"], a["aria-pressed"]].includes("true") ||
-    (a["aria-current"] !== undefined && a["aria-current"] !== "false")
+    (a["aria-current"] !== undefined && a["aria-current"] !== "false") ||
+    a["data-state"] === "checked" ||
+    a["data-state"] === "active" ||
+    a["data-state"] === "open"
   )
     out.selected = true;
-  if (isToggleRole(role)) out.toggle = true;
-  const group = role === "radio" ? ctx.labels?.radioGroups.get(n) : undefined;
+  if (
+    isToggleRole(role) ||
+    a["aria-pressed"] !== undefined ||
+    (a["data-state"] !== undefined &&
+      ["open", "closed", "checked", "unchecked", "active", "inactive"].includes(a["data-state"]))
+  )
+    out.toggle = true;
+  const group = role === "radio" || role === "tab" ? ctx.labels?.radioGroups.get(n) : undefined;
   if (group !== undefined) out.group = group;
   if (a["aria-disabled"] === "true") out.disabled = true;
+  if (a["aria-invalid"] === "true") out.invalid = true;
+  const shortcut = clean(a["aria-keyshortcuts"]) || clean(a["accesskey"]);
+  if (shortcut) out.shortcut = shortcut;
+  if (a["tabindex"] !== undefined) {
+    const ti = parseInt(a["tabindex"], 10);
+    if (!Number.isNaN(ti)) out.tabIndex = ti;
+  }
   if (a["aria-hidden"] === "true") out.hidden = true;
   const tag = /^h([1-6])$/.exec(n.tag);
   const level = tag ? Number(tag[1]) : role === "heading" ? parseInt(a["aria-level"] ?? "", 10) || 2 : undefined;
