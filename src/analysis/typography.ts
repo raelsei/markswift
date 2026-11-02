@@ -1,6 +1,5 @@
 /** Computed font selection with conversion-scoped bundled families. */
 import { type BundledFamilies, type BundledFamily } from "../model/fonts.ts";
-import type { LayoutNode } from "../model/layout.ts";
 import { type FontSpec } from "../model/semantic.ts";
 import { round2, px, fontWeight, fontFamilies, fontStretch, variationSettings } from "../css/index.ts";
 /**
@@ -112,30 +111,4 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
   const lh = s["line-height"];
   if (lh && lh !== "normal") spec.lineHeight = round2(px(lh));
   return spec;
-}
-
-/**
- * The weights each font family is drawn at in a layout tree, its state looks (pressed, focused, open) included:
- * static instances of a variable font must cover every weight the generated views select.
- */
-export function collectFontUsages(nodes: LayoutNode | LayoutNode[] | undefined): Map<string, Set<number>> {
-  const map = new Map<string, Set<number>>();
-  const add = (styles: Record<string, string>) => {
-    const families = styles["font-family"];
-    if (!families) return;
-    const w = variationSettings(styles["font-variation-settings"])["wght"] ?? fontWeight(styles["font-weight"]);
-    for (const fam of fontFamilies(families)) {
-      const k = fam.toLowerCase();
-      map.set(k, (map.get(k) ?? new Set<number>()).add(w));
-    }
-  };
-  const walk = (node: LayoutNode): void => {
-    if (node.styles) {
-      add(node.styles);
-      for (const delta of Object.values(node.states ?? {})) if (delta) add({ ...node.styles, ...delta });
-    }
-    node.children?.forEach(walk);
-  };
-  for (const n of nodes === undefined ? [] : Array.isArray(nodes) ? nodes : [nodes]) walk(n);
-  return map;
 }

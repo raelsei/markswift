@@ -13,7 +13,6 @@ import { type BandPlan, planBands } from "../../src/analysis/bands.ts";
 import { unionFaces } from "../../src/api/convert.ts";
 import { matchesWidth, widthQuery } from "../../src/css/index.ts";
 import { packageFonts } from "../../src/fonts/package.ts";
-import { collectFontUsages } from "../../src/analysis/typography.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
@@ -364,13 +363,9 @@ async function run() {
           const dir = join(out, "_bp", key);
           const swiftDir = join(dir, "swift");
           const name = pilotName(key);
-          const usages = collectFontUsages(bands.map((band) => band.layout.root));
           const fonts = await packageFonts(
             unionFaces(bands.map((band) => band.layout.fonts)),
             new Map(bands.flatMap((band) => band.fontFiles).map((f) => [f.file, f.bytes])),
-            undefined,
-            undefined,
-            usages,
           );
           const compiled = compileLayout(bands[0]!.layout, {
             name,
@@ -646,13 +641,9 @@ async function run() {
               const dir = await saveSource(entry, captured, out);
               const name = pilotName(entry.key);
               const swiftDir = join(dir, "swift");
-              const usages = collectFontUsages(captured.layout.root);
               const fonts = await packageFonts(
                 captured.layout.fonts,
                 new Map(captured.fontFiles.map((f) => [f.file, f.bytes])),
-                undefined,
-                undefined,
-                usages,
               );
               const compiled = compileLayout(captured.layout, {
                 name,

@@ -11,7 +11,6 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { compileLayout } from "../../src/compiler/index.ts";
 import { packageFonts } from "../../src/fonts/package.ts";
-import { collectFontUsages } from "../../src/analysis/typography.ts";
 import { registrationSwift } from "../../src/fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import type { ConversionResult } from "../../src/index.ts";
@@ -38,8 +37,7 @@ async function check(key: string): Promise<void> {
   const fontFiles = await readdir(fontDir).catch(() => [] as string[]);
   const sources = new Map<string, Uint8Array>();
   for (const f of fontFiles) sources.set(`_fonts/${f}`, await Bun.file(join(fontDir, f)).bytes());
-  const usages = collectFontUsages(layout.root);
-  const fonts = await packageFonts(layout.fonts, sources, undefined, undefined, usages);
+  const fonts = await packageFonts(layout.fonts, sources);
   const name =
     "Pilot" +
     key

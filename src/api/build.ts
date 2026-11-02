@@ -7,7 +7,6 @@ import {
   compileLayouts,
   validateLibrary,
   type CompileResult,
-  collectFontUsages,
   type EmitMode,
   type PaletteMap,
 } from "../compiler/index.ts";
@@ -160,8 +159,6 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
     await Promise.all(Array.from({ length: Math.min(4, components.length) }, worker));
 
     const all = captured.flatMap((c) => c.bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary])));
-    const allRoots = all.flatMap((c) => [c.layout.root, ...(c.layout.layers ?? []).flatMap((l) => l.nodes)]);
-    const usages = collectFontUsages(allRoots);
     const imageWarnings = (
       await Promise.all(
         components.map((c, i) => {
@@ -179,7 +176,6 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       new Map(all.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes])),
       undefined,
       deadline,
-      usages,
     );
     deadline.throwIfAborted();
     const compiled = compileLayouts(

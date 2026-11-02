@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import wawoff2 from "wawoff2";
 import { assembleSfnt, buildRewrittenNameTable, parseSfnt, readNameTable } from "../../../src/fonts/sfnt.ts";
-import type { FontFace, LayoutNode } from "../../../src/model/layout.ts";
+import type { FontFace } from "../../../src/model/layout.ts";
 import type { FontConverter, FontToolResult } from "../../../src/fonts/converter.ts";
 import { bundledFamilies } from "../../../src/fonts/metadata.ts";
-import { collectFontUsages, fontOf } from "../../../src/analysis/typography.ts";
+import { fontOf } from "../../../src/analysis/typography.ts";
 import { packageFonts } from "../../../src/fonts/package.ts";
 import { fontFileStem } from "../../../src/fonts/source.ts";
 import { plistFragment, registrationSwift } from "../../../src/fonts/registration.ts";
@@ -139,87 +139,6 @@ test("woff2 decompression and recompression round trip preserves all tables", as
   const ttf2 = await wawoff2.decompress(woff2);
   const sfnt2 = parseSfnt(ttf2);
   expect([...sfnt1.tables.keys()].sort()).toEqual([...sfnt2.tables.keys()].sort());
-});
-
-test("static variable-font instancing shrinks bundle and eliminates variation axes", async () => {
-  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
-  const bytes = await readFile(geistPath);
-
-  // When only weight 400 is used on the page
-  const usages = new Map([["geist variable", new Set([400])]]);
-  const pkg = await packageFonts(
-    [
-      {
-        family: "Geist Variable",
-        style: "normal",
-        weight: [100, 900],
-        loaded: true,
-        src: [{ url: "/font.woff2", file: "_fonts/font.woff2" }],
-      },
-    ],
-    new Map([["_fonts/font.woff2", bytes]]),
-    undefined,
-    undefined,
-    usages,
-  );
-
-  expect(pkg.faces).toHaveLength(1);
-  const face = pkg.faces[0]!;
-  expect(face.weight).toEqual([400, 400]);
-  expect(face.axes).toEqual({});
-  expect(pkg.assets["Fonts/GeistVariable.ttf"]).toBeDefined();
-  // Instanced static font is ~33KB, well below the ~66KB uninstanced TTF
-  expect(pkg.assets["Fonts/GeistVariable.ttf"]!.length).toBeLessThan(35000);
-});
-
-test("variable font instancing emits multiple static weights when used at discrete positions", async () => {
-  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
-  const bytes = await readFile(geistPath);
-
-  const usages = new Map([["geist variable", new Set([400, 700])]]);
-  const pkg = await packageFonts(
-    [
-      {
-        family: "Geist Variable",
-        style: "normal",
-        weight: [100, 900],
-        loaded: true,
-        src: [{ url: "/font.woff2", file: "_fonts/font.woff2" }],
-      },
-    ],
-    new Map([["_fonts/font.woff2", bytes]]),
-    undefined,
-    undefined,
-    usages,
-  );
-
-  expect(pkg.faces).toHaveLength(2);
-  expect(pkg.faces.map((f) => f.weight)).toEqual([
-    [400, 400],
-    [700, 700],
-  ]);
-  expect(pkg.faces.map((f) => f.file)).toEqual(["GeistVariable.ttf", "GeistVariable-Bold.ttf"]);
-  // Each instance registers its own style under the family (typographic subfamily too, which CoreText prefers).
-  const bold = parseSfnt(pkg.assets["Fonts/GeistVariable-Bold.ttf"]!);
-  const { names } = readNameTable(bold.tables.get("name")!.data);
-  expect([names.get(1), names.get(2), names.get(16), names.get(17)]).toEqual([
-    "Geist Variable",
-    "Bold",
-    "Geist Variable",
-    "Bold",
-  ]);
-});
-
-test("weights drawn only in a state look (pressed bold) are kept in the static instances", () => {
-  const node = {
-    tag: "button",
-    attrs: {},
-    styles: { "font-family": '"Geist Variable"', "font-weight": "400" },
-    states: { pressed: { "font-weight": "700" } },
-    bounds: { x: 0, y: 0, w: 1, h: 1 },
-    children: [],
-  } as unknown as LayoutNode;
-  expect([...collectFontUsages(node).get("geist variable")!]).toEqual([400, 700]);
 });
 
 test("a non-ASCII family keeps Windows name records only (Mac Roman cannot spell it)", async () => {

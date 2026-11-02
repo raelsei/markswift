@@ -5,49 +5,6 @@ import type { FontPackage, PackagedFace } from "./types.ts";
 import { coversLatin, fontFileStem, srcBytes, WEIGHT_SUBFAMILY } from "./source.ts";
 import { type FontConverter, nativeFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
-import { instanceVariableFont } from "./instancer.ts";
-import { assembleSfnt, buildRewrittenNameTable, extractFontMetrics, parseSfnt, readNameTable } from "./sfnt.ts";
-
-export type FontUsages = ReadonlyMap<string, ReadonlySet<number>>;
-
-/**
- * One static face per weight of a weight-only variable font (HarfBuzz instancing), each renamed to the family with
- * its weight's subfamily (name IDs 1/2/4/6/16/17, so CoreText registers each style under the family). Undefined
- * when any instance fails or has no free file name: the variable font then ships alone, never a partial set.
- */
-async function staticInstances(
-  bytes: Uint8Array,
-  weights: number[],
-  family: string,
-  style: string,
-  sig: string,
-  claimed: ReadonlyMap<string, string>,
-): Promise<Array<{ file: string; stem: string; weight: number; bytes: Uint8Array; metrics: FaceMetrics }> | undefined> {
-  const out = [];
-  const taken = new Map(claimed);
-  try {
-    for (const weight of weights.sort((a, b) => a - b)) {
-      const name = weight !== 400 ? (WEIGHT_SUBFAMILY[weight] ?? `W${weight}`) : "";
-      const subfamily = [name, style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
-      const stem = fontFileStem(family, subfamily, taken);
-      if (stem === undefined) return undefined;
-      taken.set(stem.toLowerCase(), family);
-      const sfnt = parseSfnt(await instanceVariableFont(bytes, { wght: weight }));
-      const nameTable = sfnt.tables.get("name");
-      if (nameTable) {
-        const data = buildRewrittenNameTable(readNameTable(nameTable.data).records, family, subfamily, true);
-        sfnt.tables.set("name", { offset: 0, length: data.length, checksum: 0, data });
-      }
-      const face = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
-      const { metrics } = extractFontMetrics(face, parseSfnt(face).tables);
-      out.push({ file: `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`, stem, weight, bytes: face, metrics });
-    }
-  } catch {
-    // ponytail: a glyph format HarfBuzz cannot instance keeps the variable font; report it if bundles stay large.
-    return undefined;
-  }
-  return out;
-}
 
 /**
  * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
@@ -56,16 +13,12 @@ async function staticInstances(
  * own. Faces are grouped by (family, style): within a group the Basic-Latin subset wins, the
  * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
  * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
- *
- * When `usages` shows a weight-only variable font is used at a few weights (<= 3), static instances are emitted to
- * shrink the font bundle while keeping rendering identical.
  */
 export async function packageFonts(
   faces: FontFace[],
   sources: ReadonlyMap<string, Uint8Array>,
   convert: FontConverter = nativeFontConverter,
   signal?: AbortSignal,
-  usages?: FontUsages,
 ): Promise<FontPackage> {
   const notes: FontPackage["notes"] = [];
   const note = (level: DiagnosticLevel, message: string) =>
@@ -138,63 +91,27 @@ export async function packageFonts(
       continue;
     }
 
-    const isVariable =
-      (chosen.weight[0] !== chosen.weight[1] || tool.axes["wght"] !== undefined) && tool.axes["wght"] !== undefined;
-    const usedWeights = isVariable ? usages?.get(chosen.family.toLowerCase()) : undefined;
-
-    // Static instances: a weight-only variable font used at a few weights (<= 3) ships one static face per weight.
-    // Fonts with other axes (opsz, wdth, …) stay variable: those axes follow font-size and font-stretch natively.
-    const canInstance =
-      isVariable &&
-      Object.keys(tool.axes).length === 1 &&
-      usedWeights &&
-      usedWeights.size >= 1 &&
-      usedWeights.size <= 3 &&
-      [...usedWeights].every((w) => w >= tool.axes["wght"]![0] && w <= tool.axes["wght"]![1]);
-
-    const instances = canInstance
-      ? await staticInstances(tool.bytes ?? bytes, [...usedWeights!], family, chosen.style, sig, claimed)
-      : undefined;
-    if (instances) {
-      for (const inst of instances) {
-        assets[`Fonts/${inst.file}`] = inst.bytes;
-        packaged.push({
-          family,
-          sourceFamily: chosen.family,
-          stretch,
-          file: inst.file,
-          style: chosen.style,
-          weight: [inst.weight, inst.weight],
-          axes: {},
-          metrics: inst.metrics,
-          converted: tool.converted,
-          renamed: true,
-        });
-        claimed.set(inst.stem.toLowerCase(), family);
-      }
-    } else {
-      assets[`Fonts/${file}`] = tool.bytes ?? bytes;
-      const metrics: FaceMetrics = {
-        upem: tool.upem,
-        ascent: tool.ascent,
-        descent: tool.descent,
-        lineGap: tool.lineGap,
-        useTypoMetrics: tool.useTypoMetrics,
-      };
-      packaged.push({
-        family,
-        sourceFamily: chosen.family,
-        stretch,
-        file,
-        style: chosen.style,
-        weight: chosen.weight,
-        axes: tool.axes,
-        metrics,
-        converted: tool.converted,
-        renamed: tool.renamed,
-      });
-      claimed.set(stem.toLowerCase(), family);
-    }
+    assets[`Fonts/${file}`] = tool.bytes ?? bytes;
+    const metrics: FaceMetrics = {
+      upem: tool.upem,
+      ascent: tool.ascent,
+      descent: tool.descent,
+      lineGap: tool.lineGap,
+      useTypoMetrics: tool.useTypoMetrics,
+    };
+    packaged.push({
+      family,
+      sourceFamily: chosen.family,
+      stretch,
+      file,
+      style: chosen.style,
+      weight: chosen.weight,
+      axes: tool.axes,
+      metrics,
+      converted: tool.converted,
+      renamed: tool.renamed,
+    });
+    claimed.set(stem.toLowerCase(), family);
 
     if (!chosen.loaded)
       note(

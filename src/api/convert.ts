@@ -2,7 +2,7 @@ import { DEFAULT_ROOT } from "../input/root.ts";
 import { validateName } from "../compiler/naming.ts";
 import { BrowserCapture } from "../browser/capture.ts";
 import { resolveSource, type ResolvedSource } from "../input/source.ts";
-import { collectFontUsages, compileLayout, needsProbe } from "../compiler/index.ts";
+import { compileLayout, needsProbe } from "../compiler/index.ts";
 import { packageFonts } from "../fonts/package.ts";
 import { registrationSwift } from "../fonts/registration.ts";
 import { bundledFamilies, metricsForFonts } from "../fonts/metadata.ts";
@@ -134,14 +134,11 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       { allowRemote: !options.untrustedInput, signal: deadline },
     );
     const sources = new Map(captures.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes]));
-    const allRoots = captures.flatMap((c) => [c.layout.root, ...(c.layout.layers ?? []).flatMap((l) => l.nodes)]);
-    const usages = collectFontUsages(allRoots);
     const fonts = await packageFonts(
       captures.length > 1 ? unionFaces(captures.map((c) => c.layout.fonts)) : capture.layout.fonts,
       sources,
       undefined,
       deadline,
-      usages,
     );
     deadline.throwIfAborted(); // an aborted converter returns a note, not an error
     const compiled = compileLayout(capture.layout, {
