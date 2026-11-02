@@ -1,6 +1,6 @@
 /** Inline run collection, whitespace normalization and text decoration. */
 import { type LayoutNode } from "../model/layout.ts";
-import { parseColor } from "../css/index.ts";
+import { parseColor, px } from "../css/index.ts";
 import type { Color } from "../model/values.ts";
 import { type TextDecoration, type DecorationLine } from "../model/semantic.ts";
 import { type SourceTextRun } from "./context.ts";
@@ -120,5 +120,15 @@ export function decorationOf(s: Record<string, string>, color: Color): TextDecor
   if (dc && (dc.r !== color.r || dc.g !== color.g || dc.b !== color.b || dc.a !== color.a)) d.color = dc;
   const st = s["text-decoration-style"];
   if (st === "double" || st === "dotted" || st === "dashed" || st === "wavy") d.style = st;
+  const t = s["text-decoration-thickness"];
+  if (t && t !== "auto" && t !== "from-font") {
+    const val = px(t);
+    if (val > 0) d.thickness = val;
+  }
+  const off = s["text-underline-offset"];
+  if (off && off !== "auto") {
+    const val = px(off);
+    if (val !== 0) d.offset = val;
+  }
   return d;
 }

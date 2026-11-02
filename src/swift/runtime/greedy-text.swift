@@ -11,21 +11,29 @@ struct MarkswiftGreedyText: View {
     let descent: CGFloat
     let natural: CGFloat
     var lineLimit: Int? = nil
+    var justify: Bool = false
     var body: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, ascent: ascent, descent: descent, lineLimit: lineLimit)
+            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, ascent: ascent, descent: descent, lineLimit: lineLimit, justify: justify)
         } else { fallback }
         #else
         fallback
         #endif
     }
     private var fallback: some View {
-        Text(verbatim: text).font(font).foregroundStyle(color)
-            .lineLimit(lineLimit)
-            .fixedSize(horizontal: false, vertical: true)
-            .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
-                                 ascent: ascent, descent: descent, natural: natural)
+        let base = Text(verbatim: text).font(font).foregroundStyle(color)
+        return Group {
+            if justify {
+                base.textRenderer(MarkswiftTextRenderer(justify: true))
+            } else {
+                base
+            }
+        }
+        .lineLimit(lineLimit)
+        .fixedSize(horizontal: false, vertical: true)
+        .markswiftLineHeight(lineHeight, size: size, relativeTo: style,
+                             ascent: ascent, descent: descent, natural: natural)
     }
 }
 #if os(iOS)
@@ -39,6 +47,7 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
     let ascent: CGFloat
     let descent: CGFloat
     let lineLimit: Int?
+    let justify: Bool
     func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -51,6 +60,9 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.lineBreakStrategy = []
+        if justify {
+            paragraph.alignment = .justified
+        }
         paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
         paragraph.maximumLineHeight = paragraph.minimumLineHeight
         // A fixed-height UIKit paragraph puts its baseline at the line height minus the native descent, rounded to the
