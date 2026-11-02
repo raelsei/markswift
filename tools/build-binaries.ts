@@ -110,9 +110,11 @@ async function main(): Promise<void> {
   console.log(`Wrote ${join(DIST_BIN, "checksums.txt")}`);
 
   if (!onlyArg) {
-    const formulaPath = join(ROOT, "Formula/markswift.rb");
+    // Generated per release from these exact tarballs and published as a release asset (never committed: a
+    // checksum from another build would not match the published binaries).
+    const formulaPath = join(DIST_BIN, "markswift.rb");
     await writeFile(formulaPath, formulaContent(pkg.version, checksums));
-    console.log(`Updated ${formulaPath} with release checksums.`);
+    console.log(`Wrote ${formulaPath} with release checksums.`);
   }
 }
 

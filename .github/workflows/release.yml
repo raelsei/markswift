@@ -97,13 +97,13 @@ jobs:
             gh release upload "$GITHUB_REF_NAME" \
               dist/bin/*.tar.gz \
               dist/bin/checksums.txt \
-              Formula/markswift.rb \
+              dist/bin/markswift.rb \
               --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
               dist/bin/*.tar.gz \
               dist/bin/checksums.txt \
-              Formula/markswift.rb \
+              dist/bin/markswift.rb \
               --title "$GITHUB_REF_NAME" \
               --generate-notes
           fi
