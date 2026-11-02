@@ -59,7 +59,7 @@ Options:
   -h, --help        Show this help
   -v, --version     Show version
 
-Requires Node.js 20+ (or Bun 1.4.2+) and Google Chrome; webfonts need python3 with fontTools and brotli. CSS must already be compiled; JavaScript behavior is not translated.
+Requires Node.js 20+ (or Bun 1.4.2+) and Google Chrome. CSS must already be compiled; JavaScript behavior is not translated.
 `;
 
 const valueFlags = new Set([

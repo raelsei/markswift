@@ -37,10 +37,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-      - run: python -m pip install fonttools==4.60.2 brotli==1.2.0
       - run: bun install --frozen-lockfile
       - run: ./node_modules/.bin/playwright-core install --no-shell chromium
       - name: Toolchain
@@ -93,27 +89,23 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-      - run: python -m pip install fonttools==4.60.2 brotli==1.2.0
       - run: bun install --frozen-lockfile
       - run: ./node_modules/.bin/playwright-core install --no-shell chromium
       # The device type has a memory suffix that cannot be derived from the display name.
       - name: Ensure the iPad simulator exists
         run: |
-          python - <<'PY'
-          import json, os, subprocess
-          def simctl(*args):
-              return subprocess.check_output(["xcrun", "simctl", *args], text=True)
-          name = os.environ["MARKSWIFT_SIMULATOR_IPAD"]
-          devices = json.loads(simctl("list", "devices", "available", "-j"))["devices"]
-          if not any(d["name"] == name and d.get("isAvailable") for group in devices.values() for d in group):
-              runtimes = json.loads(simctl("list", "runtimes", "available", "-j"))["runtimes"]
-              ios = [r for r in runtimes if r["platform"] == "iOS"]
-              runtime = max(ios, key=lambda r: tuple(map(int, r["version"].split("."))))["identifier"]
-              print(simctl("create", name, "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB", runtime))
-          PY
+          bun -e "
+          const { execFileSync } = require('child_process');
+          function simctl(...args) { return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf-8' }); }
+          const name = process.env.MARKSWIFT_SIMULATOR_IPAD;
+          const devices = JSON.parse(simctl('list', 'devices', 'available', '-j')).devices;
+          if (!Object.values(devices).flat().some(d => d.name === name && d.isAvailable)) {
+            const runtimes = JSON.parse(simctl('list', 'runtimes', 'available', '-j')).runtimes;
+            const ios = runtimes.filter(r => r.platform === 'iOS');
+            const runtime = ios.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))[0].identifier;
+            console.log(simctl('create', name, 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB', runtime));
+          }
+          "
       - name: Render iPhone and iPad breakpoint captures
         run: bun run pilot --renderer ios --all --reflow --group breakpoints --out "$RUNNER_TEMP/breakpoints-ios"
       - name: Gate breakpoint reflow

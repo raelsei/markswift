@@ -2,9 +2,13 @@ import type { FontFace } from "../model/layout.ts";
 import type { DiagnosticLevel } from "../model/semantic.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
-import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
-import { type FontConverter, pythonFontConverter } from "./converter.ts";
+import { coversLatin, fontFileStem, srcBytes, WEIGHT_SUBFAMILY } from "./source.ts";
+import { type FontConverter, nativeFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
+import { dropUnusedAxes, instanceVariableFont } from "./instancer.ts";
+import { assembleSfnt, buildRewrittenNameTable, extractFontMetrics, parseSfnt, readNameTable } from "./sfnt.ts";
+
+export type FontUsages = ReadonlyMap<string, ReadonlySet<number>>;
 
 /**
  * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
@@ -13,12 +17,16 @@ import { plistFragment } from "./registration.ts";
  * own. Faces are grouped by (family, style): within a group the Basic-Latin subset wins, the
  * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
  * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
+ *
+ * When `usages` shows a variable font is used at only a few axis positions (<= 3), static instances
+ * are emitted to shrink the font bundle while keeping rendering identical.
  */
 export async function packageFonts(
   faces: FontFace[],
   sources: ReadonlyMap<string, Uint8Array>,
-  convert: FontConverter = pythonFontConverter,
+  convert: FontConverter = nativeFontConverter,
   signal?: AbortSignal,
+  usages?: FontUsages,
 ): Promise<FontPackage> {
   const notes: FontPackage["notes"] = [];
   const note = (level: DiagnosticLevel, message: string) =>
@@ -42,7 +50,7 @@ export async function packageFonts(
     if (group.length > 1) {
       note(
         "approximated",
-        `font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
+        `font-family ${chosen.family} declares ${group.length} unicode-range subsets (${chosen.style}, weight ${chosen.weight.join("–")}); bundled the Basic-Latin face`,
       );
     }
     if (!latin.length)
@@ -87,38 +95,134 @@ export async function packageFonts(
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
     const tool = await convert(bytes, family, subfamily, signal);
     if (typeof tool === "string") {
-      // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
-      const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
-      note(
-        "unmapped",
-        `font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
-          (sig === "wOF2" || sig === "wOFF"
-            ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli`
-            : ""),
-      );
+      note("unmapped", `font-family ${chosen.family} not bundled (${tool}); text falls back to the system font`);
       continue;
     }
-    assets[`Fonts/${file}`] = tool.bytes ?? bytes; // No rewritten bytes: already an sfnt with a matching name, shipped verbatim.
-    const metrics: FaceMetrics = {
-      upem: tool.upem,
-      ascent: tool.ascent,
-      descent: tool.descent,
-      lineGap: tool.lineGap,
-      useTypoMetrics: tool.useTypoMetrics,
-    };
-    packaged.push({
-      family,
-      sourceFamily: chosen.family,
-      stretch,
-      file,
-      style: chosen.style,
-      weight: chosen.weight,
-      axes: tool.axes,
-      metrics,
-      converted: tool.converted,
-      renamed: tool.renamed,
-    });
-    claimed.set(stem.toLowerCase(), family);
+
+    const isVariable =
+      (chosen.weight[0] !== chosen.weight[1] || tool.axes["wght"] !== undefined) && tool.axes["wght"] !== undefined;
+    const usedWeights = isVariable ? usages?.get(chosen.family.toLowerCase()) : undefined;
+
+    // Static instances: when a variable font is used only at a few axis positions (<= 3), emit static instances.
+    const canInstance =
+      isVariable &&
+      usedWeights &&
+      usedWeights.size >= 1 &&
+      usedWeights.size <= 3 &&
+      [...usedWeights].every((w) => w >= tool.axes["wght"]![0] && w <= tool.axes["wght"]![1]);
+
+    if (canInstance) {
+      const baseBytes = tool.bytes ?? bytes;
+      for (const w of [...usedWeights].sort((a, b) => a - b)) {
+        const instWeightName = w !== 400 ? (WEIGHT_SUBFAMILY[w] ?? `W${w}`) : "";
+        const instSubfamily =
+          [instWeightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
+        const instStem = fontFileStem(family, instSubfamily, claimed);
+        if (instStem === undefined) continue;
+        const instFile = `${instStem}.${sig === "OTTO" ? "otf" : "ttf"}`;
+
+        try {
+          const instanced = await instanceVariableFont(baseBytes, { wght: w });
+          // Rewrite name table for the static subfamily
+          const sfnt = parseSfnt(instanced);
+          const nameTable = sfnt.tables.get("name");
+          let finalInstancedBytes = instanced;
+          if (nameTable) {
+            const { records } = readNameTable(nameTable.data);
+            const newNameTable = buildRewrittenNameTable(records, family, instSubfamily, false);
+            sfnt.tables.set("name", {
+              offset: 0,
+              length: newNameTable.length,
+              checksum: 0,
+              data: newNameTable,
+            });
+            finalInstancedBytes = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
+          }
+
+          const instSfnt = parseSfnt(finalInstancedBytes);
+          const { metrics: instMetrics } = extractFontMetrics(finalInstancedBytes, instSfnt.tables);
+
+          assets[`Fonts/${instFile}`] = finalInstancedBytes;
+          packaged.push({
+            family,
+            sourceFamily: chosen.family,
+            stretch,
+            file: instFile,
+            style: chosen.style,
+            weight: [w, w],
+            axes: {},
+            metrics: instMetrics,
+            converted: tool.converted,
+            renamed: true,
+          });
+          claimed.set(instStem.toLowerCase(), family);
+        } catch {
+          // ponytail: HarfBuzz instancing fallback to variable font if a glyph format is unsupported
+          assets[`Fonts/${file}`] = tool.bytes ?? bytes;
+          packaged.push({
+            family,
+            sourceFamily: chosen.family,
+            stretch,
+            file,
+            style: chosen.style,
+            weight: chosen.weight,
+            axes: tool.axes,
+            metrics: {
+              upem: tool.upem,
+              ascent: tool.ascent,
+              descent: tool.descent,
+              lineGap: tool.lineGap,
+              useTypoMetrics: tool.useTypoMetrics,
+            },
+            converted: tool.converted,
+            renamed: tool.renamed,
+          });
+          claimed.set(stem.toLowerCase(), family);
+          break;
+        }
+      }
+    } else {
+      let finalBytes = tool.bytes ?? bytes;
+      let finalAxes = tool.axes;
+
+      if (isVariable) {
+        // Drop any unused axes other than wght to shrink the variable bundle
+        const extraAxes = Object.keys(tool.axes).filter((tag) => tag !== "wght");
+        if (extraAxes.length > 0) {
+          try {
+            finalBytes = await dropUnusedAxes(finalBytes, extraAxes);
+            const sfnt = parseSfnt(finalBytes);
+            const res = extractFontMetrics(finalBytes, sfnt.tables);
+            finalAxes = res.axes;
+          } catch {
+            // Keep original if reduction fails
+          }
+        }
+      }
+
+      assets[`Fonts/${file}`] = finalBytes;
+      const metrics: FaceMetrics = {
+        upem: tool.upem,
+        ascent: tool.ascent,
+        descent: tool.descent,
+        lineGap: tool.lineGap,
+        useTypoMetrics: tool.useTypoMetrics,
+      };
+      packaged.push({
+        family,
+        sourceFamily: chosen.family,
+        stretch,
+        file,
+        style: chosen.style,
+        weight: chosen.weight,
+        axes: finalAxes,
+        metrics,
+        converted: tool.converted,
+        renamed: tool.renamed,
+      });
+      claimed.set(stem.toLowerCase(), family);
+    }
+
     if (!chosen.loaded)
       note(
         "approximated",

@@ -1,11 +1,5 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
-import script from "./convert-font.py" with { type: "text" };
-
-const run = promisify(execFile);
+import { decompressFont } from "./decompress.ts";
+import { assembleSfnt, buildRewrittenNameTable, extractFontMetrics, parseSfnt, readNameTable } from "./sfnt.ts";
 
 export interface FontToolResult {
   upem: number;
@@ -28,36 +22,56 @@ export type FontConverter = (
   signal?: AbortSignal,
 ) => Promise<FontToolResult | string>;
 
-/** python3 + fontTools. The only temp files in font packaging live and die here. */
-export const pythonFontConverter: FontConverter = async (bytes, family, subfamily, signal) => {
-  const dir = await mkdtemp(join(tmpdir(), "markswift-font-"));
+/** Pure TypeScript + WebAssembly font processor. Replaces Python/fontTools in-memory. */
+export const nativeFontConverter: FontConverter = async (bytes, family, subfamily, signal) => {
+  if (signal?.aborted) return "conversion aborted";
   try {
-    const src = join(dir, "src"),
-      dst = join(dir, "dst"),
-      py = join(dir, "convert-font.py");
-    await writeFile(src, bytes);
-    await writeFile(py, script);
-    let out: string;
-    try {
-      ({ stdout: out } = await run("python3", [py, src, dst, family, subfamily, "1"], {
-        signal,
-        maxBuffer: 16 * 1024 * 1024,
-      }));
-    } catch (error) {
-      const e = error as NodeJS.ErrnoException & { stderr?: string };
-      if (e.code === "ENOENT")
-        return "python3 not found on PATH (webfont conversion needs Python 3 with fontTools and brotli)";
-      return (e.stderr?.trim().split("\n").pop() || `python3 failed: ${e.message}`).slice(0, 200);
+    const { bytes: decompressed, converted } = await decompressFont(bytes);
+    if (signal?.aborted) return "conversion aborted";
+
+    const sfnt = parseSfnt(decompressed);
+    const nameTable = sfnt.tables.get("name");
+    if (!nameTable) return "font missing name table";
+
+    const { records, names } = readNameTable(nameTable.data);
+    const existingNames = new Set(Array.from(names.values()).filter(Boolean));
+    const wantRename = !existingNames.has(family);
+
+    let finalBytes = decompressed;
+    let renamed = false;
+
+    if (wantRename) {
+      const hasFvar = sfnt.tables.has("fvar");
+      const newNameTable = buildRewrittenNameTable(records, family, subfamily, hasFvar);
+      sfnt.tables.set("name", {
+        offset: 0,
+        length: newNameTable.length,
+        checksum: 0,
+        data: newNameTable,
+      });
+      finalBytes = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
+      renamed = true;
     }
-    let tool: Omit<FontToolResult, "bytes"> & { wrote: boolean };
-    try {
-      tool = JSON.parse(out);
-    } catch {
-      return `unreadable fontTools output: ${out.slice(0, 120)}`;
-    }
-    const { wrote, ...result } = tool;
-    return wrote ? { ...result, bytes: new Uint8Array(await readFile(dst)) } : result;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+
+    // Extract metrics from the final font
+    const finalSfnt = renamed ? parseSfnt(finalBytes) : sfnt;
+    const { metrics, axes } = extractFontMetrics(finalBytes, finalSfnt.tables);
+
+    return {
+      upem: metrics.upem,
+      ascent: metrics.ascent,
+      descent: metrics.descent,
+      lineGap: metrics.lineGap,
+      useTypoMetrics: metrics.useTypoMetrics,
+      axes,
+      converted,
+      renamed,
+      ...(renamed || converted ? { bytes: finalBytes } : {}),
+    };
+  } catch (err) {
+    return (err as Error).message.slice(0, 200);
   }
 };
+
+/** Alias for backwards compatibility. */
+export const pythonFontConverter = nativeFontConverter;
