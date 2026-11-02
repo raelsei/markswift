@@ -1,11 +1,52 @@
-/// A CSS width breakpoint as the component root sees it: `atLeast` (`min-width`, `>=`) or `above` (`max-width`, `>`).
+import SwiftUI
+
+/// Viewport orientation for CSS media queries.
+enum MarkswiftOrientation: Sendable {
+    case portrait, landscape
+}
+
+/// A CSS breakpoint as the component root sees it: width, height, or orientation.
 enum MarkswiftBandEdge: Sendable {
     case atLeast(CGFloat), above(CGFloat)
+    case atLeastHeight(CGFloat), aboveHeight(CGFloat)
+    case orientation(MarkswiftOrientation)
+
+    nonisolated var isWidthOnly: Bool {
+        switch self {
+        case .atLeast, .above: true
+        case .atLeastHeight, .aboveHeight, .orientation: false
+        }
+    }
+
     /// Narrowest proposal that passes the edge: exactly `px`, or the next representable width above it.
-    var minWidth: CGFloat {
+    nonisolated var minWidth: CGFloat {
         switch self {
         case .atLeast(let px): px
         case .above(let px): px.nextUp
+        case .atLeastHeight, .aboveHeight, .orientation: 0
+        }
+    }
+
+    nonisolated func passes(width: CGFloat?, height: CGFloat?) -> Bool {
+        switch self {
+        case .atLeast(let px):
+            guard let w = width, w.isFinite else { return false }
+            return w >= px
+        case .above(let px):
+            guard let w = width, w.isFinite else { return false }
+            return w > px
+        case .atLeastHeight(let px):
+            guard let h = height, h.isFinite else { return false }
+            return h >= px
+        case .aboveHeight(let px):
+            guard let h = height, h.isFinite else { return false }
+            return h > px
+        case .orientation(.landscape):
+            guard let w = width, let h = height, w.isFinite, h.isFinite else { return false }
+            return w > h
+        case .orientation(.portrait):
+            guard let w = width, let h = height, w.isFinite, h.isFinite else { return false }
+            return h >= w
         }
     }
 }
@@ -28,16 +69,39 @@ struct MarkswiftBandCandidate: Layout {
     }
 }
 
-/// Layout-time band selection: the widest band whose edge the proposed width passes; band 0 always fits.
+/// Layout-time band selection: the widest band whose edge the proposed size passes; band 0 always fits.
 struct MarkswiftBands<Content: View>: View {
     let edges: [MarkswiftBandEdge]
     @ViewBuilder let content: (Int) -> Content
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            ForEach(Array(edges.indices.reversed()), id: \.self) { i in
-                MarkswiftBandCandidate(minWidth: edges[i].minWidth) { content(i + 1).environment(\.markswiftBand, i + 1) }
+
+    private var isPureWidth: Bool {
+        edges.allSatisfy(\.isWidthOnly)
+    }
+
+    private func bandIndex(for width: CGFloat, height: CGFloat) -> Int {
+        for i in edges.indices.reversed() {
+            if edges[i].passes(width: width, height: height) {
+                return i + 1
             }
-            content(0).environment(\.markswiftBand, 0)
+        }
+        return 0
+    }
+
+    var body: some View {
+        if isPureWidth {
+            ViewThatFits(in: .horizontal) {
+                ForEach(Array(edges.indices.reversed()), id: \.self) { i in
+                    MarkswiftBandCandidate(minWidth: edges[i].minWidth) {
+                        content(i + 1).environment(\.markswiftBand, i + 1)
+                    }
+                }
+                content(0).environment(\.markswiftBand, 0)
+            }
+        } else {
+            GeometryReader { proxy in
+                let b = bandIndex(for: proxy.size.width, height: proxy.size.height)
+                content(b).environment(\.markswiftBand, b)
+            }
         }
     }
 }

@@ -68,6 +68,16 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   applyTooltips(root, doc);
   dropInvisible(root);
   pruneHitTesting(root);
+  const checkSticky = (node: SemNode, inScroll = false): void => {
+    const scrolls = inScroll || ((node.kind === "stack" || node.kind === "grid") && node.scroll === "v");
+    if (node.sticky && !inScroll) {
+      addDiagnostic(node.diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
+    }
+    if (node.kind === "stack" || node.kind === "grid") {
+      for (const c of node.children) checkSticky(c, scrolls);
+    }
+  };
+  checkSticky(root);
   // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
   const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
   const colorScheme =

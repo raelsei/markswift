@@ -57,7 +57,7 @@ export function bandEdges(
     devices: [],
     max: docs.at(-1)!.viewport.w,
   }).edges;
-  const bands = docs.map((d) => bandOf(d.viewport.w, cssEdges));
+  const bands = docs.map((d) => bandOf(d.viewport.w, cssEdges, d.viewport.h));
   if (
     bands[0] !== 0 ||
     bands.at(-1) !== cssEdges.length ||
@@ -73,7 +73,14 @@ export function bandEdges(
     return {
       warning: `the root does not follow the viewport width (viewport minus root width: ${round(base)}px at ${first.viewport.w}px, ${round(offset(off))}px at ${off.viewport.w}px); breakpoints are not reconstructed and the view keeps the ${first.viewport.w}px layout`,
     };
-  return { edges: cssEdges.map((e) => ({ ...e, px: round(e.px - base) })), cssEdges, bands };
+  return {
+    edges: cssEdges.map((e) => ({
+      ...e,
+      px: e.feature === "height" || e.feature === "orientation" ? e.px : round(e.px - base),
+    })),
+    cssEdges,
+    bands,
+  };
 }
 
 /** A member lookup missed: the band dropped, hoisted or restructured the node. The nearest ancestor becomes a holder. */

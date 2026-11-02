@@ -1,7 +1,7 @@
 /** Semantic node base construction and confidence classification. */
 import { type SemNode, type SemBase, type Diagnostic, addDiagnostic, confidenceOf } from "../model/semantic.ts";
 import { type LayoutNode, VALIDATION_MARK } from "../model/layout.ts";
-import { parseDeclared } from "../css/index.ts";
+import { parseDeclared, px } from "../css/index.ts";
 import { type InferenceContext } from "./context.ts";
 import { stateStylesOf, styleOf } from "./style.ts";
 import { sizeOf, trailingInset } from "./sizing.ts";
@@ -105,6 +105,9 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
     else child.children.forEach(targets);
   };
   if (n.styles["pointer-events"] === "none" && !passesTaps(n)) n.children.forEach(targets);
+  const topInset = n.styles["top"] ?? n.preferredSize?.insets?.top;
+  const isTopSticky = n.styles["position"] === "sticky" && topInset !== undefined && topInset !== "auto";
+  const sticky = isTopSticky ? { top: px(topInset) || 0 } : undefined;
   const schemes = (n.styles["color-scheme"] ?? "").split(/\s+/).filter((v) => v && v !== "only");
   const changedScheme = n !== ctx.root && n.styles["color-scheme"] !== ctx.parent?.styles["color-scheme"];
   const colorScheme = changedScheme
@@ -142,6 +145,7 @@ export function makeBase(n: LayoutNode, ctx: InferenceContext, declared: Record<
       ? { hitRegionTarget: n.id }
       : {}),
     ...(tooltip ? { tooltip } : {}),
+    ...(sticky ? { sticky } : {}),
   };
 }
 
