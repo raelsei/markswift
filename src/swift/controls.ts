@@ -250,6 +250,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         ...focused,
         ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
+        ...(n.suggestions?.length
+          ? [`.markswiftSuggestions([${n.suggestions.map(str).join(", ")}], text: ${binding})`]
+          : []),
       ];
     case "secureField":
       // The browser paints one bullet per character of the value.
@@ -338,6 +341,48 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     }
     case "picker": {
+      if (n.multiple) {
+        if (still) {
+          const selectedSet = new Set(n.values ?? []);
+          const tint = n.accent ? colorExpr(n.accent, deps, deps.id) : UA[deps.theme].accent;
+          const rows = (n.options ?? []).map((opt) => {
+            const isSelected = selectedSet.has(opt.label);
+            return [
+              "HStack(spacing: 0) {",
+              `    Text(verbatim: ${str(opt.label)})`,
+              "        .lineLimit(1)",
+              "        .padding(.horizontal, 4)",
+              "    Spacer(minLength: 0)",
+              "}",
+              ".frame(maxWidth: .infinity, alignment: .leading)",
+              ...(isSelected ? [`.background(${tint})`, ".foregroundStyle(Color.white)"] : []),
+            ];
+          });
+          return [
+            "VStack(alignment: .leading, spacing: 0) {",
+            ...indent(rows.flat(), 1),
+            "}",
+            ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)",
+          ];
+        }
+        const multiBinding = state ? `$${state}` : "Binding.constant(Set<String>())";
+        const rows = (n.options ?? []).map((opt) => {
+          const disabledAttr = opt.disabled ? ".disabled(true)" : "";
+          return `Text(verbatim: ${str(opt.label)}).tag(${str(opt.label)})${disabledAttr}`;
+        });
+        const a11yValue = state
+          ? `.accessibilityValue(${state}.isEmpty ? "No selection" : Array(${state}).sorted().joined(separator: ", "))`
+          : "";
+        return [
+          `List(selection: ${multiBinding}) {`,
+          ...indent(rows, 1),
+          "}",
+          ".listStyle(.plain)",
+          ".scrollContentBackground(.hidden)",
+          ".markswiftMultiSelect()",
+          ...(a11yValue ? [a11yValue] : []),
+        ];
+      }
       // Closed, a picker shows its selection and, unless `appearance: none` removed it, the
       // browser's arrow. App mode keeps that look as a Menu label (never the option list) over an
       // inline Picker, so the native menu and selection behaviour stay.
