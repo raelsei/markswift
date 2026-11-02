@@ -95,7 +95,7 @@ test("soft hyphen and zero-width space remain breakable in app mode", () => {
   expect(node.unbreakable).toBeUndefined();
 });
 
-test("text-align: justify sets justify on IR and uses TextRenderer / greedy justify", () => {
+test("text-align: justify: the greedy UIKit paragraph justifies, SwiftUI Text reports ragged right", () => {
   const doc = createDoc(
     "Justified text stretches each full line so that both edges line up evenly.",
     { "text-align": "justify" },
@@ -105,21 +105,11 @@ test("text-align: justify sets justify on IR and uses TextRenderer / greedy just
     ],
   );
   const screen = inferScreen(doc, "Test");
-  const node = (screen.root as StackNode).children[0] as TextNode;
-  expect(node.justify).toBe(true);
-
-  // Fidelity emit applies MarkswiftTextRenderer with justify: true and justifyWidth
-  const fidelity = emitSwift(screen, "TestView", { mode: "fidelity" }).view;
-  expect(fidelity).toContain("MarkswiftTextRenderer(justify: true, justifyWidth: 280.0)");
-
-  // App emit applies justify: true
-  const app = emitSwift(screen, "TestView", { mode: "app" }).view;
-  expect(app).toContain("justify: true");
-
-  // No diagnostic for text-align: justify
-  const result = compileLayout(doc);
-  const diags = result.diagnostics.flatMap((r) => r.diagnostics.map((d) => d.feature));
-  expect(diags).not.toContain("text-align: justify");
+  expect(((screen.root as StackNode).children[0] as TextNode).justify).toBe(true);
+  // Fidelity draws SwiftUI Text, which has no public justification API: reported, not faked.
+  const fidelity = compileLayout(doc, { mode: "fidelity" });
+  expect(fidelity.code).not.toContain("justify");
+  expect(fidelity.diagnostics.flatMap((r) => r.diagnostics.map((d) => d.feature))).toContain("text-align: justify");
 });
 
 test("custom decorations (overline, wavy, double, thickness) emit MarkswiftDecoration and no diagnostics", () => {

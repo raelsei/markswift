@@ -93,7 +93,9 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
       const lines = d.lines.map((line) => {
         const args = [`kind: ${str(line)}`];
         if (d.style && d.style !== "solid") args.push(`style: ${str(d.style)}`);
-        if (d.color) args.push(`color: ${colorExpr(d.color, ctx, n.id, `run${i}.dec`)}`);
+        // CSS decorations default to the text colour (\`currentColor\`); the renderer has no other way to know it.
+        const color = d.color ?? r.color;
+        if (color) args.push(`color: ${colorExpr(color, ctx, n.id, d.color ? `run${i}.dec` : `run${i}`)}`);
         if (d.thickness !== undefined) args.push(`thickness: ${num(d.thickness)}`);
         if (d.offset !== undefined) args.push(`offset: ${num(d.offset)}`);
         return `MarkswiftDecoration.Line(${args.join(", ")})`;
@@ -114,20 +116,15 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
       : ["Text.markswiftRuns([", ...parts.flatMap((p) => `${p},`.split("\n").map((l) => `    ${l}`)), "])"];
   const offsets = runs.flatMap((r) => (r.relativeOffset ? [r.relativeOffset] : []));
   const hasCustomDeco = runs.some((r) => isCustomDecoration(r.decoration));
-  const hasJustify = n.justify === true;
-  if (offsets.length || hasCustomDeco || hasJustify) {
+  // Justification is the greedy UIKit path's (`MarkswiftGreedyText`); SwiftUI Text has no public API for it.
+  if (n.justify)
+    note(n, "approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  if (offsets.length || hasCustomDeco) {
     const x = offsets.length ? Math.max(...offsets.map(([x]) => Math.abs(x))) : 0;
     const y = offsets.length ? Math.max(...offsets.map(([, y]) => Math.abs(y))) : 0;
     const args: string[] = [];
     if (x !== 0) args.push(`x: ${num(x)}`);
     if (y !== 0) args.push(`y: ${num(y)}`);
-    if (hasJustify) {
-      args.push("justify: true");
-      if (ctx.mode === "fidelity") {
-        const w = n.frame.w - n.padding[1] - n.padding[3];
-        args.push(`justifyWidth: ${num(w)}`);
-      }
-    }
     out.push(`.textRenderer(MarkswiftTextRenderer(${args.join(", ")}))`);
   }
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);

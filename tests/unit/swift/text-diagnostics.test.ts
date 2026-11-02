@@ -108,14 +108,13 @@ test("default text property values are not reported", () => {
     expect(found).not.toContain(feature);
 });
 
-test("custom text decorations and text-align: justify are not reported as approximations", () => {
+test("custom text decorations are not reported as approximations", () => {
   const found = features(
     doc({
       "-webkit-text-decorations-in-effect": "underline overline",
       "text-decoration-style": "wavy",
       "text-decoration-thickness": "3px",
       "text-underline-offset": "4px",
-      "text-align": "justify",
     }),
   );
   for (const feature of [
@@ -123,7 +122,6 @@ test("custom text decorations and text-align: justify are not reported as approx
     "text-underline-offset",
     "text-decoration-style",
     "text-decoration-line: overline",
-    "text-align: justify",
   ])
     expect(found).not.toContain(feature);
 });

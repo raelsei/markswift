@@ -1,5 +1,3 @@
-import CoreText
-
 /// CSS relative positioning moves paint after text layout; adjacent runs retain their advances.
 struct MarkswiftTextOffset: TextAttribute, Sendable, Hashable {
     let x: CGFloat
@@ -18,69 +16,33 @@ struct MarkswiftDecoration: TextAttribute, Sendable, Hashable {
     var lines: [Line]
 }
 
-nonisolated private func getCTLine(from line: Text.Layout.Line) -> CTLine? {
-    for run in line {
-        let mirror = Mirror(reflecting: run)
-        for c in mirror.children where c.label == "line" {
-            let cf = c.value as CFTypeRef
-            if CFGetTypeID(cf) == CTLineGetTypeID() {
-                return (cf as! CTLine)
-            }
-        }
-    }
-    return nil
-}
-
 struct MarkswiftTextRenderer: TextRenderer, Sendable {
     var x: CGFloat = 0
     var y: CGFloat = 0
-    var justify: Bool = false
-    var justifyWidth: CGFloat? = nil
 
     var displayPadding: EdgeInsets {
         EdgeInsets(top: y, leading: x, bottom: y, trailing: x)
     }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
-        let maxW = justifyWidth ?? layout.map { $0.typographicBounds.width }.max() ?? 0
-        for (i, line) in layout.enumerated() {
-            let isLast = i == layout.count - 1
-            var lineDrawn = false
-            if justify && !isLast && layout.count > 1 && maxW > 0 {
-                if let ctLine = getCTLine(from: line),
-                   let justified = CTLineCreateJustifiedLine(ctLine, 1.0, Double(maxW)) {
-                    context.withCGContext { cg in
-                        cg.saveGState()
-                        let origin = line.typographicBounds.origin
-                        cg.translateBy(x: origin.x, y: origin.y)
-                        cg.scaleBy(x: 1, y: -1)
-                        cg.textPosition = .zero
-                        CTLineDraw(justified, cg)
-                        cg.restoreGState()
-                    }
-                    lineDrawn = true
-                }
-            }
-
+        for line in layout {
             for run in line {
                 var copy = context
                 if let offset = run[MarkswiftTextOffset.self] {
                     copy.translateBy(x: offset.x, y: offset.y)
                 }
-                if !lineDrawn {
-                    copy.draw(run)
-                }
+                copy.draw(run)
                 if let deco = run[MarkswiftDecoration.self] {
-                    drawDecorations(deco, for: run, in: &copy, justifiedWidth: lineDrawn && line.count == 1 ? maxW : nil)
+                    drawDecorations(deco, for: run, in: &copy)
                 }
             }
         }
     }
 
-    private func drawDecorations(_ deco: MarkswiftDecoration, for run: Text.Layout.Run, in context: inout GraphicsContext, justifiedWidth: CGFloat?) {
+    private func drawDecorations(_ deco: MarkswiftDecoration, for run: Text.Layout.Run, in context: inout GraphicsContext) {
         let b = run.typographicBounds
         let x0 = b.rect.minX
-        let x1 = justifiedWidth ?? b.rect.maxX
+        let x1 = b.rect.maxX
         let baseline = b.origin.y
         let ascent = b.ascent
         for line in deco.lines {
