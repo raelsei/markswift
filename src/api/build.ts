@@ -20,6 +20,7 @@ import { GENERATED_BY } from "../model/version.ts";
 import { unionFaces } from "./convert.ts";
 import { captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
 import type { ConvertOptions } from "./types.ts";
+import { downloadRemoteImages } from "../images/index.ts";
 
 export interface BuildComponent {
   /** Swift view name, e.g. `AccordionView`. */
@@ -48,6 +49,8 @@ export interface BuildOptions {
   timeoutMs?: number;
   /** App colours for the library's `Palette` tokens; unmapped tokens and unused keys become warnings. */
   palette?: PaletteMap;
+  /** Optionally emit an Assets.xcassets imageset structure instead of Images/ resources. */
+  assetCatalog?: boolean;
 }
 
 export interface BuildResult {
@@ -156,6 +159,18 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
     const all = captured.flatMap((c) => c.bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary])));
     const allRoots = all.flatMap((c) => [c.layout.root, ...(c.layout.layers ?? []).flatMap((l) => l.nodes)]);
     const usages = collectFontUsages(allRoots);
+    const imageWarnings = (
+      await Promise.all(
+        components.map((c, i) => {
+          const docs = captured[i]!.bands.flatMap((b) =>
+            b.dark ? [b.primary.layout, b.dark.layout] : [b.primary.layout],
+          );
+          const base =
+            "url" in c.source ? c.source.url : `${server?.origin ?? "http://markswift.invalid"}/${c.source.file}`;
+          return downloadRemoteImages(docs, base, { signal: deadline });
+        }),
+      )
+    ).flat();
     const fonts = await packageFonts(
       unionFaces(all.map((c) => c.layout.fonts)),
       new Map(all.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes])),
@@ -186,6 +201,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
         fontMetrics: metricsForFonts(fonts),
         registerFonts: fonts.faces.length > 0,
         palette: options.palette,
+        assetCatalog: options.assetCatalog,
       },
     );
 
@@ -195,7 +211,9 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
     for (const [name, text] of Object.entries(compiled.files)) files[dir + name] = text;
     if (fonts.faces.length) files[`${dir}MarkswiftFonts.swift`] = registrationSwift(fonts.faces);
     for (const [name, bytes] of Object.entries({ ...compiled.assets, ...fonts.assets })) assets[dir + name] = bytes;
-    const resources = ["Fonts", "Images"].filter((d) => Object.keys(assets).some((k) => k.startsWith(`${dir}${d}/`)));
+    const resources = ["Fonts", "Images", "Assets.xcassets"].filter((d) =>
+      Object.keys(assets).some((k) => k.startsWith(`${dir}${d}/`)),
+    );
     if (resources.length) {
       // ponytail: text swap keeps one runtime source; a runtime hook if the line ever moves
       const runtime = files[`${dir}MarkswiftRuntime.swift`]!.split(RUNTIME_BUNDLE);
@@ -214,7 +232,11 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       "    targets: [",
       "        .target(",
       `            name: "${library}",`,
-      ...(resources.length ? [`            resources: [${resources.map((d) => `.copy("${d}")`).join(", ")}],`] : []),
+      ...(resources.length
+        ? [
+            `            resources: [${resources.map((d) => (d === "Assets.xcassets" ? `.process("${d}")` : `.copy("${d}")`)).join(", ")}],`,
+          ]
+        : []),
       "            swiftSettings: [.defaultIsolation(MainActor.self)]",
       "        ),",
       "    ]",
@@ -237,6 +259,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
     }
     for (const w of compiled.warnings) if (w.component === undefined) add(w);
     for (const w of fonts.notes) add(w);
+    for (const w of imageWarnings) add(w);
     return { files, assets, warnings: [...warnings.values()], diagnostics: compiled.diagnostics };
   } catch (error) {
     if (deadline.aborted) throw new Error(`build timed out after ${timeoutMs} ms`, { cause: error });

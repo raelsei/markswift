@@ -5,7 +5,11 @@ import { compileLayout } from "../../../src/compiler/index.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc } from "../../../src/model/layout.ts";
 import type { StackNode, TextNode } from "../../../src/model/semantic.ts";
 
-function createDoc(text: string, styles: Record<string, string> = {}, lines?: Array<{ bounds: { x: number; y: number; w: number; h: number }; start: number; length: number }>): LayoutDoc {
+function createDoc(
+  text: string,
+  styles: Record<string, string> = {},
+  lines?: Array<{ bounds: { x: number; y: number; w: number; h: number }; start: number; length: number }>,
+): LayoutDoc {
   return {
     version: LAYOUT_DOC_VERSION,
     source: "test.html",

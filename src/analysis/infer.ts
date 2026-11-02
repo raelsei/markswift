@@ -19,6 +19,7 @@ import { svgFromDataUrl } from "./svg/markup.ts";
 import { generatedAlt, PSEUDO } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
+import { determineScale } from "../images/index.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
@@ -153,6 +154,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     const svg = svgFromDataUrl(src);
     // A pseudo's generated image: `content: url(…) / "alt"`, else decorative.
     const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
+    const scale = determineScale(n, src);
     const node = withBase(n, ctx, {
       kind: "image",
       ...(ctx.parent && PSEUDO[ctx.parent.tag]
@@ -161,6 +163,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
+      ...(scale > 1 ? { scale } : {}),
       ...(alt
         ? {
             alt,
