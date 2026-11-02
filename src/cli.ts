@@ -2,8 +2,8 @@
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { EditedFilesError } from "./cli/manifest.ts";
 import { runBuild, runConversion, runInstallBrowser } from "./cli/run.ts";
+import { stopSharedBrowser } from "./browser/capture.ts";
 import { VERSION } from "./model/version.ts";
-
 async function main(): Promise<number> {
   try {
     const command = parseArgs(process.argv.slice(2));
@@ -31,6 +31,8 @@ async function main(): Promise<number> {
     }
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
+  } finally {
+    await stopSharedBrowser();
   }
 }
 

@@ -46,6 +46,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     channel: options.browserChannel,
     restricted: options.untrustedInput,
     signal: deadline,
+    isolated: options.isolated,
+    cache: options.cache,
   });
   // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
   // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.
@@ -55,9 +57,10 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     deadline.addEventListener("abort", () => reject(deadline.reason), { once: true }),
   );
   timedOut.catch(() => {}); // the deadline may fire with no capture awaiting it
+  let failed = false;
   try {
     prepared = await resolveSource(source);
-    const { html, url, label } = prepared;
+    const { html, url, label, baseDir } = prepared;
     await renderer.start();
     deadline.throwIfAborted(); // the deadline fired mid-launch, before there was a browser to close
     const name = options.name ?? "ConvertedView";
@@ -67,6 +70,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       url,
       html,
       label,
+      baseDir,
       root: options.root ?? DEFAULT_ROOT,
       theme,
       css: options.css,
@@ -76,7 +80,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       // Width media queries are reconstructed: the captures do not report them as losses.
       ...(bp ? { breakpoints: true } : {}),
     };
-    // The open-state pass runs on the primary captures only, never on the probe.
     const layered = { ...req, layers: true };
     const first = await captureThemes(renderer, layered, timedOut);
     const plan = bp ? planFor(bp, first.primary.layout.conditions, viewport) : undefined;
@@ -190,12 +193,13 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
         : {}),
     };
   } catch (error) {
+    failed = true;
     if (deadline.aborted) throw new Error(`conversion timed out after ${timeoutMs} ms`, { cause: error });
     throw error;
   } finally {
     deadline.removeEventListener("abort", stopOnTimeout);
     try {
-      await renderer.stop();
+      await (failed ? renderer.discard() : renderer.stop());
     } finally {
       prepared?.close();
     }

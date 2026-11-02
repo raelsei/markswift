@@ -51,6 +51,8 @@ export interface BuildOptions {
   palette?: PaletteMap;
   /** Optionally emit an Assets.xcassets imageset structure instead of Images/ resources. */
   assetCatalog?: boolean;
+  /** Cache captures on disk under the user cache directory. Defaults to true. */
+  cache?: boolean;
 }
 
 export interface BuildResult {
@@ -113,7 +115,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       const key = `${viewport.width}x${viewport.height}`;
       let renderer = renderers.get(key);
       if (!renderer) {
-        const capture = new BrowserCapture({ viewport, dpr: 1, signal: deadline });
+        const capture = new BrowserCapture({ viewport, dpr: 1, signal: deadline, cache: options.cache });
         renderer = { capture, started: capture.start() };
         renderers.set(key, renderer);
       }
@@ -132,6 +134,7 @@ export async function buildLibrary(options: BuildOptions): Promise<BuildResult> 
       const req = {
         name: c.name,
         ...page,
+        baseDir: serveRoot,
         root: c.root ?? DEFAULT_ROOT,
         theme: c.theme ?? "adaptive",
         css: c.css,

@@ -43,6 +43,12 @@ export interface CaptureRequest {
   probeDismiss?: boolean;
   /** The conversion reconstructs width media queries: they are not reported as losses. */
   breakpoints?: boolean;
+  /** Directory containing local assets (stylesheets, fonts, images) for dependency tracking and cache keys. */
+  baseDir?: string;
+  /** Injected CSS for this capture. */
+  css?: string;
+  /** Class added to <html> for dark theme. */
+  darkClass?: string;
 }
 
 /** Stable node identity for re-sync. `path` = element-index path from the capture root ("0/2/1"); `tag` lower-case; `attrs` raw. */
