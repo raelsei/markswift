@@ -19,7 +19,14 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS, menuButton, menuExpr } from "./controls.ts";
-import { animated, animationModifier, longestExit, stateAnimation, transitionModifiers } from "./motion.ts";
+import {
+  animated,
+  animationModifier,
+  longestExit,
+  scrollAnimationModifier,
+  stateAnimation,
+  transitionModifiers,
+} from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const generated: string[] = [];
   if (n.kind === "image" && n.generatedFont && n.generatedFont.size > 0 && ctx.mode === "app") {
@@ -267,8 +274,10 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       `.modifier(MarkswiftResponsiveTranslation(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, xWidth: ${num(x[0])}, xHeight: ${num(x[1])}, yWidth: ${num(y[0])}, yHeight: ${num(y[1])}))`,
     );
   }
-  if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
-  else if ((n.motion?.animations || n.motion?.reduced) && ctx.mode === "fidelity")
+  if (animated(n, ctx.mode)) {
+    if (n.motion?.animations || n.motion?.reduced) m.push(animationModifier(n.motion!));
+    if (n.motion?.scroll) m.push(scrollAnimationModifier(n.motion!));
+  } else if ((n.motion?.animations || n.motion?.reduced || n.motion?.scroll) && ctx.mode === "fidelity")
     note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");
   // CSS relative positioning moves paint, not layout: outside rotation/scale, which apply about the box's own origin.
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.

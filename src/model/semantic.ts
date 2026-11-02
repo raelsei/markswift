@@ -262,11 +262,18 @@ export interface KeyframeMotion {
   fill: "none" | "forwards" | "backwards" | "both";
   tracks: Partial<Record<MotionChannel, MotionTrack>>;
 }
+/** One scroll-position or view-progress driven animation. */
+export interface ScrollMotion {
+  timeline: "scroll" | "view";
+  tracks: Partial<Record<MotionChannel, MotionTrack>>;
+}
 export interface Motion {
   /** Disjoint channels. */
   animations?: KeyframeMotion[];
   /** Under Reduce Motion: absent = same as `animations`; `[]` = the base look. */
   reduced?: KeyframeMotion[];
+  /** Scroll-driven animation (animation-timeline: scroll() or view()). */
+  scroll?: ScrollMotion;
   /** `transform-origin` as fractions of the border box; absent = centre. */
   anchor?: [number, number];
   /** Static values of the driven channels (the settled computed look); the emitter drops their static modifiers. */

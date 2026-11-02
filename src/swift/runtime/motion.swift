@@ -225,3 +225,90 @@ struct MarkswiftStateAnimation: ViewModifier {
         content.animation(isOn ? (reduce ? reducedInto : into) : (reduce ? reducedBack : back), value: isOn)
     }
 }
+/// Applies motion frame values to a VisualEffect inside `scrollTransition`.
+extension VisualEffect {
+    nonisolated func markswiftMotionFrame(value: MarkswiftMotionValue, anchor: UnitPoint = .center) -> some VisualEffect {
+        self
+            .opacity(value.opacity)
+            .scaleEffect(x: value.scaleX, y: value.scaleY, anchor: anchor)
+            .rotationEffect(.degrees(value.degrees), anchor: anchor)
+            .offset(x: value.x, y: value.y)
+    }
+}
+
+/// Tracks driven by scroll progress.
+nonisolated struct MarkswiftScrollTracks: Sendable {
+    var opacity: MarkswiftMotionTrack? = nil
+    var x: MarkswiftMotionTrack? = nil
+    var y: MarkswiftMotionTrack? = nil
+    var scaleX: MarkswiftMotionTrack? = nil
+    var scaleY: MarkswiftMotionTrack? = nil
+    var degrees: MarkswiftMotionTrack? = nil
+
+    init(opacity: MarkswiftMotionTrack? = nil, x: MarkswiftMotionTrack? = nil, y: MarkswiftMotionTrack? = nil,
+         scaleX: MarkswiftMotionTrack? = nil, scaleY: MarkswiftMotionTrack? = nil, degrees: MarkswiftMotionTrack? = nil) {
+        (self.opacity, self.x, self.y, self.scaleX, self.scaleY, self.degrees) = (opacity, x, y, scaleX, scaleY, degrees)
+    }
+
+    func value(at p: Double, base: MarkswiftMotionValue) -> MarkswiftMotionValue {
+        var v = base
+        if let opacity { v.opacity = opacity.value(at: p) }
+        if let x { v.x = x.value(at: p) }
+        if let y { v.y = y.value(at: p) }
+        if let scaleX { v.scaleX = scaleX.value(at: p) }
+        if let scaleY { v.scaleY = scaleY.value(at: p) }
+        if let degrees { v.degrees = degrees.value(at: p) }
+        return v
+    }
+}
+
+/// Scroll-position-driven animation (`animation-timeline: scroll()`).
+struct MarkswiftScrollDrivenAnimation: ViewModifier {
+    let tracks: MarkswiftScrollTracks
+    var reduced: MarkswiftScrollTracks? = nil
+    var base = MarkswiftMotionValue()
+    var anchor = UnitPoint.center
+    @Environment(\.markswiftMotionTime) private var harnessTime
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.markswiftForcedStates) private var forced
+    @State private var progress: Double = 0
+
+    func body(content: Content) -> some View {
+        let reduce = systemReduce || forced.contains(.reduceMotion)
+        let active = reduce ? (reduced ?? tracks) : tracks
+        let p = harnessTime.map { t in t.isFinite ? min(max(t, 0), 1) : 1.0 } ?? progress
+        content
+            .modifier(MarkswiftMotionFrame(value: active.value(at: p, base: base), anchor: anchor))
+            .onScrollGeometryChange(for: Double.self) { geo in
+                let max = geo.contentSize.height - geo.containerSize.height
+                return max > 0 ? geo.contentOffset.y / max : 0
+            } action: { _, new in
+                progress = min(max(new, 0), 1)
+            }
+    }
+}
+
+/// View-progress-driven animation (`animation-timeline: view()`).
+struct MarkswiftViewTransition: ViewModifier {
+    let tracks: MarkswiftScrollTracks
+    var reduced: MarkswiftScrollTracks? = nil
+    var base = MarkswiftMotionValue()
+    var anchor = UnitPoint.center
+    @Environment(\.markswiftMotionTime) private var harnessTime
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.markswiftForcedStates) private var forced
+
+    func body(content: Content) -> some View {
+        let reduce = systemReduce || forced.contains(.reduceMotion)
+        let active = reduce ? (reduced ?? tracks) : tracks
+        if let harnessTime {
+            let p = harnessTime.isFinite ? min(max(harnessTime, 0), 1) : 1.0
+            content.modifier(MarkswiftMotionFrame(value: active.value(at: p, base: base), anchor: anchor))
+        } else {
+            content.scrollTransition(.interactive) { effect, phase in
+                let p = min(max(1.0 - max(0, phase.value), 0), 1)
+                return effect.markswiftMotionFrame(value: active.value(at: p, base: base), anchor: anchor)
+            }
+        }
+    }
+}

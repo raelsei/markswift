@@ -4,6 +4,7 @@ import type {
   KeyframeMotion,
   Motion,
   MotionChannel,
+  MotionTrack,
   SemNode,
   StateField,
   StateTransition,
@@ -14,7 +15,7 @@ import { num } from "./format.ts";
 
 /** App output plays the node's animations; `motion.base` names the channels the modifier drives. */
 export const animated = (n: SemNode, mode: EmitMode): boolean =>
-  mode === "app" && !!(n.motion?.animations?.length || n.motion?.reduced);
+  mode === "app" && !!(n.motion?.animations?.length || n.motion?.reduced || n.motion?.scroll);
 
 /** IR channel → `MarkswiftMotion` / `MarkswiftMotionValue` member. */
 const MEMBER: Record<MotionChannel, string> = {
@@ -72,6 +73,30 @@ export function animationModifier(motion: Motion): string {
     args.push(`base: MarkswiftMotionValue(${base.map((c) => `${MEMBER[c]}: ${num(motion.base![c]!)}`).join(", ")})`);
   if (motion.anchor) args.push(`anchor: UnitPoint(x: ${num(motion.anchor[0])}, y: ${num(motion.anchor[1])})`);
   return `.modifier(MarkswiftAnimation(${args.join(", ")}))`;
+}
+function scrollTracksExpr(tracks: Partial<Record<MotionChannel, MotionTrack>>): string {
+  const args = CHANNELS.filter((c) => tracks[c]).map((c) => {
+    const t = tracks[c]!;
+    const segments = t.segments.map((s) => `MarkswiftSegment(${num(s.to)}, ${num(s.until)}, ${easeExpr(s.easing)})`);
+    return `${MEMBER[c]}: MarkswiftMotionTrack(${num(t.from)}, [${segments.join(", ")}])`;
+  });
+  return `MarkswiftScrollTracks(${args.join(", ")})`;
+}
+
+/** `.modifier(MarkswiftScrollDrivenAnimation(…))` or `.modifier(MarkswiftViewTransition(…))` */
+export function scrollAnimationModifier(motion: Motion): string {
+  const { scroll } = motion;
+  if (!scroll) return "";
+  const tracks = scrollTracksExpr(scroll.tracks);
+  const base = CHANNELS.filter((c) => motion.base?.[c] !== undefined && motion.base[c] !== IDENTITY[c]);
+  const baseArg = base.length
+    ? `, base: MarkswiftMotionValue(${base.map((c) => `${MEMBER[c]}: ${num(motion.base![c]!)}`).join(", ")})`
+    : "";
+  const anchorArg = motion.anchor
+    ? `, anchor: UnitPoint(x: ${num(motion.anchor[0])}, y: ${num(motion.anchor[1])})`
+    : "";
+  const modifier = scroll.timeline === "view" ? "MarkswiftViewTransition" : "MarkswiftScrollDrivenAnimation";
+  return `.modifier(${modifier}(tracks: ${tracks}${baseArg}${anchorArg}))`;
 }
 
 /** A transition's SwiftUI `Animation` (`nil` = jump): bezier as `.timingCurve`, steps()/linear() via `MarkswiftEasing`. */

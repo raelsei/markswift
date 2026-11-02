@@ -122,3 +122,41 @@ test("fidelity renders the settled look and says so", () => {
     ),
   ).toBe(true);
 });
+test("app: ViewTimeline emits MarkswiftViewTransition", () => {
+  const fade: Anim = {
+    name: "fade",
+    duration: 0,
+    delay: 0,
+    iterations: 1,
+    direction: "normal",
+    fill: "both",
+    timeline: "ViewTimeline",
+    keyframes: [kf(0, { opacity: "0", transform: "scale(0.8)" }), kf(1, { opacity: "1", transform: "scale(1)" })],
+  };
+  const { code } = compile("app", [box("v", {}, { animations: [fade] })]);
+  expect(code).toContain(".modifier(MarkswiftViewTransition(tracks: MarkswiftScrollTracks(");
+  expect(code).toContain(
+    "opacity: MarkswiftMotionTrack(0.0, [MarkswiftSegment(1.0, 1.0, .points([0.0, 1.0], [0.0, 1.0]))])",
+  );
+  expect(code).toContain(
+    "scaleX: MarkswiftMotionTrack(0.8, [MarkswiftSegment(1.0, 1.0, .points([0.0, 1.0], [0.0, 1.0]))])",
+  );
+});
+
+test("app: ScrollTimeline emits MarkswiftScrollDrivenAnimation", () => {
+  const slide: Anim = {
+    name: "slide",
+    duration: 0,
+    delay: 0,
+    iterations: 1,
+    direction: "normal",
+    fill: "both",
+    timeline: "ScrollTimeline",
+    keyframes: [kf(0, { transform: "translateY(40px)" }), kf(1, { transform: "translateY(0px)" })],
+  };
+  const { code } = compile("app", [box("s", {}, { animations: [slide] })]);
+  expect(code).toContain(".modifier(MarkswiftScrollDrivenAnimation(tracks: MarkswiftScrollTracks(");
+  expect(code).toContain(
+    "y: MarkswiftMotionTrack(40.0, [MarkswiftSegment(0.0, 1.0, .points([0.0, 1.0], [0.0, 1.0]))])",
+  );
+});
