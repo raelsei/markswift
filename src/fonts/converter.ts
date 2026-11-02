@@ -34,7 +34,9 @@ export const nativeFontConverter: FontConverter = async (bytes, family, subfamil
     if (!nameTable) return "font missing name table";
 
     const { records, names } = readNameTable(nameTable.data);
-    const existingNames = new Set(Array.from(names.values()).filter(Boolean));
+    // The names CoreText registers a face under (family, style, full, PostScript, typographic): a CSS family
+    // equal to another record (a designer, a vendor) is no reason to skip the rename.
+    const existingNames = new Set([1, 2, 4, 6, 16, 17].map((id) => names.get(id)).filter(Boolean));
     const wantRename = !existingNames.has(family);
 
     let finalBytes = decompressed;

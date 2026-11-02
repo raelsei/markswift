@@ -210,9 +210,11 @@ export function buildRewrittenNameTable(
     ...(hasFvar ? { 16: family, 17: subfamily } : {}),
   };
 
+  // Mac Roman records hold ASCII names only (written as UTF-8 they would garble "Söhne"); Windows records carry all.
+  const ascii = Object.values(newNames).every((n) => n === undefined || /^[\x20-\x7e]*$/.test(n));
   const platforms = [
     { platformID: 3, encodingID: 1, languageID: 0x0409, utf16: true },
-    { platformID: 1, encodingID: 0, languageID: 0, utf16: false },
+    ...(ascii ? [{ platformID: 1, encodingID: 0, languageID: 0, utf16: false }] : []),
   ];
 
   const additions: Array<NameRecordItem & { utf16: boolean }> = [];

@@ -5,10 +5,49 @@ import type { FontPackage, PackagedFace } from "./types.ts";
 import { coversLatin, fontFileStem, srcBytes, WEIGHT_SUBFAMILY } from "./source.ts";
 import { type FontConverter, nativeFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
-import { dropUnusedAxes, instanceVariableFont } from "./instancer.ts";
+import { instanceVariableFont } from "./instancer.ts";
 import { assembleSfnt, buildRewrittenNameTable, extractFontMetrics, parseSfnt, readNameTable } from "./sfnt.ts";
 
 export type FontUsages = ReadonlyMap<string, ReadonlySet<number>>;
+
+/**
+ * One static face per weight of a weight-only variable font (HarfBuzz instancing), each renamed to the family with
+ * its weight's subfamily (name IDs 1/2/4/6/16/17, so CoreText registers each style under the family). Undefined
+ * when any instance fails or has no free file name: the variable font then ships alone, never a partial set.
+ */
+async function staticInstances(
+  bytes: Uint8Array,
+  weights: number[],
+  family: string,
+  style: string,
+  sig: string,
+  claimed: ReadonlyMap<string, string>,
+): Promise<Array<{ file: string; stem: string; weight: number; bytes: Uint8Array; metrics: FaceMetrics }> | undefined> {
+  const out = [];
+  const taken = new Map(claimed);
+  try {
+    for (const weight of weights.sort((a, b) => a - b)) {
+      const name = weight !== 400 ? (WEIGHT_SUBFAMILY[weight] ?? `W${weight}`) : "";
+      const subfamily = [name, style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
+      const stem = fontFileStem(family, subfamily, taken);
+      if (stem === undefined) return undefined;
+      taken.set(stem.toLowerCase(), family);
+      const sfnt = parseSfnt(await instanceVariableFont(bytes, { wght: weight }));
+      const nameTable = sfnt.tables.get("name");
+      if (nameTable) {
+        const data = buildRewrittenNameTable(readNameTable(nameTable.data).records, family, subfamily, true);
+        sfnt.tables.set("name", { offset: 0, length: data.length, checksum: 0, data });
+      }
+      const face = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
+      const { metrics } = extractFontMetrics(face, parseSfnt(face).tables);
+      out.push({ file: `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`, stem, weight, bytes: face, metrics });
+    }
+  } catch {
+    // ponytail: a glyph format HarfBuzz cannot instance keeps the variable font; report it if bundles stay large.
+    return undefined;
+  }
+  return out;
+}
 
 /**
  * Packages every bundleable face: faces + their captured bytes in, `Fonts/<file>` assets out.
@@ -18,8 +57,8 @@ export type FontUsages = ReadonlyMap<string, ReadonlySet<number>>;
  * rest are reported. A face whose bytes cannot be read, or whose format iOS cannot load and
  * `convert` cannot convert, is noted and left out of the package; no asset is shipped for it.
  *
- * When `usages` shows a variable font is used at only a few axis positions (<= 3), static instances
- * are emitted to shrink the font bundle while keeping rendering identical.
+ * When `usages` shows a weight-only variable font is used at a few weights (<= 3), static instances are emitted to
+ * shrink the font bundle while keeping rendering identical.
  */
 export async function packageFonts(
   faces: FontFace[],
@@ -103,104 +142,38 @@ export async function packageFonts(
       (chosen.weight[0] !== chosen.weight[1] || tool.axes["wght"] !== undefined) && tool.axes["wght"] !== undefined;
     const usedWeights = isVariable ? usages?.get(chosen.family.toLowerCase()) : undefined;
 
-    // Static instances: when a variable font is used only at a few axis positions (<= 3), emit static instances.
+    // Static instances: a weight-only variable font used at a few weights (<= 3) ships one static face per weight.
+    // Fonts with other axes (opsz, wdth, …) stay variable: those axes follow font-size and font-stretch natively.
     const canInstance =
       isVariable &&
+      Object.keys(tool.axes).length === 1 &&
       usedWeights &&
       usedWeights.size >= 1 &&
       usedWeights.size <= 3 &&
       [...usedWeights].every((w) => w >= tool.axes["wght"]![0] && w <= tool.axes["wght"]![1]);
 
-    if (canInstance) {
-      const baseBytes = tool.bytes ?? bytes;
-      for (const w of [...usedWeights].sort((a, b) => a - b)) {
-        const instWeightName = w !== 400 ? (WEIGHT_SUBFAMILY[w] ?? `W${w}`) : "";
-        const instSubfamily =
-          [instWeightName, chosen.style === "normal" ? "" : "Italic"].filter(Boolean).join(" ") || "Regular";
-        const instStem = fontFileStem(family, instSubfamily, claimed);
-        if (instStem === undefined) continue;
-        const instFile = `${instStem}.${sig === "OTTO" ? "otf" : "ttf"}`;
-
-        try {
-          const instanced = await instanceVariableFont(baseBytes, { wght: w });
-          // Rewrite name table for the static subfamily
-          const sfnt = parseSfnt(instanced);
-          const nameTable = sfnt.tables.get("name");
-          let finalInstancedBytes = instanced;
-          if (nameTable) {
-            const { records } = readNameTable(nameTable.data);
-            const newNameTable = buildRewrittenNameTable(records, family, instSubfamily, false);
-            sfnt.tables.set("name", {
-              offset: 0,
-              length: newNameTable.length,
-              checksum: 0,
-              data: newNameTable,
-            });
-            finalInstancedBytes = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
-          }
-
-          const instSfnt = parseSfnt(finalInstancedBytes);
-          const { metrics: instMetrics } = extractFontMetrics(finalInstancedBytes, instSfnt.tables);
-
-          assets[`Fonts/${instFile}`] = finalInstancedBytes;
-          packaged.push({
-            family,
-            sourceFamily: chosen.family,
-            stretch,
-            file: instFile,
-            style: chosen.style,
-            weight: [w, w],
-            axes: {},
-            metrics: instMetrics,
-            converted: tool.converted,
-            renamed: true,
-          });
-          claimed.set(instStem.toLowerCase(), family);
-        } catch {
-          // ponytail: HarfBuzz instancing fallback to variable font if a glyph format is unsupported
-          assets[`Fonts/${file}`] = tool.bytes ?? bytes;
-          packaged.push({
-            family,
-            sourceFamily: chosen.family,
-            stretch,
-            file,
-            style: chosen.style,
-            weight: chosen.weight,
-            axes: tool.axes,
-            metrics: {
-              upem: tool.upem,
-              ascent: tool.ascent,
-              descent: tool.descent,
-              lineGap: tool.lineGap,
-              useTypoMetrics: tool.useTypoMetrics,
-            },
-            converted: tool.converted,
-            renamed: tool.renamed,
-          });
-          claimed.set(stem.toLowerCase(), family);
-          break;
-        }
+    const instances = canInstance
+      ? await staticInstances(tool.bytes ?? bytes, [...usedWeights!], family, chosen.style, sig, claimed)
+      : undefined;
+    if (instances) {
+      for (const inst of instances) {
+        assets[`Fonts/${inst.file}`] = inst.bytes;
+        packaged.push({
+          family,
+          sourceFamily: chosen.family,
+          stretch,
+          file: inst.file,
+          style: chosen.style,
+          weight: [inst.weight, inst.weight],
+          axes: {},
+          metrics: inst.metrics,
+          converted: tool.converted,
+          renamed: true,
+        });
+        claimed.set(inst.stem.toLowerCase(), family);
       }
     } else {
-      let finalBytes = tool.bytes ?? bytes;
-      let finalAxes = tool.axes;
-
-      if (isVariable) {
-        // Drop any unused axes other than wght to shrink the variable bundle
-        const extraAxes = Object.keys(tool.axes).filter((tag) => tag !== "wght");
-        if (extraAxes.length > 0) {
-          try {
-            finalBytes = await dropUnusedAxes(finalBytes, extraAxes);
-            const sfnt = parseSfnt(finalBytes);
-            const res = extractFontMetrics(finalBytes, sfnt.tables);
-            finalAxes = res.axes;
-          } catch {
-            // Keep original if reduction fails
-          }
-        }
-      }
-
-      assets[`Fonts/${file}`] = finalBytes;
+      assets[`Fonts/${file}`] = tool.bytes ?? bytes;
       const metrics: FaceMetrics = {
         upem: tool.upem,
         ascent: tool.ascent,
@@ -215,7 +188,7 @@ export async function packageFonts(
         file,
         style: chosen.style,
         weight: chosen.weight,
-        axes: finalAxes,
+        axes: tool.axes,
         metrics,
         converted: tool.converted,
         renamed: tool.renamed,

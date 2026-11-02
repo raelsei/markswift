@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import wawoff2 from "wawoff2";
 import { assembleSfnt, buildRewrittenNameTable, parseSfnt, readNameTable } from "../../../src/fonts/sfnt.ts";
-import type { FontFace } from "../../../src/model/layout.ts";
+import type { FontFace, LayoutNode } from "../../../src/model/layout.ts";
 import type { FontConverter, FontToolResult } from "../../../src/fonts/converter.ts";
 import { bundledFamilies } from "../../../src/fonts/metadata.ts";
-import { fontOf } from "../../../src/analysis/typography.ts";
+import { collectFontUsages, fontOf } from "../../../src/analysis/typography.ts";
 import { packageFonts } from "../../../src/fonts/package.ts";
 import { fontFileStem } from "../../../src/fonts/source.ts";
 import { plistFragment, registrationSwift } from "../../../src/fonts/registration.ts";
@@ -199,8 +199,37 @@ test("variable font instancing emits multiple static weights when used at discre
     [700, 700],
   ]);
   expect(pkg.faces.map((f) => f.file)).toEqual(["GeistVariable.ttf", "GeistVariable-Bold.ttf"]);
-  expect(pkg.assets["Fonts/GeistVariable.ttf"]).toBeDefined();
-  expect(pkg.assets["Fonts/GeistVariable-Bold.ttf"]).toBeDefined();
+  // Each instance registers its own style under the family (typographic subfamily too, which CoreText prefers).
+  const bold = parseSfnt(pkg.assets["Fonts/GeistVariable-Bold.ttf"]!);
+  const { names } = readNameTable(bold.tables.get("name")!.data);
+  expect([names.get(1), names.get(2), names.get(16), names.get(17)]).toEqual([
+    "Geist Variable",
+    "Bold",
+    "Geist Variable",
+    "Bold",
+  ]);
+});
+
+test("weights drawn only in a state look (pressed bold) are kept in the static instances", () => {
+  const node = {
+    tag: "button",
+    attrs: {},
+    styles: { "font-family": '"Geist Variable"', "font-weight": "400" },
+    states: { pressed: { "font-weight": "700" } },
+    bounds: { x: 0, y: 0, w: 1, h: 1 },
+    children: [],
+  } as unknown as LayoutNode;
+  expect([...collectFontUsages(node).get("geist variable")!]).toEqual([400, 700]);
+});
+
+test("a non-ASCII family keeps Windows name records only (Mac Roman cannot spell it)", async () => {
+  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
+  const sfnt = parseSfnt(await wawoff2.decompress(await readFile(geistPath)));
+  const { records } = readNameTable(sfnt.tables.get("name")!.data);
+  const table = buildRewrittenNameTable(records, "Söhne", "Regular", true);
+  const rewritten = readNameTable(table);
+  expect(rewritten.names.get(1)).toBe("Söhne");
+  expect(rewritten.records.filter((r) => r.platformID === 1 && r.nameID === 1)).toEqual([]);
 });
 
 test("name table parsing and rewriting updates CSS family name correctly", async () => {
