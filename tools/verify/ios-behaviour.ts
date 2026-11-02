@@ -3,7 +3,7 @@
  * (`tools/verify/ios-behaviour/`), runs it on the iOS simulator and judges what iOS exposed:
  * accessibility tree, Apple's audit, Dynamic Type height, RTL mirroring and interaction.
  *
- *   bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>
+ *   bun run tools/verify/ios-behaviour.ts [--build-only] [--benchmarks] --out <fresh dir>
  */
 import type { Page } from "playwright-core";
 import { mkdir, readdir, rm } from "node:fs/promises";
@@ -25,6 +25,8 @@ const FIXTURES = join(ROOT, "tests/conformance/fixtures");
 const PROJECT_DIR = join(import.meta.dir, "ios-behaviour");
 const GENERATED = join(PROJECT_DIR, "Generated");
 const PROJECT = join(PROJECT_DIR, "MarkswiftBehaviour.xcodeproj");
+/** Curated heavy fixtures measured by the opt-in benchmark harness. */
+const BENCHMARK_CASES = ["tw-settings", "tw-form", "shadcn-card", "overlay-sheet"];
 /**
  * `@ScaledMetric(relativeTo:)` / `.custom(_:size:relativeTo:)` multiplier of each `Font.TextStyle` at
  * `.accessibilityExtraLarge` (AX3, `UICTContentSizeCategoryAccessibilityXL`) over `.large`, for a 100 pt value.
@@ -660,8 +662,15 @@ function judge(item: Prepared, log: CaseLog | undefined) {
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { out: { type: "string" }, "build-only": { type: "boolean" } } });
-  if (!values.out) throw new Error("usage: bun run tools/verify/ios-behaviour.ts [--build-only] --out <fresh dir>");
+  const { values } = parseArgs({
+    options: {
+      out: { type: "string" },
+      "build-only": { type: "boolean" },
+      benchmarks: { type: "boolean" },
+    },
+  });
+  if (!values.out)
+    throw new Error("usage: bun run tools/verify/ios-behaviour.ts [--build-only] [--benchmarks] --out <fresh dir>");
   const out = resolve(values.out);
   if ((await readdir(out).catch(() => [])).length) throw new Error(`--out ${out} is not empty`);
   await mkdir(out, { recursive: true });
@@ -674,7 +683,8 @@ async function main() {
   await mkdir(GENERATED, { recursive: true });
   const written: Record<string, Uint8Array> = {};
   const prepared: Prepared[] = [];
-  for (const id of spec.cases) {
+  const targetCases = values.benchmarks ? spec.cases.filter((id) => BENCHMARK_CASES.includes(id)) : spec.cases;
+  for (const id of targetCases) {
     const { prepared: item, files } = await prepareCase(id);
     for (const [name, bytes] of Object.entries(files)) {
       const prior = written[name];
@@ -740,6 +750,7 @@ async function main() {
       [
         "env",
         `TEST_RUNNER_MARKSWIFT_BEHAVIOUR_DIR=${out}`,
+        ...(values.benchmarks ? ["TEST_RUNNER_MARKSWIFT_BENCHMARKS=1"] : []),
         ...xcode,
         "test-without-building",
         "-destination",
@@ -777,6 +788,23 @@ async function main() {
   const ok = !unknownFailures.length && !staleKnown.length && !errors.length;
   const report = { ok, simulator: sim, cases, unknownFailures, staleKnown, hitRegion, errors };
   await Bun.write(join(out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+  if (values.benchmarks) {
+    const benchFile = Bun.file(join(out, "benchmarks.json"));
+    if (await benchFile.exists()) {
+      const bench = (await benchFile.json()) as Array<{
+        case: string;
+        initialBodyEvaluations: number;
+        postScrollBodyEvaluations: number;
+        scrollDecelerationMetricMeasured: boolean;
+      }>;
+      console.log("\n--- Benchmarks (Report Only) ---");
+      for (const b of bench) {
+        console.log(
+          `  ${b.case}: initial evals=${b.initialBodyEvaluations}, post-scroll evals=${b.postScrollBodyEvaluations}, scroll deceleration hitch metric=${b.scrollDecelerationMetricMeasured ? "measured" : "skipped"}`,
+        );
+      }
+    }
+  }
   console.log(
     `${ok ? "ok" : "FAILED"}: ${unknownFailures.length} unknown failures, ${staleKnown.length} stale known, ${errors.length} errors, ${hitRegion.length} hit-region findings → ${join(out, "report.json")}`,
   );
