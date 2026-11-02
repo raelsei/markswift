@@ -462,22 +462,24 @@ test("flexAlignContent distributes lines in a taller cross axis for all modes", 
   expect(stretched.lineCrossSizes).toEqual([65, 75]);
 });
 
-test("breakable text item wrapped in Chrome keeps its min-content and is admitted with autoMin", () => {
-  // Three items in a 340px row: item0 has basis 150 and wrapped to 2 lines in Chrome (min-content 100px: 80px text + 20px pad)
-  // solveFlexRow with min 100 clamps item0 at 100, and items 1 and 2 shrink to 112 each (100 + 112 + 112 + 16 = 340)
-  const doc = flexDoc(
-    [
-      { w: 100, text: 80, lines: 2, pad: 10, flex: [0, 1, "150px"] },
-      { w: 77, flex: [0, 1, "150px"] },
-      { w: 77, flex: [0, 1, "150px"] },
-    ],
-    {},
-    270,
-  );
-  const row = rowOf(doc);
-  expect(row.flex).toBeDefined();
-  expect(row.flex!.items[0]!.min).toBe(100);
-  expect(row.flex!.items[0]!.autoMin).toBe(true);
+test("breakable text items probe their min-content natively (autoMin); a clipping item has none", () => {
+  const row = (styles: Record<string, string>) =>
+    rowOf(
+      flexDoc(
+        [
+          { w: 254 / 3, text: 60, lines: 2, flex: [0, 1, "150px"], styles },
+          { w: 254 / 3, flex: [0, 1, "150px"] },
+          { w: 254 / 3, flex: [0, 1, "150px"] },
+        ],
+        {},
+        270,
+      ),
+    );
+  const wrapped = row({}).flex!.items[0]!;
+  expect(wrapped.autoMin).toBe(true);
+  // The captured wrapped width is not min-content (it changes with the width), so nothing is pinned.
+  expect(wrapped.min).toBeUndefined();
+  expect(row({ "overflow-x": "hidden" }).flex!.items[0]!.autoMin).toBeUndefined();
 });
 
 test("column allocation in a definite height admits unequal growers and emits axis .vertical", () => {

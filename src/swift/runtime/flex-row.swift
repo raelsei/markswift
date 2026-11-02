@@ -25,7 +25,8 @@ struct MarkswiftFlexRow: Layout {
     var items: [Item]
     var spacing: CGFloat
     var align: Align = .stretch
-    var alignContent: AlignContent = .stretch
+    /// `align-content` of a wrapping container with a definite height; nil hugs its lines (stacked from the start).
+    var alignContent: AlignContent? = nil
     /// `flex-wrap: wrap`: the gap between lines; nil keeps one line (nowrap).
     var rowGap: CGFloat? = nil
 
@@ -149,13 +150,16 @@ struct MarkswiftFlexRow: Layout {
     private func mainProposal(main: CGFloat?, cross: CGFloat?) -> ProposedViewSize {
         axis == .horizontal ? ProposedViewSize(width: main, height: cross) : ProposedViewSize(width: cross, height: main)
     }
-    private func zeroProposal() -> ProposedViewSize {
-        axis == .horizontal ? ProposedViewSize(width: 0, height: nil) : ProposedViewSize(width: nil, height: 0)
+    /// The proposal that measures an item's content along the main axis: a column item at the column's width.
+    private func contentProposal(cross c: CGFloat?, main m: CGFloat? = nil) -> ProposedViewSize {
+        axis == .horizontal ? ProposedViewSize(width: m, height: nil) : ProposedViewSize(width: c, height: m)
     }
 
-    private func bases(_ subviews: Subviews) -> [CGFloat] {
+    private func bases(_ subviews: Subviews, _ crossAvailable: CGFloat?) -> [CGFloat] {
         precondition(items.count == subviews.count, "MarkswiftFlexRow items/subviews mismatch")
-        return subviews.indices.map { items[$0].basis ?? main(subviews[$0].sizeThatFits(.unspecified)) }
+        return subviews.indices.map {
+            items[$0].basis ?? main(subviews[$0].sizeThatFits(contentProposal(cross: crossAvailable)))
+        }
     }
 
     private func crossSizes(_ m: [CGFloat], _ c: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
@@ -165,7 +169,7 @@ struct MarkswiftFlexRow: Layout {
     /// Sizes, lines and line cross sizes at `mainAvailable`.
     private func plan(_ mainAvailable: CGFloat, _ crossAvailable: CGFloat?, _ subviews: Subviews)
         -> (main: [CGFloat], cross: [CGFloat], lines: [Range<Int>], lineCrossSizes: [CGFloat]) {
-        let b = bases(subviews)
+        let b = bases(subviews, crossAvailable)
         let lines = rowGap == nil ? [0..<b.count] : Self.lines(width: mainAvailable, items: items, bases: b, spacing: spacing)
         var m = [CGFloat](repeating: 0, count: b.count)
         for l in lines {
@@ -177,7 +181,7 @@ struct MarkswiftFlexRow: Layout {
             }.reduce(0, +)
             if baseSum > space {
                 for (k, i) in l.enumerated() where lineItems[k].autoMin {
-                    let probed = main(subviews[i].sizeThatFits(zeroProposal()))
+                    let probed = main(subviews[i].sizeThatFits(contentProposal(cross: crossAvailable, main: 0)))
                     if probed > lineItems[k].min { lineItems[k].min = probed }
                 }
             }
@@ -189,10 +193,12 @@ struct MarkswiftFlexRow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let b = bases(subviews)
+        let crossProp = cross(CGSize(width: proposal.width ?? .infinity, height: proposal.height ?? .infinity))
+        let crossOffered = crossProp.isFinite ? crossProp : nil
+        let b = bases(subviews, crossOffered)
         let ideal = subviews.indices.map { i -> CGFloat in
             let it = items[i]
-            let content = main(subviews[i].sizeThatFits(.unspecified))
+            let content = main(subviews[i].sizeThatFits(contentProposal(cross: crossOffered)))
             if it.fraction != nil { return content }
             let base = Swift.max(it.min, it.inset, Swift.min(it.max ?? .infinity, b[i]))
             return it.grow > 0 || it.basis == nil ? Swift.max(base, Swift.min(it.max ?? .infinity, content)) : base
@@ -200,25 +206,25 @@ struct MarkswiftFlexRow: Layout {
         let mainProp = main(CGSize(width: proposal.width ?? .infinity, height: proposal.height ?? .infinity))
         let mainOffered = mainProp.isFinite ? Swift.max(0, mainProp) : nil
         let mainAvailable = mainOffered ?? (ideal.reduce(0, +) + CGFloat(Swift.max(0, b.count - 1)) * spacing)
-        let crossProp = cross(CGSize(width: proposal.width ?? .infinity, height: proposal.height ?? .infinity))
-        let p = plan(mainAvailable, crossProp.isFinite ? crossProp : nil, subviews)
+        let p = plan(mainAvailable, crossOffered, subviews)
         guard let rowGap else {
             let crossSize = crossProp.isFinite && axis == .vertical ? crossProp : (p.cross.max() ?? 0)
             return makeSize(main: mainAvailable, cross: crossSize)
         }
         let totalLinesCross = p.lineCrossSizes.reduce(0, +) + CGFloat(Swift.max(0, p.lines.count - 1)) * rowGap
-        let finalCross = crossProp.isFinite ? Swift.max(crossProp, totalLinesCross) : totalLinesCross
+        let finalCross = alignContent != nil && crossOffered != nil ? Swift.max(crossProp, totalLinesCross) : totalLinesCross
         return makeSize(main: mainAvailable, cross: finalCross)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let mainAvailable = main(bounds.size)
         let crossAvailable = cross(bounds.size)
-        let p = plan(mainAvailable, proposal.height, subviews)
+        // A nowrap row measures its items at the row's proposed height (as before); a column at its own width.
+        let p = plan(mainAvailable, axis == .horizontal ? proposal.height : crossAvailable, subviews)
         let (lineOffsets, lineCrossSizes) = rowGap == nil
             ? ([CGFloat(0)], [crossAvailable])
             : Self.alignContentDistribution(
-                alignContent: alignContent,
+                alignContent: alignContent ?? .start,
                 lineCrossSizes: p.lineCrossSizes,
                 availableCross: crossAvailable,
                 gap: rowGap ?? 0

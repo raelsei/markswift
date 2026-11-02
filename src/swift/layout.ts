@@ -131,7 +131,7 @@ function flexRowExpr(n: StackNode, flex: NonNullable<StackNode["flex"]>, ctx: Em
   const axis = flex.axis === "v" ? "axis: .vertical, " : "";
   const align = flex.align === "stretch" ? "" : `, align: .${flex.align}`;
   const alignContent =
-    flex.alignContent && flex.alignContent !== "stretch" && ALIGN_CONTENT_MAP[flex.alignContent]
+    flex.alignContent && ALIGN_CONTENT_MAP[flex.alignContent]
       ? `, alignContent: ${ALIGN_CONTENT_MAP[flex.alignContent]}`
       : "";
   const rowGap = flex.rowGap === undefined ? "" : `, rowGap: ${num(flex.rowGap)}`;

@@ -67,8 +67,8 @@ export function flexLines(items: FlexItem[], bases: number[], width: number, gap
   if (start < bases.length) out.push([start, bases.length]);
   return out;
 }
-// ponytail: min-width:auto is the captured min-content for unbreakable content (`unbreakableWidth`) or wrapped
-// lines (`breakableMinContent`), else the box's padding and border; the runtime probes `sizeThatFits(width: 0)`.
+// ponytail: min-width:auto is the captured min-content for unbreakable content (`unbreakableWidth`), else the box's
+// padding and border; breakable text is probed natively (`autoMin`, runtime `sizeThatFits` at width 0).
 
 const near = (a: number, b: number) => Math.abs(a - b) <= 1;
 const ALIGN: Record<string, FlexRow["align"]> = {
@@ -256,20 +256,6 @@ function unbreakableWidth(item: LayoutNode): number | undefined {
     );
   return nowrap(item) || solid(item) ? maxContent(item) : undefined;
 }
-function breakableMinContent(item: LayoutNode): number | undefined {
-  if ((item.styles["overflow-x"] ?? "visible") !== "visible" || !hasText(item)) return undefined;
-  let maxLine = 0;
-  for (const c of item.children) {
-    if (c.tag === "#text" && c.lines && c.lines.length > 1) {
-      for (const l of c.lines) maxLine = Math.max(maxLine, l.bounds.w);
-    }
-  }
-  if (maxLine > 0) {
-    const [, r, , l] = insetsOf(item.styles);
-    return maxLine + r + l;
-  }
-  return undefined;
-}
 
 function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined {
   const s = n.styles;
@@ -354,7 +340,9 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
     }
     if (inset > 0) item.inset = inset;
     if (fraction !== undefined) item.fraction = fraction;
-    if (hasText(node) && unbreakableWidth(node) === undefined && min === "auto") item.autoMin = true;
+    // A clipping item's automatic minimum is 0 (css-flexbox §4.5); otherwise the runtime probes min-content.
+    const clips = (node.styles[isCol ? "overflow-y" : "overflow-x"] ?? "visible") !== "visible";
+    if (hasText(node) && !clips && unbreakableWidth(node) === undefined && min === "auto") item.autoMin = true;
     authored.push(raw);
     items.push(item);
   }
@@ -400,7 +388,7 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
     const minProp = isCol ? (node.styles["min-height"] ?? "auto") : (node.styles["min-width"] ?? "auto");
     if (!overflowing || minProp !== "auto") continue;
     const mainProp = isCol ? (node.preferredSize?.height ?? "auto") : (node.preferredSize?.width ?? "auto");
-    const solid = isCol ? node.bounds.h : (unbreakableWidth(node) ?? breakableMinContent(node));
+    const solid = isCol ? node.bounds.h : unbreakableWidth(node);
     const auto = solid === undefined ? undefined : PX.test(mainProp) ? Math.min(solid, item.basis ?? solid) : solid;
     if (auto !== undefined && auto > (item.inset ?? 0) + 0.5) item.min = Math.round(auto * 100) / 100;
   }
@@ -487,7 +475,7 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
       items,
       align,
       ...(isCol ? { axis: "v" } : {}),
-      ...(wraps ? { rowGap, ...(alignContent !== "stretch" ? { alignContent } : {}) } : {}),
+      ...(wraps ? { rowGap, ...(alignContent ? { alignContent } : {}) } : {}),
       ...(fidelityNote ? { fidelityNote } : {}),
     },
     candidate: candidate || (overflowing && items.some((i) => i.min !== undefined)),
