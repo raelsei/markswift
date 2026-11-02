@@ -1,4 +1,12 @@
-import type { BandEdge, StackNode, GridNode, GridRowTrack, TableColumn, TableLayout } from "../model/semantic.ts";
+import type {
+  BandEdge,
+  StackNode,
+  GridNode,
+  GridRowTrack,
+  TableColumn,
+  TableLayout,
+  SemNode,
+} from "../model/semantic.ts";
 import type { EmitContext } from "./context.ts";
 import { note } from "./diagnostics.ts";
 import { horizontalAlignment, indent, num, str, verticalAlignment } from "./format.ts";
@@ -176,8 +184,15 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
           : n.align === "baseline"
             ? ".firstTextBaseline"
             : verticalAlignment(n.align);
-    const ctor =
-      n.axis === "v"
+    const hasSticky =
+      ctx.mode === "app" && n.axis === "v" && n.scroll === "v" && kids.some((c) => c.sticky !== undefined);
+    if (ctx.mode === "fidelity") {
+      for (const c of kids)
+        if (c.sticky) note(c, "approximated", "position: sticky", "position: sticky (snapshot position)");
+    }
+    const ctor = hasSticky
+      ? `LazyVStack(alignment: ${align}, spacing: ${num(spacing)}, pinnedViews: [.sectionHeaders])`
+      : n.axis === "v"
         ? `VStack(alignment: ${align}, spacing: ${num(spacing)})`
         : `HStack(alignment: ${align}, spacing: ${num(spacing)})`;
     out.push(`${ctor} {`);
@@ -186,31 +201,60 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     // plus one after the last (all gaps equal).
     const around = n.distribution === "around",
       evenly = n.distribution === "evenly";
-    kids.forEach((c, i) => {
-      // In-flow layer content: everything this child adds (spacers, gap padding) shows only with its layer.
-      const shown = c.shownBy !== undefined ? ctx.control.openStates.get(c.shownBy) : undefined;
-      const start = out.length;
-      if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
-      if ((i > 0 && n.distribution === "between") || around || evenly)
-        out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
-      const lines = ctx.renderNode(c);
-      const extra: string[] = [];
-      if (geometry) {
-        const dy = Math.round((c.frame.y - (n.frame.y + n.padding[0])) * 100) / 100;
-        if (dy > 0.5) extra.push(`.padding(.top, ${num(dy)})`);
+    if (hasSticky) {
+      let i = 0;
+      while (i < kids.length && !kids[i]!.sticky) {
+        const c = kids[i]!;
+        out.push(...indent(ctx.renderNode(c), 1));
+        i++;
       }
-      // Negative when the first child hangs outside the content box (outside markers, negative margins).
-      if (i === 0 && n.leadInset !== 0 && !around && !evenly && !auto.has(0))
-        extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
-      if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
-        extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
-      // The content's own insertion/removal (its reveal, its exit) on its one expression.
-      out.push(...indent([...lines, ...extra, ...(shown ? transitionModifiers(c) : [])], 1));
-      if (around) out.push("    Spacer(minLength: 0)");
-      if (shown) out.splice(start, out.length - start, `    if ${shown} {`, ...indent(out.slice(start), 1), "    }");
-      if (evenly && i === kids.length - 1) out.push("    Spacer(minLength: 0)");
-      if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
-    });
+      while (i < kids.length) {
+        const header = kids[i]!;
+        i++;
+        const sectionKids: SemNode[] = [];
+        while (i < kids.length && !kids[i]!.sticky) {
+          sectionKids.push(kids[i]!);
+          i++;
+        }
+        out.push("    Section {");
+        for (const sk of sectionKids) {
+          out.push(...indent(ctx.renderNode(sk), 2));
+        }
+        out.push("    } header: {");
+        const headerLines = ctx.renderNode(header);
+        if (header.sticky?.top && header.sticky.top > 0) {
+          headerLines.push(`.padding(.top, ${num(header.sticky.top)})`);
+        }
+        out.push(...indent(headerLines, 2));
+        out.push("    }");
+      }
+    } else {
+      kids.forEach((c, i) => {
+        // In-flow layer content: everything this child adds (spacers, gap padding) shows only with its layer.
+        const shown = c.shownBy !== undefined ? ctx.control.openStates.get(c.shownBy) : undefined;
+        const start = out.length;
+        if (auto.has(i)) out.push(`    Spacer(minLength: ${num(i === 0 ? n.leadInset : gapAt(i))})`);
+        if ((i > 0 && n.distribution === "between") || around || evenly)
+          out.push(`    Spacer(minLength: ${n.distribution === "between" && i > 0 && n.minGap ? num(n.minGap) : "0"})`);
+        const lines = ctx.renderNode(c);
+        const extra: string[] = [];
+        if (geometry) {
+          const dy = Math.round((c.frame.y - (n.frame.y + n.padding[0])) * 100) / 100;
+          if (dy > 0.5) extra.push(`.padding(.top, ${num(dy)})`);
+        }
+        // Negative when the first child hangs outside the content box (outside markers, negative margins).
+        if (i === 0 && n.leadInset !== 0 && !around && !evenly && !auto.has(0))
+          extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(n.leadInset)})`);
+        if ((!uniform || auto.size) && !spacers && i > 0 && !auto.has(i))
+          extra.push(`.padding(${n.axis === "v" ? ".top" : ".leading"}, ${num(gapAt(i))})`);
+        // The content's own insertion/removal (its reveal, its exit) on its one expression.
+        out.push(...indent([...lines, ...extra, ...(shown ? transitionModifiers(c) : [])], 1));
+        if (around) out.push("    Spacer(minLength: 0)");
+        if (shown) out.splice(start, out.length - start, `    if ${shown} {`, ...indent(out.slice(start), 1), "    }");
+        if (evenly && i === kids.length - 1) out.push("    Spacer(minLength: 0)");
+        if (i === kids.length - 1 && auto.has(kids.length)) out.push("    Spacer(minLength: 0)");
+      });
+    }
     out.push("}");
     if (hugsRowHeight(n, ctx)) out.push(".fixedSize(horizontal: false, vertical: true)");
   }
@@ -263,5 +307,14 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
 
 /** `MarkswiftBands(edges: […])`: inclusive edges are `.atLeast`, exclusive (`max-width`) ones `.above`. */
 export function bandsOpen(edges: BandEdge[]): string {
-  return `MarkswiftBands(edges: [${edges.map((e) => `.${e.inclusive ? "atLeast" : "above"}(${num(e.px)})`).join(", ")}])`;
+  const edgeExprs = edges.map((e) => {
+    if (e.feature === "orientation") {
+      return `.orientation(.${e.orientation ?? "landscape"})`;
+    }
+    if (e.feature === "height") {
+      return `.${e.inclusive ? "atLeastHeight" : "aboveHeight"}(${num(e.px)})`;
+    }
+    return `.${e.inclusive ? "atLeast" : "above"}(${num(e.px)})`;
+  });
+  return `MarkswiftBands(edges: [${edgeExprs.join(", ")}])`;
 }

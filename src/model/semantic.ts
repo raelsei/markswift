@@ -157,10 +157,12 @@ export interface FlexRow {
 
 export type Axis = "v" | "h";
 
-/** A width breakpoint: the next band starts at `px` (`inclusive`) or just above it (`max-width`, `width >`). */
+/** A breakpoint edge: width, height, or orientation condition. */
 export interface BandEdge {
   px: number;
   inclusive: boolean;
+  feature?: "width" | "height" | "orientation";
+  orientation?: "portrait" | "landscape";
 }
 
 /** Cross-axis alignment of children inside a stack. */
@@ -652,6 +654,8 @@ export interface SemBase extends SizeConstraints {
   alternatives?: SemNode[];
   /** CSS `@keyframes` animations (app output plays them; fidelity renders the settled look). */
   motion?: Motion;
+  /** CSS `position: sticky; top: ...` pinning metadata. */
+  sticky?: { top: number };
 }
 
 export interface StackNode extends SemBase {

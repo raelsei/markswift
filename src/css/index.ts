@@ -19,4 +19,16 @@ export {
   parseTrackTemplate,
   resolvedGridTracks,
 } from "./grid.ts";
-export { type WidthQuery, widthQuery, passes, matchesWidth, captureWidth, bandOf } from "./media.ts";
+export {
+  type WidthQuery,
+  type MediaQueryCondition,
+  mediaCondition,
+  widthQuery,
+  heightQuery,
+  orientationQuery,
+  passes,
+  matchesWidth,
+  matchesMedia,
+  captureWidth,
+  bandOf,
+} from "./media.ts";
