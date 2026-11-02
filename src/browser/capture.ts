@@ -26,7 +26,8 @@ import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
-import { captureStates } from "./states.ts";
+import { captureStates, forceStates } from "./states.ts";
+import { PRESSABLE_SELECTOR } from "../model/interactive.ts";
 import {
   LAYER_MARK,
   activate,
@@ -670,14 +671,29 @@ export class BrowserCapture {
    */
   async captureFrame(
     spec: CaptureRequest,
-    frame: { t: number; reduced: boolean },
+    frame: { t: number; reduced: boolean; pressed?: boolean },
     clip: { x: number; y: number; width: number; height: number },
   ): Promise<Uint8Array> {
     const page = await this.context.newPage();
     try {
       if (!frame.reduced) await page.emulateMedia({ reducedMotion: "no-preference" });
       await this.load(page, spec);
-      await noTransitions(page);
+      if (frame.pressed) {
+        const cdp = await this.context.newCDPSession(page);
+        await cdp.send("DOM.enable");
+        await cdp.send("CSS.enable");
+        const { root: doc } = await cdp.send("DOM.getDocument", { depth: 0 });
+        const { nodeIds } = await cdp.send("DOM.querySelectorAll", {
+          nodeId: doc.nodeId,
+          selector: `${spec.root} :is(${PRESSABLE_SELECTOR}), ${spec.root}:is(${PRESSABLE_SELECTOR})`,
+        });
+        if (nodeIds.length) {
+          await forceStates(cdp, nodeIds, ["hover", "active"]);
+        }
+        await cdp.detach();
+      } else {
+        await noTransitions(page);
+      }
       if (!(await settle(page, { at: frame.t })))
         throw new Error(`${spec.screen}@t:${frame.t}: no animation to pause; the frame would be the settled look`);
       await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
@@ -709,12 +725,14 @@ export class BrowserCapture {
     try {
       await page.emulateMedia({ reducedMotion: "no-preference" });
       await this.load(page, spec);
-      await noTransitions(page);
+      const sheet = await noTransitions(page);
       await settle(page);
+      await sheet.evaluate((s) => (s as HTMLStyleElement).remove());
       await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
         sel: spec.root,
         mark: ROOT_MARK,
       });
+      await recordAnimations(page);
       const cdp = await this.context.newCDPSession(page);
       const opening = await openLayer(page, cdp, `[${ROOT_MARK}="1"]`, ROOT_MARK, trigger);
       await cdp.detach();

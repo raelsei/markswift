@@ -34,6 +34,10 @@ struct Probe: View {
             Text("Revealed")
                 .transition(.modifier(active: MarkswiftReveal(fraction: 0), identity: MarkswiftReveal(fraction: 1)))
             MarkswiftRevealLayout(fraction: 0.5) { Text("Half") }
+            Text("ScrollDriven")
+                .modifier(MarkswiftScrollDrivenAnimation(tracks: MarkswiftScrollTracks(y: MarkswiftMotionTrack(40, [MarkswiftSegment(0, 1, .points([0, 1], [0, 1]))]))))
+            Text("ViewTransition")
+                .modifier(MarkswiftViewTransition(tracks: MarkswiftScrollTracks(opacity: MarkswiftMotionTrack(0, [MarkswiftSegment(1, 1, .points([0, 1], [0, 1]))]))))
         }
         .environment(\\.markswiftMotionTime, 0.25)
         .environment(\\.markswiftForcedStates, .reduceMotion)

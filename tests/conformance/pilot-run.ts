@@ -19,7 +19,7 @@ import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { ensureSimulator, renderIos, renderMacBatch } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
-import type { RenderResult } from "../../tools/verify/native-template.ts";
+import type { ForcedState, RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
@@ -496,7 +496,7 @@ async function run() {
         console.error(`${entry.key}: ${String(error)}`);
       }
     };
-    const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
+    const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: ForcedState }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
     /** Render queued captures (with their reflow views) in native builds of BATCH, then score each. */
@@ -602,7 +602,11 @@ async function run() {
                 for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"])
                   await copyFile(join(sourceDir, file), join(dir, file));
                 const job: Job = { entry, item, dir, layout, textMetrics: undefined, result };
-                const forced = frame.reduced ? ("reduceMotion" as const) : undefined;
+                const forced = frame.reduced
+                  ? ("reduceMotion" as const)
+                  : frame.pressed
+                    ? ("pressed" as const)
+                    : undefined;
                 const source = conversion && open ? { ...conversion, layout, openArg: open.openArg } : conversion;
                 if (!source) {
                   report!.completed++;
