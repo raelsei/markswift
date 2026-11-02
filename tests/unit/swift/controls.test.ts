@@ -529,7 +529,7 @@ test("select multiple emits a native multi-selection list with Set<String> bindi
   expect(diagnostics).not.toContain("select: <select multiple/size> list box → menu picker");
 });
 
-test("select multiple in fidelity mode keeps the captured look with highlighted selection", () => {
+test("select multiple in fidelity mode paints selected options in Chrome's inactive listbox grey, text unchanged", () => {
   const { view } = swift(
     [
       field("select", { id: "cars", multiple: "", size: "4" }, 0, 80, [
@@ -544,7 +544,9 @@ test("select multiple in fidelity mode keeps the captured look with highlighted 
   expect(view).toContain("VStack(alignment: .leading, spacing: 0)");
   expect(view).toContain('Text(verbatim: "Volvo")');
   expect(view).toContain('Text(verbatim: "Saab")');
-  expect(view).toContain(".foregroundStyle(Color.white)");
+  // Saab and Audi are selected: two rows on the inactive selection fill; the option text keeps its colour.
+  expect(view.split(".background(Color.markswift(0.808, 0.808, 0.808))").length - 1).toBe(2);
+  expect(view).not.toContain(".foregroundStyle(Color.white)");
   expect(view).not.toContain("List(selection:");
 });
 
