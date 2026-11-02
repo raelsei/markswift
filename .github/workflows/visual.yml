@@ -96,10 +96,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-      - run: python -m pip install fonttools==4.60.2 brotli==1.2.0
       - run: bun install --frozen-lockfile
       - run: ./node_modules/.bin/playwright-core install --no-shell chromium
       - name: Toolchain
