@@ -112,7 +112,8 @@ export function flexAlignContent(
   const slack = availableCross - total;
   const offsets: number[] = [];
   let sizes = [...lineCrossSizes];
-  if (count <= 1 || slack <= 0.5) {
+  // A wrapping container is multi-line even with one line, so align-content still places it (CSS 9.4).
+  if (count === 0 || slack <= 0.5) {
     let y = 0;
     for (const s of lineCrossSizes) {
       offsets.push(y);
@@ -146,7 +147,7 @@ export function flexAlignContent(
       break;
     }
     case "between": {
-      const extra = slack / (count - 1);
+      const extra = count > 1 ? slack / (count - 1) : 0;
       let y = 0;
       for (const s of lineCrossSizes) {
         offsets.push(y);

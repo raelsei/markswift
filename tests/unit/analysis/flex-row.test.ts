@@ -462,6 +462,16 @@ test("flexAlignContent distributes lines in a taller cross axis for all modes", 
   expect(stretched.lineCrossSizes).toEqual([65, 75]);
 });
 
+test("flexAlignContent places a wrapping container's single line (space-between falls back to start)", () => {
+  // One 30px line in 150px: slack 120.
+  expect(flexAlignContent("center", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("end", [30], 150, 10).offsets).toEqual([120]);
+  expect(flexAlignContent("around", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("evenly", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("between", [30], 150, 10).offsets).toEqual([0]);
+  expect(flexAlignContent("stretch", [30], 150, 10).lineCrossSizes).toEqual([150]);
+});
+
 test("breakable text items probe their min-content natively (autoMin); a clipping item has none", () => {
   const row = (styles: Record<string, string>) =>
     rowOf(

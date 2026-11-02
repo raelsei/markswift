@@ -126,9 +126,13 @@ nativeTest(
         { swift: ".spaceEvenly", ts: "evenly" },
         { swift: ".stretch", ts: "stretch" },
       ];
-      const alignContentCalls = modes.map(
-        (m) =>
-          `    MarkswiftFlexRow.alignContentDistribution(alignContent: ${m.swift}, lineCrossSizes: [30, 40], availableCross: 150, gap: 10).offsets,`,
+      // Two lines, and one line (a wrapping container is multi-line even with a single line).
+      const lineSets = [[30, 40], [30]];
+      const alignContentCalls = lineSets.flatMap((ls) =>
+        modes.map(
+          (m) =>
+            `    MarkswiftFlexRow.alignContentDistribution(alignContent: ${m.swift}, lineCrossSizes: [${ls.join(", ")}], availableCross: 150, gap: 10).offsets,`,
+        ),
       );
       await Bun.write(
         join(directory, "main.swift"),
@@ -157,7 +161,7 @@ nativeTest(
         240_000,
       );
       const lines = (await command([join(directory, "parity")], directory, 30_000)).trim().split("\n");
-      expect(lines).toHaveLength(2 * CASES.length + modes.length);
+      expect(lines).toHaveLength(2 * CASES.length + lineSets.length * modes.length);
       CASES.forEach((c, i) => {
         const swift = JSON.parse(lines[i]!) as number[];
         const ts = solveFlexRow(c.items, c.bases, c.width, c.gap);
@@ -166,12 +170,15 @@ nativeTest(
         const starts = flexLines(c.items, c.bases, c.width, c.gap).map(([a]) => a);
         expect(JSON.parse(lines[CASES.length + i]!)).toEqual(starts);
       });
-      modes.forEach((m, i) => {
-        const swiftOffsets = JSON.parse(lines[2 * CASES.length + i]!) as number[];
-        const tsOffsets = flexAlignContent(m.ts, [30, 40], 150, 10).offsets;
-        expect(swiftOffsets).toHaveLength(tsOffsets.length);
-        for (const [j, off] of swiftOffsets.entries()) expect(Math.abs(off - tsOffsets[j]!)).toBeLessThanOrEqual(0.001);
-      });
+      for (const [s, ls] of lineSets.entries()) {
+        for (const [i, m] of modes.entries()) {
+          const swiftOffsets = JSON.parse(lines[2 * CASES.length + s * modes.length + i]!) as number[];
+          const tsOffsets = flexAlignContent(m.ts, ls, 150, 10).offsets;
+          expect(swiftOffsets).toHaveLength(tsOffsets.length);
+          for (const [j, off] of swiftOffsets.entries())
+            expect(Math.abs(off - tsOffsets[j]!)).toBeLessThanOrEqual(0.001);
+        }
+      }
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

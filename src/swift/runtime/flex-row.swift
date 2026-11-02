@@ -103,7 +103,8 @@ struct MarkswiftFlexRow: Layout {
         let slack = availableCross - total
         var offsets = [CGFloat]()
         var sizes = lineCrossSizes
-        if count <= 1 || slack <= 0.5 {
+        // A wrapping container is multi-line even with one line, so align-content still places it (CSS 9.4).
+        if count == 0 || slack <= 0.5 {
             var y: CGFloat = 0
             for s in lineCrossSizes { offsets.append(y); y += s + gap }
             return (offsets, sizes)
@@ -119,7 +120,7 @@ struct MarkswiftFlexRow: Layout {
             var y: CGFloat = slack / 2
             for s in lineCrossSizes { offsets.append(y); y += s + gap }
         case .spaceBetween:
-            let extra = slack / CGFloat(count - 1)
+            let extra = count > 1 ? slack / CGFloat(count - 1) : 0
             var y: CGFloat = 0
             for s in lineCrossSizes { offsets.append(y); y += s + gap + extra }
         case .spaceAround:

@@ -77,6 +77,7 @@
     "overlay-dialog-390-dark-app@open:edit-profile@t:50": "macOS ImageRenderer cannot rasterise the dialog's AppKit TextFields (its @open capture scores the same, 0.91); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner: @raelsei",
     "overlay-dialog-390-light-app@open:edit-profile@t:50": "macOS ImageRenderer cannot rasterise the dialog's AppKit TextFields (its @open capture scores the same, 0.91); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner: @raelsei",
     "overlay-sheet-390-dark-app@open:open-sheet@t:100": "macOS ImageRenderer cannot rasterise the sheet's AppKit TextFields (its @open capture scores the same, 0.93); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner: @raelsei",
-    "overlay-sheet-390-light-app@open:open-sheet@t:100": "macOS ImageRenderer cannot rasterise the sheet's AppKit TextFields (its @open capture scores the same, 0.93); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner: @raelsei"
+    "overlay-sheet-390-light-app@open:open-sheet@t:100": "macOS ImageRenderer cannot rasterise the sheet's AppKit TextFields (its @open capture scores the same, 0.93); the frame is within 0.03 of that capture and the iOS gate judges it (iOS ≥ 0.95) — owner: @raelsei",
+    "select-multiple@app": "macOS ImageRenderer cannot rasterise the AppKit-backed List of <select multiple>; the iOS gate judges it — owner: @raelsei"
   }
 }

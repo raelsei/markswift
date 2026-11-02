@@ -64,21 +64,25 @@ export interface ControlDeps extends ColorCtx {
  * carries every other measured colour: resolved for the screen's theme, or as a light/dark pair
  * (`Color.markswift(light:dark:)` from MarkswiftRuntime.swift) for an adaptive view. Measured from Chrome 152.
  */
-const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
+const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string; listSelection: string }> = {
   light: {
     accent: "Color.markswift(0.0, 0.459, 1.0)",
     track: "Color.markswift(0.937, 0.937, 0.937)",
     edge: "Color.markswift(0.698, 0.698, 0.698)",
+    listSelection: "Color.markswift(0.808, 0.808, 0.808)",
   },
   dark: {
     accent: "Color.markswift(0.6, 0.784, 1.0)",
     track: "Color.markswift(0.231, 0.231, 0.231)",
     edge: "Color.markswift(0.522, 0.522, 0.522)",
+    listSelection: "Color.markswift(0.329, 0.329, 0.329)",
   },
   adaptive: {
     accent: "Color.markswift(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
     track: "Color.markswift(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
     edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
+    listSelection:
+      "Color.markswift(light: Color.markswift(0.808, 0.808, 0.808), dark: Color.markswift(0.329, 0.329, 0.329))",
   },
 };
 /**
@@ -292,18 +296,19 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       if (n.multiple) {
         if (still) {
           const selectedSet = new Set(n.values ?? []);
-          const tint = n.accent ? colorExpr(n.accent, deps, deps.id) : UA[deps.theme].accent;
+          // An unfocused listbox paints its selected options in Chrome's inactive selection grey; the text keeps its colour.
+          const fill = UA[deps.theme].listSelection;
           const rows = (n.options ?? []).map((opt) => {
             const isSelected = selectedSet.has(opt.label);
             return [
               "HStack(spacing: 0) {",
               `    Text(verbatim: ${str(opt.label)})`,
               "        .lineLimit(1)",
-              "        .padding(.horizontal, 4)",
+              "        .padding(.horizontal, 2)",
               "    Spacer(minLength: 0)",
               "}",
               ".frame(maxWidth: .infinity, alignment: .leading)",
-              ...(isSelected ? [`.background(${tint})`, ".foregroundStyle(Color.white)"] : []),
+              ...(isSelected ? [`.background(${fill})`] : []),
             ];
           });
           return [
