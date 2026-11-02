@@ -75,3 +75,39 @@ jobs:
           cd "$smoke_dir"
           actual="$(npx --yes --package="markswift@$version" markswift --version)"
           test "$actual" = "$version"
+
+  binaries:
+    name: Build and release binary assets
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - name: Build standalone binaries for all platforms and Homebrew formula
+        run: bun run build:binaries
+      - name: Upload binary release assets and Homebrew formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              dist/bin/*.tar.gz \
+              dist/bin/checksums.txt \
+              Formula/markswift.rb \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/bin/*.tar.gz \
+              dist/bin/checksums.txt \
+              Formula/markswift.rb \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

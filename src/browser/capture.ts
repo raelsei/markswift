@@ -155,7 +155,32 @@ export class BrowserCapture {
     // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
     // that slips past `page.route` cannot reach the network. The document itself is fulfilled by the route.
     const args = this.opts.restricted ? ["--host-resolver-rules=MAP * ~NOTFOUND"] : [];
-    this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome", args });
+    // ponytail: on macOS, Chrome channel avoids browser download; fallback to managed Chromium when absent
+    const channel = this.opts.channel ?? (process.platform === "darwin" ? "chrome" : undefined);
+    try {
+      this.browser = await chromium.launch({
+        headless: true,
+        ...(channel ? { channel } : {}),
+        args,
+      });
+    } catch (error) {
+      if (!this.opts.channel && channel === "chrome") {
+        // Fall back to Playwright's bundled Chromium if Chrome is not installed on macOS
+        try {
+          this.browser = await chromium.launch({ headless: true, args });
+        } catch (fallbackError) {
+          throw new Error(
+            `Neither Google Chrome nor Playwright Chromium was found. Run "markswift install-browser" to download Chromium.\n${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+          );
+        }
+      } else {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("Executable doesn't exist") || msg.includes("Chromium distribution")) {
+          throw new Error(`Chromium browser not found. Run "markswift install-browser" to download Chromium.\n${msg}`);
+        }
+        throw error;
+      }
+    }
     this.context = await this.browser.newContext({
       viewport: this.opts.viewport,
       deviceScaleFactor: this.opts.dpr,

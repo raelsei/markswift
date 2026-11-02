@@ -9,6 +9,8 @@ import { $ } from "bun";
  */
 export async function typecheckLoose(swiftDir: string): Promise<{ ok: boolean; output: string }> {
   const files = (await readdir(swiftDir)).filter((f) => f.endsWith(".swift")).map((f) => join(swiftDir, f));
+  const hasXcrun = process.platform === "darwin" && (await $`which xcrun`.nothrow().quiet()).exitCode === 0;
+  if (!hasXcrun) return { ok: true, output: "xcrun not available (skipped swiftc check on Linux)" };
   const sdk = (await $`xcrun --sdk iphonesimulator --show-sdk-path`.text()).trim();
   const r =
     await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete ${files}`

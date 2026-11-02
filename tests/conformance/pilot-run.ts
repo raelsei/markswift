@@ -159,7 +159,7 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
   const [sourceRevision, sourceStatus, xcode] = await Promise.all([
     outputOf(["git", "rev-parse", "HEAD"]),
     outputOf(["git", "status", "--porcelain", "--", "src"]),
-    outputOf(["xcodebuild", "-version"]),
+    outputOf(["xcodebuild", "-version"]).catch(() => "none"),
   ]);
   assertCleanSource(sourceStatus);
   const selected = renderer === "ios" ? await ensureSimulator() : null;
@@ -180,7 +180,7 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
   const rendererName = selected
     ? `${selected.name} ${selected.runtime}`
     : renderer === "mac"
-      ? `macOS ${await outputOf(["sw_vers", "-productVersion"])} ImageRenderer`
+      ? `macOS ${await outputOf(["sw_vers", "-productVersion"]).catch(() => "unknown")} ImageRenderer`
       : "none";
   return {
     sourceRevision,
