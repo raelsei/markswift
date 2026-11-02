@@ -75,14 +75,21 @@ export function getBrowserVersion(channel?: string): string | undefined {
 }
 
 /**
- * Scans HTML and injected CSS for local relative links (stylesheets, images, fonts),
- * reads their contents from disk if baseDir is provided, and computes a single content hash.
- * If any linked resource on disk changes, this hash changes, preventing stale cache hits.
+ * One hash over the local files the document links (stylesheets, images, fonts, and what stylesheets import), read
+ * from disk: an edit to any of them misses the cache. `root` is the directory served at `/`, `docDir` the
+ * document's own. Undefined when a link cannot be hashed (missing file, remote URL inside a stylesheet): the
+ * capture is then not cached, since nothing would notice that resource change.
  */
-export async function hashLinkedResources(html: string, baseDir?: string, css?: string): Promise<string> {
-  if (!baseDir) return "";
+export async function hashLinkedResources(
+  html: string,
+  root?: string,
+  css?: string,
+  docDir = root,
+): Promise<string | undefined> {
+  if (!root || !docDir) return "";
   const visited = new Set<string>();
   const hashes: Array<{ path: string; hash: string }> = [];
+  let unhashable = false;
 
   const scanUrls = (content: string): string[] => {
     const urls: string[] = [];
@@ -95,40 +102,28 @@ export async function hashLinkedResources(html: string, baseDir?: string, css?: 
     return urls;
   };
 
-  const processFile = async (relPath: string) => {
-    const clean = relPath.split(/[?#]/)[0]!.trim();
-    if (
-      !clean ||
-      clean.startsWith("data:") ||
-      clean.startsWith("http:") ||
-      clean.startsWith("https:") ||
-      clean.startsWith("//")
-    ) {
+  const processFile = async (url: string, from: string) => {
+    const clean = url.split(/[?#]/)[0]!.trim();
+    if (!clean || clean.startsWith("data:") || clean.startsWith("#")) return;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(clean)) {
+      unhashable = true;
       return;
     }
-    const full = resolve(baseDir, clean);
+    const full = clean.startsWith("/") ? resolve(root, `.${decodeURI(clean)}`) : resolve(from, decodeURI(clean));
     if (visited.has(full)) return;
     visited.add(full);
     try {
       const content = await readFile(full);
-      const h = createHash("sha256").update(content).digest("hex").slice(0, 16);
-      hashes.push({ path: clean, hash: h });
-      if (clean.endsWith(".css")) {
-        const subUrls = scanUrls(content.toString("utf8"));
-        for (const sub of subUrls) {
-          const subRel = relative(baseDir, resolve(dirname(full), sub.split(/[?#]/)[0]!.trim()));
-          await processFile(subRel);
-        }
-      }
+      hashes.push({ path: relative(root, full), hash: createHash("sha256").update(content).digest("hex") });
+      if (full.endsWith(".css"))
+        for (const sub of scanUrls(content.toString("utf8"))) await processFile(sub, dirname(full));
     } catch {
-      // Missing or unreadable file is omitted from linked hashes.
+      unhashable = true;
     }
   };
 
-  const urls = scanUrls(html);
-  if (css) urls.push(...scanUrls(css));
-  for (const u of urls) await processFile(u);
-
+  for (const u of [...scanUrls(html), ...(css ? scanUrls(css) : [])]) await processFile(u, docDir);
+  if (unhashable) return undefined;
   if (!hashes.length) return "";
   hashes.sort((a, b) => a.path.localeCompare(b.path));
   return createHash("sha256")

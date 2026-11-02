@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -125,11 +125,25 @@ describe("hashLinkedResources", () => {
     expect(hash2).not.toBe(hash1);
   });
 
-  test("ignores external and data URLs", async () => {
-    const html =
-      '<link rel="stylesheet" href="https://example.com/ext.css"><img src="data:image/png;base64,123"><img src="//cdn.test/img.png">';
-    const hash = await hashLinkedResources(html, dir);
-    expect(hash).toBe("");
+  test("data URLs need no hash; remote or missing resources make the capture uncacheable", async () => {
+    expect(await hashLinkedResources('<img src="data:image/png;base64,123">', dir)).toBe("");
+    // Nothing would notice these change, so the capture must not be cached.
+    expect(
+      await hashLinkedResources('<link rel="stylesheet" href="https://example.com/ext.css">', dir),
+    ).toBeUndefined();
+    expect(await hashLinkedResources('<img src="//cdn.test/img.png">', dir)).toBeUndefined();
+    expect(await hashLinkedResources('<img src="missing.png">', dir)).toBeUndefined();
+  });
+
+  test("relative links resolve from the document's directory, root-relative ones from the served root", async () => {
+    await mkdir(join(dir, "components"), { recursive: true });
+    await writeFile(join(dir, "components", "card.css"), "a{}");
+    await writeFile(join(dir, "site.css"), "b{}");
+    const html = '<link rel="stylesheet" href="card.css"><link rel="stylesheet" href="/site.css">';
+    const before = await hashLinkedResources(html, dir, undefined, join(dir, "components"));
+    expect(before).toBeString();
+    await writeFile(join(dir, "components", "card.css"), "a{color:red}");
+    expect(await hashLinkedResources(html, dir, undefined, join(dir, "components"))).not.toBe(before);
   });
 });
 

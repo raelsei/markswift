@@ -5,6 +5,7 @@
  * Knows nothing about where the page came from: the source's CaptureRequest
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
+import { dirname, join } from "node:path";
 import { settle, withFrozenProgress } from "./settle.ts";
 import { collectFontFaces, readFontBytes, attachResolvedFonts } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
@@ -264,6 +265,8 @@ export async function stopSharedBrowser(key?: string): Promise<void> {
 export class BrowserCapture {
   private browser?: Browser;
   private context?: BrowserContext;
+  /** The in-flight context setup: concurrent captures share it instead of each acquiring a browser. */
+  private contextReady?: Promise<BrowserContext>;
   private stopping?: Promise<void>;
   private readonly opts: CaptureOptions;
   private ownsBrowser = false;
@@ -275,6 +278,10 @@ export class BrowserCapture {
     this.opts = opts;
   }
 
+  private get sharedKey(): string {
+    return `${this.opts.channel ?? "chrome"}:${this.opts.restricted ? "restricted" : "normal"}`;
+  }
+
   async start(): Promise<void> {
     this.started = true;
     if (!this.opts.cache || process.env.MARKSWIFT_NO_CACHE === "1") {
@@ -282,25 +289,29 @@ export class BrowserCapture {
     }
   }
 
-  private async ensureContext(): Promise<BrowserContext> {
-    if (this.context) return this.context;
-    this.opts.signal?.throwIfAborted();
-    if (this.opts.isolated) {
-      this.browser = await launchBrowser(this.opts);
-      this.ownsBrowser = true;
-    } else {
-      this.browser = await getSharedBrowser({
-        channel: this.opts.channel,
-        restricted: this.opts.restricted,
+  private ensureContext(): Promise<BrowserContext> {
+    // A shared browser another conversion abandoned (a stuck page) is gone: acquire a fresh one.
+    if (this.context && !this.browser?.isConnected()) this.dropBrowser();
+    this.contextReady ??= (async () => {
+      this.opts.signal?.throwIfAborted();
+      if (this.opts.isolated) {
+        this.browser = await launchBrowser(this.opts);
+        this.ownsBrowser = true;
+      } else {
+        this.browser = await getSharedBrowser({ channel: this.opts.channel, restricted: this.opts.restricted });
+        this.ownsBrowser = false;
+      }
+      this.context = await this.browser.newContext({
+        viewport: this.opts.viewport,
+        deviceScaleFactor: this.opts.dpr,
+        reducedMotion: "reduce",
       });
-      this.ownsBrowser = false;
-    }
-    this.context = await this.browser.newContext({
-      viewport: this.opts.viewport,
-      deviceScaleFactor: this.opts.dpr,
-      reducedMotion: "reduce",
+      return this.context;
+    })().catch((error) => {
+      this.contextReady = undefined;
+      throw error;
     });
-    return this.context;
+    return this.contextReady;
   }
 
   /** Version of the browser (e.g. `153.0.8010.12`). */
@@ -308,26 +319,32 @@ export class BrowserCapture {
     return this.browser?.version() ?? getBrowserVersion(this.opts.channel) ?? "unknown";
   }
 
-  async discard(): Promise<void> {
-    await this.discardBrowser();
+  /** Forgets this capture's browser and context, releasing its share of a shared browser. */
+  private dropBrowser(): void {
+    if (this.browser && !this.ownsBrowser) releaseSharedBrowser(this.sharedKey);
+    this.browser = undefined;
+    this.context = undefined;
+    this.contextReady = undefined;
   }
 
-  private async discardBrowser(): Promise<void> {
-    if (this.browser) {
-      const b = this.browser;
-      this.browser = undefined;
-      this.context = undefined;
-      if (!this.opts.isolated) {
-        const key = `${this.opts.channel ?? "chrome"}:${this.opts.restricted ? "restricted" : "normal"}`;
-        await stopSharedBrowser(key);
-      }
-      await b.close().catch(() => {});
-    }
+  /**
+   * A stuck `newPage` (no deadline settles it) leaves the browser unusable: close it. A shared one only while it is
+   * still the shared browser; other holders reconnect on their next capture.
+   */
+  private async abandonBrowser(): Promise<void> {
+    const b = this.browser;
+    if (!b) return;
+    const shared = !this.ownsBrowser;
+    this.dropBrowser();
+    if (shared) {
+      if (sharedBrowsers.get(this.sharedKey)?.browser === b) await stopSharedBrowser(this.sharedKey);
+    } else await b.close().catch(() => {});
   }
 
   /**
    * Safe to call more than once and concurrently (the conversion deadline and its cleanup both
-   * call it): one close runs. Closes context, keeping shared browser alive across conversions.
+   * call it): one close runs. Closes this capture's context and its own browser; a shared browser stays for the
+   * other conversions and closes once none holds it.
    */
   stop(): Promise<void> {
     if (!this.started && !this.context && !this.browser) return Promise.resolve();
@@ -335,12 +352,8 @@ export class BrowserCapture {
       try {
         await this.context?.close().catch(() => {});
       } finally {
-        if (this.ownsBrowser && this.browser) {
-          await this.browser.close().catch(() => {});
-        } else if (!this.ownsBrowser && this.browser) {
-          const key = `${this.opts.channel ?? "chrome"}:${this.opts.restricted ? "restricted" : "normal"}`;
-          releaseSharedBrowser(key);
-        }
+        if (this.ownsBrowser) await this.browser?.close().catch(() => {});
+        this.dropBrowser();
       }
     })();
     return this.stopping;
@@ -351,40 +364,45 @@ export class BrowserCapture {
    * LayoutDoc.source label. The page's `prefers-color-scheme` follows `spec.theme`.
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
-    // Cached only when the capture is a pure function of hashed inputs: the document and its local resources, no
-    // remote resource (its bytes are not hashed), the standard node identity, a known browser.
-    const browserVersion = getBrowserVersion(this.opts.channel);
-    const useCache =
+    // Cached only when the capture is a pure function of hashed inputs: a document this process serves, or pasted
+    // markup with no base (`markswift.invalid`; a remote `baseURL` resolves relative links remotely), its local resources, no remote resource, the standard node
+    // identity, a known browser.
+    const served = new URL(spec.url);
+    const browserVersion =
       this.opts.cache === true &&
       process.env.MARKSWIFT_NO_CACHE !== "1" &&
       spec.html !== undefined &&
       identity === htmlIdentity &&
-      browserVersion !== undefined &&
-      !REMOTE_RESOURCE.test(`${spec.html}\n${spec.css ?? ""}`);
+      /^(?:127\.0\.0\.1|localhost|\[::1\]|markswift\.invalid)$/.test(served.hostname) &&
+      !REMOTE_RESOURCE.test(`${spec.html}\n${spec.css ?? ""}`)
+        ? getBrowserVersion(this.opts.channel)
+        : undefined;
     let cacheKey: string | undefined;
-    if (useCache) {
-      const viewport = spec.viewport ?? this.opts.viewport;
-      const linked = await hashLinkedResources(spec.html!, spec.baseDir, spec.css);
-      cacheKey = computeCacheKey({
-        html: spec.html!,
-        linkedResources: linked,
-        viewport,
-        theme: spec.theme,
-        browserVersion,
-        source,
-        screen: spec.screen,
-        dpr: this.opts.dpr,
-        restricted: !!this.opts.restricted,
-        root: spec.root,
-        waitFor: spec.waitFor,
-        css: spec.css,
-        darkClass: spec.darkClass,
-        open: spec.open ? `${spec.open.id}:${spec.open.path}` : undefined,
-        probeDismiss: spec.probeDismiss,
-        screenshot: spec.screenshot,
-        breakpoints: spec.breakpoints,
-      });
-      const cached = await readCaptureCache(cacheKey);
+    if (browserVersion !== undefined && spec.html !== undefined) {
+      // Relative links resolve from the document's directory under the served root.
+      const docDir = spec.baseDir && join(spec.baseDir, dirname(decodeURIComponent(served.pathname)));
+      const linked = await hashLinkedResources(spec.html, spec.baseDir, spec.css, docDir);
+      if (linked !== undefined)
+        cacheKey = computeCacheKey({
+          html: spec.html,
+          linkedResources: linked,
+          viewport: spec.viewport ?? this.opts.viewport,
+          theme: spec.theme,
+          browserVersion,
+          source,
+          screen: spec.screen,
+          dpr: this.opts.dpr,
+          restricted: !!this.opts.restricted,
+          root: spec.root,
+          waitFor: spec.waitFor,
+          css: spec.css,
+          darkClass: spec.darkClass,
+          open: spec.open ? `${spec.open.id}:${spec.open.path}` : undefined,
+          probeDismiss: spec.probeDismiss,
+          screenshot: spec.screenshot,
+          breakpoints: spec.breakpoints,
+        });
+      const cached = cacheKey && (await readCaptureCache(cacheKey));
       if (cached) return cached;
     }
 
@@ -400,7 +418,7 @@ export class BrowserCapture {
         expired = true;
         reject(new Error(`capture ${key} timed out after ${timeoutMs}ms during ${phase}`));
         // Closing a page releases pending CDP work. A stuck newPage needs the browser closed.
-        void (page ? page.close() : this.discardBrowser()).catch(() => {});
+        void (page ? page.close() : this.abandonBrowser()).catch(() => {});
       }, timeoutMs);
     });
     try {
@@ -422,7 +440,7 @@ export class BrowserCapture {
         ),
         timedOut,
       ]);
-      if (useCache && cacheKey) {
+      if (cacheKey) {
         await writeCaptureCache(cacheKey, result).catch(() => {});
       }
       return result;

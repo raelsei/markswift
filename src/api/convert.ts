@@ -58,7 +58,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     deadline.addEventListener("abort", () => reject(deadline.reason), { once: true }),
   );
   timedOut.catch(() => {}); // the deadline may fire with no capture awaiting it
-  let failed = false;
   try {
     prepared = await resolveSource(source);
     const { html, url, label, baseDir } = prepared;
@@ -194,13 +193,12 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
         : {}),
     };
   } catch (error) {
-    failed = true;
     if (deadline.aborted) throw new Error(`conversion timed out after ${timeoutMs} ms`, { cause: error });
     throw error;
   } finally {
     deadline.removeEventListener("abort", stopOnTimeout);
     try {
-      await (failed ? renderer.discard() : renderer.stop());
+      await renderer.stop();
     } finally {
       prepared?.close();
     }
