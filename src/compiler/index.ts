@@ -350,13 +350,17 @@ function verifyAtProbe(screen: Screen, probe: LayoutDoc): void {
     } else if (n.kind === "stack" && n.flex) {
       const f = n.flex;
       const p = at && admitFlexRow(at, true);
-      if (p && isDeepStrictEqual([p.items, p.align], [f.items, f.align])) return;
+      if (
+        p &&
+        isDeepStrictEqual([p.items, p.align, p.axis, p.alignContent], [f.items, f.align, f.axis, f.alignContent])
+      )
+        return;
       delete n.flex;
       note(
         n,
         "approximated",
         f.fidelityNote?.feature ?? "flex-shrink",
-        `flex allocation not reproduced at the ${probe.size.w}px probe; captured widths pinned`,
+        `flex allocation not reproduced at the ${probe.size.w}px probe; captured ${f.axis === "v" ? "heights" : "widths"} pinned`,
       );
     }
   });

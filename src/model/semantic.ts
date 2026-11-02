@@ -141,18 +141,24 @@ export interface FlexItem {
   fraction?: number;
   /** `align-self` when it differs from the row's `align-items`. */
   align?: FlexRow["align"];
+  /** CSS `min-width: auto` (or `min-height: auto`): measured natively when shrinking. */
+  autoMin?: boolean;
 }
 /**
- * An admitted flex row (nowrap, or `flex-wrap: wrap` whose captured lines CSS line breaking reproduces); app mode
- * emits MarkswiftFlexRow, fidelity keeps the children's captured geometry.
+ * An admitted flex container (row, column, or `flex-wrap: wrap`); app mode emits MarkswiftFlexRow,
+ * fidelity keeps the children's captured geometry.
  */
 export interface FlexRow {
   items: FlexItem[];
   align: "start" | "center" | "end" | "stretch";
+  /** Layout axis: default "h" (row); "v" for column flex. */
+  axis?: Axis;
+  /** `align-content` line distribution for wrapping rows in a taller box. */
+  alignContent?: "start" | "center" | "end" | "between" | "around" | "evenly" | "stretch";
   /** `flex-wrap: wrap`: the gap between lines; absent on a nowrap row. */
   rowGap?: number;
   /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
-  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis" | "flex-wrap"; message: string };
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis" | "flex-wrap" | "flex-column"; message: string };
 }
 
 export type Axis = "v" | "h";

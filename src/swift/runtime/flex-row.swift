@@ -1,5 +1,6 @@
-/// CSS flex row: grow / shrink / basis (px, nil = content, or a fraction of the row), min/max clamps, gaps, per-item
-/// `align-self`; with `rowGap` (`flex-wrap: wrap`) items break into lines, each allocated on its own.
+/// CSS flex row or column: grow / shrink / basis (px, nil = content, or a fraction of the container), min/max clamps,
+/// gaps, per-item `align-self`; with `rowGap` (`flex-wrap: wrap`) items break into lines, each allocated on its own,
+/// with `alignContent` distributing lines in a taller container.
 struct MarkswiftFlexRow: Layout {
     struct Item: Sendable {
         var grow: CGFloat
@@ -7,17 +8,24 @@ struct MarkswiftFlexRow: Layout {
         var basis: CGFloat?
         var min: CGFloat = 0
         var max: CGFloat? = nil
-        /// Horizontal padding and border: the box's floor, excluded from the shrink weight.
+        /// Horizontal (or vertical for column) padding and border: the box's floor, excluded from the shrink weight.
         var inset: CGFloat = 0
-        /// Percentage basis: `basis + fraction × width`.
+        /// Percentage basis: `basis + fraction × mainAvailable`.
         var fraction: CGFloat? = nil
-        /// `align-self`, when it differs from the row's `align-items`.
+        /// `align-self`, when it differs from the container's `align-items`.
         var align: Align? = nil
+        /// CSS `min-width: auto` / `min-height: auto`: probed natively when shrinking.
+        var autoMin: Bool = false
     }
     enum Align: Sendable { case start, center, end, stretch }
+    enum AlignContent: Sendable { case start, center, end, spaceBetween, spaceAround, spaceEvenly, stretch }
+    enum Axis: Sendable { case horizontal, vertical }
+
+    var axis: Axis = .horizontal
     var items: [Item]
     var spacing: CGFloat
     var align: Align = .stretch
+    var alignContent: AlignContent = .stretch
     /// `flex-wrap: wrap`: the gap between lines; nil keeps one line (nowrap).
     var rowGap: CGFloat? = nil
 
@@ -81,66 +89,163 @@ struct MarkswiftFlexRow: Layout {
         return size
     }
 
+    /// `align-content` line distribution in a taller cross axis, mirroring `flexAlignContent`
+    /// (src/analysis/flex-row.ts).
+    static func alignContentDistribution(
+        alignContent: AlignContent,
+        lineCrossSizes: [CGFloat],
+        availableCross: CGFloat,
+        gap: CGFloat
+    ) -> (offsets: [CGFloat], lineCrossSizes: [CGFloat]) {
+        let count = lineCrossSizes.count
+        let total = lineCrossSizes.reduce(0, +) + CGFloat(Swift.max(0, count - 1)) * gap
+        let slack = availableCross - total
+        var offsets = [CGFloat]()
+        var sizes = lineCrossSizes
+        if count <= 1 || slack <= 0.5 {
+            var y: CGFloat = 0
+            for s in lineCrossSizes { offsets.append(y); y += s + gap }
+            return (offsets, sizes)
+        }
+        switch alignContent {
+        case .start:
+            var y: CGFloat = 0
+            for s in lineCrossSizes { offsets.append(y); y += s + gap }
+        case .end:
+            var y: CGFloat = slack
+            for s in lineCrossSizes { offsets.append(y); y += s + gap }
+        case .center:
+            var y: CGFloat = slack / 2
+            for s in lineCrossSizes { offsets.append(y); y += s + gap }
+        case .spaceBetween:
+            let extra = slack / CGFloat(count - 1)
+            var y: CGFloat = 0
+            for s in lineCrossSizes { offsets.append(y); y += s + gap + extra }
+        case .spaceAround:
+            let unit = slack / CGFloat(count)
+            var y: CGFloat = unit / 2
+            for s in lineCrossSizes { offsets.append(y); y += s + gap + unit }
+        case .spaceEvenly:
+            let unit = slack / CGFloat(count + 1)
+            var y: CGFloat = unit
+            for s in lineCrossSizes { offsets.append(y); y += s + gap + unit }
+        case .stretch:
+            let extra = slack / CGFloat(count)
+            sizes = lineCrossSizes.map { $0 + extra }
+            var y: CGFloat = 0
+            for s in sizes { offsets.append(y); y += s + gap }
+        }
+        return (offsets, sizes)
+    }
+
+    private func main(_ size: CGSize) -> CGFloat { axis == .horizontal ? size.width : size.height }
+    private func cross(_ size: CGSize) -> CGFloat { axis == .horizontal ? size.height : size.width }
+    private func makeSize(main: CGFloat, cross: CGFloat) -> CGSize {
+        axis == .horizontal ? CGSize(width: main, height: cross) : CGSize(width: cross, height: main)
+    }
+    private func makePoint(main: CGFloat, cross: CGFloat) -> CGPoint {
+        axis == .horizontal ? CGPoint(x: main, y: cross) : CGPoint(x: cross, y: main)
+    }
+    private func mainProposal(main: CGFloat?, cross: CGFloat?) -> ProposedViewSize {
+        axis == .horizontal ? ProposedViewSize(width: main, height: cross) : ProposedViewSize(width: cross, height: main)
+    }
+    private func zeroProposal() -> ProposedViewSize {
+        axis == .horizontal ? ProposedViewSize(width: 0, height: nil) : ProposedViewSize(width: nil, height: 0)
+    }
+
     private func bases(_ subviews: Subviews) -> [CGFloat] {
         precondition(items.count == subviews.count, "MarkswiftFlexRow items/subviews mismatch")
-        return subviews.indices.map { items[$0].basis ?? subviews[$0].sizeThatFits(.unspecified).width }
+        return subviews.indices.map { items[$0].basis ?? main(subviews[$0].sizeThatFits(.unspecified)) }
     }
 
-    private func heights(_ w: [CGFloat], _ height: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
-        subviews.indices.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w[$0], height: height)).height }
+    private func crossSizes(_ m: [CGFloat], _ c: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
+        subviews.indices.map { cross(subviews[$0].sizeThatFits(mainProposal(main: m[$0], cross: c))) }
     }
 
-    /// Widths, heights and lines at `width`; a wrapping row's items are measured without the row's height.
-    private func plan(_ width: CGFloat, _ height: CGFloat?, _ subviews: Subviews)
-        -> (w: [CGFloat], h: [CGFloat], lines: [Range<Int>], lineHeights: [CGFloat]) {
+    /// Sizes, lines and line cross sizes at `mainAvailable`.
+    private func plan(_ mainAvailable: CGFloat, _ crossAvailable: CGFloat?, _ subviews: Subviews)
+        -> (main: [CGFloat], cross: [CGFloat], lines: [Range<Int>], lineCrossSizes: [CGFloat]) {
         let b = bases(subviews)
-        let lines = rowGap == nil ? [0..<b.count] : Self.lines(width: width, items: items, bases: b, spacing: spacing)
-        var w = [CGFloat](repeating: 0, count: b.count)
+        let lines = rowGap == nil ? [0..<b.count] : Self.lines(width: mainAvailable, items: items, bases: b, spacing: spacing)
+        var m = [CGFloat](repeating: 0, count: b.count)
         for l in lines {
-            let lw = Self.widths(width: width, items: Array(items[l]), bases: Array(b[l]), spacing: spacing)
-            for (k, i) in l.enumerated() { w[i] = lw[k] }
+            var lineItems = Array(items[l])
+            let lineBases = Array(b[l])
+            let space = mainAvailable - CGFloat(Swift.max(0, lineItems.count - 1)) * spacing
+            let baseSum = lineBases.indices.map { i in
+                lineItems[i].fraction.map { Swift.max(lineItems[i].inset, lineBases[i] + $0 * mainAvailable) } ?? lineBases[i]
+            }.reduce(0, +)
+            if baseSum > space {
+                for (k, i) in l.enumerated() where lineItems[k].autoMin {
+                    let probed = main(subviews[i].sizeThatFits(zeroProposal()))
+                    if probed > lineItems[k].min { lineItems[k].min = probed }
+                }
+            }
+            let lm = Self.widths(width: mainAvailable, items: lineItems, bases: lineBases, spacing: spacing)
+            for (k, i) in l.enumerated() { m[i] = lm[k] }
         }
-        let h = heights(w, rowGap == nil ? height : nil, subviews)
-        return (w, h, lines, lines.map { l in l.map { h[$0] }.max() ?? 0 })
+        let c = crossSizes(m, rowGap == nil ? crossAvailable : nil, subviews)
+        return (m, c, lines, lines.map { l in l.map { c[$0] }.max() ?? 0 })
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let b = bases(subviews)
-        // Without a width the row is as wide as its items' max-content contributions (CSS fit-content): a growing or
-        // content-sized item its content, never less than its clamped base; a percentage basis is indefinite there.
         let ideal = subviews.indices.map { i -> CGFloat in
             let it = items[i]
-            let content = subviews[i].sizeThatFits(.unspecified).width
+            let content = main(subviews[i].sizeThatFits(.unspecified))
             if it.fraction != nil { return content }
             let base = Swift.max(it.min, it.inset, Swift.min(it.max ?? .infinity, b[i]))
             return it.grow > 0 || it.basis == nil ? Swift.max(base, Swift.min(it.max ?? .infinity, content)) : base
         }
-        let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil }
-            ?? ideal.reduce(0, +) + CGFloat(max(0, b.count - 1)) * spacing
-        let p = plan(width, proposal.height, subviews)
-        guard let rowGap else { return CGSize(width: width, height: p.h.max() ?? 0) }
-        return CGSize(width: width, height: p.lineHeights.reduce(0, +) + CGFloat(max(0, p.lines.count - 1)) * rowGap)
+        let mainProp = main(CGSize(width: proposal.width ?? .infinity, height: proposal.height ?? .infinity))
+        let mainOffered = mainProp.isFinite ? Swift.max(0, mainProp) : nil
+        let mainAvailable = mainOffered ?? (ideal.reduce(0, +) + CGFloat(Swift.max(0, b.count - 1)) * spacing)
+        let crossProp = cross(CGSize(width: proposal.width ?? .infinity, height: proposal.height ?? .infinity))
+        let p = plan(mainAvailable, crossProp.isFinite ? crossProp : nil, subviews)
+        guard let rowGap else {
+            let crossSize = crossProp.isFinite && axis == .vertical ? crossProp : (p.cross.max() ?? 0)
+            return makeSize(main: mainAvailable, cross: crossSize)
+        }
+        let totalLinesCross = p.lineCrossSizes.reduce(0, +) + CGFloat(Swift.max(0, p.lines.count - 1)) * rowGap
+        let finalCross = crossProp.isFinite ? Swift.max(crossProp, totalLinesCross) : totalLinesCross
+        return makeSize(main: mainAvailable, cross: finalCross)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let p = plan(bounds.width, proposal.height, subviews)
-        var y = bounds.minY
+        let mainAvailable = main(bounds.size)
+        let crossAvailable = cross(bounds.size)
+        let p = plan(mainAvailable, proposal.height, subviews)
+        let (lineOffsets, lineCrossSizes) = rowGap == nil
+            ? ([CGFloat(0)], [crossAvailable])
+            : Self.alignContentDistribution(
+                alignContent: alignContent,
+                lineCrossSizes: p.lineCrossSizes,
+                availableCross: crossAvailable,
+                gap: rowGap ?? 0
+            )
+
         for (n, l) in p.lines.enumerated() {
-            // One nowrap line is the row's height; a wrapping line its tallest item's.
-            let lineHeight = rowGap == nil ? bounds.height : p.lineHeights[n]
-            var x = bounds.minX
+            let lineCross = lineCrossSizes[n]
+            let crossBase = lineOffsets[n]
+            var m = CGFloat(0)
             for i in l {
                 let a = items[i].align ?? align
-                let dy: CGFloat = switch a {
+                let dc: CGFloat = switch a {
                 case .start, .stretch: 0
-                case .center: (lineHeight - p.h[i]) / 2
-                case .end: lineHeight - p.h[i]
+                case .center: (lineCross - p.cross[i]) / 2
+                case .end: lineCross - p.cross[i]
                 }
-                subviews[i].place(at: CGPoint(x: x, y: y + dy), anchor: .topLeading,
-                                  proposal: ProposedViewSize(width: p.w[i], height: a == .stretch ? lineHeight : p.h[i]))
-                x += p.w[i] + spacing
+                let origin = bounds.origin
+                let pt = makePoint(main: m, cross: crossBase + dc)
+                let finalOrigin = CGPoint(x: origin.x + pt.x, y: origin.y + pt.y)
+                let itemCross = a == .stretch ? lineCross : p.cross[i]
+                subviews[i].place(
+                    at: finalOrigin,
+                    anchor: .topLeading,
+                    proposal: mainProposal(main: p.main[i], cross: itemCross)
+                )
+                m += p.main[i] + spacing
             }
-            y += lineHeight + (rowGap ?? 0)
         }
     }
 }
