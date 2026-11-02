@@ -1,8 +1,8 @@
 /** Computed font selection with conversion-scoped bundled families. */
 import { type BundledFamilies, type BundledFamily } from "../model/fonts.ts";
+import type { LayoutNode } from "../model/layout.ts";
 import { type FontSpec } from "../model/semantic.ts";
 import { round2, px, fontWeight, fontFamilies, fontStretch, variationSettings } from "../css/index.ts";
-
 /**
  * Lower-case family name → the SwiftUI system design that carries it: the CSS generic families,
  * the `ui-*` keywords, the Apple system stacks (`-apple-system`, `BlinkMacSystemFont`) and the
@@ -112,4 +112,37 @@ export function fontOf(s: Record<string, string>, families: BundledFamilies = {}
   const lh = s["line-height"];
   if (lh && lh !== "normal") spec.lineHeight = round2(px(lh));
   return spec;
+}
+
+/** Collects the set of font weights used by family from a layout tree. */
+export function collectFontUsages(nodes: LayoutNode | LayoutNode[] | undefined): Map<string, Set<number>> {
+  const map = new Map<string, Set<number>>();
+  if (!nodes) return map;
+  const list = Array.isArray(nodes) ? nodes : [nodes];
+
+  function walk(node: LayoutNode) {
+    if (node.styles) {
+      const famStr = node.styles["font-family"];
+      if (famStr) {
+        const fams = fontFamilies(famStr);
+        const fvs = variationSettings(node.styles["font-variation-settings"]);
+        const w = fvs["wght"] ?? fontWeight(node.styles["font-weight"]);
+        for (const fam of fams) {
+          const k = fam.toLowerCase();
+          let set = map.get(k);
+          if (!set) {
+            set = new Set<number>();
+            map.set(k, set);
+          }
+          set.add(w);
+        }
+      }
+    }
+    for (const child of node.children ?? []) {
+      walk(child);
+    }
+  }
+
+  for (const n of list) walk(n);
+  return map;
 }
