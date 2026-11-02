@@ -321,6 +321,8 @@ export interface TextDecoration {
   lines: DecorationLine[];
   color?: Color;
   style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
+  thickness?: number;
+  offset?: number;
 }
 
 /** CSS counter styles a list marker or `counter()` is regenerated in (`src/css/counter.ts`). */
@@ -711,6 +713,8 @@ export interface TextNode extends SemBase {
   sourceTag?: string;
   runs: TextRun[];
   align: "leading" | "center" | "trailing";
+  /** CSS `text-align: justify`: app and fidelity modes justify lines via TextRenderer / UIKit paragraph style. */
+  justify?: true;
   lineLimit?: number;
   truncate?: boolean;
   /**
