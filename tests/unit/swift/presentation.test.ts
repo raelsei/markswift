@@ -7,7 +7,7 @@ import type { LayoutDoc } from "../../../src/model/layout.ts";
 import presentationRuntime from "../../../src/swift/runtime/presentation.swift" with { type: "text" };
 import { command } from "../../../tools/verify/process.ts";
 import { typecheck } from "../../../tools/verify/typecheck.ts";
-import { DIALOG, NATIVE, POPOVER, SHEET } from "../../helpers/presentations.ts";
+import { DIALOG, DRAWER, NATIVE, POPOVER, SHEET } from "../../helpers/presentations.ts";
 
 const nativeTest = process.env.MARKSWIFT_SWIFT_TESTS === "1" ? test : test.skip;
 const compile = (d: LayoutDoc, mode: "app" | "fidelity" = "app") => compileLayout(d, { name: "Overlay", mode });
@@ -157,6 +157,35 @@ test("dialog width preserves authored percentage/calc and intrinsic height", () 
   const unknown = fluidDialog();
   unknown.layers![0]!.nodes[0]!.styles["max-width"] = "80%";
   expect(compile(unknown).code).not.toContain("MarkswiftPresentationWidth(");
+});
+
+test("bottom drawer: default captured presentation vs opt-in native .sheet with detents", () => {
+  const defaultCode = compile(DRAWER()).code;
+  expect(defaultCode).toContain(".markswiftPresentation(");
+  expect(defaultCode).toContain(".markswiftPlaced(.edge(.bottom))");
+  expect(defaultCode).not.toContain(".presentationDetents(");
+
+  const nativeCode = compileLayout(DRAWER(), { name: "Overlay", nativeSheet: true }).code;
+  expect(nativeCode).not.toContain(".markswiftPresentation(");
+  expect(nativeCode).toContain(".sheet(isPresented: $isOpenDrawerPresented, onDismiss: onOpenDrawerDismissed) {");
+  expect(nativeCode).toContain(".presentationDetents([.height(320.0), .large])");
+  expect(nativeCode).toContain(".presentationDragIndicator(.visible)");
+
+  // Full height drawer (h >= 844 * 0.85 = 717.4) emits [.large]
+  const fullHeightCode = compileLayout(DRAWER(750), { name: "Overlay", nativeSheet: true }).code;
+  expect(fullHeightCode).toContain(".presentationDetents([.large])");
+
+  // Trailing sheet stays a drawn presentation even with nativeSheet
+  const rightSheetCode = compileLayout(SHEET(), { name: "Overlay", nativeSheet: true }).code;
+  expect(rightSheetCode).toContain(".markswiftPresentation(");
+  expect(rightSheetCode).toContain(".markswiftPlaced(.edge(.trailing))");
+});
+
+test("presentation runtime contains swipe-to-dismiss drag gesture and reduce motion support", () => {
+  expect(presentationRuntime).toContain("DragGesture(minimumDistance: 10)");
+  expect(presentationRuntime).toContain("edgeDragGesture");
+  expect(presentationRuntime).toContain("accessibilityReduceMotion");
+  expect(presentationRuntime).toContain("private var reduce: Bool { reduceMotion }");
 });
 
 function repeatedTriggers(): LayoutDoc {

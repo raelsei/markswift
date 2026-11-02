@@ -79,15 +79,6 @@ const LOSSES: [string, Record<string, string>, string[]][] = [
   ["text-indent: 2em", { "text-indent": "32px" }, ["text-indent"]],
   ['font-feature-settings: "liga" 0', { "font-feature-settings": '"liga" 0' }, ["font-feature-settings"]],
   ["font-variant-caps: small-caps", { "font-variant-caps": "small-caps" }, ["font-variant-caps"]],
-  [
-    "underline thickness and offset",
-    {
-      "-webkit-text-decorations-in-effect": "underline",
-      "text-decoration-thickness": "3px",
-      "text-underline-offset": "4px",
-    },
-    ["text-decoration-thickness", "text-underline-offset"],
-  ],
 ];
 
 for (const [name, styles, expected] of LOSSES)
@@ -113,6 +104,24 @@ test("default text property values are not reported", () => {
     "font-feature-settings",
     "hyphens",
     "text-decoration-thickness",
+  ])
+    expect(found).not.toContain(feature);
+});
+
+test("custom text decorations are not reported as approximations", () => {
+  const found = features(
+    doc({
+      "-webkit-text-decorations-in-effect": "underline overline",
+      "text-decoration-style": "wavy",
+      "text-decoration-thickness": "3px",
+      "text-underline-offset": "4px",
+    }),
+  );
+  for (const feature of [
+    "text-decoration-thickness",
+    "text-underline-offset",
+    "text-decoration-style",
+    "text-decoration-line: overline",
   ])
     expect(found).not.toContain(feature);
 });

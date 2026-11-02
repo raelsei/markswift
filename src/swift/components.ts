@@ -87,6 +87,12 @@ function counterColumn(group: Run[], c: number): CounterColumn | undefined {
   return counter && { counter, ords };
 }
 
+export interface VariantEnum {
+  cases: string[];
+  memberCase: string[];
+  templates: Map<string, NodeTemplate>;
+}
+
 interface Run {
   /** The stack or grid holding the members. */
   parent: StackNode | GridNode;
@@ -96,7 +102,7 @@ interface Run {
    * Per slot column (DFS order over a member): marker, each member's value and slot node, and the
    * first member's text before the slot on its line (a colour's role).
    */
-  columns: Array<{ marker: string; values: string[]; nodes: SemNode[]; at: string }>;
+  columns: Array<{ marker: string; values: string[]; nodes: SemNode[]; at: string; optional?: boolean }>;
   /**
    * First column whose value vector equals this one's (`$` stripped): columns sharing one field or
    * parameter. Design-literal columns are classed and given their role over every run of the type.
@@ -106,6 +112,9 @@ interface Run {
   forEach: boolean;
   /** Runs with equal signatures share one row type and subview. */
   sig: string;
+  variantEnum?: VariantEnum;
+  optionalChildren?: Map<SemNode, string>;
+  optionalChildMap?: Map<SemNode, SemNode>;
 }
 
 export interface Extraction {
@@ -127,7 +136,7 @@ const isContainer = (n: SemNode): n is StackNode | GridNode => n.kind === "stack
 const strip = (v: string) => v.replace(/^\$/, "");
 /** A member name without its deduplication counter (`onEdit2` → `onEdit`): members named alike. */
 const stem = (v: string) => strip(v).replace(/\d+$/, "");
-const LITERAL: Record<string, true> = { S: true, C: true, I: true };
+const LITERAL: Record<string, true> = { S: true, C: true, I: true, W: true };
 /** A child's placeholder line: indent, NUL, the child's index in the template. */
 const PLACEHOLDER = new RegExp("^( *)\\u0000(\\d+)$");
 
@@ -140,7 +149,7 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
   );
   const names = [...kinds.keys()].sort((a, b) => b.length - a.length);
   const token = new RegExp(
-    `"(?:[^"\\\\]|\\\\.)*"|Color\\.markswift\\(|Palette\\.[A-Za-z_]\\w*|MarkswiftShape_[0-9a-f]+\\(\\)` +
+    `"(?:[^"\\\\]|\\\\.)*"|Color\\.markswift\\(|Palette\\.[A-Za-z_]\\w*|MarkswiftShape_[0-9a-f]+\\(\\)|(?<=\\.frame\\(width: )\\d+(?:\\.\\d+)?(?=[,)])` +
       (names.length ? `|(?<![\\w$])\\$?(?:${names.join("|")})\\b` : ""),
     "g",
   );
@@ -177,7 +186,11 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
         marker = "C";
       } else if (t.startsWith("Palette.")) marker = "C";
       else if (t.startsWith("MarkswiftShape_")) marker = "I";
-      else marker = (t[0] === "$" ? "$" : "") + kinds.get(strip(t))!;
+      else if (/^\d/.test(t)) {
+        // A control's fixed width (a tab, a field): rows of different widths share a template, the width a field.
+        if (isContainer(n) || n.kind !== "control") continue;
+        marker = "W";
+      } else marker = (t[0] === "$" ? "$" : "") + kinds.get(strip(t))!;
       shape += own.slice(last, start) + `\u0001${marker}\u0001`;
       last = end;
       slots.push({ start, end, marker, value: own.slice(start, end) });
@@ -262,7 +275,7 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       else return undefined;
     }
     const n = parent;
-    const forEach =
+    const isStack =
       n.kind === "stack" &&
       !n.measured &&
       !n.wrap &&
@@ -272,10 +285,290 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       n.distribution !== "around" &&
       n.distribution !== "evenly" &&
       !(start === 0 && n.leadInset !== 0);
+    const isGrid =
+      n.kind === "grid" &&
+      !n.table &&
+      (!n.measured || !!n.template) &&
+      (!n.template ||
+        (!n.template.autoRepeat &&
+          !n.template.items.some(
+            (it) =>
+              it.colSpan > 1 || it.rowSpan > 1 || it.justify !== "stretch" || it.margin[0] !== 0 || it.margin[1] !== 0,
+          ) &&
+          (() => {
+            const firstTrack = n.template!.tracks[0];
+            if (!firstTrack) return false;
+            return n.template!.tracks.every((t) => {
+              if (t.kind !== firstTrack.kind) return false;
+              if (t.kind === "px" && firstTrack.kind === "px") return t.px === firstTrack.px;
+              if (t.kind === "fr" && firstTrack.kind === "fr") return t.fr === firstTrack.fr;
+              return t.kind === "auto";
+            });
+          })()) ||
+        n.template.autoRepeat !== undefined);
+    const forEach = isStack || isGrid;
     // ponytail: runs whose state/action columns play different roles (a field in one, a constant in another) get separate types; merge per column if designs need it.
     const sig = `${tpl(members[0]!).key}|${columns.map((col, c) => (LITERAL[col.marker] ? "" : `${roles[c]}:${cls[c]}`)).join(",")}`;
     return { parent, members, columns, cls, roles, forEach, sig };
   };
+
+  const isVariantCandidate = (members: SemNode[]): boolean => {
+    if (members.length < 2) return false;
+    const first = members[0]!;
+    if (first.kind !== "control" || first.control !== "button") return false;
+    if (!members.every((m) => m.kind === "control" && m.control === "button")) return false;
+    const keys = [...new Set(members.map((m) => tpl(m).key))];
+    if (keys.length < 2 || keys.length > 4) return false;
+    const hasSelected = members.some(
+      (m) => m.a11y?.selected || tpl(m).own.includes(".accessibilityAddTraits(.isSelected)"),
+    );
+    const allHandlerless = members.every((m) => m.action && /^(?:node:|#)/.test(m.action.key));
+    return hasSelected && allHandlerless;
+  };
+
+  const isOptionalChildNode = (node: SemNode): boolean => {
+    if (node.kind === "text" || node.kind === "image" || node.kind === "svg") return true;
+    if (
+      isContainer(node) &&
+      node.children.length <= 2 &&
+      node.children.every((c) => c.kind === "text" || c.kind === "image" || c.kind === "svg")
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const isOptionalCandidate = (members: SemNode[], full: SemNode): boolean => {
+    if (members.length < 2) return false;
+    if (!isContainer(full) || full.kind !== "stack") return false;
+    const fullKids = tpl(full).children;
+    if (fullKids.length < 2) return false;
+    if (fullKids.every((c) => isContainer(c) && tpl(c).children.length >= 2)) return false;
+    let missingTotal = 0;
+    const missingKids: SemNode[] = [];
+    for (const m of members) {
+      if (m.kind !== full.kind || (m.kind === "stack" && full.kind === "stack" && m.axis !== full.axis)) return false;
+      const mKids = tpl(m).children;
+      let fIdx = 0;
+      for (const mk of mKids) {
+        while (fIdx < fullKids.length && tpl(fullKids[fIdx]!).key !== tpl(mk).key) {
+          missingKids.push(fullKids[fIdx]!);
+          fIdx++;
+        }
+        if (fIdx >= fullKids.length) return false;
+        fIdx++;
+      }
+      while (fIdx < fullKids.length) {
+        missingKids.push(fullKids[fIdx]!);
+        fIdx++;
+      }
+      missingTotal += fullKids.length - mKids.length;
+    }
+    return (
+      missingTotal >= 1 &&
+      members.every((m) => fullKids.length - tpl(m).children.length <= 1) &&
+      missingKids.every(isOptionalChildNode)
+    );
+  };
+
+  const makeVariantRun = (
+    parent: StackNode | GridNode,
+    _start: number,
+    members: SemNode[],
+    keys: string[],
+  ): Run | undefined => {
+    const caseNames: string[] = [];
+    const memberCase: string[] = [];
+    const templates = new Map<string, NodeTemplate>();
+
+    for (const [kIdx, key] of keys.entries()) {
+      const firstM = members.find((m) => tpl(m).key === key)!;
+      const isSel = firstM.a11y?.selected || tpl(firstM).own.includes(".accessibilityAddTraits(.isSelected)");
+      let cName = isSel ? "active" : "inactive";
+      if (caseNames.includes(cName)) cName = `${cName}${kIdx + 1}`;
+      caseNames.push(cName);
+      templates.set(cName, tpl(firstM));
+    }
+
+    for (const m of members) {
+      const kIdx = keys.indexOf(tpl(m).key);
+      memberCase.push(caseNames[kIdx]!);
+    }
+
+    const variantEnum: VariantEnum = {
+      cases: caseNames,
+      memberCase,
+      templates,
+    };
+
+    const flats = members.map((m) => collect(m).flatMap((n) => tpl(n).slots.map((s) => ({ s, n }))));
+    const columns: Run["columns"] = [];
+
+    const sSlots = members.map((_m, idx) => flats[idx]!.filter((f) => f.s.marker === "S"));
+    const minS = Math.min(...sSlots.map((s) => s.length));
+    for (let sIdx = 0; sIdx < minS; sIdx++) {
+      columns.push({
+        marker: "S",
+        values: sSlots.map((s) => s[sIdx]!.s.value),
+        nodes: sSlots.map((s) => s[sIdx]!.n),
+        at: tpl(sSlots[0]![sIdx]!.n).own,
+      });
+    }
+
+    const aSlots = members.map((_m, idx) => flats[idx]!.filter((f) => f.s.marker === "action"));
+    const minA = Math.min(...aSlots.map((s) => s.length));
+    for (let aIdx = 0; aIdx < minA; aIdx++) {
+      columns.push({
+        marker: "action",
+        values: aSlots.map((s) => s[aIdx]!.s.value),
+        nodes: aSlots.map((s) => s[aIdx]!.n),
+        at: tpl(aSlots[0]![aIdx]!.n).own,
+      });
+    }
+
+    // A control's own width is a `W` slot: its values are exact. Otherwise the member's measured width wraps it.
+    const ownWidths = members.map((m) => tpl(m).slots.find((s) => s.marker === "W")?.value);
+    const slotWidths = ownWidths.every((w) => w !== undefined);
+    const widths = slotWidths ? (ownWidths as string[]) : members.map((m) => num(Math.round(m.frame.w * 100) / 100));
+    if (widths.some((w) => w !== widths[0])) {
+      columns.push({
+        marker: "W",
+        values: widths,
+        nodes: members,
+        at: tpl(members[0]!).own,
+      });
+    }
+    const moveSlots = flats.flatMap((f) =>
+      f.filter((x) => x.s.marker.startsWith("pressed") || x.s.marker.startsWith("focus")),
+    );
+    const seenMove = new Set<string>();
+    for (const ms of moveSlots) {
+      const v = strip(ms.s.value);
+      if (!seenMove.has(v)) {
+        seenMove.add(v);
+        columns.push({
+          marker: ms.s.marker,
+          values: members.map(() => ms.s.value),
+          nodes: members.map(() => ms.n),
+          at: tpl(ms.n).own,
+        });
+      }
+    }
+
+    if (!columns.length) return undefined;
+
+    const vectors = columns.map((c) => c.values.map(strip).join("\u0000"));
+    const cls = vectors.map((v) => vectors.indexOf(v));
+    const roles: Role[] = [];
+    for (const [, col] of columns.entries()) {
+      const kind = strip(col.marker);
+      if (kind === "S" || kind === "W") roles.push("field");
+      else if (kind === "action") roles.push("collapse");
+      else if (kind.startsWith("pressed") || kind.startsWith("focus")) roles.push("move");
+      else roles.push("literal");
+    }
+
+    const forEach = true;
+    const sig = `variant:${keys.join("+")}|${columns.map((_col, c) => `${roles[c]}:${cls[c]}`).join(",")}`;
+    return { parent, members, columns, cls, roles, forEach, sig, variantEnum };
+  };
+
+  const makeOptionalRun = (
+    parent: StackNode | GridNode,
+    start: number,
+    members: SemNode[],
+    full: SemNode,
+  ): Run | undefined => {
+    const fullKids = tpl(full).children;
+    const missingInSome = new Set<SemNode>();
+    for (const m of members) {
+      const mKids = tpl(m).children;
+      let fIdx = 0;
+      for (const mk of mKids) {
+        while (fIdx < fullKids.length && tpl(fullKids[fIdx]!).key !== tpl(mk).key) {
+          missingInSome.add(fullKids[fIdx]!);
+          fIdx++;
+        }
+        fIdx++;
+      }
+      while (fIdx < fullKids.length) {
+        missingInSome.add(fullKids[fIdx]!);
+        fIdx++;
+      }
+    }
+
+    const fullNodes = collect(full);
+    const fullFlats = fullNodes.flatMap((n) => tpl(n).slots.map((s) => ({ s, n })));
+
+    const optChildOf = new Map<SemNode, SemNode>();
+    for (const optKid of missingInSome) {
+      for (const descendant of collect(optKid)) {
+        optChildOf.set(descendant, optKid);
+      }
+    }
+
+    const columns: Run["columns"] = [];
+    const optionalChildMap = new Map<SemNode, SemNode>();
+    for (const [descendant, optKid] of optChildOf) {
+      optionalChildMap.set(descendant, optKid);
+    }
+
+    for (const { s, n } of fullFlats) {
+      const optKid = optChildOf.get(n);
+      const isOptional = optKid !== undefined;
+      const values: string[] = [];
+      const nodes: SemNode[] = [];
+
+      for (const m of members) {
+        const mNodes = collect(m);
+        const matchNode = mNodes.find((mn) => tpl(mn).key === tpl(n).key);
+        const present = matchNode && (!isOptional || collect(m).some((mn) => tpl(mn).key === tpl(optKid!).key));
+        const matchSlot = present ? tpl(matchNode).slots.find((sl) => sl.marker === s.marker) : undefined;
+        // Only a whole optional child may be absent: a node or slot missing from a row while its parent is there (a
+        // border colour only the expanded item has) is a different shape, which this run cannot express.
+        if (present ? !matchSlot : !isOptional) return undefined;
+        values.push(matchSlot ? matchSlot.value : "nil");
+        nodes.push(matchSlot ? matchNode! : n);
+      }
+
+      columns.push({
+        marker: s.marker,
+        values,
+        nodes,
+        at: tpl(n).own,
+        optional: isOptional,
+      });
+    }
+
+    const vectors = columns.map((c) => c.values.map(strip).join("\u0000"));
+    const cls = vectors.map((v) => vectors.indexOf(v));
+    const roles: Role[] = [];
+    for (const [, col] of columns.entries()) {
+      if (col.optional) {
+        roles.push("field");
+      } else if (LITERAL[strip(col.marker)]) {
+        roles.push(col.values.some((v) => v !== col.values[0]) ? "field" : "literal");
+      } else {
+        roles.push("field");
+      }
+    }
+
+    const isStack =
+      parent.kind === "stack" &&
+      !parent.measured &&
+      !parent.wrap &&
+      typeof parent.spacing === "number" &&
+      !parent.autoGaps?.length &&
+      parent.distribution !== "between" &&
+      parent.distribution !== "around" &&
+      parent.distribution !== "evenly" &&
+      !(start === 0 && parent.leadInset !== 0);
+    const forEach = isStack;
+    const sig = `opt:${tpl(full).key}|${columns.map((col, c) => `${roles[c]}:${cls[c]}:${col.optional ? "opt" : ""}`).join(",")}`;
+    const optionalChildren = new Map<SemNode, string>();
+    return { parent, members, columns, cls, roles, forEach, sig, optionalChildren, optionalChildMap };
+  };
+
   const runs: Run[] = [];
   const walk = (n: SemNode): void => {
     const first = new Map<SemNode, Run>();
@@ -285,7 +578,39 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
         const k = n.children[i]!;
         let j = i + 1;
         while (j < n.children.length && tpl(n.children[j]!).key === tpl(k).key) j++;
-        const run = j - i >= 2 ? makeRun(n, i, n.children.slice(i, j)) : undefined;
+        let run = j - i >= 2 ? makeRun(n, i, n.children.slice(i, j)) : undefined;
+
+        if (!run || j < n.children.length) {
+          const isSameKind = (a: SemNode, b: SemNode): boolean => {
+            if (a.kind !== b.kind) return false;
+            if (a.kind === "control" && b.kind === "control") return a.control === b.control;
+            if (a.kind === "stack" && b.kind === "stack") return a.axis === b.axis;
+            return true;
+          };
+          let maxJ = i + 1;
+          while (maxJ < n.children.length && isSameKind(n.children[maxJ]!, k)) maxJ++;
+          if (maxJ - i >= 2 && maxJ > j) {
+            const candidates = n.children.slice(i, maxJ);
+            if (isVariantCandidate(candidates)) {
+              const keys = [...new Set(candidates.map((c) => tpl(c).key))];
+              const vRun = makeVariantRun(n, i, candidates, keys);
+              if (vRun) {
+                run = vRun;
+                j = maxJ;
+              }
+            } else if (isContainer(k)) {
+              const full = candidates.reduce((max, c) => (tpl(c).children.length > tpl(max).children.length ? c : max));
+              if (isOptionalCandidate(candidates, full)) {
+                const optRun = makeOptionalRun(n, i, candidates, full);
+                if (optRun) {
+                  run = optRun;
+                  j = maxJ;
+                }
+              }
+            }
+          }
+        }
+
         // ponytail: leaf runs only as a `ForEach` and only when their colours agree: per-member calls of a
         // one-node subview save nothing, and differently coloured neighbours (a name and its role) are not a list.
         const sameColours = run?.columns.every(
@@ -407,6 +732,7 @@ export function componentNames(
     const col = run.columns[c]!;
     const kind = strip(col.marker);
     const n = nodeAt(run, c, 0);
+    if (kind === "W") return "width";
     if (kind === "S") return n?.a11y?.heading ? "title" : "text";
     if (kind === "I") return "icon";
     if (kind === "C") {
@@ -470,8 +796,16 @@ export function componentNames(
     const named = new Set<SemNode | undefined>();
     for (const c of t.fieldCols) {
       const nodes = t.group.flatMap((r) => r.members.map((_, i) => nodeAt(r, c, i)));
-      fields.set(c, fieldName(named.has(nodes[0]) ? [] : nodes, kindName(t.run, c), own, base));
+      const name = fieldName(named.has(nodes[0]) ? [] : nodes, kindName(t.run, c), own, base);
+      fields.set(c, name);
       named.add(nodes[0]);
+      if (t.run.columns[c]?.optional) {
+        for (const [descendant, optKid] of t.run.optionalChildMap ?? []) {
+          if (descendant === nodes[0] || optKid === nodes[0]) {
+            t.run.optionalChildren?.set(optKid, name);
+          }
+        }
+      }
     }
     // A per-row action keeps its members' shared name (`onEdit`, `onEdit2` → `onEdit`); members named
     // after their own captions (`onApples`, `onPears`) name it after the row (`onItem`).
@@ -625,7 +959,19 @@ export function extractComponents(
     for (const [c, v] of vectors.entries()) {
       if (v === undefined) continue;
       const first = head.columns[c]!.values[0]!;
-      const role = group.some((run) => run.columns[c]!.values.some((x) => x !== first)) ? "field" : "literal";
+      const col = head.columns[c]!;
+      let role: Role;
+      if (col.optional) {
+        const presentValues = col.values.filter((v) => v !== "nil" && v !== undefined && v !== "");
+        const samePresent = presentValues.length > 0 && presentValues.every((v) => v === presentValues[0]);
+        if (col.marker === "C" || (col.marker === "I" && samePresent)) {
+          role = "literal";
+        } else {
+          role = "field";
+        }
+      } else {
+        role = group.some((run) => run.columns[c]!.values.some((x) => x !== first)) ? "field" : "literal";
+      }
       for (const run of group) {
         run.roles[c] = role;
         run.cls[c] = vectors.indexOf(v);
@@ -722,6 +1068,17 @@ export function extractComponents(
     for (const [c, role] of run.roles.entries())
       if ((role === "field" && !LITERAL[strip(run.columns[c]!.marker)]) || role === "collapse" || role === "move")
         for (const v of run.columns[c]!.values) removed.set(strip(v), run);
+    if (run.variantEnum) {
+      for (const m of run.members) {
+        visit(m, (f) => {
+          for (const s of tpl(f).slots) {
+            if (s.marker.startsWith("pressed") || s.marker.startsWith("focus") || s.marker.startsWith("ephemeral")) {
+              removed.set(strip(s.value), run);
+            }
+          }
+        });
+      }
+    }
     const ord = t.counter?.ords.get(run);
     const args = (item: string, value: string, index = "") =>
       [
@@ -755,12 +1112,34 @@ export function extractComponents(
       ]);
       for (const m of run.members.slice(1)) calls.set(m, []);
     } else if (run.forEach) {
-      calls.set(
-        run.members[0]!,
-        t.binding
-          ? [`ForEach($${data}) { $${row} in`, `    ${view}(${args(row, `$${row}`)})`, "}"]
-          : [`ForEach(${data}) { ${row} in`, `    ${view}(${args(row, row)})`, "}"],
-      );
+      if (run.parent.kind === "grid" && !run.parent.template && run.parent.columns > 1) {
+        const strideData = t.binding ? `$${data}` : data;
+        const sliceItem = t.binding ? `$${row}` : row;
+        calls.set(run.members[0]!, [
+          `ForEach(Array(stride(from: 0, to: ${data}.count, by: ${run.parent.columns})), id: \\.self) { rowStart in`,
+          "    GridRow {",
+          `        ForEach(${strideData}[rowStart..<min(rowStart + ${run.parent.columns}, ${data}.count)]) { ${sliceItem} in`,
+          `            ${view}(${args(row, sliceItem)})`,
+          "        }",
+          "    }",
+          "}",
+        ]);
+      } else if (run.parent.kind === "grid" && !run.parent.template && run.parent.columns === 1) {
+        calls.set(run.members[0]!, [
+          t.binding ? `ForEach($${data}) { $${row} in` : `ForEach(${data}) { ${row} in`,
+          "    GridRow {",
+          `        ${view}(${args(row, t.binding ? `$${row}` : row)})`,
+          "    }",
+          "}",
+        ]);
+      } else {
+        calls.set(
+          run.members[0]!,
+          t.binding
+            ? [`ForEach($${data}) { $${row} in`, `    ${view}(${args(row, `$${row}`)})`, "}"]
+            : [`ForEach(${data}) { ${row} in`, `    ${view}(${args(row, row)})`, "}"],
+        );
+      }
       for (const m of run.members.slice(1)) calls.set(m, []);
     } else
       run.members.forEach((m, i) => {
@@ -830,47 +1209,79 @@ export function extractComponents(
     const own = runs.flatMap((run, r) => (runType[r] === t ? [{ run, data: names.data[r]! }] : []));
     const fields = t.fieldCols.map((c) => {
       const kind = strip(head.columns[c]!.marker);
+      const isOptional = head.columns[c]!.optional === true;
       const swiftType =
-        kind === "S"
-          ? "String"
-          : kind === "C"
-            ? "Color"
-            : kind === "I"
-              ? "AnyShape"
-              : memberOf.get(nameAt(head, c))!.type;
-      return { c, name: n.fields.get(c)!, type: swiftType };
+        kind === "W"
+          ? "CGFloat"
+          : kind === "S"
+            ? "String"
+            : kind === "C"
+              ? "Color"
+              : kind === "I"
+                ? "AnyShape"
+                : memberOf.get(nameAt(head, c))!.type;
+      const typeStr = isOptional ? `${swiftType}?` : swiftType;
+      const defaultVal = isOptional ? " = nil" : "";
+      return { c, name: n.fields.get(c)!, type: typeStr, defaultVal, isOptional };
     });
     if (extension.length) extension.push("");
+    if (head.variantEnum) {
+      extension.push(
+        `/// Variants of \`${n.type}\`.`,
+        `${acc}enum ${n.type}Variant: String, Sendable, CaseIterable {`,
+        ...head.variantEnum.cases.map((c) => `    case ${c}`),
+        "}",
+        "",
+      );
+    }
+    const variantField = head.variantEnum
+      ? [`    ${acc}var variant: ${n.type}Variant = .${head.variantEnum.cases[0]}`]
+      : [];
     extension.push(
       `/// One row of \`${own[0]!.data}\`: the content that differs between the repeated elements of the design.`,
       `${acc}struct ${n.type}: Identifiable {`,
       "    /// Template path of the captured element: stable across regenerations of the same design.",
       `    ${acc}let id: String`,
-      ...fields.map((f) => `    ${acc}var ${f.name}: ${f.type}`),
+      ...fields.map((f) => `    ${acc}var ${f.name}: ${f.type}${f.defaultVal}`),
+      ...variantField,
     );
-    if (acc)
+    if (acc) {
+      const initParams = [
+        "id: String",
+        ...fields.map((f) => `${f.name}: ${f.type}${f.defaultVal}`),
+        ...(head.variantEnum ? [`variant: ${n.type}Variant = .${head.variantEnum.cases[0]}`] : []),
+      ];
       extension.push(
         "",
-        `    ${acc}init(${["id: String", ...fields.map((f) => `${f.name}: ${f.type}`)].join(", ")}) {`,
-        ...["id", ...fields.map((f) => f.name)].map((f) => `        self.${f} = ${f}`),
+        `    ${acc}init(${initParams.join(", ")}) {`,
+        ...["id", ...fields.map((f) => f.name), ...(head.variantEnum ? ["variant"] : [])].map(
+          (f) => `        self.${f} = ${f}`,
+        ),
         "    }",
       );
+    }
     extension.push("}");
     for (const { run, data } of own) {
       const ids = run.members.map((m) => m.id);
       const unique = new Set(ids).size === ids.length;
       extension.push("", `${acc}static let ${data}: [${n.type}] = [`);
       for (const [i, m] of run.members.entries()) {
-        const values = fields.map(({ c, name }) => {
+        const values = fields.map(({ c, name, isOptional }) => {
           const col = run.columns[c]!;
-          const v = col.values[i]!;
+          const v = col.values[i];
+          if (isOptional && (v === undefined || v === "" || v === "nil")) {
+            return `${name}: nil`;
+          }
           const kind = strip(col.marker);
-          if (kind === "S" || kind === "C") return `${name}: ${v}`;
+          if (kind === "W" || kind === "S" || kind === "C") return `${name}: ${v}`;
           if (kind === "I") return `${name}: AnyShape(${v})`;
           // A binding field starts at the member's `@State` seed.
-          return `${name}: ${seed(strip(v))}`;
+          return `${name}: ${seed(strip(v!))}`;
         });
-        extension.push(`    ${n.type}(${[`id: ${str(unique ? m.id : String(i))}`, ...values].join(", ")}),`);
+        const variantArg = run.variantEnum ? [`variant: .${run.variantEnum.memberCase[i]}`] : [];
+        extension.push(
+          `    ${n.type}(${[`id: ${str(unique ? m.id : String(i))}`, ...values, ...variantArg].join(", ")}),`,
+        );
       }
       extension.push("]");
     }
@@ -919,7 +1330,10 @@ export function extractComponents(
           const cls = run.cls[base + i]!;
           const dollar = s.value[0] === "$" ? "$" : "";
           const field = n.fields.get(cls);
-          if (field) return `${dollar}${n.row}.${field}`;
+          if (field) {
+            if (run.columns[cls]?.optional) return field;
+            return `${dollar}${n.row}.${field}`;
+          }
           const role = run.roles[base + i];
           if (role === "collapse") return actionAt(run, cls);
           if (role === "counter") {
@@ -929,15 +1343,83 @@ export function extractComponents(
           const pass = role === "binding" ? n.pass.get(cls) : undefined;
           return pass ? dollar + pass : s.value;
         },
-        (c) => (isContainer(c) ? [ctx.nameOf.get(c)!] : expand(c)),
+        (c) => {
+          if (run.optionalChildren && run.optionalChildren.has(c)) {
+            const field = run.optionalChildren.get(c)!;
+            const inner = expand(c);
+            return [`if let ${field} = ${n.row}.${field} {`, ...indent(inner, 1), "}"];
+          }
+          return isContainer(c) ? [ctx.nameOf.get(c)!] : expand(c);
+        },
       );
     };
-    const body = [`${acc}var body: some View {`, ...indent(expand(first), 1), "}"];
+
+    let body: string[];
+    if (run.variantEnum) {
+      const vEnum = run.variantEnum;
+      const branches: string[] = [];
+      for (const caseName of vEnum.cases) {
+        const vNode = run.members.find((_, i) => vEnum.memberCase[i] === caseName)!;
+        const widthCol = t.fieldCols.find((c) => strip(run.columns[c]!.marker) === "W");
+        const widthField = widthCol !== undefined ? n.fields.get(widthCol) : undefined;
+        const expandV = (node: SemNode): string[] =>
+          fill(
+            node,
+            (s) => {
+              // A control's own width is the row's measured width.
+              if (s.marker === "W" && widthField) return `${n.row}.${widthField}`;
+              if (s.marker === "S") {
+                const isVerbatim = tpl(node)
+                  .own.slice(Math.max(0, s.start - 15), s.start)
+                  .includes("verbatim:");
+                if (isVerbatim) {
+                  const firstField = t.fieldCols.find((c) => strip(run.columns[c]!.marker) === "S");
+                  const field = firstField !== undefined ? n.fields.get(firstField) : undefined;
+                  return field ? `${n.row}.${field}` : s.value;
+                }
+                return s.value;
+              }
+              if (s.marker === "action") {
+                const firstCollapse = run.roles.findIndex((r) => r === "collapse");
+                return firstCollapse !== -1 ? actionAt(run, firstCollapse) : s.value;
+              }
+              if (
+                s.marker.startsWith("pressed") ||
+                s.marker.startsWith("$pressed") ||
+                s.marker.startsWith("ephemeral") ||
+                s.marker.startsWith("$ephemeral")
+              ) {
+                return s.value[0] === "$" ? "$isPressed" : "isPressed";
+              }
+              return s.value;
+            },
+            (c) => (isContainer(c) ? [ctx.nameOf.get(c)!] : expandV(c)),
+          );
+        let vLines = expandV(vNode);
+        // Without a width slot of its own, the member's measured width wraps it.
+        const hasSlot = tpl(vNode).slots.some((s) => s.marker === "W");
+        const outerField = hasSlot ? undefined : widthField;
+        if (outerField) {
+          const insertIdx = vLines.findIndex((l) => l.includes(".background(") || l.includes(".contentShape("));
+          if (insertIdx !== -1)
+            vLines = [
+              ...vLines.slice(0, insertIdx),
+              `    .frame(width: ${n.row}.${outerField}, alignment: .center)`,
+              ...vLines.slice(insertIdx),
+            ];
+        }
+        branches.push(`case .${caseName}:`);
+        branches.push(...indent(vLines, 1));
+      }
+      body = [`${acc}var body: some View {`, `    switch ${n.row}.variant {`, ...indent(branches, 1), "    }", "}"];
+    } else {
+      body = [`${acc}var body: some View {`, ...indent(expand(first), 1), "}"];
+    }
     // A breakpoint row holding a band holder reads the band `MarkswiftBands` chose from the environment.
     let banded = false;
     visit(first, (node) => {
       banded ||= !!node.alternatives;
-      if (node !== first && isContainer(node))
+      if (node !== first && isContainer(node) && !run.optionalChildren?.has(node) && !run.variantEnum)
         body.push(
           "",
           `// ${node.id.replace(/[\r\n\u2028\u2029]/g, " ")}`,
@@ -983,6 +1465,9 @@ export function extractComponents(
       ...bindings.map((b) => `@Binding ${acc}var ${b.name}: ${b.type}`),
       ...actions.map((a) => `${acc}var ${a}: () -> Void = {}`),
       ...classes(run, "move").flatMap((c) => memberOf.get(nameAt(run, c))!.decl),
+      ...(run.variantEnum && body.some((l) => l.includes("isPressed"))
+        ? ["@MarkswiftPressed private var isPressed"]
+        : []),
       "",
       ...init,
       ...body,

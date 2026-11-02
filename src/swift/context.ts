@@ -37,6 +37,8 @@ export interface EmitOptions {
   registerFonts?: boolean;
   /** Command the view header names for regeneration. Default `convert`. */
   regenerate?: "convert" | "build";
+  /** Opt-in native .sheet with presentationDetents for bottom drawers. */
+  nativeSheet?: boolean;
 }
 
 /** Everything the recursive emitters need; built once per screen. */
@@ -73,6 +75,7 @@ export interface EmitContext extends ColorCtx {
   /** This screen's colour → token lookup; see `colorExpr`. */
   tokens?: ScreenTokens;
   adaptive?: boolean;
+  nativeSheet?: boolean;
 }
 
 /**

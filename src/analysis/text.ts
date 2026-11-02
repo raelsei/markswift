@@ -268,7 +268,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
     for (const v of numeric.split(/\s+/))
       if (v && !NUMERIC_FEATURES[v])
         note("approximated", "font-variant-numeric", `font-variant-numeric ${v} has no SwiftUI API → default figures`);
-    reportTextLosses(s, deco, note);
+    reportTextLosses(s, note);
     const clipEl =
       [...inlineChain(host, r.styleOf)].reverse().find(clipsText) ?? (clipsText(host) ? host : ctx.textClip);
     const paint = clipEl ? textPaintOf(clipEl, r.node.bounds) : undefined;
@@ -494,8 +494,7 @@ export function buildText(host: LayoutNode, runs: SourceTextRun[], ctx: Inferenc
   // so overriding the direction on a stack would mirror it a second time.
   if (host.styles["unicode-bidi"] === "plaintext") node.plaintext = true;
   if (dir === "rtl") node.layoutDirection = "rtl";
-  if (ta === "justify")
-    note("approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  if (ta === "justify") node.justify = true;
   const indent = host.styles["text-indent"];
   if (indent && px(indent) !== 0) note("approximated", "text-indent", `text-indent ${indent} dropped`);
   const wm = host.styles["writing-mode"];
@@ -608,7 +607,6 @@ function unbreakable(runs: TextRun[], s: Record<string, string>): boolean {
 /** Text properties SwiftUI `Text` cannot express; reported per value, never silently dropped. */
 function reportTextLosses(
   s: Record<string, string>,
-  deco: TextRun["decoration"],
   note: (level: DiagnosticLevel, feature: string, message: string) => void,
 ): void {
   if (s["hyphens"] === "auto")
@@ -638,12 +636,4 @@ function reportTextLosses(
   if (ffs && ffs !== "normal") note("approximated", "font-feature-settings", `font-feature-settings ${ffs} dropped`);
   const caps = s["font-variant-caps"];
   if (caps && caps !== "normal") note("approximated", "font-variant-caps", `font-variant-caps ${caps} dropped`);
-  if (deco) {
-    const t = s["text-decoration-thickness"];
-    if (t && t !== "auto" && t !== "from-font")
-      note("approximated", "text-decoration-thickness", `text-decoration-thickness ${t} → system line thickness`);
-    const o = s["text-underline-offset"];
-    if (deco.lines.includes("underline") && o && o !== "auto")
-      note("approximated", "text-underline-offset", `text-underline-offset ${o} → system underline position`);
-  }
 }

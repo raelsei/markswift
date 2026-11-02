@@ -1,6 +1,6 @@
 /** Flex rows MarkswiftFlexRow reproduces, admitted only when the solver mirror matches the capture. */
 import { expect, test } from "bun:test";
-import { admitFlexRow, solveFlexRow } from "../../../src/analysis/flex-row.ts";
+import { admitFlexRow, flexAlignContent, solveFlexRow } from "../../../src/analysis/flex-row.ts";
 import { inferScreen } from "../../../src/analysis/infer.ts";
 import { compileLayout } from "../../../src/compiler/index.ts";
 import { LAYOUT_DOC_VERSION, type LayoutDoc, type LayoutNode } from "../../../src/model/layout.ts";
@@ -445,4 +445,261 @@ test("a centred row emits its alignment", () => {
   expect(compileLayout(flexDoc(P4, { "align-items": "center" }), { name: "RowView", mode: "app" }).code).toContain(
     "spacing: 8.0, align: .center) {",
   );
+});
+
+test("flexAlignContent distributes lines in a taller cross axis for all modes", () => {
+  const lines = [30, 40];
+  const gap = 10;
+  const available = 150; // total lines + gap = 80; slack = 70
+  expect(flexAlignContent("start", lines, available, gap).offsets).toEqual([0, 40]);
+  expect(flexAlignContent("end", lines, available, gap).offsets).toEqual([70, 110]);
+  expect(flexAlignContent("center", lines, available, gap).offsets).toEqual([35, 75]);
+  expect(flexAlignContent("between", lines, available, gap).offsets).toEqual([0, 110]);
+  expect(flexAlignContent("around", lines, available, gap).offsets).toEqual([17.5, 92.5]);
+  expect(flexAlignContent("evenly", lines, available, gap).offsets).toEqual([23.333333333333332, 86.66666666666666]);
+  const stretched = flexAlignContent("stretch", lines, available, gap);
+  expect(stretched.offsets).toEqual([0, 75]);
+  expect(stretched.lineCrossSizes).toEqual([65, 75]);
+});
+
+test("flexAlignContent places a wrapping container's single line (space-between falls back to start)", () => {
+  // One 30px line in 150px: slack 120.
+  expect(flexAlignContent("center", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("end", [30], 150, 10).offsets).toEqual([120]);
+  expect(flexAlignContent("around", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("evenly", [30], 150, 10).offsets).toEqual([60]);
+  expect(flexAlignContent("between", [30], 150, 10).offsets).toEqual([0]);
+  expect(flexAlignContent("stretch", [30], 150, 10).lineCrossSizes).toEqual([150]);
+});
+
+test("breakable text items probe their min-content natively (autoMin); a clipping item has none", () => {
+  const row = (styles: Record<string, string>) =>
+    rowOf(
+      flexDoc(
+        [
+          { w: 254 / 3, text: 60, lines: 2, flex: [0, 1, "150px"], styles },
+          { w: 254 / 3, flex: [0, 1, "150px"] },
+          { w: 254 / 3, flex: [0, 1, "150px"] },
+        ],
+        {},
+        270,
+      ),
+    );
+  const wrapped = row({}).flex!.items[0]!;
+  expect(wrapped.autoMin).toBe(true);
+  // The captured wrapped width is not min-content (it changes with the width), so nothing is pinned.
+  expect(wrapped.min).toBeUndefined();
+  expect(row({ "overflow-x": "hidden" }).flex!.items[0]!.autoMin).toBeUndefined();
+});
+
+test("column allocation in a definite height admits unequal growers and emits axis .vertical", () => {
+  const colNode: LayoutNode = {
+    id: "col",
+    tag: "div",
+    attrs: {},
+    preferredSize: { width: "300px", height: "400px" },
+    bounds: { x: 0, y: 0, w: 300, h: 400 },
+    children: [
+      {
+        id: "c1",
+        tag: "div",
+        attrs: {},
+        preferredSize: { width: "auto", height: "auto" },
+        bounds: { x: 0, y: 0, w: 300, h: 130.67 },
+        children: [],
+        styles: {
+          ...INHERITED,
+          display: "block",
+          "box-sizing": "border-box",
+          "flex-grow": "1",
+          "flex-shrink": "1",
+          "flex-basis": "0px",
+          "margin-top": "0px",
+          "margin-bottom": "0px",
+          order: "0",
+          "align-self": "stretch",
+          "min-height": "auto",
+          "max-height": "none",
+        },
+      },
+      {
+        id: "c2",
+        tag: "div",
+        attrs: {},
+        preferredSize: { width: "auto", height: "auto" },
+        bounds: { x: 0, y: 138.67, w: 300, h: 261.33 },
+        children: [],
+        styles: {
+          ...INHERITED,
+          display: "block",
+          "box-sizing": "border-box",
+          "flex-grow": "2",
+          "flex-shrink": "1",
+          "flex-basis": "0px",
+          "margin-top": "0px",
+          "margin-bottom": "0px",
+          order: "0",
+          "align-self": "stretch",
+          "min-height": "auto",
+          "max-height": "none",
+        },
+      },
+    ],
+    styles: {
+      ...INHERITED,
+      display: "flex",
+      "flex-direction": "column",
+      "flex-wrap": "nowrap",
+      "align-items": "stretch",
+      "justify-content": "normal",
+      "row-gap": "8px",
+    },
+  };
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "flex-col.html",
+    combo: { screen: "col", theme: "light" },
+    size: { w: 300, h: 400 },
+    viewport: { x: 0, y: 0, w: 300, h: 400 },
+    conditions: [],
+    dpr: 1,
+    canvas: "rgb(255, 255, 255)",
+    fonts: [],
+    root: {
+      id: "root",
+      tag: "main",
+      attrs: {},
+      bounds: { x: 0, y: 0, w: 300, h: 400 },
+      children: [colNode],
+      styles: { ...INHERITED, display: "block" },
+    },
+  };
+  const admitted = admitFlexRow(colNode);
+  expect(admitted).toBeDefined();
+  expect(admitted!.axis).toBe("v");
+  const app = compileLayout(doc, { name: "ColView", mode: "app", extract: false }).code;
+  expect(app).toContain("MarkswiftFlexRow(axis: .vertical, items:");
+  expect(app).not.toContain(".frame(height: 130.67");
+});
+
+test("column allocation in an auto-height container is rejected", () => {
+  const colNode: LayoutNode = {
+    id: "col",
+    tag: "div",
+    attrs: {},
+    preferredSize: { width: "300px", height: "auto" },
+    bounds: { x: 0, y: 0, w: 300, h: 200 },
+    children: [
+      {
+        id: "c1",
+        tag: "div",
+        attrs: {},
+        preferredSize: { width: "auto", height: "auto" },
+        bounds: { x: 0, y: 0, w: 300, h: 100 },
+        children: [],
+        styles: { ...INHERITED, display: "block", "flex-grow": "1", "flex-shrink": "1", "flex-basis": "0px" },
+      },
+      {
+        id: "c2",
+        tag: "div",
+        attrs: {},
+        preferredSize: { width: "auto", height: "auto" },
+        bounds: { x: 0, y: 100, w: 300, h: 100 },
+        children: [],
+        styles: { ...INHERITED, display: "block", "flex-grow": "1", "flex-shrink": "1", "flex-basis": "0px" },
+      },
+    ],
+    styles: { ...INHERITED, display: "flex", "flex-direction": "column", "flex-wrap": "nowrap" },
+  };
+  expect(admitFlexRow(colNode)).toBeUndefined();
+});
+
+test("wrapping flex row admits align-content center in a taller box", () => {
+  // 2 lines of 40px chips in a 160px row (total height 80 + 8 = 88; slack = 72; center y = 36)
+  const chips: LayoutNode[] = [
+    // Line 1 (x: 0, 158)
+    {
+      id: "t1",
+      tag: "div",
+      attrs: {},
+      preferredSize: { width: "150px", height: "40px" },
+      bounds: { x: 0, y: 36, w: 150, h: 40 },
+      children: [],
+      styles: {
+        ...INHERITED,
+        display: "block",
+        "flex-grow": "0",
+        "flex-shrink": "1",
+        "flex-basis": "150px",
+        "min-width": "auto",
+        "max-width": "none",
+        "margin-left": "0px",
+        "margin-right": "0px",
+        order: "0",
+      },
+    },
+    {
+      id: "t2",
+      tag: "div",
+      attrs: {},
+      preferredSize: { width: "150px", height: "40px" },
+      bounds: { x: 158, y: 36, w: 150, h: 40 },
+      children: [],
+      styles: {
+        ...INHERITED,
+        display: "block",
+        "flex-grow": "0",
+        "flex-shrink": "1",
+        "flex-basis": "150px",
+        "min-width": "auto",
+        "max-width": "none",
+        "margin-left": "0px",
+        "margin-right": "0px",
+        order: "0",
+      },
+    },
+    // Line 2 (x: 0)
+    {
+      id: "t3",
+      tag: "div",
+      attrs: {},
+      preferredSize: { width: "150px", height: "40px" },
+      bounds: { x: 0, y: 84, w: 150, h: 40 },
+      children: [],
+      styles: {
+        ...INHERITED,
+        display: "block",
+        "flex-grow": "0",
+        "flex-shrink": "1",
+        "flex-basis": "150px",
+        "min-width": "auto",
+        "max-width": "none",
+        "margin-left": "0px",
+        "margin-right": "0px",
+        order: "0",
+      },
+    },
+  ];
+  const rowNode: LayoutNode = {
+    id: "wrapRow",
+    tag: "div",
+    attrs: {},
+    preferredSize: { width: "320px", height: "160px" },
+    bounds: { x: 0, y: 0, w: 320, h: 160 },
+    children: chips,
+    styles: {
+      ...INHERITED,
+      display: "flex",
+      "flex-direction": "row",
+      "flex-wrap": "wrap",
+      "align-items": "stretch",
+      "align-content": "center",
+      "justify-content": "flex-start",
+      "column-gap": "8px",
+      "row-gap": "8px",
+    },
+  };
+  const admitted = admitFlexRow(rowNode);
+  expect(admitted).toBeDefined();
+  expect(admitted!.alignContent).toBe("center");
 });

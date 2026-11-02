@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-reflow" content="pinned">
+<title>media-query--orientation-height</title>
+<style>
+:root { --bg: #f4f6fa; --fg: #111827; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.panel { display: flex; flex-direction: column; gap: 8px; }
+.b { box-sizing: border-box; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 16px; }
+.landscape-only { display: none; }
+.tall-only { display: none; }
+@media (orientation: landscape) {
+  .panel { flex-direction: row; }
+  .landscape-only { display: block; }
+}
+@media (min-height: 1000px) {
+  .tall-only { display: block; }
+}
+</style>
+</head>
+<body>
+<main data-markswift-root>
+  <div class="card panel">
+    <div class="b">Standard View</div>
+    <div class="b landscape-only">Landscape Panel</div>
+    <div class="b tall-only">Tall Height Panel</div>
+  </div>
+</main>
+</body>
+</html>

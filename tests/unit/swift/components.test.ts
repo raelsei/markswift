@@ -131,7 +131,7 @@ test("a row with a different font weight breaks the run", () => {
   expect(apart).not.toContain("struct Row");
 });
 
-test("grid tiles share a subview called once per tile", () => {
+test("grid tiles become a ForEach over grid cells", () => {
   const tile = (i: number) => {
     const x = 16 + (i % 2) * 180,
       y = 16 + Math.floor(i / 2) * 50;
@@ -158,8 +158,11 @@ test("grid tiles share a subview called once per tile", () => {
   const swift = emit(
     doc(element("main", 0, 0, 393, 200, { display: "block", "padding-top": "16px", "padding-left": "16px" }, [grid])),
   );
-  expect(swift).not.toContain("ForEach(");
-  for (const i of [0, 1, 2, 3]) expect(swift).toContain(`ItemView(item: Self.items[${i}])`);
+  expect(swift).toContain("ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \\.self) { rowStart in");
+  expect(swift).toContain("struct Item: Identifiable");
+  expect(swift).toContain("struct ItemView: View");
+  expect(swift).toContain("init(items: [Item] = Self.items");
+  expect(swift).toContain("ItemView(item: item)");
 });
 
 test("rows whose overlays differ are not a run", () => {
@@ -342,6 +345,36 @@ function teamDoc(): LayoutDoc {
   const h = withAttrs(text("Team", 16, 16, 100), { "data-markswift-field": "title" }, "h2");
   return doc(element("main", 0, 0, 393, 200, ROOT, [h, list, button("Save", 16, 130, { onclick: "save()" })]));
 }
+
+test("extracted rows keep a nested control's fixed width: equal widths a literal, different widths a field", () => {
+  const field = (y: number, w: number, id: string) =>
+    withAttrs(element("input", 200, y, w, 36, { display: "inline-block", width: `${w}px` }), {
+      type: "text",
+      id,
+      value: id,
+    });
+  const list = (widths: number[]) =>
+    element(
+      "ul",
+      16,
+      16,
+      360,
+      140,
+      { display: "flex", "flex-direction": "column", gap: "8px" },
+      widths.map((w, i) =>
+        element("li", 16, 16 + i * 44, 360, 36, FLEX_ROW, [
+          text(`Label ${i}`, 16, 24 + i * 44, 100),
+          field(16 + i * 44, w, `f${i}`),
+        ]),
+      ),
+    );
+  const same = emit(doc(element("main", 0, 0, 393, 200, ROOT, [list([196, 196, 196])])));
+  expect(same).toContain("ForEach(");
+  expect(same).toContain(".frame(width: 196.0)");
+  const varied = emit(doc(element("main", 0, 0, 393, 200, ROOT, [list([196, 120, 160])])));
+  expect(varied).toContain("var width: CGFloat");
+  expect(varied).toMatch(/\.frame\(width: \w+\.width\)/);
+});
 
 test("a heading before the list names the row type", () => {
   const list = listDoc(ROWS).root.children[0]!;
@@ -588,4 +621,160 @@ test("outside counters with unequal widths share an extracted row and align thei
   expect(fidelity).not.toContain(".alignmentGuide(.leading)");
   expect(fidelity).toContain(".offset(x: -24.0, y: 0.0)");
   expect(fidelity).toContain(".offset(x: -32.0, y: 0.0)");
+});
+
+test("optional children: rows with an absent badge become one struct with an optional field", () => {
+  const badgeEl = (label: string, x: number, y: number) =>
+    withAttrs(
+      element(
+        "span",
+        x + 180,
+        y,
+        40,
+        20,
+        {
+          display: "inline-block",
+          "font-size": "12px",
+          "line-height": "16px",
+          color: "rgb(255, 255, 255)",
+          "background-color": "rgb(220, 38, 38)",
+          "border-radius": "4px",
+        },
+        [
+          {
+            tag: "#text",
+            attrs: {},
+            styles: {},
+            bounds: { x: x + 184, y: y + 2, w: 32, h: 16 },
+            text: label,
+            children: [],
+          },
+        ],
+      ),
+      { "data-markswift-field": "badge" },
+    );
+  const rowsWithOptionalBadge: LayoutNode[] = [
+    element("li", 16, 16, 360, 20, FLEX_ROW, [
+      text("Ada", 16, 16, 100),
+      text("Owner", 128, 16, 60),
+      badgeEl("Admin", 16, 16),
+    ]),
+    element("li", 16, 44, 360, 20, FLEX_ROW, [text("Alan", 16, 44, 100), text("Editor", 128, 44, 60)]),
+    element("li", 16, 72, 360, 20, FLEX_ROW, [
+      text("Grace", 16, 72, 100),
+      text("Viewer", 128, 72, 60),
+      badgeEl("VIP", 16, 72),
+    ]),
+  ];
+  const ul = element(
+    "ul",
+    16,
+    16,
+    360,
+    76,
+    { display: "flex", "flex-direction": "column", gap: "8px" },
+    rowsWithOptionalBadge,
+  );
+  const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [ul])));
+  expect(swift).toContain("ForEach(rows) { row in");
+  expect(swift).toContain("struct Row: Identifiable");
+  expect(swift).toContain("var badge: String? = nil");
+  expect(swift).toContain("if let badge = row.badge {");
+  expect(swift).toContain('badge: "Admin"');
+  expect(swift).toContain("badge: nil");
+  expect(swift).toContain('badge: "VIP"');
+});
+
+test("optional children: a required slot only some rows have never becomes a nil in a non-optional field", () => {
+  // The accordion shape: the expanded item adds a child and a border colour on the row itself.
+  const bordered = {
+    ...FLEX_ROW,
+    "border-bottom-width": "1px",
+    "border-bottom-style": "solid",
+    "border-bottom-color": "rgb(229, 231, 235)",
+  };
+  const row = (name: string, y: number, extra: LayoutNode[], styles: Record<string, string>) =>
+    element("li", 16, y, 360, 20, styles, [text(name, 16, y, 100), ...extra]);
+  const ul = element("ul", 16, 16, 360, 76, { display: "flex", "flex-direction": "column", gap: "8px" }, [
+    row("Ada", 16, [text("Owner", 128, 16, 60)], bordered),
+    row("Alan", 44, [], FLEX_ROW),
+    row("Grace", 72, [], FLEX_ROW),
+  ]);
+  const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [ul])));
+  for (const [, field] of swift.matchAll(/\b(\w+): nil\b/g))
+    expect(swift).toMatch(new RegExp(`var ${field}: [^\\n]*\\? = nil`));
+});
+
+test("variants: tabs with active and inactive states become an enum variant with switch", () => {
+  const tabButton = (label: string, x: number, active: boolean, id: string): LayoutNode => {
+    const t: LayoutNode = {
+      tag: "#text",
+      attrs: {},
+      styles: {},
+      bounds: { x: x + 6, y: 18, w: 50, h: 20 },
+      text: label,
+      children: [],
+    };
+    const styles: Record<string, string> = {
+      display: "inline-flex",
+      "font-size": "14px",
+      "line-height": "20px",
+      color: active ? "rgb(0, 0, 0)" : "rgb(120, 120, 120)",
+      "background-color": active ? "rgb(255, 255, 255)" : "rgba(0, 0, 0, 0)",
+    };
+    return withAttrs(element("button", x, 16, 60, 24, styles, [t]), {
+      type: "button",
+      role: "tab",
+      id,
+      "data-state": active ? "active" : "inactive",
+      "aria-selected": active ? "true" : "false",
+    });
+  };
+  const tablist = element("div", 16, 16, 200, 32, { display: "flex", "flex-direction": "row", gap: "4px" }, [
+    tabButton("Overview", 16, true, "tab-overview"),
+    tabButton("Logs", 80, false, "tab-logs"),
+    tabButton("Settings", 144, false, "tab-settings"),
+  ]);
+  const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [tablist])));
+  expect(swift).toContain("enum ItemVariant: String, Sendable, CaseIterable");
+  expect(swift).toContain("case active");
+  expect(swift).toContain("case inactive");
+  expect(swift).toContain("struct Item: Identifiable");
+  expect(swift).toContain("var variant: ItemVariant = .active");
+  expect(swift).toContain("switch item.variant {");
+  expect(swift).toContain("case .active:");
+  expect(swift).toContain("case .inactive:");
+  expect(swift).toContain("variant: .active");
+  expect(swift).toContain("variant: .inactive");
+  expect(swift).toContain("ForEach(items) { item in");
+});
+
+test("ForEach over grid cells in MarkswiftTracks", () => {
+  const tile = (i: number) => {
+    const x = 16 + (i % 2) * 180,
+      y = 16 + Math.floor(i / 2) * 50;
+    return element("div", x, y, 170, 40, { display: "flex", "flex-direction": "column", gap: "0px" }, [
+      text(`Tile ${i + 1}`, x, y, 170),
+    ]);
+  };
+  const grid = element(
+    "section",
+    16,
+    16,
+    350,
+    90,
+    {
+      display: "grid",
+      "grid-template-columns": "170px 170px",
+      "column-gap": "10px",
+      "row-gap": "10px",
+    },
+    [0, 1, 2, 3].map(tile),
+  );
+  grid.preferredSize = { width: "auto", height: "auto", gridTemplateColumns: "1fr 1fr" };
+  const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [grid])));
+  expect(swift).toContain("MarkswiftTracks(tracks: [.fr(1.0), .fr(1.0)], hSpacing: 10.0, vSpacing: 10.0) {");
+  expect(swift).toContain("ForEach(items) { item in");
+  expect(swift).toContain("ItemView(item: item)");
+  expect(swift).toContain("init(items: [Item] = Self.items");
 });

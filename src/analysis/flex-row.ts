@@ -67,9 +67,8 @@ export function flexLines(items: FlexItem[], bases: number[], width: number, gap
   if (start < bases.length) out.push([start, bases.length]);
   return out;
 }
-// ponytail: min-width:auto is the captured min-content only for unbreakable content (`unbreakableWidth`), else the
-// box's padding and border; admission proves the captured width, the probe a second width. Measure min-content
-// natively if rows with wrapping text diverge.
+// ponytail: min-width:auto is the captured min-content for unbreakable content (`unbreakableWidth`), else the box's
+// padding and border; breakable text is probed natively (`autoMin`, runtime `sizeThatFits` at width 0).
 
 const near = (a: number, b: number) => Math.abs(a - b) <= 1;
 const ALIGN: Record<string, FlexRow["align"]> = {
@@ -81,12 +80,112 @@ const ALIGN: Record<string, FlexRow["align"]> = {
   "flex-end": "end",
   end: "end",
 };
+const ALIGN_CONTENT: Record<string, FlexRow["alignContent"]> = {
+  stretch: "stretch",
+  "flex-start": "start",
+  start: "start",
+  "flex-end": "end",
+  end: "end",
+  center: "center",
+  "space-between": "between",
+  "space-around": "around",
+  "space-evenly": "evenly",
+};
 const START: Record<string, true> = { normal: true, "flex-start": true, start: true };
 const SELF: Record<string, true> = { auto: true, normal: true };
 const PX = /^\d+(\.\d+)?px$/;
 const PCT = /^\d+(\.\d+)?%$/;
 const BASIS = /^(auto|content|\d+(\.\d+)?(px|%))$/;
 
+/**
+ * `align-content` line distribution in a taller cross axis, mirroring `MarkswiftFlexRow.alignContentDistribution`
+ * (runtime/flex-row.swift).
+ */
+export function flexAlignContent(
+  alignContent: NonNullable<FlexRow["alignContent"]>,
+  lineCrossSizes: number[],
+  availableCross: number,
+  gap: number,
+): { offsets: number[]; lineCrossSizes: number[] } {
+  const count = lineCrossSizes.length;
+  const total = lineCrossSizes.reduce((a, b) => a + b, 0) + Math.max(0, count - 1) * gap;
+  const slack = availableCross - total;
+  const offsets: number[] = [];
+  let sizes = [...lineCrossSizes];
+  // A wrapping container is multi-line even with one line, so align-content still places it (CSS 9.4).
+  if (count === 0 || slack <= 0.5) {
+    let y = 0;
+    for (const s of lineCrossSizes) {
+      offsets.push(y);
+      y += s + gap;
+    }
+    return { offsets, lineCrossSizes: sizes };
+  }
+  switch (alignContent) {
+    case "start": {
+      let y = 0;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap;
+      }
+      break;
+    }
+    case "end": {
+      let y = slack;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap;
+      }
+      break;
+    }
+    case "center": {
+      let y = slack / 2;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap;
+      }
+      break;
+    }
+    case "between": {
+      const extra = count > 1 ? slack / (count - 1) : 0;
+      let y = 0;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap + extra;
+      }
+      break;
+    }
+    case "around": {
+      const unit = slack / count;
+      let y = unit / 2;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap + unit;
+      }
+      break;
+    }
+    case "evenly": {
+      const unit = slack / (count + 1);
+      let y = unit;
+      for (const s of lineCrossSizes) {
+        offsets.push(y);
+        y += s + gap + unit;
+      }
+      break;
+    }
+    case "stretch": {
+      const extra = slack / count;
+      sizes = lineCrossSizes.map((s) => s + extra);
+      let y = 0;
+      for (const s of sizes) {
+        offsets.push(y);
+        y += s + gap;
+      }
+      break;
+    }
+  }
+  return { offsets, lineCrossSizes: sizes };
+}
 const memo = new WeakMap<LayoutNode, { row: FlexRow; candidate: boolean } | null>();
 
 /**
@@ -163,9 +262,12 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
   const s = n.styles;
   // 1. Container.
   const wrap = s["flex-wrap"] ?? "nowrap";
-  if (s.display !== "flex" || (s["flex-direction"] ?? "row") !== "row" || (wrap !== "nowrap" && wrap !== "wrap"))
+  const direction = s["flex-direction"] ?? "row";
+  if (s.display !== "flex" || (direction !== "row" && direction !== "column") || (wrap !== "nowrap" && wrap !== "wrap"))
     return undefined;
   if (s.direction === "rtl") return undefined;
+  const isCol = direction === "column";
+  if (isCol && wrap !== "nowrap") return undefined;
   // 2. Items; a bare text run would be an anonymous item.
   if (n.children.some((c) => c.tag === "#text" && (c.text ?? "").trim())) return undefined;
   const nodes = n.children.filter((c) => c.tag !== "#text" && c.styles.display !== "none" && !outOfFlow(c));
@@ -174,14 +276,22 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
   const rowGap =
     s["row-gap"] === undefined || s["row-gap"] === "normal" ? 0 : PX.test(s["row-gap"]) ? px(s["row-gap"]) : NaN;
   if (wraps && Number.isNaN(rowGap)) return undefined;
-  // Lines stack from the top only in a box as tall as they are: a definite or minimum height leaves align-content
-  // free space to distribute at another width.
-  const minHeight = s["min-height"] ?? "auto";
-  if (wraps && ((n.preferredSize?.height ?? "auto") !== "auto" || (minHeight !== "auto" && minHeight !== "0px")))
-    return undefined;
+  // A column requires a definite or minimum height so flex allocation has space to distribute.
+  const hPref = n.preferredSize?.height ?? "auto";
+  const hMin = s["min-height"] ?? "auto";
+  const colDefinite = (hPref !== "auto" && PX.test(hPref)) || (hMin !== "auto" && hMin !== "0px" && PX.test(hMin));
+  if (isCol && !colDefinite) return undefined;
+  // A wrapping row distributes lines using align-content when declared.
+  const rawAlignContent = s["align-content"];
+  const alignContent = rawAlignContent && rawAlignContent !== "normal" ? ALIGN_CONTENT[rawAlignContent] : undefined;
+  if (wraps && rawAlignContent && rawAlignContent !== "normal" && !alignContent) return undefined;
+  const insets = insetsOf(s);
+  const mainGap = isCol ? px(s["row-gap"]) : px(s["column-gap"]);
+  const mainAvailable = isCol ? n.bounds.h - insets[0] - insets[2] : n.bounds.w - insets[1] - insets[3];
+  const crossAvailable = isCol ? n.bounds.w - insets[1] - insets[3] : n.bounds.h - insets[0] - insets[2];
+
   // 3–4. Per item, and its basis: border-box px (CSS adds padding and border to the flex base size), a percentage
-  // of the row, or content. px min/max-width clamp a definite basis; on a content basis SwiftUI's measure would
-  // already include them.
+  // of the container, or content.
   const items: FlexItem[] = [];
   const authored: Array<number | undefined> = [];
   for (const node of nodes) {
@@ -191,28 +301,36 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
     const grow = Number(t["flex-grow"]);
     const shrink = Number(t["flex-shrink"]);
     if (!Number.isFinite(grow) || !Number.isFinite(shrink)) return undefined;
-    if (px(t["margin-left"]) !== 0 || px(t["margin-right"]) !== 0 || px(t.order) !== 0) return undefined;
+    if (isCol) {
+      if (px(t["margin-top"]) !== 0 || px(t["margin-bottom"]) !== 0 || px(t.order) !== 0) return undefined;
+    } else {
+      if (px(t["margin-left"]) !== 0 || px(t["margin-right"]) !== 0 || px(t.order) !== 0) return undefined;
+    }
     const self = t["align-self"] ?? "auto";
     if (!SELF[self] && !ALIGN[self]) return undefined;
-    const width = node.preferredSize?.width ?? "auto";
-    if ((width !== "auto" && !PX.test(width) && !PCT.test(width)) || !BASIS.test(basis)) return undefined;
-    const pct = PCT.test(basis) ? basis : basis === "auto" && PCT.test(width) ? width : undefined;
+    const mainProp = isCol ? (node.preferredSize?.height ?? "auto") : (node.preferredSize?.width ?? "auto");
+    if ((mainProp !== "auto" && !PX.test(mainProp) && !PCT.test(mainProp)) || !BASIS.test(basis)) return undefined;
+    const pct = PCT.test(basis) ? basis : basis === "auto" && PCT.test(mainProp) ? mainProp : undefined;
     const fraction = pct && pct !== "0%" ? Number.parseFloat(pct) / 100 : undefined;
-    // A percentage padding resolves against the row too, but the capture holds only its px.
-    if (fraction !== undefined && (px(t["padding-left"]) !== 0 || px(t["padding-right"]) !== 0)) return undefined;
-    const raw = PX.test(basis) ? px(basis) : pct ? 0 : basis === "auto" && PX.test(width) ? px(width) : undefined;
-    const [, r, , l] = insetsOf(t);
-    const inset = r + l;
+    if (fraction !== undefined) {
+      if (isCol) {
+        if (px(t["padding-top"]) !== 0 || px(t["padding-bottom"]) !== 0) return undefined;
+      } else {
+        if (px(t["padding-left"]) !== 0 || px(t["padding-right"]) !== 0) return undefined;
+      }
+    }
+    const raw = PX.test(basis) ? px(basis) : pct ? 0 : basis === "auto" && PX.test(mainProp) ? px(mainProp) : undefined;
+    const [pt, pr, pb, pl] = insetsOf(t);
+    const inset = isCol ? pt + pb : pr + pl;
     const box = t["box-sizing"] === "border-box";
-    // A border-box basis is floored at the padding and border; a percentage's floor is applied once resolved.
     const item: FlexItem = {
       grow,
       shrink,
       basis: raw === undefined ? null : box ? Math.max(raw, fraction === undefined ? inset : 0) : raw + inset,
     };
     if (!SELF[self]) item.align = ALIGN[self];
-    const min = t["min-width"] ?? "auto";
-    const max = t["max-width"] ?? "none";
+    const min = isCol ? (t["min-height"] ?? "auto") : (t["min-width"] ?? "auto");
+    const max = isCol ? (t["max-height"] ?? "none") : (t["max-width"] ?? "none");
     if (min !== "auto" && min !== "0px") {
       if (!PX.test(min) || item.basis === null) return undefined;
       if (px(min) + (box ? 0 : inset) > inset) item.min = px(min) + (box ? 0 : inset);
@@ -223,72 +341,104 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
     }
     if (inset > 0) item.inset = inset;
     if (fraction !== undefined) item.fraction = fraction;
+    // A clipping item's automatic minimum is 0 (css-flexbox §4.5); otherwise the runtime probes min-content.
+    const clips = (node.styles[isCol ? "overflow-y" : "overflow-x"] ?? "visible") !== "visible";
+    if (hasText(node) && !clips && unbreakableWidth(node) === undefined && min === "auto") item.autoMin = true;
     authored.push(raw);
     items.push(item);
   }
-  // 5. Candidates; rows the native HStack already handles stay native.
+  // 5. Candidates.
   const growth = items.reduce((sum, i) => sum + i.grow, 0);
   const factors = items.filter((i) => i.grow > 0).map((i) => i.grow);
-  const widths = nodes.filter((_, i) => items[i]!.grow > 0).map((g) => g.bounds.w);
+  const mainSizes = nodes.filter((_, i) => items[i]!.grow > 0).map((g) => (isCol ? g.bounds.h : g.bounds.w));
   const fill =
     growth >= 1 &&
     factors.every((g) => Math.abs(g - factors[0]!) < 0.000001) &&
-    Math.max(...widths) - Math.min(...widths) <= 1;
+    Math.max(...mainSizes) - Math.min(...mainSizes) <= 1;
   const c1 = factors.length > 0 && !fill;
-  // A px basis that can shrink (a 0 basis has no flex base size to shrink).
   const shrinkable = items.map((item, i) => (authored[i] ?? 0) > 0 && item.shrink > 0);
-  const c2 = nodes.some((node, i) => shrinkable[i] && node.bounds.w < items[i]!.basis! - 0.5);
+  const c2 = nodes.some((node, i) => shrinkable[i] && (isCol ? node.bounds.h : node.bounds.w) < items[i]!.basis! - 0.5);
   const c3 = shrinkable.includes(true) && nodes.some((node, i) => items[i]!.basis === null && hasText(node));
-  // A percentage basis follows the row; the HStack would pin it.
   const c4 = items.some((i) => i.fraction !== undefined);
-  // A wrapping row has no native counterpart that re-allocates each line: MarkswiftFlexRow reflows it.
-  const candidate = c1 || c2 || c3 || c4 || wraps;
+  const c5 = isCol && (c1 || c2 || c4 || (growth > 0 && !fill));
+  const candidate = c1 || c2 || c3 || c4 || (wraps && !isCol) || c5;
   // 6. Container alignment.
   const align = ALIGN[s["align-items"] ?? "normal"];
   if (!align) return undefined;
   for (const item of items) if (item.align === align) delete item.align;
   // 7. Content bases.
-  const insets = insetsOf(s);
-  const W = n.bounds.w - insets[1] - insets[3];
-  const gap = px(s["column-gap"]);
-  const content = nodes.map((node, i) => (items[i]!.basis === null ? maxContent(node) : undefined));
-  const bases = nodes.map((node, i) => items[i]!.basis ?? content[i] ?? node.bounds.w);
-  const free = W - bases.reduce((a, b) => a + b, 0) - (nodes.length - 1) * gap;
+  const content = nodes.map((node, i) => {
+    if (items[i]!.basis !== null) return undefined;
+    return isCol ? node.bounds.h : maxContent(node);
+  });
+  const bases = nodes.map((node, i) => items[i]!.basis ?? content[i] ?? (isCol ? node.bounds.h : node.bounds.w));
+  const free = mainAvailable - bases.reduce((a, b) => a + b, 0) - (nodes.length - 1) * mainGap;
   const unprovable = nodes.some((_, i) => items[i]!.basis === null && content[i] === undefined);
   const still =
-    growth === 0 && nodes.every((node, i) => items[i]!.basis === null || near(node.bounds.w, items[i]!.basis!));
+    growth === 0 &&
+    nodes.every((node, i) => items[i]!.basis === null || near(isCol ? node.bounds.h : node.bounds.w, items[i]!.basis!));
   if (unprovable && !still) return undefined;
-  // 8. Distribution: only start packing is mirrored, unless the row fills (grow ≥ 1, nothing clamped) at any width;
-  // a wrapping row's lines may not all grow, so it packs at the start.
+  // 8. Distribution.
   const clamped = items.some((i) => i.min !== undefined || i.max !== undefined || i.fraction !== undefined);
   const start = START[s["justify-content"] ?? "normal"];
   if (!start && (wraps || !(free >= 0 && growth >= 1 && !clamped))) return undefined;
-  // Automatic minimums of a row its bases overflow, capped by a px width (the specified size suggestion). A row with
-  // room keeps its native content sizing: captured minimums would mix Chrome's text widths into native allocation.
+  // Automatic minimums of a container whose bases overflow.
   const overflowing = free < -0.5;
   for (const [i, node] of nodes.entries()) {
     const item = items[i]!;
-    if (!overflowing || (node.styles["min-width"] ?? "auto") !== "auto") continue;
-    const width = node.preferredSize?.width ?? "auto";
-    const solid = unbreakableWidth(node);
-    const auto = solid === undefined ? undefined : PX.test(width) ? Math.min(solid, item.basis ?? solid) : solid;
+    const minProp = isCol ? (node.styles["min-height"] ?? "auto") : (node.styles["min-width"] ?? "auto");
+    if (!overflowing || minProp !== "auto") continue;
+    const mainProp = isCol ? (node.preferredSize?.height ?? "auto") : (node.preferredSize?.width ?? "auto");
+    const solid = isCol ? node.bounds.h : unbreakableWidth(node);
+    const auto = solid === undefined ? undefined : PX.test(mainProp) ? Math.min(solid, item.basis ?? solid) : solid;
     if (auto !== undefined && auto > (item.inset ?? 0) + 0.5) item.min = Math.round(auto * 100) / 100;
   }
-  // 9. Geometry: each line from the row's left edge, lines stacked from its top (no align-content distribution).
-  const lines: Array<[number, number]> = wraps ? flexLines(items, bases, W, gap) : [[0, nodes.length]];
-  let y = n.bounds.y + insets[0];
-  for (const [a, b] of lines) {
-    const w = solveFlexRow(items.slice(a, b), bases.slice(a, b), W, gap);
-    const line = nodes.slice(a, b);
-    let x = n.bounds.x + insets[3];
-    for (const [k, node] of line.entries()) {
-      if (!near(node.bounds.w, w[k]!) || !near(node.bounds.x, x)) return undefined;
-      x += w[k]! + gap;
+  // 9. Geometry.
+  if (isCol) {
+    const hAlloc = solveFlexRow(items, bases, mainAvailable, mainGap);
+    let y = n.bounds.y + insets[0];
+    for (const [k, node] of nodes.entries()) {
+      if (!near(node.bounds.h, hAlloc[k]!) || !near(node.bounds.y, y)) return undefined;
+      const a = items[k]?.align ?? align;
+      let expectedW = node.bounds.w;
+      let expectedX = n.bounds.x + insets[3];
+      if (a === "stretch") expectedW = crossAvailable;
+      else if (a === "center") expectedX += (crossAvailable - node.bounds.w) / 2;
+      else if (a === "end") expectedX += crossAvailable - node.bounds.w;
+      if (!near(node.bounds.w, expectedW) || !near(node.bounds.x, expectedX)) return undefined;
+      y += hAlloc[k]! + mainGap;
     }
-    if (!wraps) continue;
-    const height = Math.max(...line.map((c) => c.bounds.h));
-    if (line.some((c) => c.bounds.y < y - 1 || c.bounds.y + c.bounds.h > y + height + 1)) return undefined;
-    y += height + rowGap;
+  } else {
+    const lines: Array<[number, number]> = wraps
+      ? flexLines(items, bases, mainAvailable, mainGap)
+      : [[0, nodes.length]];
+    const lineHeights = lines.map(([a, b]) => Math.max(...nodes.slice(a, b).map((c) => c.bounds.h)));
+    const totalLineHeights = lineHeights.reduce((a, b) => a + b, 0) + Math.max(0, lines.length - 1) * rowGap;
+    const slack = crossAvailable - totalLineHeights;
+    const hasHeightConstraint = (n.preferredSize?.height ?? "auto") !== "auto" || (hMin !== "auto" && hMin !== "0px");
+    // Without declared align-content, a wrapping row must hug its content: a height constraint leaves unprovable slack.
+    if (wraps && hasHeightConstraint && (alignContent === undefined || slack <= 0.5)) return undefined;
+
+    const distribution = alignContent
+      ? flexAlignContent(alignContent, lineHeights, crossAvailable, rowGap)
+      : { offsets: lines.map(() => 0), lineCrossSizes: lineHeights };
+    let naturalY = n.bounds.y + insets[0];
+    for (const [lineIdx, [a, b]] of lines.entries()) {
+      const w = solveFlexRow(items.slice(a, b), bases.slice(a, b), mainAvailable, mainGap);
+      const line = nodes.slice(a, b);
+      let x = n.bounds.x + insets[3];
+      const lineY = alignContent ? n.bounds.y + insets[0] + distribution.offsets[lineIdx]! : naturalY;
+      const lineH = distribution.lineCrossSizes[lineIdx]!;
+      for (const [k, node] of line.entries()) {
+        if (!near(node.bounds.w, w[k]!) || !near(node.bounds.x, x)) return undefined;
+        x += w[k]! + mainGap;
+      }
+      if (!wraps) continue;
+      const lineTop = Math.min(...line.map((c) => c.bounds.y));
+      if (!near(lineTop, lineY)) return undefined;
+      if (line.some((c) => c.bounds.y < lineY - 1 || c.bounds.y + c.bounds.h > lineY + lineH + 1)) return undefined;
+      naturalY += lineH + rowGap;
+    }
   }
   const fidelityNote: FlexRow["fidelityNote"] = wraps
     ? {
@@ -296,28 +446,39 @@ function admit(n: LayoutNode): { row: FlexRow; candidate: boolean } | undefined 
         message:
           "wrapping flex allocation pinned to captured positions in fidelity mode; app mode reflows it with MarkswiftFlexRow",
       }
-    : c1
+    : isCol
       ? {
-          feature: "flex-grow",
+          feature: "flex-column",
           message:
-            "unequal flex allocation pinned to captured widths in fidelity mode; app mode reflows it with MarkswiftFlexRow",
+            "column flex allocation pinned to captured heights in fidelity mode; app mode reflows it with MarkswiftFlexRow",
         }
-      : c2
+      : c1
         ? {
-            feature: "flex-shrink",
+            feature: "flex-grow",
             message:
-              "shrunk flex items pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
+              "unequal flex allocation pinned to captured widths in fidelity mode; app mode reflows it with MarkswiftFlexRow",
           }
-        : c4
+        : c2
           ? {
-              feature: "flex-basis",
+              feature: "flex-shrink",
               message:
-                "percentage flex bases pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
+                "shrunk flex items pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
             }
-          : undefined;
-  // A row held open by its items' minimums overflows; the HStack would squeeze them instead.
+          : c4
+            ? {
+                feature: "flex-basis",
+                message:
+                  "percentage flex bases pinned to captured widths in fidelity mode; app mode reflows them with MarkswiftFlexRow",
+              }
+            : undefined;
   return {
-    row: { items, align, ...(wraps ? { rowGap } : {}), ...(fidelityNote ? { fidelityNote } : {}) },
+    row: {
+      items,
+      align,
+      ...(isCol ? { axis: "v" } : {}),
+      ...(wraps ? { rowGap, ...(alignContent ? { alignContent } : {}) } : {}),
+      ...(fidelityNote ? { fidelityNote } : {}),
+    },
     candidate: candidate || (overflowing && items.some((i) => i.min !== undefined)),
   };
 }

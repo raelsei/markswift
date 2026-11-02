@@ -141,26 +141,34 @@ export interface FlexItem {
   fraction?: number;
   /** `align-self` when it differs from the row's `align-items`. */
   align?: FlexRow["align"];
+  /** CSS `min-width: auto` (or `min-height: auto`): measured natively when shrinking. */
+  autoMin?: boolean;
 }
 /**
- * An admitted flex row (nowrap, or `flex-wrap: wrap` whose captured lines CSS line breaking reproduces); app mode
- * emits MarkswiftFlexRow, fidelity keeps the children's captured geometry.
+ * An admitted flex container (row, column, or `flex-wrap: wrap`); app mode emits MarkswiftFlexRow,
+ * fidelity keeps the children's captured geometry.
  */
 export interface FlexRow {
   items: FlexItem[];
   align: "start" | "center" | "end" | "stretch";
+  /** Layout axis: default "h" (row); "v" for column flex. */
+  axis?: Axis;
+  /** `align-content` line distribution for wrapping rows in a taller box. */
+  alignContent?: "start" | "center" | "end" | "between" | "around" | "evenly" | "stretch";
   /** `flex-wrap: wrap`: the gap between lines; absent on a nowrap row. */
   rowGap?: number;
   /** What fidelity still reports (the pinned allocation), absent when today's output reported nothing. */
-  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis" | "flex-wrap"; message: string };
+  fidelityNote?: { feature: "flex-grow" | "flex-shrink" | "flex-basis" | "flex-wrap" | "flex-column"; message: string };
 }
 
 export type Axis = "v" | "h";
 
-/** A width breakpoint: the next band starts at `px` (`inclusive`) or just above it (`max-width`, `width >`). */
+/** A breakpoint edge: width, height, or orientation condition. */
 export interface BandEdge {
   px: number;
   inclusive: boolean;
+  feature?: "width" | "height" | "orientation";
+  orientation?: "portrait" | "landscape";
 }
 
 /** Cross-axis alignment of children inside a stack. */
@@ -262,11 +270,21 @@ export interface KeyframeMotion {
   fill: "none" | "forwards" | "backwards" | "both";
   tracks: Partial<Record<MotionChannel, MotionTrack>>;
 }
+/** One scroll-position or view-progress driven animation. */
+/** An `animation-timeline: view()` animation: progress follows the view's scroll transition phase. */
+export interface ScrollMotion {
+  timeline: "view";
+  tracks: Partial<Record<MotionChannel, MotionTrack>>;
+}
 export interface Motion {
   /** Disjoint channels. */
   animations?: KeyframeMotion[];
   /** Under Reduce Motion: absent = same as `animations`; `[]` = the base look. */
   reduced?: KeyframeMotion[];
+  /** `animation-timeline: view()` animation. */
+  scroll?: ScrollMotion;
+  /** Its Reduce Motion variant (the author's, else without movement channels). */
+  reducedScroll?: ScrollMotion;
   /** `transform-origin` as fractions of the border box; absent = centre. */
   anchor?: [number, number];
   /** Static values of the driven channels (the settled computed look); the emitter drops their static modifiers. */
@@ -321,6 +339,8 @@ export interface TextDecoration {
   lines: DecorationLine[];
   color?: Color;
   style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
+  thickness?: number;
+  offset?: number;
 }
 
 /** CSS counter styles a list marker or `counter()` is regenerated in (`src/css/counter.ts`). */
@@ -374,7 +394,7 @@ export interface TextRun {
    * A generated image (`content: url()`, an inside `list-style-image`) inside the text: drawn at its captured CSS size
    * on the baseline, as CSS sizes and seats it. `text` is U+FFFC. `alt` from `content: … / "alt"`; none = decorative.
    */
-  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string };
+  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string; scale?: number };
   /**
    * The run is a counter the browser printed (`::marker` of a counter `list-style-type`, `content: counter()`):
    * `text === prefix + counterText(value, style) + suffix`. Only component extraction reads it (rows derive the
@@ -498,13 +518,30 @@ export interface Presentation {
 
 /** One entry of a native menu; `id` is the item's LayoutNode id. */
 export type MenuItem =
-  | { kind: "button"; id: string; label: string; action?: Action; disabled?: true; destructive?: true }
-  | { kind: "toggle"; id: string; label: string; checked: boolean; disabled?: true }
+  | {
+      kind: "button";
+      id: string;
+      label: string;
+      action?: Action;
+      disabled?: true;
+      destructive?: true;
+      icon?: SvgNode;
+      shortcut?: string;
+    }
+  | {
+      kind: "toggle";
+      id: string;
+      label: string;
+      checked: boolean;
+      disabled?: true;
+      icon?: SvgNode;
+      shortcut?: string;
+    }
   /** `selected`: index into `options`, −1 when none is checked. */
   | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
-  | { kind: "submenu"; id: string; label: string; items?: MenuItem[] };
+  | { kind: "submenu"; id: string; label: string; items?: MenuItem[]; icon?: SvgNode };
 /** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;
@@ -596,12 +633,14 @@ export interface SemBase extends SizeConstraints {
     hint?: string;
     /** `aria-selected`/`aria-checked`/`aria-pressed` = `true`, or an `aria-current` other than `false`. */
     selected?: true;
-    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio. */
+    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio, or `aria-pressed` (a toggle button). */
     toggle?: true;
     /** `role=radio` inside a `role=radiogroup`: the group element's id. Its radios share one selection. */
     group?: string;
     /** `aria-disabled="true"`. */
     disabled?: true;
+    /** The first `aria-keyshortcuts` alternative (`Control+S`). */
+    shortcut?: string;
   };
   /** `title`, inline-run titles and captured tooltip layers: `.help` + an accessibility hint; never drawn. */
   tooltip?: string;
@@ -652,6 +691,8 @@ export interface SemBase extends SizeConstraints {
   alternatives?: SemNode[];
   /** CSS `@keyframes` animations (app output plays them; fidelity renders the settled look). */
   motion?: Motion;
+  /** CSS `position: sticky; top: ...` pinning metadata. */
+  sticky?: { top: number };
 }
 
 export interface StackNode extends SemBase {
@@ -711,6 +752,8 @@ export interface TextNode extends SemBase {
   sourceTag?: string;
   runs: TextRun[];
   align: "leading" | "center" | "trailing";
+  /** CSS `text-align: justify`: app and fidelity modes justify lines via TextRenderer / UIKit paragraph style. */
+  justify?: true;
   lineLimit?: number;
   truncate?: boolean;
   /**
@@ -757,6 +800,8 @@ export interface ImageNode extends SemBase {
   contentMode: "fill" | "contain" | "cover" | "none";
   /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
   position?: [number, number];
+  /** Scale factor (e.g. 2 for @2x images); points = pixels / scale. Default 1. */
+  scale?: number;
   /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
   alt?: string;
   /** Computed font of the element; used when the alt text stands in for a source that cannot render. */
@@ -839,6 +884,14 @@ export interface ControlNode extends SemBase {
   level?: "optimum" | "suboptimal" | "poor";
   /** Picker choices in document order: the `<option>`s a menu lists (`hidden` ones are left out). */
   options?: PickerOption[];
+  /** `<select multiple>`: whether multiple options can be chosen. */
+  multiple?: boolean;
+  /** Initial multi-selection choices (`<select multiple>`): the labels of the selected options. */
+  values?: string[];
+  /** `<select size>`: visible row count. */
+  size?: number;
+  /** `<input list>`: suggestion values from the associated `<datalist>`. */
+  suggestions?: string[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
   /** `<details open>`: initial disclosure state. */

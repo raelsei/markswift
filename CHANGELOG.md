@@ -5,6 +5,40 @@ A LayoutDoc schema change is a major version.
 
 ## [Unreleased]
 
+### Added
+
+- Linux capture and standalone binaries: capture runs on Linux with Playwright's Chromium (`markswift install-browser
+  [--with-deps]`; Google Chrome stays the macOS default, with Playwright's Chromium as fallback; `--browser-channel`).
+  Releases attach standalone binaries for macOS and Linux (arm64, x64), `checksums.txt` and a Homebrew formula.
+- Fonts need no Python: WOFF/WOFF2 decoding and name-table rewriting run in-process (`wawoff2`).
+- A capture cache (convert and build; `--no-cache`, `--clear-cache`) keyed by the page, its local linked files, the
+  capture options, the browser and the capture code; one shared Chromium serves every conversion in a process, and
+  webfont bytes come from the browser's own responses.
+- Images: remote `http(s)` images are downloaded at conversion time (10 s and 25 MB per image; never for
+  `untrustedInput`), the 2x `srcset`/`image-set` candidate the browser chose ships as `@2x` and draws at point size,
+  and `--asset-catalog` writes an `Assets.xcassets` catalog instead of `Images/`.
+- `<select multiple>` (`List(selection:)` over a `Set<String>`) and `<input list>` with `<datalist>` suggestions.
+- Zero-width spaces and soft hyphens stay break opportunities; UIKit paragraphs justify `text-align: justify`;
+  overlines, wavy/dotted/dashed/double lines, `text-decoration-thickness` and `text-underline-offset` are drawn.
+- Overlays: swipe-to-dismiss for edge sheets and drawers that dismiss on an outside tap or Escape; `--native-sheet`
+  presents bottom drawers as a native `.sheet` with detents; menu items keep their leading SVG icon and their
+  shortcut (`.keyboardShortcut`, else trailing text). `aria-keyshortcuts` reaches buttons and links, and
+  `aria-pressed` buttons are toggles.
+- Flex: columns allocate grow/shrink in a definite height, wrapping rows distribute lines by `align-content`, and
+  wrapping text gets its automatic minimum from a native min-content probe. A wrapping container's single line is
+  placed by `align-content` too.
+- Extraction: rows differing by an optional child share one row type (an optional field, `if let`), rows with two
+  looks get a `variant` enum, and grid cells (`MarkswiftTracks`, `Grid`) are a `ForEach` over a data array the
+  screen's `init` takes. Regenerate views: row types and `init` parameters change where these patterns occur.
+- With `--breakpoints`, `min-height`/`max-height` and `orientation` media queries switch the view like width queries;
+  thresholds no device viewport reaches are reported. A top-sticky header inside a vertical scroll view pins natively.
+- Motion: `animation-timeline: view()` follows the view's scroll transition (approximated: CSS uses the cover range);
+  `markswift-motion-pressed` fixtures gate pressed transitions mid-flight, and overlay transitions play in the
+  reference's `@open` frames.
+- CI: the visual `all` scope runs as 4 shards merged before the gate (`pilot --shard i/n`, `quality --merge`), a Linux
+  job runs unit tests and a capture smoke test, and `test:ios-behaviour --benchmarks` reports body re-evaluations and
+  scroll hitches.
+
 ### Changed
 
 - iOS 26+ app output: plain multiline paragraphs in the default system font now wrap greedily like the browser,

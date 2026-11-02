@@ -2,8 +2,8 @@ import type { FontFace } from "../model/layout.ts";
 import type { DiagnosticLevel } from "../model/semantic.ts";
 import type { FaceMetrics } from "../model/fonts.ts";
 import type { FontPackage, PackagedFace } from "./types.ts";
-import { coversLatin, srcBytes, fontFileStem, WEIGHT_SUBFAMILY } from "./source.ts";
-import { type FontConverter, pythonFontConverter } from "./converter.ts";
+import { coversLatin, fontFileStem, srcBytes, WEIGHT_SUBFAMILY } from "./source.ts";
+import { type FontConverter, nativeFontConverter } from "./converter.ts";
 import { plistFragment } from "./registration.ts";
 
 /**
@@ -17,7 +17,7 @@ import { plistFragment } from "./registration.ts";
 export async function packageFonts(
   faces: FontFace[],
   sources: ReadonlyMap<string, Uint8Array>,
-  convert: FontConverter = pythonFontConverter,
+  convert: FontConverter = nativeFontConverter,
   signal?: AbortSignal,
 ): Promise<FontPackage> {
   const notes: FontPackage["notes"] = [];
@@ -42,7 +42,7 @@ export async function packageFonts(
     if (group.length > 1) {
       note(
         "approximated",
-        `font-family ${chosen.family} ships ${group.length} unicode-range subsets at weight ${chosen.weight.join("–")}; bundled the one covering Basic Latin, ${group.length - 1} dropped (iOS has no per-codepoint fallback inside a family)`,
+        `font-family ${chosen.family} declares ${group.length} unicode-range subsets (${chosen.style}, weight ${chosen.weight.join("–")}); bundled the Basic-Latin face`,
       );
     }
     if (!latin.length)
@@ -87,18 +87,11 @@ export async function packageFonts(
     const file = `${stem}.${sig === "OTTO" ? "otf" : "ttf"}`;
     const tool = await convert(bytes, family, subfamily, signal);
     if (typeof tool === "string") {
-      // No converter: nothing is shipped. WOFF/WOFF2 is the usual cause, so the note names the format.
-      const fmt = sig === "wOF2" ? "WOFF2" : sig === "wOFF" ? "WOFF" : "the source format";
-      note(
-        "unmapped",
-        `font-family ${chosen.family} not bundled (${tool}); text falls back to the system font` +
-          (sig === "wOF2" || sig === "wOFF"
-            ? ` — iOS cannot register ${fmt}; converting it needs python3 with fontTools + brotli`
-            : ""),
-      );
+      note("unmapped", `font-family ${chosen.family} not bundled (${tool}); text falls back to the system font`);
       continue;
     }
-    assets[`Fonts/${file}`] = tool.bytes ?? bytes; // No rewritten bytes: already an sfnt with a matching name, shipped verbatim.
+
+    assets[`Fonts/${file}`] = tool.bytes ?? bytes;
     const metrics: FaceMetrics = {
       upem: tool.upem,
       ascent: tool.ascent,
@@ -119,6 +112,7 @@ export async function packageFonts(
       renamed: tool.renamed,
     });
     claimed.set(stem.toLowerCase(), family);
+
     if (!chosen.loaded)
       note(
         "approximated",

@@ -19,7 +19,14 @@ import { affineModifier, filterModifier, clipPathModifier, maskModifier } from "
 import { note } from "./diagnostics.ts";
 import { insetShadowModifiers, outerShadowModifiers } from "./shadows.ts";
 import { FIELDS, menuButton, menuExpr } from "./controls.ts";
-import { animated, animationModifier, longestExit, stateAnimation, transitionModifiers } from "./motion.ts";
+import {
+  animated,
+  animationModifier,
+  longestExit,
+  scrollAnimationModifier,
+  stateAnimation,
+  transitionModifiers,
+} from "./motion.ts";
 export function modifiers(n: SemNode, ctx: EmitContext): string[] {
   const generated: string[] = [];
   if (n.kind === "image" && n.generatedFont && n.generatedFont.size > 0 && ctx.mode === "app") {
@@ -75,7 +82,7 @@ function decorated(n: SemNode, core: string[], ctx: EmitContext): string[] {
   const style = `.buttonStyle(${press ? `MarkswiftPressStyle(isPressed: $${press})` : ".plain"})`;
   return [
     ...(menu
-      ? menuButton(menu, label, style, ctx.control)
+      ? menuButton(menu, label, style, { ...ctx.control, colorCtx: ctx, ...ctx })
       : [
           ...(tap ? ["Button {", ...indent(tap, 1), "} label: {"] : [`Button(action: ${name}) {`]),
           ...indent(label, 1),
@@ -267,8 +274,10 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
       `.modifier(MarkswiftResponsiveTranslation(width: ${num(n.frame.w)}, height: ${num(n.frame.h)}, xWidth: ${num(x[0])}, xHeight: ${num(x[1])}, yWidth: ${num(y[0])}, yHeight: ${num(y[1])}))`,
     );
   }
-  if (animated(n, ctx.mode)) m.push(animationModifier(n.motion!));
-  else if ((n.motion?.animations || n.motion?.reduced) && ctx.mode === "fidelity")
+  if (animated(n, ctx.mode)) {
+    if (n.motion?.animations || n.motion?.reduced) m.push(animationModifier(n.motion!));
+    if (n.motion?.scroll) m.push(scrollAnimationModifier(n.motion!));
+  } else if ((n.motion?.animations || n.motion?.reduced || n.motion?.scroll) && ctx.mode === "fidelity")
     note(n, "approximated", "animation-name", "fidelity renders the settled look; app output animates");
   // CSS relative positioning moves paint, not layout: outside rotation/scale, which apply about the box's own origin.
   // A positioned box paints above its in-flow siblings, so an offset into a later sibling stays on top.
@@ -281,7 +290,8 @@ export function placementModifiers(n: SemNode, ctx: EmitContext): string[] {
     if (n.opens.longPress && state) m.push(`.simultaneousGesture(LongPressGesture().onEnded { _ in ${state} = true })`);
   }
   // A right-click menu: the trigger keeps its view; a long-press opens the native menu.
-  if (n.menu?.context) m.push(".contextMenu {", ...indent(menuExpr(n.menu.items, ctx.control), 1), "}");
+  if (n.menu?.context)
+    m.push(".contextMenu {", ...indent(menuExpr(n.menu.items, { ...ctx.control, colorCtx: ctx, ...ctx }), 1), "}");
   // Where the browser's horizontal margins put the finished box inside its parent's content
   // box. After the paint, so the fills span the box the margins left, not the whole parent.
   if (n.selfAlign) m.push(`.frame(maxWidth: .infinity, alignment: ${horizontalAlignment(n.selfAlign)})`);
@@ -372,6 +382,30 @@ function presentationModifiers(n: SemNode, ctx: EmitContext): string[] {
   return [...roots].flatMap(([p, overlays]) => {
     const state = ctx.control.openStates.get(p.id);
     if (!state) return [];
+    if (ctx.nativeSheet && p.placement.kind === "edge" && p.placement.edge === "bottom") {
+      const first = overlays.find((o) => o.node.hitTesting !== false);
+      if (!first) return [];
+      const view = ctx.renderNode(first.node);
+      const h = Math.round(first.node.frame.h * 10) / 10;
+      const isFull = h >= ctx.screen.size.h * 0.85;
+      const detents = isFull ? "[.large]" : `[.height(${num(h)}), .large]`;
+      const parentState = p.parentLayer && ctx.control.openStates.get(p.parentLayer);
+      const d = p.dismiss;
+      return [
+        `.sheet(isPresented: $${state}, onDismiss: ${ctx.control.dismissedOf.get(p.id) ?? "{}"}) {`,
+        ...indent(
+          [
+            ...view,
+            `.presentationDetents(${detents})`,
+            ".presentationDragIndicator(.visible)",
+            ...(!d.outside ? [".interactiveDismissDisabled(true)"] : []),
+          ],
+          1,
+        ),
+        "}",
+        ...(parentState ? [`.onChange(of: ${parentState}) { _, shown in if !shown { ${state} = false } }`] : []),
+      ];
+    }
     const first = overlays.find((o) => o.node.hitTesting !== false);
     const at = p.placement;
     const placed =

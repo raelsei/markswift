@@ -215,3 +215,42 @@ test("an animated node at opacity 0 is kept; static opacity becomes the base", (
   expect(n!.style.hidden).toBeUndefined();
   expect(n!.motion!.base).toEqual({ opacity: 0 });
 });
+test("scroll-driven animation: ViewTimeline maps opacity and transform tracks", () => {
+  const fade = anim(
+    "fade",
+    [kf(0, { opacity: "0", transform: "scale(0.8)" }), kf(1, { opacity: "1", transform: "scale(1)" })],
+    {
+      timeline: "ViewTimeline",
+    },
+  );
+  const { n } = infer(box("n", { animations: [fade] }));
+  expect(n!.motion?.scroll).toBeDefined();
+  expect(n!.motion!.scroll!.timeline).toBe("view");
+  expect(Object.keys(n!.motion!.scroll!.tracks)).toEqual(["opacity", "sx", "sy"]);
+  expect(n!.motion!.base).toEqual({ opacity: 1, sx: 1, sy: 1 });
+  // The phase mapping is an approximation of the cover range, and says so.
+  expect(diag(n!, "animation-timeline")[0]).toMatchObject({ level: "approximated" });
+  // Reduce Motion keeps the fade, not the movement.
+  expect(Object.keys(n!.motion!.reducedScroll!.tracks)).toEqual(["opacity"]);
+});
+
+test("scroll-driven animation: a scroll() timeline has no per-view counterpart and is reported", () => {
+  const slide = anim("slide", [kf(0, { transform: "translateY(50px)" }), kf(1, { transform: "translateY(0px)" })], {
+    timeline: "ScrollTimeline",
+  });
+  const { n } = infer(box("n", { animations: [slide] }));
+  expect(n!.motion?.scroll).toBeUndefined();
+  expect(diag(n!, "animation-timeline")[0]).toMatchObject({ level: "unmapped" });
+});
+
+test("scroll-driven animation: ScrollTimeline(self) reports unmapped", () => {
+  const grow = anim("grow", [kf(0, { transform: "scale(0.5)" }), kf(1, { transform: "scale(1)" })], {
+    timeline: "ScrollTimeline(self)",
+  });
+  const { n } = infer(box("n", { animations: [grow] }));
+  expect(n!.motion?.scroll).toBeUndefined();
+  expect(diag(n!, "animation-timeline")[0]).toMatchObject({
+    level: "unmapped",
+    message: "scroll-driven animation grow is not translated (rendered settled)",
+  });
+});

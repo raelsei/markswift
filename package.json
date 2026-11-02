@@ -12,6 +12,8 @@
   },
   "scripts": {
     "build": "rm -rf dist && bun build src/cli.ts src/index.ts src/compiler/index.ts --target=node --packages=external --splitting --outdir dist && tsc -p tsconfig.build.json",
+    "build:binary": "bun build --compile --external chromium-bidi --outfile dist/markswift src/cli.ts",
+    "build:binaries": "bun run tools/build-binaries.ts",
     "prepack": "bun run build",
     "typecheck": "tsc --noEmit -p .",
     "lint": "biome ci .",
@@ -31,6 +33,7 @@
     "htmlparser2": "^9.1.0",
     "playwright-core": "^1.63.0",
     "svgpath": "^2.6.0",
+    "wawoff2": "^2.0.1",
     "zod": "^4.1.0"
   },
   "devDependencies": {

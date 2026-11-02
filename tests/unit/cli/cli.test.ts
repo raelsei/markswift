@@ -159,6 +159,14 @@ test("CLI theme defaults to adaptive and passes the dark class through", async (
   expect(result.code).toBe(2);
   expect(result.stderr).toContain("--theme must be adaptive, light or dark");
 });
+test("--asset-catalog flag enables asset catalog emission in CLI options", () => {
+  const plain = parseArgs(["convert", "card.html", "--out", "generated"]);
+  if (plain.kind !== "convert") throw new Error("expected convert");
+  expect(plain.options.assetCatalog).toBeUndefined();
+  const withCatalog = parseArgs(["convert", "card.html", "--out", "generated", "--asset-catalog"]);
+  if (withCatalog.kind !== "convert") throw new Error("expected convert");
+  expect(withCatalog.options.assetCatalog).toBe(true);
+});
 
 test("--breakpoints takes auto or a comma list of WIDTH or WIDTHxHEIGHT", async () => {
   const parsed = (value: string) => {
@@ -207,4 +215,16 @@ test("--css url()s relative to the CSS file are inlined as data URLs", async () 
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("install-browser parses with and without --with-deps", () => {
+  expect(parseArgs(["install-browser"])).toEqual({ kind: "install-browser", withDeps: false });
+  expect(parseArgs(["install-browser", "--with-deps"])).toEqual({ kind: "install-browser", withDeps: true });
+  expect(parseArgs(["install-browser", "--help"])).toEqual({ kind: "help" });
+  expect(() => parseArgs(["install-browser", "--unknown"])).toThrow(UsageError);
+});
+
+test("--browser-channel option is passed to conversion options", () => {
+  const parsed = parseArgs(["convert", "card.html", "--out", "gen", "--browser-channel", "chromium"]);
+  expect(parsed.kind === "convert" && parsed.options.browserChannel).toBe("chromium");
 });

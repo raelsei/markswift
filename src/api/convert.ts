@@ -10,6 +10,7 @@ import type { HtmlSource } from "../input/types.ts";
 import type { FontFace, LayoutDoc } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
 import { type BandCapture, captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
+import { downloadRemoteImages } from "../images/index.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -45,6 +46,9 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     channel: options.browserChannel,
     restricted: options.untrustedInput,
     signal: deadline,
+    isolated: options.isolated,
+    // A `prepare` callback is code the cache key cannot hash.
+    cache: options.cache ?? !options.prepare,
   });
   // Closing Chrome rejects most of what is pending in it (goto, evaluate, fonts.ready, image decode), but
   // Playwright never settles a `newPage` in flight as its context closes: each capture also races the deadline.
@@ -56,7 +60,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
   timedOut.catch(() => {}); // the deadline may fire with no capture awaiting it
   try {
     prepared = await resolveSource(source);
-    const { html, url, label } = prepared;
+    const { html, url, label, baseDir } = prepared;
     await renderer.start();
     deadline.throwIfAborted(); // the deadline fired mid-launch, before there was a browser to close
     const name = options.name ?? "ConvertedView";
@@ -66,6 +70,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       url,
       html,
       label,
+      baseDir,
       root: options.root ?? DEFAULT_ROOT,
       theme,
       css: options.css,
@@ -75,7 +80,6 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       // Width media queries are reconstructed: the captures do not report them as losses.
       ...(bp ? { breakpoints: true } : {}),
     };
-    // The open-state pass runs on the primary captures only, never on the probe.
     const layered = { ...req, layers: true };
     const first = await captureThemes(renderer, layered, timedOut);
     const plan = bp ? planFor(bp, first.primary.layout.conditions, viewport) : undefined;
@@ -124,6 +128,11 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       variantProbes.push(probed && probed.size.w !== layout.size.w ? probed : undefined);
     }
     const captures = bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary]));
+    const imageWarnings = await downloadRemoteImages(
+      captures.map((c) => c.layout),
+      url,
+      { allowRemote: !options.untrustedInput, signal: deadline },
+    );
     const sources = new Map(captures.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
       captures.length > 1 ? unionFaces(captures.map((c) => c.layout.fonts)) : capture.layout.fonts,
@@ -140,6 +149,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       dark: dark?.layout,
       probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
       palette: options.palette,
+      nativeSheet: options.nativeSheet,
+      assetCatalog: options.assetCatalog,
       ...(bands.length > 1
         ? {
             variants: bands.slice(1).map((b) => b.primary.layout),
@@ -166,7 +177,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     return {
       ...compiled,
       assets,
-      warnings: [...pageWarnings, ...notes, ...fonts.notes, ...compiled.warnings],
+      warnings: [...pageWarnings, ...imageWarnings, ...notes, ...fonts.notes, ...compiled.warnings],
       layout: capture.layout,
       ...(dark ? { darkLayout: dark.layout } : {}),
       ...(plan

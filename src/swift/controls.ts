@@ -15,12 +15,13 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ControlNode, MenuItem, MenuSpec, PickerOption, SemNode } from "../model/semantic.ts";
+import type { ControlNode, MenuItem, MenuSpec, PickerOption, SemNode, SvgNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
 import { animationExpr } from "./motion.ts";
+import { svgExpr } from "./svg.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
 export interface ControlDeps extends ColorCtx {
@@ -50,6 +51,7 @@ export interface ControlDeps extends ColorCtx {
   closeOf?: ControlMembers["closeOf"];
   /** Native menu toggle/radio item → its `@State` member; built by `controlMembers`. */
   menuState?: ControlMembers["menuState"];
+  shapes?: Record<string, string>;
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
@@ -62,21 +64,25 @@ export interface ControlDeps extends ColorCtx {
  * carries every other measured colour: resolved for the screen's theme, or as a light/dark pair
  * (`Color.markswift(light:dark:)` from MarkswiftRuntime.swift) for an adaptive view. Measured from Chrome 152.
  */
-const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string }> = {
+const UA: Record<Theme | "adaptive", { accent: string; track: string; edge: string; listSelection: string }> = {
   light: {
     accent: "Color.markswift(0.0, 0.459, 1.0)",
     track: "Color.markswift(0.937, 0.937, 0.937)",
     edge: "Color.markswift(0.698, 0.698, 0.698)",
+    listSelection: "Color.markswift(0.808, 0.808, 0.808)",
   },
   dark: {
     accent: "Color.markswift(0.6, 0.784, 1.0)",
     track: "Color.markswift(0.231, 0.231, 0.231)",
     edge: "Color.markswift(0.522, 0.522, 0.522)",
+    listSelection: "Color.markswift(0.329, 0.329, 0.329)",
   },
   adaptive: {
     accent: "Color.markswift(light: Color.markswift(0.0, 0.459, 1.0), dark: Color.markswift(0.6, 0.784, 1.0))",
     track: "Color.markswift(light: Color.markswift(0.937, 0.937, 0.937), dark: Color.markswift(0.231, 0.231, 0.231))",
     edge: "Color.markswift(light: Color.markswift(0.698, 0.698, 0.698), dark: Color.markswift(0.522, 0.522, 0.522))",
+    listSelection:
+      "Color.markswift(light: Color.markswift(0.808, 0.808, 0.808), dark: Color.markswift(0.329, 0.329, 0.329))",
   },
 };
 /**
@@ -138,6 +144,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   // Fidelity draws the field's text, so nothing takes focus; the member still drives the box.
   const focus = deps.focusOf?.get(n);
   const focused = focus ? [`.focused($${focus})`] : [];
+  // `aria-keyshortcuts` (its first alternative): the shortcut a keyboard (iPad, Mac) triggers the control with.
+  const parsedShortcut = n.a11y?.shortcut ? parseShortcut(n.a11y.shortcut) : undefined;
+  const buttonMods = [buttonStyle, ...(parsedShortcut ? [keyboardShortcutModifier(parsedShortcut)] : [])];
   switch (n.control) {
     case "button": {
       const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
@@ -152,7 +161,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "} label: {",
           ...indent(pressable(n, deps), 1),
           "}",
-          buttonStyle,
+          ...buttonMods,
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
@@ -162,8 +171,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
       // changes the screen's state and acts.
       const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap ?? deps.closeOf?.get(n);
-      if (tap) return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
-      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
+      if (tap)
+        return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", ...buttonMods];
+      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ...buttonMods]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -175,7 +185,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
         return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), [
           "}",
-          buttonStyle,
+          ...buttonMods,
           // An in-app `<a>` emitted as a Button is still a link.
           ".accessibilityRemoveTraits(.isButton)",
           ".accessibilityAddTraits(.isLink)",
@@ -192,6 +202,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         ...focused,
         ...inputTraits(n),
         ...(n.action ? [`.onSubmit { ${deps.actionOf.get(n.action.key)}() }`] : []),
+        ...(n.suggestions?.length
+          ? [`.markswiftSuggestions([${n.suggestions.map(str).join(", ")}], text: ${binding})`]
+          : []),
       ];
     case "secureField":
       // The browser paints one bullet per character of the value.
@@ -280,6 +293,49 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       ];
     }
     case "picker": {
+      if (n.multiple) {
+        if (still) {
+          const selectedSet = new Set(n.values ?? []);
+          // An unfocused listbox paints its selected options in Chrome's inactive selection grey; the text keeps its colour.
+          const fill = UA[deps.theme].listSelection;
+          const rows = (n.options ?? []).map((opt) => {
+            const isSelected = selectedSet.has(opt.label);
+            return [
+              "HStack(spacing: 0) {",
+              `    Text(verbatim: ${str(opt.label)})`,
+              "        .lineLimit(1)",
+              "        .padding(.horizontal, 2)",
+              "    Spacer(minLength: 0)",
+              "}",
+              ".frame(maxWidth: .infinity, alignment: .leading)",
+              ...(isSelected ? [`.background(${fill})`] : []),
+            ];
+          });
+          return [
+            "VStack(alignment: .leading, spacing: 0) {",
+            ...indent(rows.flat(), 1),
+            "}",
+            ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)",
+          ];
+        }
+        const multiBinding = state ? `$${state}` : "Binding.constant(Set<String>())";
+        const rows = (n.options ?? []).map((opt) => {
+          const disabledAttr = opt.disabled ? ".disabled(true)" : "";
+          return `Text(verbatim: ${str(opt.label)}).tag(${str(opt.label)})${disabledAttr}`;
+        });
+        const a11yValue = state
+          ? `.accessibilityValue(${state}.isEmpty ? "No selection" : Array(${state}).sorted().joined(separator: ", "))`
+          : "";
+        return [
+          `List(selection: ${multiBinding}) {`,
+          ...indent(rows, 1),
+          "}",
+          ".listStyle(.plain)",
+          ".scrollContentBackground(.hidden)",
+          ".markswiftMultiSelect()",
+          ...(a11yValue ? [a11yValue] : []),
+        ];
+      }
       // Closed, a picker shows its selection and, unless `appearance: none` removed it, the
       // browser's arrow. App mode keeps that look as a Menu label (never the option list) over an
       // inline Picker, so the native menu and selection behaviour stay.
@@ -528,18 +584,134 @@ function pickerRows(options: PickerOption[]): string[] {
  * Toggles, a radio run as an inline Picker, separators, labelled sections.
  */
 // ponytail: a submenu is a disabled label (its items are not captured); opening nested triggers is the upgrade path.
-export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" | "menuState">): string[] {
+export interface ParsedShortcut {
+  keyExpr: string;
+  modifiers: Array<"command" | "shift" | "option" | "control">;
+}
+
+export function parseShortcut(text: string): ParsedShortcut | undefined {
+  let s = text.trim();
+  const modifiers = new Set<"command" | "shift" | "option" | "control">();
+
+  if (s.includes("⌘")) {
+    modifiers.add("command");
+    s = s.replace(/⌘/g, "");
+  }
+  if (s.includes("⇧")) {
+    modifiers.add("shift");
+    s = s.replace(/⇧/g, "");
+  }
+  if (s.includes("⌥")) {
+    modifiers.add("option");
+    s = s.replace(/⌥/g, "");
+  }
+  if (s.includes("⌃")) {
+    modifiers.add("control");
+    s = s.replace(/⌃/g, "");
+  }
+
+  const wordRegex = /\b(ctrl|control|cmd|command|meta|super|alt|option|shift)[\s+-]+/gi;
+  let match: RegExpExecArray | null;
+  while ((match = wordRegex.exec(s)) !== null) {
+    const word = match[1]!.toLowerCase();
+    if (word === "ctrl" || word === "control") modifiers.add("control");
+    else if (word === "cmd" || word === "command" || word === "meta" || word === "super") modifiers.add("command");
+    else if (word === "alt" || word === "option") modifiers.add("option");
+    else if (word === "shift") modifiers.add("shift");
+  }
+  s = s
+    .replace(wordRegex, "")
+    .replace(/^[\s+-]+|[\s+-]+$/g, "")
+    .trim();
+
+  const order = ["command", "shift", "option", "control"] as const;
+  const mods = order.filter((m) => modifiers.has(m));
+
+  if (/^(?:enter|return)$/i.test(s) || s === "⏎") return { keyExpr: ".return", modifiers: mods };
+  if (/^(?:esc|escape)$/i.test(s)) return { keyExpr: ".escape", modifiers: mods };
+  if (/^(?:delete|backspace)$/i.test(s) || s === "⌫") return { keyExpr: ".delete", modifiers: mods };
+  if (/^tab$/i.test(s) || s === "⇥") return { keyExpr: ".tab", modifiers: mods };
+  if (/^space$/i.test(s) || s === "␣") return { keyExpr: ".space", modifiers: mods };
+  if (/^up(?:arrow)?$/i.test(s) || s === "↑") return { keyExpr: ".upArrow", modifiers: mods };
+  if (/^down(?:arrow)?$/i.test(s) || s === "↓") return { keyExpr: ".downArrow", modifiers: mods };
+  if (/^left(?:arrow)?$/i.test(s) || s === "←") return { keyExpr: ".leftArrow", modifiers: mods };
+  if (/^right(?:arrow)?$/i.test(s) || s === "→") return { keyExpr: ".rightArrow", modifiers: mods };
+
+  if (s.length === 1) return { keyExpr: str(s.toLowerCase()), modifiers: mods };
+
+  return undefined;
+}
+
+function keyboardShortcutModifier(p: ParsedShortcut): string {
+  // Explicit modifiers: SwiftUI's default is `.command`, which the design did not ask for.
+  return `.keyboardShortcut(${p.keyExpr}, modifiers: [${p.modifiers.map((m) => `.${m}`).join(", ")}])`;
+}
+
+function menuIconExpr(icon: SvgNode, deps: MenuDeps): string[] {
+  const w = Math.max(1, Math.round((icon.frame.w || icon.viewBox[2] || 16) * 10) / 10);
+  const h = Math.max(1, Math.round((icon.frame.h || icon.viewBox[3] || 16) * 10) / 10);
+  const svgLines = svgExpr(icon, deps.shapes ?? {}, deps.colorCtx ?? { mode: deps.mode ?? "app" });
+  return [`Image.markswiftRendered(width: ${num(w)}, height: ${num(h)}) {`, ...indent(svgLines, 1), "}"];
+}
+
+export type MenuDeps = Pick<ControlDeps, "actionOf" | "menuState"> & {
+  shapes?: Record<string, string>;
+  colorCtx?: ColorCtx;
+  mode?: EmitMode;
+};
+export function menuExpr(items: MenuItem[], deps: MenuDeps): string[] {
   return items.flatMap((i): string[] => {
-    const label = "label" in i ? [`    Text(verbatim: ${str(i.label)})`] : [];
+    const shortcut = "shortcut" in i ? i.shortcut : undefined;
+    const parsed = shortcut ? parseShortcut(shortcut) : undefined;
+    const shortcutMod = parsed ? [keyboardShortcutModifier(parsed)] : [];
+
+    let titleView: string[];
+    if ("label" in i) {
+      if (shortcut && !parsed) {
+        titleView = [
+          "HStack {",
+          `    Text(verbatim: ${str(i.label)})`,
+          "    Spacer()",
+          `    Text(verbatim: ${str(shortcut)})`,
+          "}",
+        ];
+      } else {
+        titleView = [`Text(verbatim: ${str(i.label)})`];
+      }
+    } else {
+      titleView = [];
+    }
+
+    const icon = "icon" in i ? i.icon : undefined;
+    let label: string[];
+    if (icon && "label" in i) {
+      const iconView = menuIconExpr(icon, deps);
+      label = ["Label {", ...indent(titleView, 1), "} icon: {", ...indent(iconView, 1), "}"];
+    } else {
+      label = titleView;
+    }
+
     const off = "disabled" in i && i.disabled ? [".disabled(true)"] : [];
     const state = "id" in i ? deps.menuState?.get(i.id) : undefined;
     switch (i.kind) {
       case "button": {
         const action = (i.action && deps.actionOf.get(i.action.key)) ?? "{}";
-        return [`Button(${i.destructive ? "role: .destructive, " : ""}action: ${action}) {`, ...label, "}", ...off];
+        return [
+          `Button(${i.destructive ? "role: .destructive, " : ""}action: ${action}) {`,
+          ...indent(label, 1),
+          "}",
+          ...shortcutMod,
+          ...off,
+        ];
       }
       case "toggle":
-        return [`Toggle(isOn: ${state ? `$${state}` : ".constant(false)"}) {`, ...label, "}", ...off];
+        return [
+          `Toggle(isOn: ${state ? `$${state}` : ".constant(false)"}) {`,
+          ...indent(label, 1),
+          "}",
+          ...shortcutMod,
+          ...off,
+        ];
       case "radio":
         return [
           `Picker(selection: ${state ? `$${state}` : '.constant("")'}) {`,
@@ -552,13 +724,13 @@ export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" |
       case "divider":
         return ["Divider()"];
       case "section":
-        return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...label, "}"];
+        return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...indent(label, 1), "}"];
       default: // submenu
         return [
           "Menu {",
           ...indent(menuExpr(i.items ?? [], deps), 1),
           "} label: {",
-          ...label,
+          ...indent(label, 1),
           "}",
           ...(i.items?.length ? [] : [".disabled(true)"]),
         ];
@@ -567,12 +739,7 @@ export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" |
 }
 
 /** A menu trigger: its Button's label and style around a native `Menu` of the captured items. */
-export function menuButton(
-  menu: MenuSpec,
-  label: string[],
-  buttonStyle: string,
-  deps: Pick<ControlDeps, "actionOf" | "menuState">,
-): string[] {
+export function menuButton(menu: MenuSpec, label: string[], buttonStyle: string, deps: MenuDeps): string[] {
   return [
     "Menu {",
     ...indent(menuExpr(menu.items, deps), 1),

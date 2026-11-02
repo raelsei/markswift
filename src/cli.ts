@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { EditedFilesError } from "./cli/manifest.ts";
-import { runBuild, runConversion } from "./cli/run.ts";
+import { runBuild, runConversion, runInstallBrowser } from "./cli/run.ts";
+import { stopSharedBrowser } from "./browser/capture.ts";
 import { VERSION } from "./model/version.ts";
-
 async function main(): Promise<number> {
   try {
     const command = parseArgs(process.argv.slice(2));
@@ -16,6 +16,7 @@ async function main(): Promise<number> {
       return 0;
     }
     if (command.kind === "build") await runBuild(command);
+    else if (command.kind === "install-browser") await runInstallBrowser(command);
     else await runConversion(command);
     return 0;
   } catch (error) {
@@ -30,6 +31,8 @@ async function main(): Promise<number> {
     }
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
+  } finally {
+    await stopSharedBrowser();
   }
 }
 

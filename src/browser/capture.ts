@@ -5,9 +5,17 @@
  * Knows nothing about where the page came from: the source's CaptureRequest
  * names the URL, root selector and theme; its NodeIdentity names the nodes.
  */
+import { dirname, join } from "node:path";
 import { settle, withFrozenProgress } from "./settle.ts";
 import { collectFontFaces, readFontBytes, attachResolvedFonts } from "./fonts.ts";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright-core";
+import {
+  computeCacheKey,
+  getBrowserVersion,
+  hashLinkedResources,
+  readCaptureCache,
+  writeCaptureCache,
+} from "./cache.ts";
 import { LAYOUT_DOC_VERSION, STYLE_WHITELIST, type Layer, type LayoutDoc } from "../model/layout.ts";
 import {
   snapshotToTree,
@@ -24,9 +32,11 @@ import { readPreferredSizes, relativePositions } from "./sizing.ts";
 import { readElementAnimations, readMotion, recordAnimations } from "./motion.ts";
 import { applyConditionMarks, readConditionalRules } from "./conditions.ts";
 import type { NodeIdentity, CaptureRequest, Trigger } from "../input/types.ts";
+import { htmlIdentity } from "../input/identity.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 import { inlineCapturedImages } from "./images.ts";
-import { captureStates } from "./states.ts";
+import { captureStates, forceStates } from "./states.ts";
+import { PRESSABLE_SELECTOR } from "../model/interactive.ts";
 import {
   LAYER_MARK,
   activate,
@@ -42,6 +52,8 @@ import {
 
 /** Stamped on the resolved `spec.root` element so the snapshot tree can be joined back to it. */
 const ROOT_MARK = "data-markswift-root-capture";
+/** A resource the capture cache cannot hash: a remote stylesheet, image, font or import. */
+const REMOTE_RESOURCE = /(?:\b(?:href|src|srcset)\s*=\s*["']?|url\(\s*["']?|@import\s+["'])(?:https?:)?\/\//i;
 /** Stamped (after snapshot A) on every element whose `transform`/`translate`/`rotate`/`scale` is not `none`. */
 const TRANSFORMED_MARK = "data-markswift-transformed";
 /** Stamped (after snapshot A) on every `position: relative` element: snapshot B and the screenshot drop its offset. */
@@ -137,13 +149,128 @@ export interface CaptureOptions {
   signal?: AbortSignal;
   /** Deadline for each capture, including page creation and CDP calls. Defaults to 120 seconds. */
   timeoutMs?: number;
+  /** Use an isolated browser process instead of the shared browser. Default: false. */
+  isolated?: boolean;
+  /** Cache captures on disk under the user cache directory (`convert`/`build` turn it on). Default: false. */
+  cache?: boolean;
+}
+
+interface SharedBrowserEntry {
+  promise?: Promise<Browser>;
+  browser?: Browser;
+  refCount: number;
+  idleTimer?: ReturnType<typeof setTimeout>;
+}
+const sharedBrowsers = new Map<string, SharedBrowserEntry>();
+
+/**
+ * Headless Chromium for a channel (default: Chrome on macOS, which needs no download; Playwright's Chromium
+ * elsewhere), falling back to Playwright's Chromium when the default Chrome is not installed.
+ */
+async function launchBrowser(opts: { channel?: string; restricted?: boolean }): Promise<Browser> {
+  // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
+  // that slips past `page.route` cannot reach the network. The document itself is fulfilled by the route.
+  const args = opts.restricted ? ["--host-resolver-rules=MAP * ~NOTFOUND"] : [];
+  const channel = opts.channel ?? (process.platform === "darwin" ? "chrome" : undefined);
+  try {
+    return await chromium.launch({ headless: true, ...(channel ? { channel } : {}), args });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!opts.channel && channel === "chrome") {
+      try {
+        return await chromium.launch({ headless: true, args });
+      } catch (fallback) {
+        const detail = fallback instanceof Error ? fallback.message : String(fallback);
+        throw new Error(
+          `Neither Google Chrome nor Playwright Chromium was found. Run "markswift install-browser" to download Chromium.\n${detail}`,
+        );
+      }
+    }
+    if (msg.includes("Executable doesn't exist") || msg.includes("Chromium distribution"))
+      throw new Error(`Chromium browser not found. Run "markswift install-browser" to download Chromium.\n${msg}`);
+    throw error;
+  }
+}
+
+/** Acquire a shared headless Chromium instance for the given channel and restrictions. */
+export async function getSharedBrowser(opts: { channel?: string; restricted?: boolean }): Promise<Browser> {
+  const key = `${opts.channel ?? "chrome"}:${opts.restricted ? "restricted" : "normal"}`;
+  let entry = sharedBrowsers.get(key);
+  if (!entry) {
+    entry = { refCount: 0 };
+    sharedBrowsers.set(key, entry);
+  }
+  entry.refCount++;
+  if (entry.idleTimer !== undefined) {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = undefined;
+  }
+  if (entry.browser && entry.browser.isConnected()) {
+    return entry.browser;
+  }
+  if (!entry.promise) {
+    entry.promise = launchBrowser(opts)
+      .then((browser) => {
+        browser.on("disconnected", () => {
+          if (sharedBrowsers.get(key)?.browser === browser) sharedBrowsers.delete(key);
+        });
+        entry!.browser = browser;
+        entry!.promise = undefined;
+        return browser;
+      })
+      .catch((err) => {
+        sharedBrowsers.delete(key);
+        throw err;
+      });
+  }
+  return entry.promise ?? entry.browser!;
+}
+
+function releaseSharedBrowser(key: string): void {
+  const entry = sharedBrowsers.get(key);
+  if (!entry) return;
+  entry.refCount = Math.max(0, entry.refCount - 1);
+  if (entry.refCount === 0) {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = setTimeout(() => {
+      void stopSharedBrowser(key);
+    }, 200);
+    entry.idleTimer.unref?.();
+  }
+}
+
+/** Closes running shared browsers (all, or specific browser key). */
+export async function stopSharedBrowser(key?: string): Promise<void> {
+  if (key !== undefined) {
+    const entry = sharedBrowsers.get(key);
+    sharedBrowsers.delete(key);
+    if (entry) {
+      clearTimeout(entry.idleTimer);
+      const b = entry.browser ?? (await entry.promise?.catch(() => undefined));
+      await b?.close().catch(() => {});
+    }
+    return;
+  }
+  const entries = [...sharedBrowsers.values()];
+  sharedBrowsers.clear();
+  await Promise.allSettled(
+    entries.map(async (e) => {
+      clearTimeout(e.idleTimer);
+      const b = e.browser ?? (await e.promise?.catch(() => undefined));
+      await b?.close().catch(() => {});
+    }),
+  );
 }
 
 export class BrowserCapture {
-  private browser!: Browser;
-  private context!: BrowserContext;
+  private browser?: Browser;
+  private context?: BrowserContext;
+  /** The in-flight context setup: concurrent captures share it instead of each acquiring a browser. */
+  private contextReady?: Promise<BrowserContext>;
   private stopping?: Promise<void>;
   private readonly opts: CaptureOptions;
+  private ownsBrowser = false;
+  private started = false;
 
   constructor(opts: CaptureOptions) {
     if (opts.timeoutMs !== undefined && (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs <= 0))
@@ -151,34 +278,82 @@ export class BrowserCapture {
     this.opts = opts;
   }
 
-  async start(): Promise<void> {
-    // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
-    // that slips past `page.route` cannot reach the network. The document itself is fulfilled by the route.
-    const args = this.opts.restricted ? ["--host-resolver-rules=MAP * ~NOTFOUND"] : [];
-    this.browser = await chromium.launch({ headless: true, channel: this.opts.channel ?? "chrome", args });
-    this.context = await this.browser.newContext({
-      viewport: this.opts.viewport,
-      deviceScaleFactor: this.opts.dpr,
-      reducedMotion: "reduce",
-    });
+  private get sharedKey(): string {
+    return `${this.opts.channel ?? "chrome"}:${this.opts.restricted ? "restricted" : "normal"}`;
   }
 
-  /** Version of the launched browser (e.g. `153.0.8010.12`). */
+  async start(): Promise<void> {
+    this.started = true;
+    if (!this.opts.cache || process.env.MARKSWIFT_NO_CACHE === "1") {
+      await this.ensureContext();
+    }
+  }
+
+  private ensureContext(): Promise<BrowserContext> {
+    // A shared browser another conversion abandoned (a stuck page) is gone: acquire a fresh one.
+    if (this.context && !this.browser?.isConnected()) this.dropBrowser();
+    this.contextReady ??= (async () => {
+      this.opts.signal?.throwIfAborted();
+      if (this.opts.isolated) {
+        this.browser = await launchBrowser(this.opts);
+        this.ownsBrowser = true;
+      } else {
+        this.browser = await getSharedBrowser({ channel: this.opts.channel, restricted: this.opts.restricted });
+        this.ownsBrowser = false;
+      }
+      this.context = await this.browser.newContext({
+        viewport: this.opts.viewport,
+        deviceScaleFactor: this.opts.dpr,
+        reducedMotion: "reduce",
+      });
+      return this.context;
+    })().catch((error) => {
+      this.contextReady = undefined;
+      throw error;
+    });
+    return this.contextReady;
+  }
+
+  /** Version of the browser (e.g. `153.0.8010.12`). */
   get version(): string {
-    return this.browser.version();
+    return this.browser?.version() ?? getBrowserVersion(this.opts.channel) ?? "unknown";
+  }
+
+  /** Forgets this capture's browser and context, releasing its share of a shared browser. */
+  private dropBrowser(): void {
+    if (this.browser && !this.ownsBrowser) releaseSharedBrowser(this.sharedKey);
+    this.browser = undefined;
+    this.context = undefined;
+    this.contextReady = undefined;
+  }
+
+  /**
+   * A stuck `newPage` (no deadline settles it) leaves the browser unusable: close it. A shared one only while it is
+   * still the shared browser; other holders reconnect on their next capture.
+   */
+  private async abandonBrowser(): Promise<void> {
+    const b = this.browser;
+    if (!b) return;
+    const shared = !this.ownsBrowser;
+    this.dropBrowser();
+    if (shared) {
+      if (sharedBrowsers.get(this.sharedKey)?.browser === b) await stopSharedBrowser(this.sharedKey);
+    } else await b.close().catch(() => {});
   }
 
   /**
    * Safe to call more than once and concurrently (the conversion deadline and its cleanup both
-   * call it): one close runs. Before `start` has a browser it does nothing, so a later call still closes it.
+   * call it): one close runs. Closes this capture's context and its own browser; a shared browser stays for the
+   * other conversions and closes once none holds it.
    */
   stop(): Promise<void> {
-    if (!this.browser) return Promise.resolve();
+    if (!this.started && !this.context && !this.browser) return Promise.resolve();
     this.stopping ??= (async () => {
       try {
-        await this.context?.close();
+        await this.context?.close().catch(() => {});
       } finally {
-        await this.browser.close();
+        if (this.ownsBrowser) await this.browser?.close().catch(() => {});
+        this.dropBrowser();
       }
     })();
     return this.stopping;
@@ -189,6 +364,48 @@ export class BrowserCapture {
    * LayoutDoc.source label. The page's `prefers-color-scheme` follows `spec.theme`.
    */
   async capture(spec: CaptureRequest, identity: NodeIdentity, source: string): Promise<Capture> {
+    // Cached only when the capture is a pure function of hashed inputs: a document this process serves, or pasted
+    // markup with no base (`markswift.invalid`; a remote `baseURL` resolves relative links remotely), its local resources, no remote resource, the standard node
+    // identity, a known browser.
+    const served = new URL(spec.url);
+    const browserVersion =
+      this.opts.cache === true &&
+      process.env.MARKSWIFT_NO_CACHE !== "1" &&
+      spec.html !== undefined &&
+      identity === htmlIdentity &&
+      /^(?:127\.0\.0\.1|localhost|\[::1\]|markswift\.invalid)$/.test(served.hostname) &&
+      !REMOTE_RESOURCE.test(`${spec.html}\n${spec.css ?? ""}`)
+        ? getBrowserVersion(this.opts.channel)
+        : undefined;
+    let cacheKey: string | undefined;
+    if (browserVersion !== undefined && spec.html !== undefined) {
+      // Relative links resolve from the document's directory under the served root.
+      const docDir = spec.baseDir && join(spec.baseDir, dirname(decodeURIComponent(served.pathname)));
+      const linked = await hashLinkedResources(spec.html, spec.baseDir, spec.css, docDir);
+      if (linked !== undefined)
+        cacheKey = computeCacheKey({
+          html: spec.html,
+          linkedResources: linked,
+          viewport: spec.viewport ?? this.opts.viewport,
+          theme: spec.theme,
+          browserVersion,
+          source,
+          screen: spec.screen,
+          dpr: this.opts.dpr,
+          restricted: !!this.opts.restricted,
+          root: spec.root,
+          waitFor: spec.waitFor,
+          css: spec.css,
+          darkClass: spec.darkClass,
+          open: spec.open ? `${spec.open.id}:${spec.open.path}` : undefined,
+          probeDismiss: spec.probeDismiss,
+          screenshot: spec.screenshot,
+          breakpoints: spec.breakpoints,
+        });
+      const cached = cacheKey && (await readCaptureCache(cacheKey));
+      if (cached) return cached;
+    }
+
     const timeoutMs = this.opts.timeoutMs ?? 120_000;
     const viewport = spec.viewport ?? this.opts.viewport;
     const key = `${source}/${spec.screen}/${viewport.width}/${spec.theme}${spec.open ? `/open:${spec.open.id}` : ""}`;
@@ -201,11 +418,11 @@ export class BrowserCapture {
         expired = true;
         reject(new Error(`capture ${key} timed out after ${timeoutMs}ms during ${phase}`));
         // Closing a page releases pending CDP work. A stuck newPage needs the browser closed.
-        void (page ? page.close() : this.stop()).catch(() => {});
+        void (page ? page.close() : this.abandonBrowser()).catch(() => {});
       }, timeoutMs);
     });
     try {
-      return await Promise.race([
+      const result = await Promise.race([
         this.capturePage(
           spec,
           identity,
@@ -223,6 +440,10 @@ export class BrowserCapture {
         ),
         timedOut,
       ]);
+      if (cacheKey) {
+        await writeCaptureCache(cacheKey, result).catch(() => {});
+      }
+      return result;
     } finally {
       clearTimeout(timer);
     }
@@ -235,15 +456,17 @@ export class BrowserCapture {
     progress: (phase: string) => void,
     openedPage: (page: Page) => void,
   ): Promise<Capture> {
-    const page = await this.context.newPage();
+    const context = await this.ensureContext();
+    const page = await context.newPage();
     openedPage(page);
     const viewport = spec.viewport ?? this.opts.viewport;
     const errors: string[] = [];
     const images = new Map<string, string>();
     const imageReads: Promise<void>[] = [];
+    const fontResponses = new Map<string, Uint8Array>();
+    const fontReads: Promise<void>[] = [];
     const sheets = new Map<string, string>();
     const sheetReads: Promise<void>[] = [];
-    // Chromium probes /favicon.ico on its own; a static directory rarely has one.
     const favicon = (url: string) => url.endsWith("/favicon.ico");
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => {
@@ -268,6 +491,26 @@ export class BrowserCapture {
             .catch(() => {
               errors.push(`Could not capture image bytes: ${r.url()}`);
             }),
+        );
+      }
+      if (
+        r.ok() &&
+        (r.request().resourceType() === "font" ||
+          (mime !== undefined &&
+            (mime.startsWith("font/") ||
+              mime.includes("font") ||
+              mime.includes("woff") ||
+              mime.includes("truetype") ||
+              mime.includes("opentype"))))
+      ) {
+        fontReads.push(
+          r
+            .body()
+            .then((bytes) => {
+              const u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+              for (const u of requestURLs(r)) fontResponses.set(u, u8);
+            })
+            .catch(() => {}),
         );
       }
       if (r.ok() && r.request().resourceType() === "stylesheet") {
@@ -296,7 +539,7 @@ export class BrowserCapture {
       progress("settle");
       await settle(page);
       progress("newCDPSession / stylesheets");
-      const cdp = await this.context.newCDPSession(page);
+      const cdp = await context.newCDPSession(page);
       await Promise.all(sheetReads);
       progress("collectFontFaces");
       const { faces: fonts, unreadable } = await collectFontFaces(page, Object.fromEntries(sheets));
@@ -313,7 +556,8 @@ export class BrowserCapture {
           `Stylesheet ${label} contains uncompiled Tailwind directives (@tailwind / @import "tailwindcss" / @apply); compile it first (for example with the Tailwind CLI) — the capture saw unstyled markup.`,
         );
       progress("readFontBytes");
-      const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal);
+      await Promise.all(fontReads);
+      const fontFiles = await readFontBytes(fonts, !this.opts.restricted, this.opts.signal, fontResponses);
       const canvas = await page.evaluate(
         ({ sel, mark }) => {
           const el = document.querySelector(sel);
@@ -645,14 +889,30 @@ export class BrowserCapture {
    */
   async captureFrame(
     spec: CaptureRequest,
-    frame: { t: number; reduced: boolean },
+    frame: { t: number; reduced: boolean; pressed?: boolean },
     clip: { x: number; y: number; width: number; height: number },
   ): Promise<Uint8Array> {
-    const page = await this.context.newPage();
+    const context = await this.ensureContext();
+    const page = await context.newPage();
     try {
       if (!frame.reduced) await page.emulateMedia({ reducedMotion: "no-preference" });
       await this.load(page, spec);
-      await noTransitions(page);
+      if (frame.pressed) {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send("DOM.enable");
+        await cdp.send("CSS.enable");
+        const { root: doc } = await cdp.send("DOM.getDocument", { depth: 0 });
+        const { nodeIds } = await cdp.send("DOM.querySelectorAll", {
+          nodeId: doc.nodeId,
+          selector: `${spec.root} :is(${PRESSABLE_SELECTOR}), ${spec.root}:is(${PRESSABLE_SELECTOR})`,
+        });
+        if (nodeIds.length) {
+          await forceStates(cdp, nodeIds, ["hover", "active"]);
+        }
+        await cdp.detach();
+      } else {
+        await noTransitions(page);
+      }
       if (!(await settle(page, { at: frame.t })))
         throw new Error(`${spec.screen}@t:${frame.t}: no animation to pause; the frame would be the settled look`);
       await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
@@ -661,7 +921,7 @@ export class BrowserCapture {
       });
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await withFrozenProgress(page, await this.context.newCDPSession(page), (timeout) =>
+      return await withFrozenProgress(page, await context.newCDPSession(page), (timeout) =>
         page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png", timeout }),
       );
     } finally {
@@ -680,17 +940,20 @@ export class BrowserCapture {
     t: number,
     clip: { x: number; y: number; width: number; height: number },
   ): Promise<Uint8Array> {
-    const page = await this.context.newPage();
+    const context = await this.ensureContext();
+    const page = await context.newPage();
     try {
       await page.emulateMedia({ reducedMotion: "no-preference" });
       await this.load(page, spec);
-      await noTransitions(page);
+      const sheet = await noTransitions(page);
       await settle(page);
+      await sheet.evaluate((s) => (s as HTMLStyleElement).remove());
       await page.evaluate(({ sel, mark }) => document.querySelector(sel)?.setAttribute(mark, "1"), {
         sel: spec.root,
         mark: ROOT_MARK,
       });
-      const cdp = await this.context.newCDPSession(page);
+      await recordAnimations(page);
+      const cdp = await context.newCDPSession(page);
       const opening = await openLayer(page, cdp, `[${ROOT_MARK}="1"]`, ROOT_MARK, trigger);
       await cdp.detach();
       if (!opening?.roots.length) throw new Error(`trigger ${trigger.id} opened nothing`);
@@ -701,7 +964,7 @@ export class BrowserCapture {
         );
       await markTransformed(page);
       await cancelAncestorTransforms(page);
-      return await withFrozenProgress(page, await this.context.newCDPSession(page), (timeout) =>
+      return await withFrozenProgress(page, await context.newCDPSession(page), (timeout) =>
         page.screenshot({ clip, scale: "device", animations: "allow", caret: "hide", type: "png", timeout }),
       );
     } finally {

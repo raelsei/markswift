@@ -19,6 +19,7 @@ import { svgFromDataUrl } from "./svg/markup.ts";
 import { generatedAlt, PSEUDO } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
+import { determineScale } from "../images/index.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
@@ -67,6 +68,16 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   applyTooltips(root, doc);
   dropInvisible(root);
   pruneHitTesting(root);
+  const checkSticky = (node: SemNode, inScroll = false): void => {
+    const scrolls = inScroll || ((node.kind === "stack" || node.kind === "grid") && node.scroll === "v");
+    if (node.sticky && !inScroll) {
+      addDiagnostic(node.diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
+    }
+    if (node.kind === "stack" || node.kind === "grid") {
+      for (const c of node.children) checkSticky(c, scrolls);
+    }
+  };
+  checkSticky(root);
   // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
   const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
   const colorScheme =
@@ -153,6 +164,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     const svg = svgFromDataUrl(src);
     // A pseudo's generated image: `content: url(…) / "alt"`, else decorative.
     const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
+    const scale = determineScale(n, src);
     const node = withBase(n, ctx, {
       kind: "image",
       ...(ctx.parent && PSEUDO[ctx.parent.tag]
@@ -161,6 +173,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
+      ...(scale > 1 ? { scale } : {}),
       ...(alt
         ? {
             alt,
@@ -192,6 +205,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       collectRuns(c, runs);
       continue;
     }
+    if (c.tag === "datalist") continue;
     if (c.styles["position"] === "fixed" && n !== ctx.root) ctx.fixed.push(c);
     else if (outOfFlow(c)) abs.push(c);
     else flow.push(c);
@@ -377,11 +391,9 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
-    // Admission excludes reverse rows and `order`, so the x-sorted children are the items in order.
-    if (axis === "h") {
-      const flex = admitFlexRow(n);
-      if (flex && flex.items.length === stack.children.length) stack.flex = flex;
-    }
+    // Admission excludes reverse rows and `order`, so the sorted children are the items in order.
+    const flex = admitFlexRow(n);
+    if (flex && flex.items.length === stack.children.length && (flex.axis ?? "h") === axis) stack.flex = flex;
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
       if (g > 0) stack.minGap = round2(g);

@@ -252,20 +252,48 @@ enum MarkswiftAssets {
 extension Image {
     /// A raster image shipped as `Images/<file>`; decoded once per process, then cached. Falls back to a
     /// system placeholder instead of trapping when the file is missing from the bundle.
-    nonisolated static func markswiftAsset(_ file: String) -> Image {
+    nonisolated static func markswiftAsset(_ file: String, scale: CGFloat = 1) -> Image {
 #if canImport(UIKit)
-        if let cached = MarkswiftAssets.cache.object(forKey: file as NSString) { return Image(uiImage: cached) }
+        let cacheKey = (scale == 1 ? file : "\(file)@\(scale)x") as NSString
+        if let cached = MarkswiftAssets.cache.object(forKey: cacheKey) { return Image(uiImage: cached) }
         let bundle = MarkswiftAssets.bundle
-        guard let url = bundle.url(forResource: "Images/" + file, withExtension: nil) ?? bundle.url(forResource: file, withExtension: nil),
-              let image = UIImage(contentsOfFile: url.path) else { return Image(systemName: "photo") }
-        MarkswiftAssets.cache.setObject(image, forKey: file as NSString)
+        // An asset catalog names the imageset without the `@2x` of the loose file; it picks the scale itself.
+        let nameWithoutExt = (file as NSString).deletingPathExtension
+            .replacingOccurrences(of: #"@[1-3]x$"#, with: "", options: .regularExpression)
+        let image: UIImage? = {
+            if let img = UIImage(named: nameWithoutExt, in: bundle, with: nil) ?? UIImage(named: file, in: bundle, with: nil) {
+                return img
+            }
+            guard let url = bundle.url(forResource: "Images/" + file, withExtension: nil) ?? bundle.url(forResource: file, withExtension: nil) else {
+                return nil
+            }
+            if scale != 1, let data = try? Data(contentsOf: url), let img = UIImage(data: data, scale: scale) {
+                return img
+            }
+            return UIImage(contentsOfFile: url.path)
+        }()
+        guard let image else { return Image(systemName: "photo") }
+        MarkswiftAssets.cache.setObject(image, forKey: cacheKey)
         return Image(uiImage: image)
 #else
-        if let cached = MarkswiftAssets.cache.object(forKey: file as NSString) { return Image(nsImage: cached) }
+        let cacheKey = (scale == 1 ? file : "\(file)@\(scale)x") as NSString
+        if let cached = MarkswiftAssets.cache.object(forKey: cacheKey) { return Image(nsImage: cached) }
         let bundle = MarkswiftAssets.bundle
-        guard let url = bundle.url(forResource: "Images/" + file, withExtension: nil) ?? bundle.url(forResource: file, withExtension: nil),
-              let image = NSImage(contentsOfFile: url.path) else { return Image(systemName: "photo") }
-        MarkswiftAssets.cache.setObject(image, forKey: file as NSString)
+        let nameWithoutExt = (file as NSString).deletingPathExtension
+            .replacingOccurrences(of: #"@[1-3]x$"#, with: "", options: .regularExpression)
+        let image: NSImage? = {
+            if let img = bundle.image(forResource: nameWithoutExt) ?? bundle.image(forResource: file) {
+                return img
+            }
+            guard let url = bundle.url(forResource: "Images/" + file, withExtension: nil) ?? bundle.url(forResource: file, withExtension: nil),
+                  let loaded = NSImage(contentsOfFile: url.path) else { return nil }
+            if scale > 1 && loaded.size.width == CGFloat(loaded.representations.first?.pixelsWide ?? 0) {
+                loaded.size = NSSize(width: loaded.size.width / scale, height: loaded.size.height / scale)
+            }
+            return loaded
+        }()
+        guard let image else { return Image(systemName: "photo") }
+        MarkswiftAssets.cache.setObject(image, forKey: cacheKey)
         return Image(nsImage: image)
 #endif
     }

@@ -135,6 +135,7 @@ test("markswift-viewport-height sets a case's capture height; other cases and th
       .map((item) => item.id)
       .sort(),
   ).toEqual([
+    "drawer",
     "overlay-alert-dialog",
     "overlay-dialog",
     "overlay-hover-card",
@@ -196,6 +197,15 @@ test("markswift-motion-open adds @open:<layer>@t:<ms> enter frames per theme", (
   expect(matrix.filter((e) => e.frame).map((e) => [e.key, e.frame])).toEqual([
     ["d-390-light-app@open:edit-profile@t:50", { t: 50, reduced: false, layer: "edit-profile" }],
     ["d-390-light-app@open:open-sheet@t:100", { t: 100, reduced: false, layer: "open-sheet" }],
+  ]);
+});
+test("markswift-motion-pressed adds @pressed@t:<ms> frames per theme", () => {
+  const tag = motionTag('<meta name="markswift-motion-pressed" content="50,100">', "x");
+  expect(tag).toEqual({ motionPressed: [50, 100] });
+  const matrix = buildMatrix([{ id: "btn", fixture: "components/btn.html", themes: ["light"], ...tag }]);
+  expect(matrix.filter((e) => e.frame).map((e) => [e.key, e.frame])).toEqual([
+    ["btn-390-light-app@pressed@t:50", { t: 50, reduced: false, pressed: true }],
+    ["btn-390-light-app@pressed@t:100", { t: 100, reduced: false, pressed: true }],
   ]);
 });
 

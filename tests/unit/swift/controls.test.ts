@@ -504,3 +504,86 @@ test("a select lists only its visible options, disables the disabled ones and he
   // Nothing selected: the browser selects the first option that is not disabled.
   expect(view).toContain('@State private var s_first: String = "Here"');
 });
+
+test("select multiple emits a native multi-selection list with Set<String> binding and VoiceOver value in app mode", () => {
+  const { view, diagnostics } = swift([
+    field("select", { id: "cars", multiple: "", size: "4" }, 0, 80, [
+      option("Volvo"),
+      option("Saab", { selected: "" }),
+      option("Mercedes", { disabled: "" }),
+      option("Audi", { selected: "" }),
+    ]),
+  ]);
+  expect(view).toContain('@State private var s_cars: Set<String> = ["Saab", "Audi"]');
+  expect(view).toContain("List(selection: $s_cars)");
+  expect(view).toContain('.tag("Volvo")');
+  expect(view).toContain('.tag("Saab")');
+  expect(view).toContain('.tag("Mercedes").disabled(true)');
+  expect(view).toContain('.tag("Audi")');
+  expect(view).toContain(".listStyle(.plain)");
+  expect(view).toContain(".scrollContentBackground(.hidden)");
+  expect(view).toContain(".markswiftMultiSelect()");
+  expect(view).toContain(
+    '.accessibilityValue(s_cars.isEmpty ? "No selection" : Array(s_cars).sorted().joined(separator: ", "))',
+  );
+  expect(diagnostics).not.toContain("select: <select multiple/size> list box → menu picker");
+});
+
+test("select multiple in fidelity mode paints selected options in Chrome's inactive listbox grey, text unchanged", () => {
+  const { view } = swift(
+    [
+      field("select", { id: "cars", multiple: "", size: "4" }, 0, 80, [
+        option("Volvo"),
+        option("Saab", { selected: "" }),
+        option("Mercedes"),
+        option("Audi", { selected: "" }),
+      ]),
+    ],
+    "fidelity",
+  );
+  expect(view).toContain("VStack(alignment: .leading, spacing: 0)");
+  expect(view).toContain('Text(verbatim: "Volvo")');
+  expect(view).toContain('Text(verbatim: "Saab")');
+  // Saab and Audi are selected: two rows on the inactive selection fill; the option text keeps its colour.
+  expect(view.split(".background(Color.markswift(0.808, 0.808, 0.808))").length - 1).toBe(2);
+  expect(view).not.toContain(".foregroundStyle(Color.white)");
+  expect(view).not.toContain("List(selection:");
+});
+
+test("select size without multiple approximates as menu picker with diagnostic", () => {
+  const { view, diagnostics } = swift([
+    field("select", { id: "single", size: "4" }, 0, 38, [option("One"), option("Two", { selected: "" })]),
+  ]);
+  expect(view).toContain("Menu {");
+  expect(view).toContain(".pickerStyle(.inline)");
+  expect(diagnostics).toContain("select: <select size> list box without multiple → menu picker");
+});
+
+test("input list with datalist attaches native suggestions in app mode and keeps painted field in fidelity mode", () => {
+  const zero = { x: 0, y: 0, w: 0, h: 0 };
+  const { view, diagnostics } = swift([
+    field("input", { id: "flavor", type: "text", list: "flavors", value: "Mint" }, 0),
+    el("datalist", { id: "flavors" }, zero, [
+      option("Chocolate", { value: "Chocolate" }),
+      option("Coconut"),
+      option("Mint", { value: "Mint" }),
+      option("Strawberry", { disabled: "" }),
+    ]),
+    field("input", { id: "missing", type: "text", list: "nowhere" }, 50),
+    field("input", { id: "empty", type: "text", list: "empty-list" }, 100),
+    el("datalist", { id: "empty-list" }, zero, []),
+  ]);
+  expect(view).toContain('.markswiftSuggestions(["Chocolate", "Coconut", "Mint"], text: $s_flavor)');
+  expect(diagnostics).toContain('input: datalist: <input list="nowhere">: datalist #nowhere not found in capture');
+  expect(diagnostics).toContain('input: datalist: <input list="empty-list">: datalist #empty-list has no options');
+
+  const fidelity = swift(
+    [
+      field("input", { id: "flavor", type: "text", list: "flavors", value: "Mint" }, 0),
+      el("datalist", { id: "flavors" }, zero, [option("Mint")]),
+    ],
+    "fidelity",
+  );
+  expect(fidelity.view).toContain('Text(verbatim: "Mint")');
+  expect(fidelity.view).not.toContain("markswiftSuggestions");
+});

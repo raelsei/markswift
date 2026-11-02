@@ -176,25 +176,36 @@ export async function readFontBytes(
   faces: FontFaceRecord[],
   allowRemote = true,
   signal?: AbortSignal,
+  responses?: ReadonlyMap<string, Uint8Array>,
 ): Promise<Array<{ file: string; bytes: Uint8Array }>> {
   const files: Array<{ file: string; bytes: Uint8Array }> = [];
   const byHash: Record<string, string> = {};
   for (const face of faces) {
     for (const src of face.src) {
       if (src.url.startsWith("data:")) continue;
-      if (!allowRemote) continue;
-      if (!URL.canParse(src.url) || !["http:", "https:"].includes(new URL(src.url).protocol)) continue;
-      let bytes: Uint8Array;
-      try {
-        const res = await fetch(src.url, { signal, redirect: "follow" });
-        if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_FONT_BYTES) continue;
-        // ponytail: chunked responses are read fully before the size check; stream with a byte counter if hosts abuse it.
-        bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytes.length > MAX_FONT_BYTES) continue;
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        continue;
+      let bytes: Uint8Array | undefined = responses?.get(src.url);
+      if (!bytes && responses && URL.canParse(src.url)) {
+        try {
+          const u = new URL(src.url);
+          u.hash = "";
+          bytes = responses.get(u.href);
+        } catch {}
       }
+      if (!bytes) {
+        if (!allowRemote) continue;
+        if (!URL.canParse(src.url) || !["http:", "https:"].includes(new URL(src.url).protocol)) continue;
+        try {
+          const res = await fetch(src.url, { signal, redirect: "follow" });
+          if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_FONT_BYTES) continue;
+          // ponytail: chunked responses are read fully before the size check; stream with a byte counter if hosts abuse it.
+          bytes = new Uint8Array(await res.arrayBuffer());
+          if (bytes.length > MAX_FONT_BYTES) continue;
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          continue;
+        }
+      }
+      if (bytes.length > MAX_FONT_BYTES) continue;
       const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
       if (!byHash[hash]) {
         const sig = new TextDecoder("latin1").decode(bytes.subarray(0, 4));

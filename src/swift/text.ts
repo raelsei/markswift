@@ -57,7 +57,7 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     !plain.image &&
     !plain.counter &&
     plain.gap === undefined &&
-    /^[\x20-\x7E\n]+$/.test(plain.text)
+    /^[\x20-\x7E\n\u00AD\u200B]+$/.test(plain.text)
   ) {
     const r = faceRatios(plain.font, ctx.fontMetrics);
     const size = plain.font.size;
@@ -65,8 +65,9 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
     const descent = Math.round(r.descent * size);
     const leading = plain.font.lineHeight - ascent - descent;
     const below = descent + leading - 2 * Math.floor(leading / 2);
+    const justifyArg = n.justify ? ", justify: true" : "";
     return [
-      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)}, lineLimit: ${n.lineLimit ?? "nil"})`,
+      `MarkswiftGreedyText(text: ${str(plain.text)}, font: ${fontExpr(plain.font, ctx)}, color: ${colorExpr(plain.color, ctx, n.id)}, size: ${num(plain.font.size)}, style: .${nearestTextStyle(plain.font.size)}, lineHeight: ${num(plain.font.lineHeight)}, ascent: ${num(ascent / size)}, descent: ${num(below / size)}, natural: ${num(r.natural)}, lineLimit: ${n.lineLimit ?? "nil"}${justifyArg})`,
     ];
   }
 
@@ -86,7 +87,21 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
   // corpus render shows it moves nothing else.
   const lineBreak = n.plaintext || runs.some((r) => /[\u202A-\u202E\u2066-\u2069]/.test(r.text)) ? "\u2028" : "\n";
   const parts = runs.map((r, i) => {
-    const text = runExpr(r, i, n, viewCase === undefined, ctx, lineBreak);
+    let text = runExpr(r, i, n, viewCase === undefined, ctx, lineBreak);
+    if (isCustomDecoration(r.decoration)) {
+      const d = r.decoration!;
+      const lines = d.lines.map((line) => {
+        const args = [`kind: ${str(line)}`];
+        if (d.style && d.style !== "solid") args.push(`style: ${str(d.style)}`);
+        // CSS decorations default to the text colour (\`currentColor\`); the renderer has no other way to know it.
+        const color = d.color ?? r.color;
+        if (color) args.push(`color: ${colorExpr(color, ctx, n.id, d.color ? `run${i}.dec` : `run${i}`)}`);
+        if (d.thickness !== undefined) args.push(`thickness: ${num(d.thickness)}`);
+        if (d.offset !== undefined) args.push(`offset: ${num(d.offset)}`);
+        return `MarkswiftDecoration.Line(${args.join(", ")})`;
+      });
+      text = `(${text}).customAttribute(MarkswiftDecoration(lines: [${lines.join(", ")}]))`;
+    }
     return r.relativeOffset
       ? `(${text}).customAttribute(MarkswiftTextOffset(x: ${num(r.relativeOffset[0])}, y: ${num(r.relativeOffset[1])}))`
       : text;
@@ -100,10 +115,17 @@ export function textExpr(n: TextNode, ctx: EmitContext): string[] {
       ? parts[0]!.split("\n")
       : ["Text.markswiftRuns([", ...parts.flatMap((p) => `${p},`.split("\n").map((l) => `    ${l}`)), "])"];
   const offsets = runs.flatMap((r) => (r.relativeOffset ? [r.relativeOffset] : []));
-  if (offsets.length) {
-    const x = Math.max(...offsets.map(([x]) => Math.abs(x)));
-    const y = Math.max(...offsets.map(([, y]) => Math.abs(y)));
-    out.push(`.textRenderer(MarkswiftOffsetTextRenderer(x: ${num(x)}, y: ${num(y)}))`);
+  const hasCustomDeco = runs.some((r) => isCustomDecoration(r.decoration));
+  // Justification is the greedy UIKit path's (`MarkswiftGreedyText`); SwiftUI Text has no public API for it.
+  if (n.justify)
+    note(n, "approximated", "text-align: justify", "text-align: justify → ragged right (SwiftUI Text cannot justify)");
+  if (offsets.length || hasCustomDeco) {
+    const x = offsets.length ? Math.max(...offsets.map(([x]) => Math.abs(x))) : 0;
+    const y = offsets.length ? Math.max(...offsets.map(([, y]) => Math.abs(y))) : 0;
+    const args: string[] = [];
+    if (x !== 0) args.push(`x: ${num(x)}`);
+    if (y !== 0) args.push(`y: ${num(y)}`);
+    out.push(`.textRenderer(MarkswiftTextRenderer(${args.join(", ")}))`);
   }
   if (n.align !== "leading") out.push(`.multilineTextAlignment(.${n.align})`);
   if (n.lineLimit !== undefined) out.push(`.lineLimit(${n.lineLimit})`);
@@ -274,17 +296,32 @@ function runExpr(
     let at = 0;
     let broken = "";
     for (const b of r.breaks) {
-      broken += text.slice(at, text[b - 1] === " " ? b - 1 : b) + lineBreak;
+      const prev = text[b - 1];
+      if (prev === " ") {
+        broken += text.slice(at, b - 1) + lineBreak;
+      } else if (prev === "\u00AD") {
+        broken += text.slice(at, b - 1) + "-" + lineBreak;
+      } else if (prev === "\u200B") {
+        broken += text.slice(at, b - 1) + lineBreak;
+      } else {
+        broken += text.slice(at, b) + lineBreak;
+      }
       at = b;
     }
     text = broken + text.slice(at);
   }
   if (
     ctx.mode === "fidelity" &&
-    text.endsWith(" ") &&
+    (text.endsWith(" ") || text.endsWith("\u200B")) &&
     n.runs.slice(i + 1).find((x) => x.gap === undefined)?.breaks?.[0] === 0
   )
     text = text.slice(0, -1);
+  if (
+    ctx.mode === "fidelity" &&
+    text.endsWith("\u00AD") &&
+    n.runs.slice(i + 1).find((x) => x.gap === undefined)?.breaks?.[0] === 0
+  )
+    text = text.slice(0, -1) + "-";
   if (literalTransform && r.transform) {
     text = transformLiteral(text, r.transform);
     if (r.transform === "capitalize")
@@ -338,11 +375,9 @@ function runExpr(
       );
     e += `.foregroundStyle(${paint ?? colorExpr(r.color, ctx, n.id, fill)})`;
   }
-  if (r.decoration) {
+  if (r.decoration && !isCustomDecoration(r.decoration)) {
     const d = r.decoration;
     const pattern = d.style === "dotted" ? ".dot" : d.style === "dashed" ? ".dash" : undefined;
-    if (d.style === "wavy" || d.style === "double")
-      note(n, "approximated", "text-decoration-style", `text-decoration-style ${d.style} drawn solid`);
     const args = [
       pattern ? `pattern: ${pattern}` : "",
       d.color ? `color: ${colorExpr(d.color, ctx, n.id, `run${i}.dec`)}` : "",
@@ -352,13 +387,6 @@ function runExpr(
     for (const line of d.lines) {
       if (line === "underline") e += `.underline(${args})`;
       else if (line === "line-through") e += `.strikethrough(${args})`;
-      else
-        note(
-          n,
-          "approximated",
-          "text-decoration-line: overline",
-          "text-decoration-line overline has no SwiftUI form; dropped",
-        );
     }
   }
   if (r.kerning !== undefined && r.kerning !== 0) {
@@ -378,5 +406,17 @@ function transformLiteral(text: string, t: NonNullable<TextRun["transform"]>): s
   return text.replace(
     /(^|[^\p{L}\p{N}'’])(\p{L})/gu,
     (_, before: string, letter: string) => before + letter.toUpperCase(),
+  );
+}
+
+/** Decorations that SwiftUI's native .underline/.strikethrough cannot reproduce: overline, wavy, double, explicit thickness/offset. */
+function isCustomDecoration(d: TextRun["decoration"]): boolean {
+  if (!d) return false;
+  return (
+    d.lines.includes("overline") ||
+    d.style === "wavy" ||
+    d.style === "double" ||
+    d.thickness !== undefined ||
+    d.offset !== undefined
   );
 }
