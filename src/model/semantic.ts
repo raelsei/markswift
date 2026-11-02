@@ -498,13 +498,30 @@ export interface Presentation {
 
 /** One entry of a native menu; `id` is the item's LayoutNode id. */
 export type MenuItem =
-  | { kind: "button"; id: string; label: string; action?: Action; disabled?: true; destructive?: true }
-  | { kind: "toggle"; id: string; label: string; checked: boolean; disabled?: true }
+  | {
+      kind: "button";
+      id: string;
+      label: string;
+      action?: Action;
+      disabled?: true;
+      destructive?: true;
+      icon?: SvgNode | ImageNode;
+      shortcut?: string;
+    }
+  | {
+      kind: "toggle";
+      id: string;
+      label: string;
+      checked: boolean;
+      disabled?: true;
+      icon?: SvgNode | ImageNode;
+      shortcut?: string;
+    }
   /** `selected`: index into `options`, −1 when none is checked. */
   | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
-  | { kind: "submenu"; id: string; label: string; items?: MenuItem[] };
+  | { kind: "submenu"; id: string; label: string; items?: MenuItem[]; icon?: SvgNode | ImageNode };
 /** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;

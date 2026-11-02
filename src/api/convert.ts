@@ -140,6 +140,8 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       dark: dark?.layout,
       probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
       palette: options.palette,
+      sheet: options.sheet,
+      nativeSheet: options.nativeSheet,
       ...(bands.length > 1
         ? {
             variants: bands.slice(1).map((b) => b.primary.layout),

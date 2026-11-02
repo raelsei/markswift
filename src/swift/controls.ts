@@ -15,12 +15,13 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ControlNode, MenuItem, MenuSpec, PickerOption, SemNode } from "../model/semantic.ts";
+import type { ControlNode, ImageNode, MenuItem, MenuSpec, PickerOption, SemNode, SvgNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
 import { shapeExpr } from "./paint.ts";
 import { animationExpr } from "./motion.ts";
+import { svgExpr } from "./svg.ts";
 
 /** What the emitter must be able to do with a control's children and label. */
 export interface ControlDeps extends ColorCtx {
@@ -50,6 +51,7 @@ export interface ControlDeps extends ColorCtx {
   closeOf?: ControlMembers["closeOf"];
   /** Native menu toggle/radio item → its `@State` member; built by `controlMembers`. */
   menuState?: ControlMembers["menuState"];
+  shapes?: Record<string, string>;
   /** Text field → its `@MarkswiftFocused` member; built by `controlMembers`. */
   focusOf?: Map<SemNode, string>;
   /** Packaged face metrics: a field in a bundled face spaces its lines from that face's natural line. */
@@ -528,18 +530,148 @@ function pickerRows(options: PickerOption[]): string[] {
  * Toggles, a radio run as an inline Picker, separators, labelled sections.
  */
 // ponytail: a submenu is a disabled label (its items are not captured); opening nested triggers is the upgrade path.
-export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" | "menuState">): string[] {
+export interface ParsedShortcut {
+  keyExpr: string;
+  modifiers: Array<"command" | "shift" | "option" | "control">;
+}
+
+export function parseShortcut(text: string): ParsedShortcut | undefined {
+  let s = text.trim();
+  const modifiers = new Set<"command" | "shift" | "option" | "control">();
+
+  if (s.includes("⌘")) {
+    modifiers.add("command");
+    s = s.replace(/⌘/g, "");
+  }
+  if (s.includes("⇧")) {
+    modifiers.add("shift");
+    s = s.replace(/⇧/g, "");
+  }
+  if (s.includes("⌥")) {
+    modifiers.add("option");
+    s = s.replace(/⌥/g, "");
+  }
+  if (s.includes("⌃")) {
+    modifiers.add("control");
+    s = s.replace(/⌃/g, "");
+  }
+
+  const wordRegex = /\b(ctrl|control|cmd|command|meta|super|alt|option|shift)[\s+-]+/gi;
+  let match: RegExpExecArray | null;
+  while ((match = wordRegex.exec(s)) !== null) {
+    const word = match[1]!.toLowerCase();
+    if (word === "ctrl" || word === "control") modifiers.add("control");
+    else if (word === "cmd" || word === "command" || word === "meta" || word === "super") modifiers.add("command");
+    else if (word === "alt" || word === "option") modifiers.add("option");
+    else if (word === "shift") modifiers.add("shift");
+  }
+  s = s
+    .replace(wordRegex, "")
+    .replace(/^[\s+-]+|[\s+-]+$/g, "")
+    .trim();
+
+  const order = ["command", "shift", "option", "control"] as const;
+  const mods = order.filter((m) => modifiers.has(m));
+
+  if (/^(?:enter|return)$/i.test(s) || s === "⏎") return { keyExpr: ".return", modifiers: mods };
+  if (/^(?:esc|escape)$/i.test(s)) return { keyExpr: ".escape", modifiers: mods };
+  if (/^(?:delete|backspace)$/i.test(s) || s === "⌫") return { keyExpr: ".delete", modifiers: mods };
+  if (/^tab$/i.test(s) || s === "⇥") return { keyExpr: ".tab", modifiers: mods };
+  if (/^space$/i.test(s) || s === "␣") return { keyExpr: ".space", modifiers: mods };
+  if (/^up(?:arrow)?$/i.test(s) || s === "↑") return { keyExpr: ".upArrow", modifiers: mods };
+  if (/^down(?:arrow)?$/i.test(s) || s === "↓") return { keyExpr: ".downArrow", modifiers: mods };
+  if (/^left(?:arrow)?$/i.test(s) || s === "←") return { keyExpr: ".leftArrow", modifiers: mods };
+  if (/^right(?:arrow)?$/i.test(s) || s === "→") return { keyExpr: ".rightArrow", modifiers: mods };
+
+  if (s.length === 1) return { keyExpr: str(s.toLowerCase()), modifiers: mods };
+
+  return undefined;
+}
+
+function keyboardShortcutModifier(p: ParsedShortcut): string {
+  if (p.modifiers.length === 0) {
+    if (p.keyExpr.startsWith(".")) return `.keyboardShortcut(${p.keyExpr})`;
+    return `.keyboardShortcut(${p.keyExpr}, modifiers: [])`;
+  }
+  if (p.modifiers.length === 1) {
+    return `.keyboardShortcut(${p.keyExpr}, modifiers: .${p.modifiers[0]})`;
+  }
+  return `.keyboardShortcut(${p.keyExpr}, modifiers: [${p.modifiers.map((m) => `.${m}`).join(", ")}])`;
+}
+
+function menuIconExpr(icon: SvgNode | ImageNode, deps: MenuDeps): string[] {
+  if (icon.kind === "svg") {
+    const w = Math.max(1, Math.round((icon.frame.w || icon.viewBox[2] || 16) * 10) / 10);
+    const h = Math.max(1, Math.round((icon.frame.h || icon.viewBox[3] || 16) * 10) / 10);
+    const shapes = deps.shapes ?? {};
+    const colorCtx: ColorCtx = deps.colorCtx ?? { mode: deps.mode ?? "app" };
+    const svgLines = svgExpr(icon, shapes, colorCtx);
+    return [`Image.markswiftRendered(width: ${num(w)}, height: ${num(h)}) {`, ...indent(svgLines, 1), "}"];
+  }
+  if (icon.src) {
+    return [`Image.markswiftAsset(${str(icon.src)})`];
+  }
+  return ['Image(systemName: "photo")'];
+}
+
+export type MenuDeps = Pick<ControlDeps, "actionOf" | "menuState"> & {
+  shapes?: Record<string, string>;
+  colorCtx?: ColorCtx;
+  mode?: EmitMode;
+};
+export function menuExpr(items: MenuItem[], deps: MenuDeps): string[] {
   return items.flatMap((i): string[] => {
-    const label = "label" in i ? [`    Text(verbatim: ${str(i.label)})`] : [];
+    const shortcut = "shortcut" in i ? i.shortcut : undefined;
+    const parsed = shortcut ? parseShortcut(shortcut) : undefined;
+    const shortcutMod = parsed ? [keyboardShortcutModifier(parsed)] : [];
+
+    let titleView: string[];
+    if ("label" in i) {
+      if (shortcut && !parsed) {
+        titleView = [
+          "HStack {",
+          `    Text(verbatim: ${str(i.label)})`,
+          "    Spacer()",
+          `    Text(verbatim: ${str(shortcut)})`,
+          "}",
+        ];
+      } else {
+        titleView = [`Text(verbatim: ${str(i.label)})`];
+      }
+    } else {
+      titleView = [];
+    }
+
+    const icon = "icon" in i ? i.icon : undefined;
+    let label: string[];
+    if (icon && "label" in i) {
+      const iconView = menuIconExpr(icon, deps);
+      label = ["Label {", ...indent(titleView, 1), "} icon: {", ...indent(iconView, 1), "}"];
+    } else {
+      label = titleView;
+    }
+
     const off = "disabled" in i && i.disabled ? [".disabled(true)"] : [];
     const state = "id" in i ? deps.menuState?.get(i.id) : undefined;
     switch (i.kind) {
       case "button": {
         const action = (i.action && deps.actionOf.get(i.action.key)) ?? "{}";
-        return [`Button(${i.destructive ? "role: .destructive, " : ""}action: ${action}) {`, ...label, "}", ...off];
+        return [
+          `Button(${i.destructive ? "role: .destructive, " : ""}action: ${action}) {`,
+          ...indent(label, 1),
+          "}",
+          ...shortcutMod,
+          ...off,
+        ];
       }
       case "toggle":
-        return [`Toggle(isOn: ${state ? `$${state}` : ".constant(false)"}) {`, ...label, "}", ...off];
+        return [
+          `Toggle(isOn: ${state ? `$${state}` : ".constant(false)"}) {`,
+          ...indent(label, 1),
+          "}",
+          ...shortcutMod,
+          ...off,
+        ];
       case "radio":
         return [
           `Picker(selection: ${state ? `$${state}` : '.constant("")'}) {`,
@@ -552,13 +684,13 @@ export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" |
       case "divider":
         return ["Divider()"];
       case "section":
-        return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...label, "}"];
+        return ["Section {", ...indent(menuExpr(i.items, deps), 1), "} header: {", ...indent(label, 1), "}"];
       default: // submenu
         return [
           "Menu {",
           ...indent(menuExpr(i.items ?? [], deps), 1),
           "} label: {",
-          ...label,
+          ...indent(label, 1),
           "}",
           ...(i.items?.length ? [] : [".disabled(true)"]),
         ];
@@ -567,12 +699,7 @@ export function menuExpr(items: MenuItem[], deps: Pick<ControlDeps, "actionOf" |
 }
 
 /** A menu trigger: its Button's label and style around a native `Menu` of the captured items. */
-export function menuButton(
-  menu: MenuSpec,
-  label: string[],
-  buttonStyle: string,
-  deps: Pick<ControlDeps, "actionOf" | "menuState">,
-): string[] {
+export function menuButton(menu: MenuSpec, label: string[], buttonStyle: string, deps: MenuDeps): string[] {
   return [
     "Menu {",
     ...indent(menuExpr(menu.items, deps), 1),

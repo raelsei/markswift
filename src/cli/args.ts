@@ -11,7 +11,10 @@ export interface ConversionCommand {
   palettePath?: string;
   update: boolean;
   force: boolean;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints">;
+  options: Pick<
+    ConvertOptions,
+    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "sheet" | "nativeSheet"
+  >;
 }
 
 export interface BuildCommand {
@@ -56,6 +59,8 @@ Options:
   --palette <file>  JSON map from CSS variables or hex colours to app colours
                     (e.g. {"--primary": "Color.accentColor"})
   --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
+  --native-sheet    Emit native SwiftUI .sheet with detents for bottom drawers
+  --sheet <native|captured>  Opt-in native .sheet for bottom drawers (default: captured)
   -h, --help        Show this help
   -v, --version     Show version
 
@@ -75,6 +80,7 @@ const valueFlags = new Set([
   "--mode",
   "--palette",
   "--breakpoints",
+  "--sheet",
 ]);
 
 export function parseArgs(args: string[]): Command {
@@ -94,7 +100,7 @@ export function parseArgs(args: string[]): Command {
       afterDoubleDash = true;
       continue;
     }
-    if (!afterDoubleDash && (arg === "--update" || arg === "--force")) {
+    if (!afterDoubleDash && (arg === "--update" || arg === "--force" || arg === "--native-sheet")) {
       if (flags.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       flags.add(arg);
     } else if (!afterDoubleDash && valueFlags.has(arg)) {
@@ -154,6 +160,10 @@ export function parseArgs(args: string[]): Command {
               return size;
             }),
           };
+  const sheet = values.get("--sheet");
+  const nativeSheet = flags.has("--native-sheet") || sheet === "native" || sheet === "true";
+  if (sheet !== undefined && sheet !== "native" && sheet !== "captured")
+    throw new UsageError("--sheet must be native or captured");
   return {
     kind: "convert",
     source,
@@ -170,6 +180,7 @@ export function parseArgs(args: string[]): Command {
       mode,
       viewport: { width, height },
       ...(breakpoints ? { breakpoints } : {}),
+      ...(nativeSheet ? { nativeSheet: true, sheet: "native" as const } : {}),
     },
   };
 }
