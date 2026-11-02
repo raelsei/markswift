@@ -72,10 +72,31 @@ test("menu item shortcut parsing: .keyboardShortcut for parsed combinations, tra
     children: [],
   });
   const { code } = compile(doc);
-  expect(code).toContain('.keyboardShortcut("b", modifiers: .command)');
+  expect(code).toContain('.keyboardShortcut("b", modifiers: [.command])');
   expect(code).toContain('Text(verbatim: "Settings")');
   expect(code).toContain("Spacer()");
   expect(code).toContain('Text(verbatim: "Double Click")');
+});
+
+test("shortcuts spell out their modifiers: none stays none, aria-keyshortcuts reaches a button", () => {
+  const doc = DROPDOWN();
+  const group = doc.layers![0]!.nodes[0]!.children[0]!.children[1]!;
+  group.children[1]!.children.push({
+    id: "billing-kbd",
+    tag: "kbd",
+    attrs: {},
+    styles: {},
+    bounds: { x: 190, y: 112, w: 20, h: 16 },
+    text: "Esc",
+    children: [],
+  });
+  // SwiftUI's default modifier is .command: ⌘Esc is not what the menu shows.
+  expect(compile(doc).code).toContain(".keyboardShortcut(.escape, modifiers: [])");
+  const plain = without(DROPDOWN());
+  const find = (n: LayoutDoc["root"]): LayoutDoc["root"] | undefined =>
+    n.tag === "button" ? n : n.children.map(find).find(Boolean);
+  find(plain.root)!.attrs["aria-keyshortcuts"] = "Control+O Meta+O";
+  expect(compile(plain).code).toContain('.keyboardShortcut("o", modifiers: [.control])');
 });
 
 test("context menu: the trigger keeps its view and gains .contextMenu", () => {

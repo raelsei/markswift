@@ -15,7 +15,7 @@
  */
 import type { Theme } from "../model/layout.ts";
 import type { FontMetrics } from "../model/fonts.ts";
-import type { ControlNode, ImageNode, MenuItem, MenuSpec, PickerOption, SemNode, SvgNode } from "../model/semantic.ts";
+import type { ControlNode, MenuItem, MenuSpec, PickerOption, SemNode, SvgNode } from "../model/semantic.ts";
 import type { ColorCtx, ControlMembers, EmitMode, ScreenTokens } from "./context.ts";
 import { numericValue } from "./control-state.ts";
 import { colorArgs, colorExpr, fontExpr, indent, nearestTextStyle, num, str } from "./format.ts";
@@ -140,6 +140,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
   // Fidelity draws the field's text, so nothing takes focus; the member still drives the box.
   const focus = deps.focusOf?.get(n);
   const focused = focus ? [`.focused($${focus})`] : [];
+  // `aria-keyshortcuts` (its first alternative): the shortcut a keyboard (iPad, Mac) triggers the control with.
+  const parsedShortcut = n.a11y?.shortcut ? parseShortcut(n.a11y.shortcut) : undefined;
+  const buttonMods = [buttonStyle, ...(parsedShortcut ? [keyboardShortcutModifier(parsedShortcut)] : [])];
   switch (n.control) {
     case "button": {
       const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
@@ -154,7 +157,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
           "} label: {",
           ...indent(pressable(n, deps), 1),
           "}",
-          buttonStyle,
+          ...buttonMods,
           "// The design only says a file is chosen here; fill in what to do with it.",
           `.fileImporter(isPresented: ${binding}, allowedContentTypes: markswiftContentTypes(${str(n.files.accept.join(","))}), allowsMultipleSelection: ${n.files.multiple ? "true" : "false"}) { _ in }`,
         ];
@@ -164,8 +167,9 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
       // An ARIA toggle (`role=checkbox|switch|radio`), a layer trigger or a presentation's closing button: the tap
       // changes the screen's state and acts.
       const tap = deps.toggleOf?.get(n)?.tap ?? deps.openOf?.get(n)?.tap ?? deps.closeOf?.get(n);
-      if (tap) return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", buttonStyle];
-      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", buttonStyle]);
+      if (tap)
+        return ["Button {", ...indent(tap, 1), "} label: {", ...indent(pressable(n, deps), 1), "}", ...buttonMods];
+      return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), ["}", ...buttonMods]);
     }
     case "link": {
       // Only an absolute URL has a destination outside the app. `#anchor` and `/path` are in-app
@@ -177,7 +181,7 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
         const action = n.action ? deps.actionOf.get(n.action.key) : undefined;
         return wrap(`Button(action: ${action ?? "{}"}) {`, pressable(n, deps), [
           "}",
-          buttonStyle,
+          ...buttonMods,
           // An in-app `<a>` emitted as a Button is still a link.
           ".accessibilityRemoveTraits(.isButton)",
           ".accessibilityAddTraits(.isLink)",
@@ -634,29 +638,15 @@ export function parseShortcut(text: string): ParsedShortcut | undefined {
 }
 
 function keyboardShortcutModifier(p: ParsedShortcut): string {
-  if (p.modifiers.length === 0) {
-    if (p.keyExpr.startsWith(".")) return `.keyboardShortcut(${p.keyExpr})`;
-    return `.keyboardShortcut(${p.keyExpr}, modifiers: [])`;
-  }
-  if (p.modifiers.length === 1) {
-    return `.keyboardShortcut(${p.keyExpr}, modifiers: .${p.modifiers[0]})`;
-  }
+  // Explicit modifiers: SwiftUI's default is `.command`, which the design did not ask for.
   return `.keyboardShortcut(${p.keyExpr}, modifiers: [${p.modifiers.map((m) => `.${m}`).join(", ")}])`;
 }
 
-function menuIconExpr(icon: SvgNode | ImageNode, deps: MenuDeps): string[] {
-  if (icon.kind === "svg") {
-    const w = Math.max(1, Math.round((icon.frame.w || icon.viewBox[2] || 16) * 10) / 10);
-    const h = Math.max(1, Math.round((icon.frame.h || icon.viewBox[3] || 16) * 10) / 10);
-    const shapes = deps.shapes ?? {};
-    const colorCtx: ColorCtx = deps.colorCtx ?? { mode: deps.mode ?? "app" };
-    const svgLines = svgExpr(icon, shapes, colorCtx);
-    return [`Image.markswiftRendered(width: ${num(w)}, height: ${num(h)}) {`, ...indent(svgLines, 1), "}"];
-  }
-  if (icon.src) {
-    return [`Image.markswiftAsset(${str(icon.src)})`];
-  }
-  return ['Image(systemName: "photo")'];
+function menuIconExpr(icon: SvgNode, deps: MenuDeps): string[] {
+  const w = Math.max(1, Math.round((icon.frame.w || icon.viewBox[2] || 16) * 10) / 10);
+  const h = Math.max(1, Math.round((icon.frame.h || icon.viewBox[3] || 16) * 10) / 10);
+  const svgLines = svgExpr(icon, deps.shapes ?? {}, deps.colorCtx ?? { mode: deps.mode ?? "app" });
+  return [`Image.markswiftRendered(width: ${num(w)}, height: ${num(h)}) {`, ...indent(svgLines, 1), "}"];
 }
 
 export type MenuDeps = Pick<ControlDeps, "actionOf" | "menuState"> & {

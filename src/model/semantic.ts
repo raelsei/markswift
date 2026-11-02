@@ -520,7 +520,7 @@ export type MenuItem =
       action?: Action;
       disabled?: true;
       destructive?: true;
-      icon?: SvgNode | ImageNode;
+      icon?: SvgNode;
       shortcut?: string;
     }
   | {
@@ -529,14 +529,14 @@ export type MenuItem =
       label: string;
       checked: boolean;
       disabled?: true;
-      icon?: SvgNode | ImageNode;
+      icon?: SvgNode;
       shortcut?: string;
     }
   /** `selected`: index into `options`, −1 when none is checked. */
   | { kind: "radio"; id: string; options: PickerOption[]; selected: number }
   | { kind: "divider" }
   | { kind: "section"; label: string; items: MenuItem[] }
-  | { kind: "submenu"; id: string; label: string; items?: MenuItem[]; icon?: SvgNode | ImageNode };
+  | { kind: "submenu"; id: string; label: string; items?: MenuItem[]; icon?: SvgNode };
 /** A captured menu layer the trigger presents natively. */
 export interface MenuSpec {
   layer: string;
@@ -628,12 +628,14 @@ export interface SemBase extends SizeConstraints {
     hint?: string;
     /** `aria-selected`/`aria-checked`/`aria-pressed` = `true`, or an `aria-current` other than `false`. */
     selected?: true;
-    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio. */
+    /** role checkbox | switch | radio | menuitemcheckbox | menuitemradio, or `aria-pressed` (a toggle button). */
     toggle?: true;
     /** `role=radio` inside a `role=radiogroup`: the group element's id. Its radios share one selection. */
     group?: string;
     /** `aria-disabled="true"`. */
     disabled?: true;
+    /** The first `aria-keyshortcuts` alternative (`Control+S`). */
+    shortcut?: string;
   };
   /** `title`, inline-run titles and captured tooltip layers: `.help` + an accessibility hint; never drawn. */
   tooltip?: string;

@@ -6,7 +6,6 @@
 import { type Layer, type LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import {
   type Diagnostic,
-  type ImageNode,
   type MenuItem,
   type PickerOption,
   type Presentation,
@@ -220,39 +219,19 @@ const itemShortcut = (n: LayoutNode): string | undefined => {
   return undefined;
 };
 
-const itemIcon = (
-  n: LayoutNode,
-  docRoot: LayoutNode,
-  bundledFamilies: BundledFamilies = {},
-): SvgNode | ImageNode | undefined => {
-  let hit: LayoutNode | undefined;
-  for (const c of n.children) {
-    if ((c.attrs["data-slot"] ?? "").includes("indicator")) continue;
-    if (c.tag === "svg" || c.tag === "img") {
-      hit = c;
-      break;
-    }
-    const inner = find(
-      c,
-      (d) => (d.tag === "svg" || d.tag === "img") && !(d.attrs["data-slot"] ?? "").includes("indicator"),
-    );
-    if (inner) {
-      hit = inner;
-      break;
-    }
-    if (c.tag === "#text" && c.text?.trim()) break;
-  }
-  if (!hit) {
-    hit = find(
-      n,
-      (d) =>
-        (d.tag === "svg" || d.tag === "img") &&
-        !(d.attrs["data-slot"] ?? "").includes("indicator") &&
-        !(d.attrs["class"] ?? "").includes("chevron-right") &&
-        !(d.attrs["class"] ?? "").includes("ml-auto") &&
-        !(d.attrs["data-slot"] ?? "").includes("sub-trigger"),
-    );
-  }
+/** A menu item's leading SVG (left of its text), not its indicator: the item's Label icon. */
+const itemIcon = (n: LayoutNode, docRoot: LayoutNode, bundledFamilies: BundledFamilies = {}): SvgNode | undefined => {
+  let textStart = Infinity;
+  const svgs: LayoutNode[] = [];
+  const walkItem = (d: LayoutNode): void => {
+    if (isShortcutNode(d) || (d.attrs["data-slot"] ?? "").includes("indicator")) return;
+    if (d.tag === "#text") {
+      if (d.text?.trim()) textStart = Math.min(textStart, d.bounds.x);
+    } else if (d.tag === "svg") svgs.push(d);
+    else d.children.forEach(walkItem);
+  };
+  n.children.forEach(walkItem);
+  const hit = svgs.find((s) => s.bounds.x + s.bounds.w <= textStart + 1);
   if (!hit) return undefined;
 
   const diagnostics: Diagnostic[] = [];
@@ -267,16 +246,7 @@ const itemIcon = (
     diagnostics,
     overlays: [],
   };
-  if (hit.tag === "svg") {
-    return buildSvg(hit, base, docRoot, bundledFamilies);
-  }
-  return {
-    ...base,
-    kind: "image",
-    src: hit.attrs["src"] ?? "",
-    contentMode: "contain",
-    ...(hit.attrs["alt"] ? { alt: hit.attrs["alt"] } : {}),
-  };
+  return buildSvg(hit, base, docRoot, bundledFamilies);
 };
 
 /** An item's text without its shortcut hint or <kbd>, whitespace collapsed. */
@@ -371,7 +341,11 @@ function menu(
     const visit = (n: LayoutNode): void => {
       const role = n.attrs["role"] ?? "";
       const label = role.startsWith("menuitem") ? itemText(n) : "";
-      const icon = doc ? itemIcon(n, doc.root, options?.bundledFamilies) : undefined;
+      // A plain item's (or submenu's) leading SVG is its Label icon; a checkbox/radio item's SVG is its indicator,
+      // which the native checkmark replaces.
+      const icon = doc && role === "menuitem" ? itemIcon(n, doc.root, options?.bundledFamilies) : undefined;
+      if (role === "menuitem" && !icon && find(n, (d) => d.tag === "img"))
+        notes.add("menu item image icons are dropped");
       const shortcut = itemShortcut(n);
       const off = disabled(n) ? { disabled: true as const } : {};
       if (role === "separator") {
@@ -409,7 +383,6 @@ function menu(
           label,
           checked: checked(n, "aria-checked"),
           ...off,
-          ...(icon ? { icon } : {}),
           ...(shortcut ? { shortcut } : {}),
         });
       else if (role === "menuitemradio") {
