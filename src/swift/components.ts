@@ -519,14 +519,13 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       for (const m of members) {
         const mNodes = collect(m);
         const matchNode = mNodes.find((mn) => tpl(mn).key === tpl(n).key);
-        if (matchNode && (!isOptional || collect(m).some((mn) => tpl(mn).key === tpl(optKid!).key))) {
-          const matchSlot = tpl(matchNode).slots.find((sl) => sl.marker === s.marker);
-          values.push(matchSlot ? matchSlot.value : s.value);
-          nodes.push(matchNode);
-        } else {
-          values.push("nil");
-          nodes.push(n);
-        }
+        const present = matchNode && (!isOptional || collect(m).some((mn) => tpl(mn).key === tpl(optKid!).key));
+        const matchSlot = present ? tpl(matchNode).slots.find((sl) => sl.marker === s.marker) : undefined;
+        // Only a whole optional child may be absent: a node or slot missing from a row while its parent is there (a
+        // border colour only the expanded item has) is a different shape, which this run cannot express.
+        if (present ? !matchSlot : !isOptional) return undefined;
+        values.push(matchSlot ? matchSlot.value : "nil");
+        nodes.push(matchSlot ? matchNode! : n);
       }
 
       columns.push({

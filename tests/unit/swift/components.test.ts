@@ -655,6 +655,26 @@ test("optional children: rows with an absent badge become one struct with an opt
   expect(swift).toContain('badge: "VIP"');
 });
 
+test("optional children: a required slot only some rows have never becomes a nil in a non-optional field", () => {
+  // The accordion shape: the expanded item adds a child and a border colour on the row itself.
+  const bordered = {
+    ...FLEX_ROW,
+    "border-bottom-width": "1px",
+    "border-bottom-style": "solid",
+    "border-bottom-color": "rgb(229, 231, 235)",
+  };
+  const row = (name: string, y: number, extra: LayoutNode[], styles: Record<string, string>) =>
+    element("li", 16, y, 360, 20, styles, [text(name, 16, y, 100), ...extra]);
+  const ul = element("ul", 16, 16, 360, 76, { display: "flex", "flex-direction": "column", gap: "8px" }, [
+    row("Ada", 16, [text("Owner", 128, 16, 60)], bordered),
+    row("Alan", 44, [], FLEX_ROW),
+    row("Grace", 72, [], FLEX_ROW),
+  ]);
+  const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [ul])));
+  for (const [, field] of swift.matchAll(/\b(\w+): nil\b/g))
+    expect(swift).toMatch(new RegExp(`var ${field}: [^\\n]*\\? = nil`));
+});
+
 test("variants: tabs with active and inactive states become an enum variant with switch", () => {
   const tabButton = (label: string, x: number, active: boolean, id: string): LayoutNode => {
     const t: LayoutNode = {
