@@ -159,6 +159,14 @@ test("CLI theme defaults to adaptive and passes the dark class through", async (
   expect(result.code).toBe(2);
   expect(result.stderr).toContain("--theme must be adaptive, light or dark");
 });
+test("--asset-catalog flag enables asset catalog emission in CLI options", () => {
+  const plain = parseArgs(["convert", "card.html", "--out", "generated"]);
+  if (plain.kind !== "convert") throw new Error("expected convert");
+  expect(plain.options.assetCatalog).toBeUndefined();
+  const withCatalog = parseArgs(["convert", "card.html", "--out", "generated", "--asset-catalog"]);
+  if (withCatalog.kind !== "convert") throw new Error("expected convert");
+  expect(withCatalog.options.assetCatalog).toBe(true);
+});
 
 test("--breakpoints takes auto or a comma list of WIDTH or WIDTHxHEIGHT", async () => {
   const parsed = (value: string) => {

@@ -10,6 +10,7 @@ import type { HtmlSource } from "../input/types.ts";
 import type { FontFace, LayoutDoc } from "../model/layout.ts";
 import type { ConvertOptions, ConversionResult } from "./types.ts";
 import { type BandCapture, captureBands, captureThemes, planFor, validateBreakpoints } from "./bands.ts";
+import { downloadRemoteImages } from "../images/index.ts";
 
 /** Convert a document, fragment, HTML file or rendered URL through the same measured pipeline. */
 export async function convert(source: HtmlSource, options: ConvertOptions = {}): Promise<ConversionResult> {
@@ -124,6 +125,11 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       variantProbes.push(probed && probed.size.w !== layout.size.w ? probed : undefined);
     }
     const captures = bands.flatMap((b) => (b.dark ? [b.primary, b.dark] : [b.primary]));
+    const imageWarnings = await downloadRemoteImages(
+      captures.map((c) => c.layout),
+      url,
+      { allowRemote: !options.untrustedInput, signal: deadline },
+    );
     const sources = new Map(captures.flatMap((c) => c.fontFiles).map((f) => [f.file, f.bytes]));
     const fonts = await packageFonts(
       captures.length > 1 ? unionFaces(captures.map((c) => c.layout.fonts)) : capture.layout.fonts,
@@ -140,6 +146,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
       dark: dark?.layout,
       probe: probe && probe.size.w !== capture.layout.size.w ? probe : undefined,
       palette: options.palette,
+      assetCatalog: options.assetCatalog,
       ...(bands.length > 1
         ? {
             variants: bands.slice(1).map((b) => b.primary.layout),
@@ -166,7 +173,7 @@ export async function convert(source: HtmlSource, options: ConvertOptions = {}):
     return {
       ...compiled,
       assets,
-      warnings: [...pageWarnings, ...notes, ...fonts.notes, ...compiled.warnings],
+      warnings: [...pageWarnings, ...imageWarnings, ...notes, ...fonts.notes, ...compiled.warnings],
       layout: capture.layout,
       ...(dark ? { darkLayout: dark.layout } : {}),
       ...(plan

@@ -26,6 +26,7 @@ import {
 } from "../swift/tokens.ts";
 import type { ScreenTokens } from "../swift/context.ts";
 import { indent } from "../swift/format.ts";
+import { toAssetCatalog } from "../images/index.ts";
 import type { FaceMetrics, BundledFamily } from "../model/fonts.ts";
 import type { ConversionWarning, Screen, SemNode } from "../model/semantic.ts";
 import type { Color } from "../model/values.ts";
@@ -61,6 +62,8 @@ export interface CompileOptions {
   visibility?: "internal" | "public";
   /** App colours for captured tokens (`--palette`); views keep referencing `Palette.x`. */
   palette?: PaletteMap;
+  /** Optionally emit an Assets.xcassets imageset structure instead of Images/ resources. */
+  assetCatalog?: boolean;
 }
 
 export interface CompileResult {
@@ -215,7 +218,7 @@ export function compileLayout(layout: LayoutDoc, options: CompileOptions = {}): 
     code: result.view,
     diagnostics: result.report,
     warnings,
-    assets: result.images,
+    assets: options.assetCatalog ? toAssetCatalog(result.images) : result.images,
     files: {
       [`${name}.swift`]: result.view,
       "MarkswiftRuntime.swift": SWIFT_RUNTIME,
@@ -457,7 +460,8 @@ export interface LibraryComponent {
   mode?: EmitMode;
 }
 
-export interface LibraryOptions extends Pick<CompileOptions, "bundledFamilies" | "fontMetrics" | "palette"> {
+export interface LibraryOptions
+  extends Pick<CompileOptions, "bundledFamilies" | "fontMetrics" | "palette" | "assetCatalog"> {
   /** Library (Swift module) name; must differ from every component name. */
   library: string;
   /** Add `BundledFonts.register()` to every preview (the package bundles fonts). */
@@ -558,7 +562,7 @@ export function compileLayouts(components: LibraryComponent[], options: LibraryO
         .join("\n")
         .trimEnd()}\n`;
   files["MarkswiftRuntime.swift"] = SWIFT_RUNTIME;
-  return { files, assets, warnings, diagnostics };
+  return { files, assets: options.assetCatalog ? toAssetCatalog(assets) : assets, warnings, diagnostics };
 }
 
 export type { LayoutDoc } from "../model/layout.ts";

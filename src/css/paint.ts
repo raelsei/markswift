@@ -2,6 +2,7 @@
 import { hue, parseColor, TRANSPARENT } from "./color.ts";
 import type { Color, GradientStop, Paint } from "../model/values.ts";
 import { splitTop, round2 } from "./syntax.ts";
+import { parseImageSet } from "./image-set.ts";
 
 /**
  * Re-express a gradient painted over `host` so that the same colours land on `sub` (both
@@ -97,6 +98,12 @@ function parseGradient(s: string, dropped?: string[]): Paint {
   s = s.trim();
   const u = /^url\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^)]*))\s*\)$/s.exec(s);
   if (u) return { kind: "image", url: (u[1] ?? u[2] ?? u[3] ?? "").replace(/\\(.)/g, "$1").trim() };
+  const iset = parseImageSet(s);
+  if (iset) {
+    const cand2x = iset.find((c) => Math.abs(c.density - 2) < 0.2);
+    const pick = cand2x ?? iset.find((c) => c.density === 1) ?? iset[0];
+    if (pick) return { kind: "image", url: pick.url, ...(cand2x ? { scale: 2 } : {}) };
+  }
   const m = /^(repeating-)?(linear|radial|conic)-gradient\((.*)\)$/s.exec(s);
   if (!m) return { kind: "unsupported", raw: s };
   const kind = m[2]!;

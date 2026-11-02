@@ -374,7 +374,7 @@ export interface TextRun {
    * A generated image (`content: url()`, an inside `list-style-image`) inside the text: drawn at its captured CSS size
    * on the baseline, as CSS sizes and seats it. `text` is U+FFFC. `alt` from `content: … / "alt"`; none = decorative.
    */
-  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string };
+  image?: { src: string; w: number; h: number; vector?: SvgNode; alt?: string; scale?: number };
   /**
    * The run is a counter the browser printed (`::marker` of a counter `list-style-type`, `content: counter()`):
    * `text === prefix + counterText(value, style) + suffix`. Only component extraction reads it (rows derive the
@@ -757,6 +757,8 @@ export interface ImageNode extends SemBase {
   contentMode: "fill" | "contain" | "cover" | "none";
   /** `object-position` as fractions of the free space (0 = left/top), when not centred. */
   position?: [number, number];
+  /** Scale factor (e.g. 2 for @2x images); points = pixels / scale. Default 1. */
+  scale?: number;
   /** `<img alt>`: the accessibility label, and the text the browser paints when the source is broken. */
   alt?: string;
   /** Computed font of the element; used when the alt text stands in for a source that cannot render. */

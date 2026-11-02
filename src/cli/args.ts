@@ -11,7 +11,10 @@ export interface ConversionCommand {
   palettePath?: string;
   update: boolean;
   force: boolean;
-  options: Pick<ConvertOptions, "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints">;
+  options: Pick<
+    ConvertOptions,
+    "name" | "root" | "theme" | "darkClass" | "mode" | "viewport" | "breakpoints" | "assetCatalog"
+  >;
 }
 
 export interface BuildCommand {
@@ -55,6 +58,7 @@ Options:
   --mode <value>    app or fidelity (default: app)
   --palette <file>  JSON map from CSS variables or hex colours to app colours
                     (e.g. {"--primary": "Color.accentColor"})
+  --asset-catalog   Emit images as an Assets.xcassets imageset catalog instead of Images/
   --breakpoints <auto|W[xH],…>  Capture one layout per CSS width band (auto: 390, 834x1210, 1210x834, 1376x1032) and emit one view that switches at the CSS thresholds
   -h, --help        Show this help
   -v, --version     Show version
@@ -94,7 +98,7 @@ export function parseArgs(args: string[]): Command {
       afterDoubleDash = true;
       continue;
     }
-    if (!afterDoubleDash && (arg === "--update" || arg === "--force")) {
+    if (!afterDoubleDash && (arg === "--update" || arg === "--force" || arg === "--asset-catalog")) {
       if (flags.has(arg)) throw new UsageError(`Repeated option: ${arg}`);
       flags.add(arg);
     } else if (!afterDoubleDash && valueFlags.has(arg)) {
@@ -169,6 +173,7 @@ export function parseArgs(args: string[]): Command {
       darkClass,
       mode,
       viewport: { width, height },
+      assetCatalog: flags.has("--asset-catalog") ? true : undefined,
       ...(breakpoints ? { breakpoints } : {}),
     },
   };
