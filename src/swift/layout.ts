@@ -43,7 +43,9 @@ function tracksExpr(n: GridNode, t: NonNullable<GridNode["template"]>, ctx: Emit
       const margin = [top ? `.padding(.top, ${num(top)})` : "", bottom ? `.padding(.bottom, ${num(bottom)})` : ""];
       const extra = `${it.colSpan > 1 ? `, columnSpan: ${it.colSpan}` : ""}${it.rowSpan > 1 ? `, rowSpan: ${it.rowSpan}` : ""}${it.justify === "stretch" ? "" : `, justify: .${it.justify}`}`;
       const cell = placed ? [`.markswiftGridCell(column: ${it.colStart}, row: ${it.rowStart}${extra})`] : [];
-      return indent([...ctx.renderNode(n.children[it.child]!), ...margin.filter(Boolean), ...cell], 1);
+      const lines = ctx.renderNode(n.children[it.child]!);
+      if (!lines.length) return [];
+      return indent([...lines, ...margin.filter(Boolean), ...cell], 1);
     }),
     "}",
   ];
@@ -170,10 +172,29 @@ export function containerExpr(n: StackNode | GridNode, ctx: EmitContext): string
     out.push(
       `Grid(alignment: .topLeading, horizontalSpacing: ${num(n.hSpacing)}, verticalSpacing: ${num(n.vSpacing)}) {`,
     );
+    const rows: string[][] = [];
+    let isForEach = false;
     for (let i = 0; i < n.children.length; i += n.columns) {
-      out.push("    GridRow {");
-      for (const c of n.children.slice(i, i + n.columns)) out.push(...indent(ctx.renderNode(c), 2));
-      out.push("    }");
+      const rowLines: string[] = [];
+      for (const c of n.children.slice(i, i + n.columns)) {
+        const lines = ctx.renderNode(c);
+        if (lines[0]?.startsWith("ForEach(")) {
+          isForEach = true;
+          rowLines.push(...lines);
+          break;
+        }
+        rowLines.push(...indent(lines, 2));
+      }
+      if (isForEach) {
+        rows.push(rowLines);
+        break;
+      }
+      rows.push(["    GridRow {", ...rowLines, "    }"]);
+    }
+    if (isForEach) {
+      out.push(...indent(rows[0]!, 1));
+    } else {
+      for (const r of rows) out.push(...r);
     }
     out.push("}");
   } else {
