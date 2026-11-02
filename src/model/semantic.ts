@@ -839,6 +839,14 @@ export interface ControlNode extends SemBase {
   level?: "optimum" | "suboptimal" | "poor";
   /** Picker choices in document order: the `<option>`s a menu lists (`hidden` ones are left out). */
   options?: PickerOption[];
+  /** `<select multiple>`: whether multiple options can be chosen. */
+  multiple?: boolean;
+  /** Initial multi-selection choices (`<select multiple>`): the labels of the selected options. */
+  values?: string[];
+  /** `<select size>`: visible row count. */
+  size?: number;
+  /** `<input list>`: suggestion values from the associated `<datalist>`. */
+  suggestions?: string[];
   /** `<a href>` as authored; fragments and relative paths have no runtime destination. */
   href?: string;
   /** `<details open>`: initial disclosure state. */

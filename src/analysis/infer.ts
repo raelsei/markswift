@@ -192,6 +192,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       collectRuns(c, runs);
       continue;
     }
+    if (c.tag === "datalist") continue;
     if (c.styles["position"] === "fixed" && n !== ctx.root) ctx.fixed.push(c);
     else if (outOfFlow(c)) abs.push(c);
     else flow.push(c);
