@@ -149,7 +149,7 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
   );
   const names = [...kinds.keys()].sort((a, b) => b.length - a.length);
   const token = new RegExp(
-    `"(?:[^"\\\\]|\\\\.)*"|Color\\.markswift\\(|Palette\\.[A-Za-z_]\\w*|MarkswiftShape_[0-9a-f]+\\(\\)` +
+    `"(?:[^"\\\\]|\\\\.)*"|Color\\.markswift\\(|Palette\\.[A-Za-z_]\\w*|MarkswiftShape_[0-9a-f]+\\(\\)|(?<=\\.frame\\(width: )\\d+(?:\\.\\d+)?(?=[,)])` +
       (names.length ? `|(?<![\\w$])\\$?(?:${names.join("|")})\\b` : ""),
     "g",
   );
@@ -165,11 +165,7 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
         return [`\u0000${children.length - 1}`];
       },
     };
-    const rawOwn = (isContainer(n) ? containerExpr(n, tctx) : refOf(n, tctx)).join("\n");
-    const own =
-      !isContainer(n) && n.kind === "control"
-        ? rawOwn.replace(/\.frame\(width: \d+(\.\d+)?(?:, alignment: \.[a-zA-Z]+)?\)\n?/g, "")
-        : rawOwn;
+    const own = (isContainer(n) ? containerExpr(n, tctx) : refOf(n, tctx)).join("\n");
     const slots: Slot[] = [];
     let shape = "";
     let last = 0;
@@ -190,7 +186,11 @@ function nodeTemplates(root: SemNode, ctx: EmitContext): Map<SemNode, NodeTempla
         marker = "C";
       } else if (t.startsWith("Palette.")) marker = "C";
       else if (t.startsWith("MarkswiftShape_")) marker = "I";
-      else marker = (t[0] === "$" ? "$" : "") + kinds.get(strip(t))!;
+      else if (/^\d/.test(t)) {
+        // A control's fixed width (a tab, a field): rows of different widths share a template, the width a field.
+        if (isContainer(n) || n.kind !== "control") continue;
+        marker = "W";
+      } else marker = (t[0] === "$" ? "$" : "") + kinds.get(strip(t))!;
       shape += own.slice(last, start) + `\u0001${marker}\u0001`;
       last = end;
       slots.push({ start, end, marker, value: own.slice(start, end) });
@@ -426,11 +426,14 @@ function findRuns(root: SemNode, templates: Map<SemNode, NodeTemplate>): Run[] {
       });
     }
 
-    const widths = members.map((m) => Math.round(m.frame.w * 100) / 100);
+    // A control's own width is a `W` slot: its values are exact. Otherwise the member's measured width wraps it.
+    const ownWidths = members.map((m) => tpl(m).slots.find((s) => s.marker === "W")?.value);
+    const slotWidths = ownWidths.every((w) => w !== undefined);
+    const widths = slotWidths ? (ownWidths as string[]) : members.map((m) => num(Math.round(m.frame.w * 100) / 100));
     if (widths.some((w) => w !== widths[0])) {
       columns.push({
         marker: "W",
-        values: widths.map((w) => num(w)),
+        values: widths,
         nodes: members,
         at: tpl(members[0]!).own,
       });
@@ -1357,10 +1360,14 @@ export function extractComponents(
       const branches: string[] = [];
       for (const caseName of vEnum.cases) {
         const vNode = run.members.find((_, i) => vEnum.memberCase[i] === caseName)!;
+        const widthCol = t.fieldCols.find((c) => strip(run.columns[c]!.marker) === "W");
+        const widthField = widthCol !== undefined ? n.fields.get(widthCol) : undefined;
         const expandV = (node: SemNode): string[] =>
           fill(
             node,
             (s) => {
+              // A control's own width is the row's measured width.
+              if (s.marker === "W" && widthField) return `${n.row}.${widthField}`;
               if (s.marker === "S") {
                 const isVerbatim = tpl(node)
                   .own.slice(Math.max(0, s.start - 15), s.start)
@@ -1389,17 +1396,17 @@ export function extractComponents(
             (c) => (isContainer(c) ? [ctx.nameOf.get(c)!] : expandV(c)),
           );
         let vLines = expandV(vNode);
-        const widthCol = t.fieldCols.find((c) => strip(run.columns[c]!.marker) === "W");
-        const widthField = widthCol !== undefined ? n.fields.get(widthCol) : undefined;
-        if (widthField) {
+        // Without a width slot of its own, the member's measured width wraps it.
+        const hasSlot = tpl(vNode).slots.some((s) => s.marker === "W");
+        const outerField = hasSlot ? undefined : widthField;
+        if (outerField) {
           const insertIdx = vLines.findIndex((l) => l.includes(".background(") || l.includes(".contentShape("));
-          if (insertIdx !== -1) {
+          if (insertIdx !== -1)
             vLines = [
               ...vLines.slice(0, insertIdx),
-              `    .frame(width: ${n.row}.${widthField}, alignment: .center)`,
+              `    .frame(width: ${n.row}.${outerField}, alignment: .center)`,
               ...vLines.slice(insertIdx),
             ];
-          }
         }
         branches.push(`case .${caseName}:`);
         branches.push(...indent(vLines, 1));

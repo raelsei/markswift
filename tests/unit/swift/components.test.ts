@@ -346,6 +346,36 @@ function teamDoc(): LayoutDoc {
   return doc(element("main", 0, 0, 393, 200, ROOT, [h, list, button("Save", 16, 130, { onclick: "save()" })]));
 }
 
+test("extracted rows keep a nested control's fixed width: equal widths a literal, different widths a field", () => {
+  const field = (y: number, w: number, id: string) =>
+    withAttrs(element("input", 200, y, w, 36, { display: "inline-block", width: `${w}px` }), {
+      type: "text",
+      id,
+      value: id,
+    });
+  const list = (widths: number[]) =>
+    element(
+      "ul",
+      16,
+      16,
+      360,
+      140,
+      { display: "flex", "flex-direction": "column", gap: "8px" },
+      widths.map((w, i) =>
+        element("li", 16, 16 + i * 44, 360, 36, FLEX_ROW, [
+          text(`Label ${i}`, 16, 24 + i * 44, 100),
+          field(16 + i * 44, w, `f${i}`),
+        ]),
+      ),
+    );
+  const same = emit(doc(element("main", 0, 0, 393, 200, ROOT, [list([196, 196, 196])])));
+  expect(same).toContain("ForEach(");
+  expect(same).toContain(".frame(width: 196.0)");
+  const varied = emit(doc(element("main", 0, 0, 393, 200, ROOT, [list([196, 120, 160])])));
+  expect(varied).toContain("var width: CGFloat");
+  expect(varied).toMatch(/\.frame\(width: \w+\.width\)/);
+});
+
 test("a heading before the list names the row type", () => {
   const list = listDoc(ROWS).root.children[0]!;
   const swift = emit(doc(element("main", 0, 0, 393, 200, ROOT, [{ ...text("Team", 16, 16, 100), tag: "h2" }, list])));
