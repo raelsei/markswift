@@ -78,7 +78,17 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         label.accessibilityLabel = text
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
-        uiView.sizeThatFits(CGSize(width: proposal.width ?? CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        var width = proposal.width ?? CGFloat.greatestFiniteMagnitude
+        // A zero proposal asks for min-content (a flex row's `autoMin` probe), but UILabel reads a zero width as
+        // unconstrained and answers with the whole text on one line: offer the widest word instead.
+        // shortcut: words split at whitespace only; add soft-hyphen and zero-width-space breaks if a row needs them.
+        if width <= 0, let attributed = uiView.attributedText, attributed.length > 0 {
+            let attributes = attributed.attributes(at: 0, effectiveRange: nil)
+            width = attributed.string.split(whereSeparator: { $0.isWhitespace })
+                .map { NSAttributedString(string: String($0), attributes: attributes).size().width.rounded(.up) }
+                .max() ?? 0
+        }
+        return uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
     }
 }
 #endif
