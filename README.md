@@ -234,8 +234,8 @@ for (const [path, data] of Object.entries({ ...result.files, ...result.assets })
   compresses text the browser broke into lines, while one-line text keeps its line box and lets the
   glyphs overflow it) and `.lineSpacing` on iOS 18–25 (`MarkswiftRuntime.swift`, `markswiftLineHeight`).
   ARIA names, descriptions, values and states reach VoiceOver; `autocomplete`, `inputmode` and
-  `enterkeyhint` choose a text field's iOS keyboard, autofill type and Return key. `<select multiple>` is a
-  `List(selection:)` over a `Set<String>` seeded with the captured selection, and `<input list>` offers its
+  `enterkeyhint` choose a text field's iOS keyboard, autofill type and Return key. `<select multiple>` keeps
+  Chrome's rows, each a button toggling a `Set<String>` seeded with the captured selection, and `<input list>` offers its
   `<datalist>` options as text suggestions. Zero-width spaces and soft hyphens stay break opportunities (a soft hyphen
   shows only where a line breaks); the UIKit paragraphs also justify `text-align: justify` (SwiftUI `Text` cannot, and
   says so). Overlines, wavy/dotted/dashed/double lines, `text-decoration-thickness` and `text-underline-offset` draw

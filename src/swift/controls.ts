@@ -294,46 +294,60 @@ function core(n: ControlNode, deps: ControlDeps): string[] {
     }
     case "picker": {
       if (n.multiple) {
-        if (still) {
+        // An unfocused listbox paints its selected options in Chrome's inactive selection grey; the text keeps its colour.
+        const fill = UA[deps.theme].listSelection;
+        // Chrome sizes the box to `size` rows (4 by default): each row gets that share of the content box, so native
+        // text metrics cannot drift the rows.
+        const rowHeight = (n.frame.h - n.padding[0] - n.padding[2]) / (n.size && n.size > 0 ? n.size : 4);
+        const label = (opt: { label: string }, selected: string) => [
+          "HStack(spacing: 0) {",
+          `    Text(verbatim: ${str(opt.label)})`,
+          "        .lineLimit(1)",
+          "        .padding(.horizontal, 2)",
+          "    Spacer(minLength: 0)",
+          "}",
+          `.frame(maxWidth: .infinity${rowHeight > 0 ? `, minHeight: ${num(rowHeight)}` : ""}, alignment: .leading)`,
+          ...(selected === "true"
+            ? [`.background(${fill})`]
+            : selected === "false"
+              ? []
+              : [`.background(${selected} ? ${fill} : Color.clear)`]),
+        ];
+        if (still || !state) {
           const selectedSet = new Set(n.values ?? []);
-          // An unfocused listbox paints its selected options in Chrome's inactive selection grey; the text keeps its colour.
-          const fill = UA[deps.theme].listSelection;
-          const rows = (n.options ?? []).map((opt) => {
-            const isSelected = selectedSet.has(opt.label);
-            return [
-              "HStack(spacing: 0) {",
-              `    Text(verbatim: ${str(opt.label)})`,
-              "        .lineLimit(1)",
-              "        .padding(.horizontal, 2)",
-              "    Spacer(minLength: 0)",
-              "}",
-              ".frame(maxWidth: .infinity, alignment: .leading)",
-              ...(isSelected ? [`.background(${fill})`] : []),
-            ];
-          });
           return [
             "VStack(alignment: .leading, spacing: 0) {",
-            ...indent(rows.flat(), 1),
+            ...indent(
+              (n.options ?? []).flatMap((opt) => label(opt, String(selectedSet.has(opt.label)))),
+              1,
+            ),
             "}",
             ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)",
           ];
         }
-        const multiBinding = state ? `$${state}` : "Binding.constant(Set<String>())";
-        const rows = (n.options ?? []).map((opt) => {
-          const disabledAttr = opt.disabled ? ".disabled(true)" : "";
-          return `Text(verbatim: ${str(opt.label)}).tag(${str(opt.label)})${disabledAttr}`;
+        // App mode keeps Chrome's rows (a native List in edit mode has 44pt rows with check circles and shows one
+        // and a half options in the captured box); a tap toggles the option, as in a touch listbox.
+        const rows = (n.options ?? []).flatMap((opt) => {
+          const on = `${state}.contains(${str(opt.label)})`;
+          return [
+            "Button {",
+            `    if ${on} { ${state}.remove(${str(opt.label)}) } else { ${state}.insert(${str(opt.label)}) }`,
+            "} label: {",
+            ...indent([...label(opt, on), ".contentShape(Rectangle())"], 1),
+            "}",
+            ".buttonStyle(.plain)",
+            `.accessibilityAddTraits(${on} ? .isSelected : [])`,
+            ...(opt.disabled ? [".disabled(true)"] : []),
+          ];
         });
-        const a11yValue = state
-          ? `.accessibilityValue(${state}.isEmpty ? "No selection" : Array(${state}).sorted().joined(separator: ", "))`
-          : "";
+        // Options beyond the visible rows scroll; a box that shows them all stays a plain stack.
+        const scrolls = (n.options?.length ?? 0) > (n.size && n.size > 0 ? n.size : 4);
         return [
-          `List(selection: ${multiBinding}) {`,
-          ...indent(rows, 1),
-          "}",
-          ".listStyle(.plain)",
-          ".scrollContentBackground(.hidden)",
-          ".markswiftMultiSelect()",
-          ...(a11yValue ? [a11yValue] : []),
+          ...(scrolls ? ["ScrollView {"] : []),
+          ...indent(["VStack(alignment: .leading, spacing: 0) {", ...indent(rows, 1), "}"], scrolls ? 1 : 0),
+          ...(scrolls ? ["}"] : []),
+          ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)",
+          `.accessibilityValue(${state}.isEmpty ? "No selection" : Array(${state}).sorted().joined(separator: ", "))`,
         ];
       }
       // Closed, a picker shows its selection and, unless `appearance: none` removed it, the

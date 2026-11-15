@@ -17,7 +17,7 @@ A LayoutDoc schema change is a major version.
 - Images: remote `http(s)` images are downloaded at conversion time (10 s and 25 MB per image; never for
   `untrustedInput`), the 2x `srcset`/`image-set` candidate the browser chose ships as `@2x` and draws at point size,
   and `--asset-catalog` writes an `Assets.xcassets` catalog instead of `Images/`.
-- `<select multiple>` (`List(selection:)` over a `Set<String>`) and `<input list>` with `<datalist>` suggestions.
+- `<select multiple>` (tappable rows in Chrome's look over a `Set<String>`) and `<input list>` with `<datalist>` suggestions.
 - Zero-width spaces and soft hyphens stay break opportunities; UIKit paragraphs justify `text-align: justify`;
   overlines, wavy/dotted/dashed/double lines, `text-decoration-thickness` and `text-underline-offset` are drawn.
 - Overlays: swipe-to-dismiss for edge sheets and drawers that dismiss on an outside tap or Escape; `--native-sheet`

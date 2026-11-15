@@ -38,7 +38,10 @@ private struct MarkswiftPlaced: ViewModifier {
         case .center: content.frame(maxWidth: .infinity, maxHeight: .infinity)
         case .edge(let e):
             let alignment: Alignment = e == .bottom ? .bottom : e == .top ? .top : e == .leading ? .leading : .trailing
+            // The layer keeps its own size along the edge's axis: offered the whole frame, a greedy child (a
+            // `Spacer` from `margin-top: auto`) would stretch a 320pt bottom drawer to full height.
             content
+                .fixedSize(horizontal: e == .leading || e == .trailing, vertical: e == .top || e == .bottom)
                 .offset(dragOffset)
                 // Swipe-to-dismiss only where the design dismisses (outside tap or Escape). `.gesture`, not a
                 // simultaneous one: a ScrollView inside the drawer keeps its own drags.

@@ -431,15 +431,6 @@ nonisolated struct MarkswiftPressStyle: ButtonStyle {
 
 extension View {
     @ViewBuilder
-    func markswiftMultiSelect() -> some View {
-        #if os(iOS)
-        self.environment(\.editMode, .constant(.active))
-        #else
-        self
-        #endif
-    }
-
-    @ViewBuilder
     func markswiftSuggestions(_ suggestions: [String], text: Binding<String>) -> some View {
         #if os(macOS)
         self.textInputSuggestions {

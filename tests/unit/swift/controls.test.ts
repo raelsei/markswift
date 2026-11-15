@@ -505,7 +505,7 @@ test("a select lists only its visible options, disables the disabled ones and he
   expect(view).toContain('@State private var s_first: String = "Here"');
 });
 
-test("select multiple emits a native multi-selection list with Set<String> binding and VoiceOver value in app mode", () => {
+test("select multiple emits tappable Chrome-look rows over a Set<String> with a VoiceOver value in app mode", () => {
   const { view, diagnostics } = swift([
     field("select", { id: "cars", multiple: "", size: "4" }, 0, 80, [
       option("Volvo"),
@@ -515,14 +515,11 @@ test("select multiple emits a native multi-selection list with Set<String> bindi
     ]),
   ]);
   expect(view).toContain('@State private var s_cars: Set<String> = ["Saab", "Audi"]');
-  expect(view).toContain("List(selection: $s_cars)");
-  expect(view).toContain('.tag("Volvo")');
-  expect(view).toContain('.tag("Saab")');
-  expect(view).toContain('.tag("Mercedes").disabled(true)');
-  expect(view).toContain('.tag("Audi")');
-  expect(view).toContain(".listStyle(.plain)");
-  expect(view).toContain(".scrollContentBackground(.hidden)");
-  expect(view).toContain(".markswiftMultiSelect()");
+  expect(view).not.toContain("List(selection:");
+  expect(view).toContain('if s_cars.contains("Volvo") { s_cars.remove("Volvo") } else { s_cars.insert("Volvo") }');
+  expect(view).toContain('.background(s_cars.contains("Saab") ? Color.markswift(0.808, 0.808, 0.808) : Color.clear)');
+  expect(view).toContain('.accessibilityAddTraits(s_cars.contains("Audi") ? .isSelected : [])');
+  expect(view.split(".disabled(true)").length - 1).toBe(1);
   expect(view).toContain(
     '.accessibilityValue(s_cars.isEmpty ? "No selection" : Array(s_cars).sorted().joined(separator: ", "))',
   );
