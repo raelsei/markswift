@@ -12,6 +12,8 @@ import {
   type CrossAlign,
   type Diagnostic,
   addDiagnostic,
+  confidenceOf,
+  walk,
 } from "../model/semantic.ts";
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
@@ -66,18 +68,19 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   applyTooltips(root, doc);
+  // Only a direct child of a vertically scrolling stack pins (swift/layout.ts); every other sticky box stays where
+  // it was captured and says so, before invisible boxes are dropped.
+  const pinned = new Set<SemNode>();
+  walk(root, (n) => {
+    if (n.kind === "stack" && n.axis === "v" && n.scroll === "v") for (const c of n.children) pinned.add(c);
+  });
+  walk(root, (n) => {
+    if (!n.sticky || pinned.has(n)) return;
+    addDiagnostic(n.diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
+    n.confidence = confidenceOf(n.diagnostics); // nodes were graded when built; an ungraded note never reaches the report
+  });
   dropInvisible(root);
   pruneHitTesting(root);
-  const checkSticky = (node: SemNode, inScroll = false): void => {
-    const scrolls = inScroll || ((node.kind === "stack" || node.kind === "grid") && node.scroll === "v");
-    if (node.sticky && !inScroll) {
-      addDiagnostic(node.diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
-    }
-    if (node.kind === "stack" || node.kind === "grid") {
-      for (const c of node.children) checkSticky(c, scrolls);
-    }
-  };
-  checkSticky(root);
   // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
   const schemes = (doc.root.styles["color-scheme"] ?? "").split(/\s+/).filter((t) => t && t !== "only");
   const colorScheme =

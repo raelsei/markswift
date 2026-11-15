@@ -319,6 +319,8 @@ browserTest(
         ),
       ).rejects.toThrow("intentional preparation failure");
       expect(handles.browser).toBeDefined();
+      // The shared browser closes shortly after its last conversion releases it, not synchronously.
+      for (let i = 0; i < 40 && handles.browser!.isConnected(); i++) await Bun.sleep(50);
       expect(handles.browser!.isConnected()).toBe(false);
       await expect(fetch(origin)).rejects.toThrow();
     } finally {

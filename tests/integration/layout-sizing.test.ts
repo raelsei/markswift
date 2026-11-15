@@ -156,9 +156,9 @@ for (const width of [320, 390, 768]) {
         ] as const) {
           expect(measured(id).bounds.h).toBe(expected);
           expect(node(id).height).toEqual({ kind: "fixed", px: expected });
-          approximation(id, "unequal flex-grow factors [1,2]");
-          approximation(id, "height pinned");
         }
+        // Columns are admitted too: the pin is reported once on the column.
+        approximation("grow-column", "column flex allocation pinned to captured heights in fidelity mode");
         for (const id of ["partial-a", "partial-b"]) {
           const expected = contentSize(measured("partial-row")).w * 0.25;
           expect(measured(id).bounds.w).toBe(expected);
