@@ -2,7 +2,7 @@
 import { HELP, parseArgs, UsageError } from "./cli/args.ts";
 import { EditedFilesError } from "./cli/manifest.ts";
 import { runBuild, runConversion, runInstallBrowser } from "./cli/run.ts";
-import { stopSharedBrowser } from "./browser/capture.ts";
+import { stopSharedBrowser } from "./api/convert.ts";
 import { VERSION } from "./model/version.ts";
 async function main(): Promise<number> {
   try {

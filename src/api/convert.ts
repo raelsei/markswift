@@ -223,3 +223,7 @@ export function unionFaces(lists: FontFace[][]): FontFace[] {
 export function convertHtml(html: string, options: ConvertOptions = {}): Promise<ConversionResult> {
   return convert({ html }, options);
 }
+
+// The public surface and the CLI reach the capture cache and the shared browser through this layer.
+export { clearCaptureCache, getCacheDir } from "../browser/cache.ts";
+export { stopSharedBrowser } from "../browser/capture.ts";

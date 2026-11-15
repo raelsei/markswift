@@ -171,14 +171,16 @@ async function launchBrowser(opts: { channel?: string; restricted?: boolean }): 
   // Restricted: no hostname (nor IP literal) resolves, so DNS prefetch, preconnect and anything
   // that slips past `page.route` cannot reach the network. The document itself is fulfilled by the route.
   const args = opts.restricted ? ["--host-resolver-rules=MAP * ~NOTFOUND"] : [];
-  const channel = opts.channel ?? (process.platform === "darwin" ? "chrome" : undefined);
+  // "chromium" is the full Playwright build that `install-browser` downloads (`--no-shell`); a launch without a
+  // channel would look for the separate headless shell instead.
+  const channel = opts.channel ?? (process.platform === "darwin" ? "chrome" : "chromium");
   try {
-    return await chromium.launch({ headless: true, ...(channel ? { channel } : {}), args });
+    return await chromium.launch({ headless: true, channel, args });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (!opts.channel && channel === "chrome") {
       try {
-        return await chromium.launch({ headless: true, args });
+        return await chromium.launch({ headless: true, channel: "chromium", args });
       } catch (fallback) {
         const detail = fallback instanceof Error ? fallback.message : String(fallback);
         throw new Error(

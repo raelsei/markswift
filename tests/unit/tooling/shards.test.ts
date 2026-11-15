@@ -136,22 +136,11 @@ test("mergeRuns throws on duplicate captures or missing run.json", async () => {
   }
 });
 
-test("visual.yml workflow file parses and specifies sharded all scope", () => {
-  const proc = Bun.spawnSync([
-    "python3",
-    "-c",
-    "import yaml, json, sys; json.dump(yaml.safe_load(open('.github/workflows/visual.yml')), sys.stdout)",
-  ]);
-  expect(proc.exitCode).toBe(0);
-  const workflow = JSON.parse(proc.stdout.toString());
-  expect(workflow.jobs["visual"]).toBeDefined();
-  expect(workflow.jobs["visual-shard"]).toBeDefined();
-  expect(workflow.jobs["visual-merge"]).toBeDefined();
-
-  // Matrix specification on visual-shard
-  const matrix = workflow.jobs["visual-shard"].strategy?.matrix;
-  expect(matrix?.shard).toEqual([1, 2, 3, 4]);
-
-  // visual-merge dependencies
-  expect(workflow.jobs["visual-merge"].needs).toBe("visual-shard");
+test("visual.yml specifies the sharded all scope", async () => {
+  // Read as text: the repo has no YAML parser and CI runners have no PyYAML.
+  const workflow = await Bun.file(".github/workflows/visual.yml").text();
+  for (const job of ["visual", "visual-shard", "visual-merge"])
+    expect(workflow).toMatch(new RegExp(`^  ${job}:$`, "m"));
+  expect(workflow).toMatch(/^ +shard: \[1, 2, 3, 4\]$/m);
+  expect(workflow).toMatch(/^ +needs: visual-shard$/m);
 });

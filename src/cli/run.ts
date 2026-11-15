@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { text } from "node:stream/consumers";
 import { buildLibrary } from "../api/build.ts";
 import { convert } from "../api/convert.ts";
-import { clearCaptureCache } from "../browser/cache.ts";
+import { clearCaptureCache } from "../api/convert.ts";
 import type { HtmlSource } from "../input/types.ts";
 import { VERSION } from "../model/version.ts";
 import type { BuildCommand, ConversionCommand, InstallBrowserCommand } from "./args.ts";
