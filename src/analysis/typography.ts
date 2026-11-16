@@ -2,7 +2,6 @@
 import { type BundledFamilies, type BundledFamily } from "../model/fonts.ts";
 import { type FontSpec } from "../model/semantic.ts";
 import { round2, px, fontWeight, fontFamilies, fontStretch, variationSettings } from "../css/index.ts";
-
 /**
  * Lower-case family name → the SwiftUI system design that carries it: the CSS generic families,
  * the `ui-*` keywords, the Apple system stacks (`-apple-system`, `BlinkMacSystemFont`) and the

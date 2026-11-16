@@ -106,6 +106,43 @@ final class BehaviourTests: XCTestCase {
             XCTAssertTrue(FileManager.default.fileExists(atPath: URL(fileURLWithPath: dir).appendingPathComponent("\(item.view).json").path), item.view)
         }
     }
+    @MainActor
+    func testBenchmarks() throws {
+        guard ProcessInfo.processInfo.environment["MARKSWIFT_BENCHMARKS"] == "1" else { return }
+        let dir = try XCTUnwrap(ProcessInfo.processInfo.environment["MARKSWIFT_BEHAVIOUR_DIR"], "MARKSWIFT_BEHAVIOUR_DIR is not set")
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: URL(fileURLWithPath: dir).appendingPathComponent("cases.json")))
+        var benchmarks: [[String: Any]] = []
+
+        for item in cases {
+            let app = launch(item, "UICTContentSizeCategoryL")
+            let evalElement = app.staticTexts["markswift.evaluations"]
+            let initialEvals = evalElement.waitForExistence(timeout: 2) ? (Int(evalElement.label) ?? 1) : 1
+
+            var hitchMeasured = false
+            let scroll = app.scrollViews.firstMatch
+            if scroll.waitForExistence(timeout: 2) && scroll.isHittable {
+                let options = XCTMeasureOptions()
+                options.iterationCount = 3
+                measure(metrics: [XCTOSSignpostMetric.scrollDecelerationMetric], options: options) {
+                    scroll.swipeUp(velocity: .fast)
+                }
+                hitchMeasured = true
+            }
+
+            let postEvals = evalElement.exists ? (Int(evalElement.label) ?? initialEvals) : initialEvals
+
+            benchmarks.append([
+                "case": item.view,
+                "initialBodyEvaluations": initialEvals,
+                "postScrollBodyEvaluations": postEvals,
+                "scrollDecelerationMetricMeasured": hitchMeasured,
+            ])
+            app.terminate()
+        }
+
+        let data = try JSONSerialization.data(withJSONObject: benchmarks, options: [.sortedKeys, .prettyPrinted])
+        try data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("benchmarks.json"))
+    }
 }
 
 @MainActor

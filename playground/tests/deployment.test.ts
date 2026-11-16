@@ -101,7 +101,6 @@ test("conversion service bundles independently of the library source tree", asyn
     expect(server).not.toContain('from "../../src/');
     expect(server).not.toMatch(/simctl|xcodebuild/);
     expect(manifest.dependencies["playwright-core"]).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(await Bun.file(join(directory, "convert-font.py")).exists()).toBe(true);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -118,7 +118,9 @@ export function applyEffects(n: LayoutNode, style: Style, diagnostics: Diagnosti
       "animation-name",
       `animation ${animation.slice(0, 40)} → animated element rendered at end state (infinite animations at their base state); no motion is generated`,
     );
-  if (s["position"] === "sticky")
+  const topInset = s["top"] ?? n.preferredSize?.insets?.top;
+  const isTopSticky = s["position"] === "sticky" && topInset !== undefined && topInset !== "auto";
+  if (s["position"] === "sticky" && !isTopSticky)
     addDiagnostic(diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
   const os = s["outline-style"];
   const ow = px(s["outline-width"]);

@@ -96,6 +96,8 @@ export type Paint =
       repeat?: BackgroundRepeat;
       /** A `data:image/svg+xml` source, parsed during analysis. */
       vector?: SvgNode;
+      /** Scale factor (e.g. 2 for @2x images); points = pixels / scale. Default 1. */
+      scale?: number;
     } & PaintInset)
   | { kind: "unsupported"; raw: string };
 

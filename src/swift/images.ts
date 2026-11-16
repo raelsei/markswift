@@ -19,7 +19,7 @@ const LOOPBACK = /^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:\d+)?(\/|$
  * `undefined` when the source cannot be shown (noted on the node).
  */
 export function imageLayer(p: ImagePaint, n: SemNode, prop: string, ctx: EmitContext): string[] | undefined {
-  const src = p.vector ? vectorSource(p.vector, ctx) : imageSource(p.url, n, prop, ctx);
+  const src = p.vector ? vectorSource(p.vector, ctx) : imageSource(p.url, n, prop, ctx, p.scale ?? 1);
   if (!src) return undefined;
   const box = n.frame;
   const repeat = p.repeat !== undefined && p.repeat !== "no-repeat";
@@ -106,7 +106,7 @@ function vectorSource(vector: SvgNode, ctx: EmitContext): ImageSource {
  * non-embedded relative URL) has no bytes to ship. An SVG payload reaching here has no vector:
  * the analysis already reported why. `undefined` (with a note) when the source is unusable.
  */
-function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): ImageSource | undefined {
+function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext, scale = 1): ImageSource | undefined {
   const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(url);
   if (!data) {
     if (/^https?:/i.test(url) && !LOOPBACK.test(url))
@@ -130,9 +130,11 @@ function imageSource(url: string, n: SemNode, prop: string, ctx: EmitContext): I
     );
     return undefined;
   }
-  const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}.${ext}`;
+  const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
+  const file = scale > 1 ? `${hash}@${scale}x.${ext}` : `${hash}.${ext}`;
   ctx.images[`Images/${file}`] ??= new Uint8Array(bytes);
-  return { kind: "raster", expr: (sizing) => `Image.markswiftAsset(${str(file)})${sizing}` };
+  const scaleArg = scale > 1 ? `, scale: ${num(scale)}` : "";
+  return { kind: "raster", expr: (sizing) => `Image.markswiftAsset(${str(file)}${scaleArg})${sizing}` };
 }
 
 /** Inventory row of an image source: the `<img>` element, or the `url()` value row of `background-image`/`mask-image`. */
@@ -198,7 +200,7 @@ export function inlineImageView(
   const src = img.vector
     ? vectorSource(img.vector, ctx)
     : decodable(img.src)
-      ? imageSource(img.src, n, "content", ctx)
+      ? imageSource(img.src, n, "content", ctx, img.scale ?? 1)
       : undefined;
   if (src?.kind === "vector") return src.view(img.w, img.h);
   if (src?.kind === "raster") return [src.expr(".resizable()")];
@@ -221,7 +223,11 @@ export function imageNodeExpr(n: ImageNode, ctx: EmitContext): string[] {
         : n.a11y?.label
           ? []
           : [`.accessibilityLabel(${str(n.alt)})`];
-  const src = n.vector ? vectorSource(n.vector, ctx) : decodable(n.src) ? imageSource(n.src, n, "img", ctx) : undefined;
+  const src = n.vector
+    ? vectorSource(n.vector, ctx)
+    : decodable(n.src)
+      ? imageSource(n.src, n, "img", ctx, n.scale ?? 1)
+      : undefined;
   if (!src) {
     if (n.src && !n.src.startsWith("data:")) dropNote(n.src, n, "img");
     if (!n.alt) return ["Color.clear", ...a11y];

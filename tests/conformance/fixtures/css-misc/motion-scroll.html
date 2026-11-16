@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="markswift-rows" content="animation-timeline">
+<meta name="markswift-themes" content="light">
+<title>motion-scroll</title>
+<style>
+:root { color-scheme: light dark; --bg: #f4f6fa; --fg: #111827; --muted: #6b7280; --card: #ffffff; --line: #d9dee7; --accent: #2563eb; --accent-fg: #ffffff; --soft: #dbeafe; }
+html, body { margin: 0; }
+body { background: var(--bg); }
+main[data-markswift-root] { box-sizing: border-box; width: 393px; padding: 16px; background: var(--bg); color: var(--fg); font-family: system-ui; font-size: 15px; line-height: 20px; }
+.cap { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.v { margin: 0 0 16px; }
+.v:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 24px; align-items: center; }
+@keyframes fade-scale { from { opacity: 0; transform: scale(0.8); } to { transform: scale(1); } }
+@keyframes slide-in { from { transform: translateY(20px); opacity: 0.5; } to { transform: translateY(0px); opacity: 1; } }
+.view-card { width: 80px; height: 60px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); animation: fade-scale linear both; animation-timeline: view(); }
+.scroll-card { width: 80px; height: 60px; border-radius: 8px; background: var(--accent); animation: slide-in linear both; animation-timeline: scroll(); }
+</style>
+</head>
+<body>
+<main data-markswift-root>
+<section class="v" id="scroll-driven">
+  <p class="cap">view-timeline / scroll-timeline</p>
+  <div class="row">
+    <div class="view-card" id="view-card"></div>
+    <div class="scroll-card" id="scroll-card"></div>
+  </div>
+</section>
+</main>
+</body>
+</html>

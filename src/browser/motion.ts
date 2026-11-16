@@ -108,7 +108,13 @@ const collect = (arg: {
       if (effect.composite !== "replace") anim.composite = effect.composite;
       const timeline = a.timeline;
       if (timeline === null) anim.timeline = "none";
-      else if (timeline.constructor.name !== "DocumentTimeline") anim.timeline = timeline.constructor.name;
+      else if (timeline.constructor.name !== "DocumentTimeline") {
+        if (timeline.constructor.name === "ScrollTimeline" && "source" in timeline && timeline.source === target) {
+          anim.timeline = "ScrollTimeline(self)";
+        } else {
+          anim.timeline = timeline.constructor.name;
+        }
+      }
       entry = anim;
     }
     if (arg.targets) {
@@ -214,11 +220,14 @@ export async function recordAnimations(page: Page): Promise<void> {
       const list = window.__markswiftStarted!;
       for (const a of anims) if (!list.includes(a)) list.push(a);
     };
-    new MutationObserver(() => add(document.getAnimations().filter((a) => a instanceof CSSAnimation))).observe(
-      document,
-      { subtree: true, childList: true, attributes: true },
-    );
+    new MutationObserver(() => add(document.getAnimations())).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    });
     document.addEventListener("animationstart", (e) => add((e.target as Element).getAnimations()), true);
+    document.addEventListener("transitionrun", (e) => add((e.target as Element).getAnimations()), true);
+    document.addEventListener("transitionstart", (e) => add((e.target as Element).getAnimations()), true);
   });
 }
 
@@ -233,14 +242,38 @@ export async function readElementAnimations(
   targets: ElementHandle[],
 ): Promise<{ lists: Anim[][]; warnings: string[] }> {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const { byTarget, ambiguous } = await page.evaluate(collect, {
+  const anims = await page.evaluate(collect, {
     targets: targets as ElementHandle<Element>[],
     kind: "CSSAnimation",
     finish: false,
   });
+  const trans = await page.evaluate(collect, {
+    targets: targets as ElementHandle<Element>[],
+    kind: "CSSTransition",
+    finish: false,
+  });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const byTarget: Anim[][] = targets.map((_, i) => {
+    const list = [...(anims.byTarget[i] as Anim[])];
+    for (const t of trans.byTarget[i] as unknown as Transition[]) {
+      list.push({
+        name: t.property,
+        duration: t.duration,
+        delay: t.delay,
+        iterations: 1,
+        direction: "normal",
+        fill: "both",
+        keyframes: [
+          { offset: 0, easing: t.easing, values: { [t.property]: t.from } },
+          { offset: 1, easing: "linear", values: { [t.property]: t.to } },
+        ],
+      });
+    }
+    return list;
+  });
+  const ambiguous = [...new Set([...anims.ambiguous, ...trans.ambiguous])];
   return {
-    lists: byTarget as Anim[][],
+    lists: byTarget,
     warnings: ambiguous.map(
       (i) => `layer root ${i} has no animation of its own and several animated descendants; its enter/exit is not read`,
     ),

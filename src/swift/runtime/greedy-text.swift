@@ -11,15 +11,17 @@ struct MarkswiftGreedyText: View {
     let descent: CGFloat
     let natural: CGFloat
     var lineLimit: Int? = nil
+    var justify: Bool = false
     var body: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, ascent: ascent, descent: descent, lineLimit: lineLimit)
+            MarkswiftGreedyLabel(text: text, font: font, color: color, size: size, lineHeight: lineHeight, ascent: ascent, descent: descent, lineLimit: lineLimit, justify: justify)
         } else { fallback }
         #else
         fallback
         #endif
     }
+    /// Before iOS 26 (and on macOS): SwiftUI Text, ragged right even when `justify` (no public API).
     private var fallback: some View {
         Text(verbatim: text).font(font).foregroundStyle(color)
             .lineLimit(lineLimit)
@@ -39,6 +41,7 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
     let ascent: CGFloat
     let descent: CGFloat
     let lineLimit: Int?
+    let justify: Bool
     func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -51,6 +54,9 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.lineBreakStrategy = []
+        if justify {
+            paragraph.alignment = .justified
+        }
         paragraph.minimumLineHeight = lineHeight * resolved.pointSize / size
         paragraph.maximumLineHeight = paragraph.minimumLineHeight
         // A fixed-height UIKit paragraph puts its baseline at the line height minus the native descent, rounded to the
@@ -72,7 +78,17 @@ private struct MarkswiftGreedyLabel: UIViewRepresentable {
         label.accessibilityLabel = text
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
-        uiView.sizeThatFits(CGSize(width: proposal.width ?? CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        var width = proposal.width ?? CGFloat.greatestFiniteMagnitude
+        // A zero proposal asks for min-content (a flex row's `autoMin` probe), but UILabel reads a zero width as
+        // unconstrained and answers with the whole text on one line: offer the widest word instead.
+        // shortcut: words split at whitespace only; add soft-hyphen and zero-width-space breaks if a row needs them.
+        if width <= 0, let attributed = uiView.attributedText, attributed.length > 0 {
+            let attributes = attributed.attributes(at: 0, effectiveRange: nil)
+            width = attributed.string.split(whereSeparator: { $0.isWhitespace })
+                .map { NSAttributedString(string: String($0), attributes: attributes).size().width.rounded(.up) }
+                .max() ?? 0
+        }
+        return uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
     }
 }
 #endif

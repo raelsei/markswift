@@ -7,6 +7,7 @@ export interface ResolvedSource {
   html?: string;
   url: string;
   label: string;
+  baseDir?: string;
   close(): void;
 }
 
@@ -24,6 +25,7 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
       html,
       url: `${server.origin}/${encodeURIComponent(basename(file))}`,
       label: basename(file),
+      baseDir: dirname(file),
       close: () => server.stop(),
     };
   }
@@ -33,6 +35,7 @@ export async function resolveSource(source: HtmlSource): Promise<ResolvedSource>
     html: source.html,
     url: source.baseURL ? httpURL(source.baseURL) : `${server?.origin ?? "http://markswift.invalid"}/index.html`,
     label: "inline.html",
+    baseDir: source.assetsDir ? resolve(source.assetsDir) : undefined,
     close: () => server?.stop(),
   };
 }

@@ -69,11 +69,11 @@ browserTest(
 );
 
 browserTest(
-  "grid tiles are unrolled calls and radio rows pass their group binding through",
+  "grid tiles are a ForEach over their data array and radio rows pass their group binding through",
   async () => {
     const { code } = await convertHtml(GRID_RADIO, { name: "GridRadio", css: GRID_RADIO_CSS });
-    expect(code).not.toContain("ForEach(ts)");
-    expect(code).toContain("TView(t: Self.ts[3]");
+    expect(code).toMatch(/ForEach\(ts\[rowStart\.\.<min\(rowStart \+ \d+, ts\.count\)\]\) \{ t in\s+TView\(t: t/);
+    expect(code).toMatch(/init\(ts: \[T\] = Self\.ts/);
     expect(code).toMatch(/@Binding var (?!s_)\w+: String/);
     expect(code).toMatch(/: \$s_\w+/);
   },
@@ -200,6 +200,12 @@ const GOLDEN: Record<string, { types: string[]; views: string[]; arrays: string[
     actions: [],
   },
   "shadcn-list-24": { types: ["Item"], views: ["ItemView"], arrays: ["items"], actions: [] },
+  "shadcn-tabs": {
+    types: ["Item", "Item2"],
+    views: ["ItemView", "Item2View"],
+    arrays: ["items", "items2"],
+    actions: ["onItem", "onItem2"],
+  },
   "tw-cards": {
     types: ["InviteATeammateCard"],
     views: ["InviteATeammateCardView"],

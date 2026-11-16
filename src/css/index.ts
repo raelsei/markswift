@@ -9,6 +9,7 @@ export { type TransformLoss, parseTransform, parseOrigin, cssTransform } from ".
 export { parseFilters, parseClipPath } from "./effects.ts";
 export { parseBackgroundRepeat, parseBackgroundSize, parseBackgroundPosition } from "./background.ts";
 export { rasterSize } from "./raster.ts";
+export { type ImageSetCandidate, parseImageSet } from "./image-set.ts";
 export { fontWeight, fontFamilies, fontStretch, variationSettings } from "./typography.ts";
 export { parseRadiusXY } from "./radius.ts";
 export {
@@ -19,4 +20,16 @@ export {
   parseTrackTemplate,
   resolvedGridTracks,
 } from "./grid.ts";
-export { type WidthQuery, widthQuery, passes, matchesWidth, captureWidth, bandOf } from "./media.ts";
+export {
+  type WidthQuery,
+  type MediaQueryCondition,
+  mediaCondition,
+  widthQuery,
+  heightQuery,
+  orientationQuery,
+  passes,
+  matchesWidth,
+  matchesMedia,
+  captureWidth,
+  bandOf,
+} from "./media.ts";

@@ -1,6 +1,6 @@
 /** CSS the capture resolved for one viewport and one validation state, reported instead of silently baked in. */
 import type { Page } from "playwright-core";
-import { matchesWidth, widthQuery } from "../css/index.ts";
+import { matchesWidth, mediaCondition, widthQuery } from "../css/index.ts";
 import {
   CONDITIONAL_MARK,
   CONTAINER_MARK,
@@ -147,9 +147,13 @@ export async function readConditionalRules(
     },
     { selector, mark: VALIDATION_MARK, conditionalMark: CONDITIONAL_MARK, containerMark: CONTAINER_MARK },
   );
-  // Width media and container queries are reconstructed with `breakpoints`; the compile reports what stays lost.
+  // Media queries (width, height, orientation) and width container queries are reconstructed with `breakpoints`; the compile reports what stays lost.
   const warnings = rules
-    .filter((c) => c.selectors.length && !(breakpoints && widthQuery(c.query)))
+    .filter(
+      (c) =>
+        c.selectors.length &&
+        !(breakpoints && (c.condition.startsWith("@container") ? widthQuery(c.query) : mediaCondition(c.query))),
+    )
     .map(({ condition, selectors }) => ({
       source: "capture" as const,
       level: "approximated" as const,

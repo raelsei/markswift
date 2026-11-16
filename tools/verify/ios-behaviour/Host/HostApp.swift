@@ -14,6 +14,34 @@ struct HostApp: App {
         }
     }
 }
+/// Tracks SwiftUI body re-evaluation counts in benchmark runs.
+/// ponytail: lock-protected in-memory dictionary; fine for benchmark suites with sequential view tests.
+final class BenchmarkTracker: @unchecked Sendable {
+    static let shared = BenchmarkTracker()
+    private var counts: [String: Int] = [:]
+    private let lock = NSLock()
+
+    func record(_ key: String) {
+        lock.lock()
+        counts[key, default: 0] += 1
+        lock.unlock()
+    }
+
+    func count(for key: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return counts[key, default: 0]
+    }
+}
+
+struct BodyEvaluationCounter: ViewModifier {
+    let name: String
+    func body(content: Content) -> some View {
+        BenchmarkTracker.shared.record(name)
+        return content
+    }
+}
+
 
 /// The hosted view framed at `MARKSWIFT_WIDTHS[widthIndex]` (390 when unset); with two or more widths, the
 /// `markswift.width` button next to the log cycles them (a breakpoint view switching bands in place). The log's value is
@@ -31,6 +59,7 @@ struct HostRoot: View {
                     .frame(width: widths.isEmpty ? 390 : widths[widthIndex], alignment: .topLeading)
                     .frame(minHeight: env["MARKSWIFT_SCREEN_HEIGHT"].flatMap { Double($0) }.map { CGFloat($0) }, alignment: .topLeading)
                     .onGeometryChange(for: Double.self) { $0.size.height } action: { height = $0 }
+                    .modifier(BodyEvaluationCounter(name: env["MARKSWIFT_VIEW"] ?? ""))
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("markswift.root")
             }
@@ -38,6 +67,8 @@ struct HostRoot: View {
                 Text(BehaviourLog.shared.hits.joined(separator: ",")).font(.caption)
                     .accessibilityValue(String(height))
                     .accessibilityIdentifier("markswift.log")
+                Text(String(BenchmarkTracker.shared.count(for: env["MARKSWIFT_VIEW"] ?? "")))
+                    .accessibilityIdentifier("markswift.evaluations")
                 if widths.count > 1 {
                     Button("Width") { widthIndex = (widthIndex + 1) % widths.count }
                         .accessibilityIdentifier("markswift.width")

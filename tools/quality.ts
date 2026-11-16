@@ -1,5 +1,5 @@
 /** Compare saved visual measurements without invoking a browser or simulator. */
-import { readdir, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
@@ -540,7 +540,104 @@ async function writeBaseline(runDir: string, path: string) {
   await Bun.write(path, JSON.stringify(manifest, null, 2) + "\n");
   console.log(`wrote ${keys.length} captures to ${path}`);
 }
+/** Combines multiple shard run directories into one self-consistent run directory with merged run.json and captures. */
+export async function mergeRuns(outDir: string, shardDirs: string[]): Promise<void> {
+  if (shardDirs.length === 0) throw new Error("no shard directories specified to merge");
+  await mkdir(outDir, { recursive: true });
 
+  const shardReports: Array<Record<string, unknown>> = [];
+  const copiedCaptures = new Set<string>();
+
+  for (const shardDir of shardDirs) {
+    const runPath = join(shardDir, "run.json");
+    if (!(await Bun.file(runPath).exists())) {
+      throw new Error(`shard directory ${shardDir} lacks run.json`);
+    }
+    const report = (await Bun.file(runPath).json()) as Record<string, unknown>;
+    shardReports.push(report);
+
+    const entries = await readdir(shardDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === "run.json") continue;
+      const srcPath = join(shardDir, entry.name);
+      const destPath = join(outDir, entry.name);
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith("_")) {
+          if (copiedCaptures.has(entry.name)) {
+            throw new Error(`duplicate capture "${entry.name}" found across shards`);
+          }
+          copiedCaptures.add(entry.name);
+        }
+        await cp(srcPath, destPath, { recursive: true });
+      }
+    }
+  }
+
+  const totalExpected = shardReports.reduce((sum, r) => sum + ((r.expected as number) ?? 0), 0);
+  const totalCompleted = shardReports.reduce((sum, r) => sum + ((r.completed as number) ?? 0), 0);
+  const allErrors = shardReports.flatMap((r) => (r.errors as string[]) ?? []);
+
+  const entryMap = new Map<string, Record<string, unknown>>();
+  for (const r of shardReports) {
+    for (const e of (r.entries as Array<Record<string, unknown>>) ?? []) {
+      if (record(e) && typeof e.key === "string") {
+        entryMap.set(e.key, e);
+      }
+    }
+  }
+  const mergedEntries = Array.from(entryMap.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
+
+  const baseEnv = (shardReports[0]?.environment as Record<string, unknown>) ?? {};
+  const mergedFixtureHashes: Record<string, string> = {};
+  for (const r of shardReports) {
+    const env = (r.environment as Record<string, unknown>) ?? {};
+    if (record(env.fixtureHashes)) {
+      Object.assign(mergedFixtureHashes, env.fixtureHashes);
+    }
+  }
+
+  const capturedAts = shardReports
+    .map((r) => (r.environment as Record<string, unknown>)?.capturedAt as string)
+    .filter((t): t is string => typeof t === "string" && t.length > 0)
+    .sort();
+
+  const mergedEnv = {
+    ...baseEnv,
+    fixtureHashes: mergedFixtureHashes,
+    capturedAt: capturedAts[0] ?? baseEnv.capturedAt,
+    simulatorUdid:
+      (
+        shardReports.find((r) => (r.environment as Record<string, unknown>)?.simulatorUdid)?.environment as Record<
+          string,
+          unknown
+        >
+      )?.simulatorUdid ?? baseEnv.simulatorUdid,
+    ipadRenderer:
+      (
+        shardReports.find((r) => (r.environment as Record<string, unknown>)?.ipadRenderer)?.environment as Record<
+          string,
+          unknown
+        >
+      )?.ipadRenderer ?? baseEnv.ipadRenderer,
+    ipadUdid:
+      (
+        shardReports.find((r) => (r.environment as Record<string, unknown>)?.ipadUdid)?.environment as Record<
+          string,
+          unknown
+        >
+      )?.ipadUdid ?? baseEnv.ipadUdid,
+  };
+
+  const mergedReport = {
+    expected: totalExpected,
+    completed: totalCompleted,
+    errors: allErrors,
+    environment: mergedEnv,
+    entries: mergedEntries,
+  };
+
+  await Bun.write(join(outDir, "run.json"), JSON.stringify(mergedReport, null, 2) + "\n");
+}
 /** Captures grouped by `<mode>\t<keyOf(capture)>`, groups sorted (`app` first). */
 function groupBy(manifest: unknown, keyOf: (c: Record<string, unknown>) => string) {
   if (!record(manifest)) throw new Error("summary needs a capture manifest object");
@@ -655,6 +752,7 @@ export function ratchetFamilies(
 
 const USAGE = `Usage: bun run tools/quality.ts <baseline-dir|manifest.json> <current-dir> [policy.json]
        bun run tools/quality.ts --write-baseline <run-dir> <manifest.json>
+       bun run tools/quality.ts --merge <out-dir> <shard-dirs...>
        bun run tools/quality.ts --summary <manifest.json> [policy.json]
        bun run tools/quality.ts --ratchet <policy.json> <manifest.json> [--features-only]
        bun run tools/quality.ts --readme <manifest.json> <policy.json>`;
@@ -665,6 +763,10 @@ if (import.meta.main) {
     if (args[0] === "--write-baseline") {
       if (args.length !== 3) throw new Error(USAGE);
       await writeBaseline(args[1]!, args[2]!);
+    } else if (args[0] === "--merge") {
+      if (args.length < 3) throw new Error(USAGE);
+      await mergeRuns(args[1]!, args.slice(2));
+      console.log(`merged ${args.length - 2} shards into ${args[1]}`);
     } else if (args[0] === "--summary") {
       if (args.length !== 2 && args.length !== 3) throw new Error(USAGE);
       const policy = args[2] ? await Bun.file(args[2]).json() : {};

@@ -38,6 +38,65 @@ test("dropdown: the trigger's label opens a native Menu of the captured items; n
   const button = compile(without(DROPDOWN())).code;
   const label = (c: string, open: RegExp) => c.slice(c.search(open)).split("\n").slice(1, 7).join("\n");
   expect(label(code, /} label: \{\n +Text\(verbatim: "Open"\)/)).toBe(label(button, /Button\(action: onOpen\) \{/));
+  // Profile has a leading SVG and a ⇧⌘P shortcut:
+  expect(code).toContain("Label {");
+  expect(code).toContain('Text(verbatim: "Profile")');
+  expect(code).toContain("Image.markswiftRendered(width: 16.0, height: 16.0)");
+  expect(code).toContain('.keyboardShortcut("p", modifiers: [.command, .shift])');
+});
+
+test("menu item shortcut parsing: .keyboardShortcut for parsed combinations, trailing text for unparsed", () => {
+  const doc = DROPDOWN();
+  // Add a <kbd> shortcut to billing and an unparsed shortcut to settings
+  const group = doc.layers![0]!.nodes[0]!.children[0]!.children[1]!;
+  // Add <kbd>⌘B</kbd> to billing
+  const billing = group.children[1]!;
+  billing.children.push({
+    id: "billing-kbd",
+    tag: "kbd",
+    attrs: {},
+    styles: {},
+    bounds: { x: 190, y: 112, w: 20, h: 16 },
+    text: "⌘B",
+    children: [],
+  });
+  // Add unparsed shortcut to settings
+  const settings = group.children[2]!;
+  settings.children.push({
+    id: "settings-shortcut",
+    tag: "span",
+    attrs: { "data-slot": "dropdown-menu-shortcut" },
+    styles: {},
+    bounds: { x: 170, y: 140, w: 40, h: 16 },
+    text: "Double Click",
+    children: [],
+  });
+  const { code } = compile(doc);
+  expect(code).toContain('.keyboardShortcut("b", modifiers: [.command])');
+  expect(code).toContain('Text(verbatim: "Settings")');
+  expect(code).toContain("Spacer()");
+  expect(code).toContain('Text(verbatim: "Double Click")');
+});
+
+test("shortcuts spell out their modifiers: none stays none, aria-keyshortcuts reaches a button", () => {
+  const doc = DROPDOWN();
+  const group = doc.layers![0]!.nodes[0]!.children[0]!.children[1]!;
+  group.children[1]!.children.push({
+    id: "billing-kbd",
+    tag: "kbd",
+    attrs: {},
+    styles: {},
+    bounds: { x: 190, y: 112, w: 20, h: 16 },
+    text: "Esc",
+    children: [],
+  });
+  // SwiftUI's default modifier is .command: ⌘Esc is not what the menu shows.
+  expect(compile(doc).code).toContain(".keyboardShortcut(.escape, modifiers: [])");
+  const plain = without(DROPDOWN());
+  const find = (n: LayoutDoc["root"]): LayoutDoc["root"] | undefined =>
+    n.tag === "button" ? n : n.children.map(find).find(Boolean);
+  find(plain.root)!.attrs["aria-keyshortcuts"] = "Control+O Meta+O";
+  expect(compile(plain).code).toContain('.keyboardShortcut("o", modifiers: [.control])');
 });
 
 test("context menu: the trigger keeps its view and gains .contextMenu", () => {

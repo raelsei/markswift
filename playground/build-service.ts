@@ -1,5 +1,5 @@
 /** Standalone Bun service artifact; Chrome remains a host/runtime dependency. */
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 export async function buildService(outputDirectory: string): Promise<void> {
@@ -17,7 +17,6 @@ export async function buildService(outputDirectory: string): Promise<void> {
   if (output === resolve(join(import.meta.dir, "dist-service"))) await rm(output, { recursive: true, force: true });
   await mkdir(output, { recursive: true });
   await Bun.write(join(output, "server.js"), built.outputs[0]!);
-  await copyFile(join(import.meta.dir, "../src/fonts/convert-font.py"), join(output, "convert-font.py"));
   await writeFile(
     join(output, "package.json"),
     JSON.stringify(

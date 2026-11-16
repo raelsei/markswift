@@ -18,9 +18,10 @@ export interface PilotCase {
   reflow?: "native" | "pinned";
   /** From the fixture's `markswift-breakpoints` meta (see `breakpointsTag`); set by the loaders, never by pilot.json. */
   breakpoints?: number[];
-  /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` metas (see `motionTag`); set by the loaders. */
+  /** Frame times (ms) from `markswift-motion` / `markswift-motion-reduced` / `markswift-motion-pressed` metas. */
   motion?: number[];
   motionReduced?: number[];
+  motionPressed?: number[];
   /** From `markswift-motion-open` (see `motionTag`): `@open:<layer>` enter frames, each `t` ms after the layer opens. */
   motionOpen?: Array<{ layer: string; t: number }>;
   /** From `<meta name="markswift-viewport-height">` (loadFixtureSet): the capture viewport's height; absent = 2000. A
@@ -68,11 +69,15 @@ export function bpReferences(edges: BandEdge[], devices: number[], max = 1376): 
  * the 390 app capture is also frame-captured with every animation paused (`@t:<ms>`, `@reduced@t:<ms>` keys).
  * `<meta name="markswift-motion-open" content="edit-profile:50">`: `<layerId>:<ms>` pairs, the layer's open capture
  * paused that far into its enter (`@open:<layer>@t:<ms>`, 066). */
-export function motionTag(html: string, id: string): Pick<RunCase, "motion" | "motionReduced" | "motionOpen"> {
-  const out: Pick<RunCase, "motion" | "motionReduced" | "motionOpen"> = {};
+export function motionTag(
+  html: string,
+  id: string,
+): Pick<RunCase, "motion" | "motionReduced" | "motionPressed" | "motionOpen"> {
+  const out: Pick<RunCase, "motion" | "motionReduced" | "motionPressed" | "motionOpen"> = {};
   for (const [name, key] of [
     ["markswift-motion", "motion"],
     ["markswift-motion-reduced", "motionReduced"],
+    ["markswift-motion-pressed", "motionPressed"],
   ] as const) {
     const tag = new RegExp(`<meta name="${name}" content="([^"]*)"`).exec(html)?.[1];
     if (tag === undefined) continue;
@@ -170,6 +175,7 @@ export type RunCase = Pick<
   | "breakpoints"
   | "motion"
   | "motionReduced"
+  | "motionPressed"
   | "motionOpen"
   | "viewportHeight"
 >;
@@ -210,8 +216,8 @@ export interface PilotEntry {
   theme: "light" | "dark";
   mode: "app" | "fidelity";
   /** Motion frame of the case's 390 app capture: every animation paused `t` ms in (`reduced`: under Reduce Motion;
-   * `layer`: of that layer's open capture). */
-  frame?: { t: number; reduced: boolean; layer?: string };
+   * `pressed`: under forced :active; `layer`: of that layer's open capture). */
+  frame?: { t: number; reduced: boolean; pressed?: boolean; layer?: string };
   /** Breakpoint reference (`…-app@bp`): scored for its own capture and for the case's merged breakpoint view. */
   arm?: "bp";
 }
@@ -242,9 +248,10 @@ export function buildMatrix(cases: RunCase[], reflow = false, references?: Map<s
       [
         ...(item.motion ?? []).map((t) => ({ t, reduced: false })),
         ...(item.motionReduced ?? []).map((t) => ({ t, reduced: true })),
+        ...(item.motionPressed ?? []).map((t) => ({ t, reduced: false, pressed: true })),
         ...(item.motionOpen ?? []).map(({ layer, t }) => ({ t, reduced: false, layer })),
-      ].map((frame: { t: number; reduced: boolean; layer?: string }) => ({
-        key: `${frame.layer ? openKey(`${item.id}-390-${theme}-app`, frame.layer) : `${item.id}-390-${theme}-app`}${frame.reduced ? "@reduced" : ""}@t:${frame.t}`,
+      ].map((frame: { t: number; reduced: boolean; pressed?: boolean; layer?: string }) => ({
+        key: `${frame.layer ? openKey(`${item.id}-390-${theme}-app`, frame.layer) : `${item.id}-390-${theme}-app`}${frame.reduced ? "@reduced" : ""}${frame.pressed ? "@pressed" : ""}@t:${frame.t}`,
         case: item,
         width: 390,
         theme,

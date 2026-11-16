@@ -4,7 +4,8 @@ import type { LayoutDoc, Theme } from "../model/layout.ts";
 import type { ConversionWarning } from "../model/semantic.ts";
 export type { HtmlSource } from "../input/types.ts";
 
-export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "palette"> {
+export interface ConvertOptions
+  extends Pick<CompileOptions, "name" | "mode" | "palette" | "nativeSheet" | "assetCatalog"> {
   /** Already compiled CSS. Utility and CSS Modules selectors work exactly like normal CSS. */
   css?: string;
   root?: string;
@@ -44,6 +45,10 @@ export interface ConvertOptions extends Pick<CompileOptions, "name" | "mode" | "
    * band 0 and the configured `viewport`'s at its lower bound, keeping its device as one more capture (within the six).
    */
   breakpoints?: true | { devices?: Array<{ width: number; height: number }>; max?: number };
+  /** Cache captures on disk under the user cache directory. Defaults to true without `prepare`, which it cannot hash. */
+  cache?: boolean;
+  /** Launch an isolated browser process instead of reusing a shared browser. Defaults to false. */
+  isolated?: boolean;
 }
 
 export interface ConversionResult extends CompileResult {

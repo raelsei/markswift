@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=393, initial-scale=1">
+<title>drawer</title>
+<meta name="markswift-themes" content="light,dark">
+<meta name="markswift-viewport-height" content="844">
+<meta name="markswift-rows" content="dialog; @aria-*">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #0f172a;
+  --card: #ffffff;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #0f172a;
+  --primary-fg: #f8fafc;
+  --scrim: rgba(0, 0, 0, 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #090d16;
+    --fg: #f8fafc;
+    --card: #131b2e;
+    --muted: #94a3b8;
+    --border: #1e293b;
+    --primary: #f8fafc;
+    --primary-fg: #0f172a;
+    --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main[data-markswift-root] { width: 393px; min-height: 844px; padding: 16px; background: var(--bg); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+.contents { display: contents; }
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 40;
+}
+.drawer {
+  position: fixed;
+  inset: auto 0px 0px 0px;
+  height: 320px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  padding: 24px 20px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  align-self: center;
+  margin-bottom: 8px;
+}
+.title { font-size: 18px; font-weight: 600; }
+.desc { font-size: 14px; color: var(--muted); }
+.footer { margin-top: auto; display: flex; gap: 8px; }
+.primary-btn {
+  flex: 1;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<main data-markswift-root>
+  <button class="btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="drawer-layer" data-state="closed" data-fixture-opens="drawer-layer">Open Drawer</button>
+</main>
+<div id="drawer-layer" class="contents" data-fixture-modal hidden>
+  <div class="scrim" data-fixture-scrim></div>
+  <div role="dialog" aria-modal="true" class="drawer" data-side="bottom" tabindex="-1">
+    <div class="handle"></div>
+    <h2 class="title">Drawer Title</h2>
+    <p class="desc">This bottom drawer can be dismissed by swiping down or clicking outside.</p>
+    <div class="footer">
+      <button class="primary-btn" data-fixture-close>Done</button>
+    </div>
+  </div>
+</div>
+<script>
+const root = document.querySelector("[data-markswift-root]");
+let current;
+const set = (t, el, open) => {
+  t.setAttribute("aria-expanded", String(open));
+  el.hidden = !open;
+  if (open) root.setAttribute("aria-hidden", "true");
+  else root.removeAttribute("aria-hidden");
+  current = open ? { t, el } : undefined;
+};
+const close = () => current && set(current.t, current.el, false);
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-fixture-opens]");
+  if (t) return set(t, document.getElementById(t.dataset.fixtureOpens), true);
+  if (!current) return;
+  if (e.target.closest("[data-fixture-close], [data-fixture-scrim]")) return close();
+});
+document.addEventListener("keydown", (e) => e.key === "Escape" && close());
+</script>
+</body>
+</html>

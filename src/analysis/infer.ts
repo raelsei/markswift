@@ -12,6 +12,8 @@ import {
   type CrossAlign,
   type Diagnostic,
   addDiagnostic,
+  confidenceOf,
+  walk,
 } from "../model/semantic.ts";
 import { parseColor, parseDeclared, px, round2 } from "../css/index.ts";
 import { buildSvg } from "./svg/build.ts";
@@ -19,6 +21,7 @@ import { svgFromDataUrl } from "./svg/markup.ts";
 import { generatedAlt, PSEUDO } from "./generated.ts";
 import { controlOf, buildControl, labelIndex } from "./controls.ts";
 import { classifyElement } from "../html/policy.ts";
+import { determineScale } from "../images/index.ts";
 import { type InferOptions, type InferenceContext, type SourceTextRun, type AnalyzedChild } from "./context.ts";
 import { finish, makeBase, withBase } from "./node-base.ts";
 import { fontOf } from "./typography.ts";
@@ -65,6 +68,17 @@ export function inferScreen(doc: LayoutDoc, name: string, options: InferOptions 
   if (doc.size.h > doc.viewport.y + doc.viewport.h + 0.5 && root.kind === "stack" && !root.scroll) root.scroll = "v";
   const canvas = parseColor(doc.canvas) ?? { r: 1, g: 1, b: 1, a: 1 };
   applyTooltips(root, doc);
+  // Only a direct child of a vertically scrolling stack pins (swift/layout.ts); every other sticky box stays where
+  // it was captured and says so, before invisible boxes are dropped.
+  const pinned = new Set<SemNode>();
+  walk(root, (n) => {
+    if (n.kind === "stack" && n.axis === "v" && n.scroll === "v") for (const c of n.children) pinned.add(c);
+  });
+  walk(root, (n) => {
+    if (!n.sticky || pinned.has(n)) return;
+    addDiagnostic(n.diagnostics, "approximated", "position: sticky", "position: sticky (snapshot position)");
+    n.confidence = confidenceOf(n.diagnostics); // nodes were graded when built; an ungraded note never reaches the report
+  });
   dropInvisible(root);
   pruneHitTesting(root);
   // `dark only` and `dark` force a scheme; `light dark`, `normal` and a missing key leave it to the app.
@@ -153,6 +167,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     const svg = svgFromDataUrl(src);
     // A pseudo's generated image: `content: url(…) / "alt"`, else decorative.
     const alt = n.attrs["alt"] ?? generatedAlt(ctx.parent);
+    const scale = determineScale(n, src);
     const node = withBase(n, ctx, {
       kind: "image",
       ...(ctx.parent && PSEUDO[ctx.parent.tag]
@@ -161,6 +176,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       src,
       ...(svg?.vector ? { vector: svg.vector } : {}),
       contentMode: "fill",
+      ...(scale > 1 ? { scale } : {}),
       ...(alt
         ? {
             alt,
@@ -192,6 +208,7 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
       collectRuns(c, runs);
       continue;
     }
+    if (c.tag === "datalist") continue;
     if (c.styles["position"] === "fixed" && n !== ctx.root) ctx.fixed.push(c);
     else if (outOfFlow(c)) abs.push(c);
     else flow.push(c);
@@ -377,11 +394,9 @@ function build(input: LayoutNode, ctx: InferenceContext): SemNode {
     stack = stackOf(base, "v", rows, "stretch", "start");
   } else {
     stack = stackOf(base, axis, lines.flat(), align, distribution, isFlex(display));
-    // Admission excludes reverse rows and `order`, so the x-sorted children are the items in order.
-    if (axis === "h") {
-      const flex = admitFlexRow(n);
-      if (flex && flex.items.length === stack.children.length) stack.flex = flex;
-    }
+    // Admission excludes reverse rows and `order`, so the sorted children are the items in order.
+    const flex = admitFlexRow(n);
+    if (flex && flex.items.length === stack.children.length && (flex.axis ?? "h") === axis) stack.flex = flex;
     if (distribution === "between") {
       const g = px(n.styles[axis === "h" ? "column-gap" : "row-gap"]);
       if (g > 0) stack.minGap = round2(g);

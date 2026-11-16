@@ -118,6 +118,7 @@ const KEEP_WITHOUT_LAYOUT: Record<string, true> = {
   mask: true,
   option: true,
   optgroup: true,
+  datalist: true,
 };
 /** Pseudo-elements that become LayoutNodes; every other `pseudoType` (first-letter, backdrop, scrollbar parts, …) is dropped. */
 const PSEUDO_TAGS: Record<string, string> = { before: "::before", after: "::after", marker: "::marker" };
@@ -536,7 +537,7 @@ function appendChildren(
         if (c.lines && c.lines.length > 1)
           text.lines = c.lines.map((l) => ({ bounds: rebase(l.bounds, origin), start: l.start, length: l.length }));
         out.push(text);
-      } else if ((!raw.bounds || raw.name === "textarea") && c.value.trim()) {
+      } else if ((!raw.bounds || raw.name === "textarea" || raw.name === "option") && c.value.trim()) {
         out.push({
           tag: "#text",
           attrs: {},

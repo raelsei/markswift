@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { bandOf, captureWidth, matchesWidth, passes, widthQuery } from "../../../src/css/index.ts";
+import {
+  bandOf,
+  captureWidth,
+  heightQuery,
+  matchesWidth,
+  mediaCondition,
+  orientationQuery,
+  passes,
+  widthQuery,
+} from "../../../src/css/index.ts";
 
 const above = (px: number, inclusive: boolean) => ({ above: { px, inclusive } });
 const below = (px: number, inclusive: boolean) => ({ below: { px, inclusive } });
@@ -43,6 +52,26 @@ describe("widthQuery", () => {
     expect(widthQuery(query)).toEqual(expected);
   });
 });
+describe("heightQuery and orientationQuery", () => {
+  test("parses pure height queries", () => {
+    expect(heightQuery("(min-height: 800px)")).toEqual({ above: { px: 800, inclusive: true, feature: "height" } });
+    expect(heightQuery("(max-height: 600px)")).toEqual({ below: { px: 600, inclusive: false, feature: "height" } });
+    expect(heightQuery("(height >= 50rem)")).toEqual({ above: { px: 800, inclusive: true, feature: "height" } });
+    expect(heightQuery("(min-width: 600px)")).toBeUndefined();
+  });
+
+  test("parses pure orientation queries", () => {
+    expect(orientationQuery("(orientation: landscape)")).toBe("landscape");
+    expect(orientationQuery("(orientation: portrait)")).toBe("portrait");
+    expect(orientationQuery("(min-width: 600px)")).toBeUndefined();
+  });
+
+  test("mediaCondition parses compound media queries", () => {
+    const cond = mediaCondition("(min-width: 768px) and (orientation: landscape)")!;
+    expect(cond.width?.above?.px).toBe(768);
+    expect(cond.orientation).toBe("landscape");
+  });
+});
 
 describe("edge helpers", () => {
   test("passes and matchesWidth", () => {
@@ -52,6 +81,12 @@ describe("edge helpers", () => {
     expect([639, 640, 1023, 1024].map((w) => matchesWidth(q, w))).toEqual([false, true, true, false]);
     expect(matchesWidth(widthQuery("(max-width: 767px)")!, 767)).toBe(true);
     expect(matchesWidth(widthQuery("(max-width: 767px)")!, 767.5)).toBe(false);
+    expect(passes({ px: 800, inclusive: true, feature: "height" }, 390, 800)).toBe(true);
+    expect(passes({ px: 800, inclusive: true, feature: "height" }, 390, 799)).toBe(false);
+    expect(passes({ px: 0, inclusive: true, feature: "orientation", orientation: "landscape" }, 844, 390)).toBe(true);
+    expect(passes({ px: 0, inclusive: true, feature: "orientation", orientation: "landscape" }, 390, 844)).toBe(false);
+    expect(passes({ px: 0, inclusive: true, feature: "orientation", orientation: "portrait" }, 390, 844)).toBe(true);
+    expect(passes({ px: 0, inclusive: true, feature: "orientation", orientation: "portrait" }, 844, 390)).toBe(false);
   });
 
   test("captureWidth is the first integer width past the edge", () => {

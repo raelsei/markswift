@@ -202,6 +202,6 @@ export function fillAlignment(n: SemNode, mode: EmitMode): string {
     return alignment(h!, v!);
   }
   // A single-line field, select or date input: Chrome centres its text in the box (an editor's starts at the top).
-  if (n.kind === "control" && LINE_CONTROLS[n.control]) return ".leading";
+  if (n.kind === "control" && LINE_CONTROLS[n.control] && !(n.control === "picker" && n.multiple)) return ".leading";
   return ".topLeading";
 }

@@ -123,8 +123,8 @@ const CASES: Array<{ feature: string; level: "approximated" | "unmapped"; node: 
   { feature: "transform", level: "unmapped", node: box({ transform: "bogus(1)" }) },
   { feature: "translate", level: "unmapped", node: box({ translate: "bogus(1)" }) },
   { feature: "rotate", level: "unmapped", node: box({ rotate: "x 45deg" }) },
-  { feature: "mask-image", level: "unmapped", node: box({ "mask-image": "image-set(url(a.png) 1x)" }) },
-  { feature: "background-image", level: "unmapped", node: box({ "background-image": "image-set(url(a.png) 1x)" }) },
+  { feature: "mask-image", level: "unmapped", node: box({ "mask-image": "element(#a)" }) },
+  { feature: "background-image", level: "unmapped", node: box({ "background-image": "element(#a)" }) },
   {
     feature: "background-image",
     level: "approximated",

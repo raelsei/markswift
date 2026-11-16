@@ -7,7 +7,7 @@ trap 'rm -rf "$work"' EXIT
 tarball="$(cd "$repo" && npm pack --silent --pack-destination "$work" | tail -n 1)"
 shim="$work/bin"
 mkdir -p "$shim"
-for tool in node npm npx python3; do ln -s "$(command -v "$tool")" "$shim/$tool"; done
+for tool in node npm npx; do ln -s "$(command -v "$tool")" "$shim/$tool"; done
 export PATH="$shim:/usr/bin:/bin"
 if command -v bun >/dev/null; then echo "bun is still on PATH" >&2; exit 1; fi
 cd "$work"

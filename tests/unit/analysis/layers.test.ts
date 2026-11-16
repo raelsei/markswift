@@ -248,7 +248,7 @@ test("presentation: an unplaced box keeps its captured offset", () => {
   expect(presented(d).p!.placement).toEqual({ kind: "offset" });
 });
 
-test("menu: a dropdown's items in DOM order, shortcut dropped, the trigger unopened", () => {
+test("menu: a dropdown's items in DOM order with icon and shortcut, the trigger unopened", () => {
   const { overlays, trigger } = presented(DROPDOWN());
   expect(overlays).toEqual([]);
   expect(trigger.opens).toBeUndefined();
@@ -257,7 +257,14 @@ test("menu: a dropdown's items in DOM order, shortcut dropped, the trigger unope
       kind: "section",
       label: "My Account",
       items: [
-        { kind: "button", id: "profile", label: "Profile", action: expect.anything() },
+        {
+          kind: "button",
+          id: "profile",
+          label: "Profile",
+          action: expect.anything(),
+          icon: expect.anything(),
+          shortcut: "⇧⌘P",
+        },
         { kind: "button", id: "billing", label: "Billing", action: expect.anything() },
         { kind: "button", id: "settings", label: "Settings", action: expect.anything() },
       ],
@@ -269,16 +276,15 @@ test("menu: a dropdown's items in DOM order, shortcut dropped, the trigger unope
     { kind: "button", id: "logout", label: "Log out", action: expect.anything(), destructive: true },
     { kind: "submenu", id: "invite", label: "Invite users" },
   ]);
-  expect(JSON.stringify(trigger.menu)).not.toContain("⇧⌘P");
   expect(trigger.menu!.context).toBeUndefined();
   expect(messages(trigger)).toEqual(
     expect.arrayContaining([
       "@role: native menu popup: the CSS look of the open list is not drawn",
-      "@role: menu shortcut text is dropped",
-      "@role: menu item icons are dropped",
       "@role: submenu Invite users items are not captured",
     ]),
   );
+  expect(messages(trigger)).not.toContain("@role: menu shortcut text is dropped");
+  expect(messages(trigger)).not.toContain("@role: menu item icons are dropped");
 });
 
 test("menu: a right-click layer is a context menu on a plain node", () => {

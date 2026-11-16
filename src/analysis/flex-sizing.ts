@@ -52,8 +52,9 @@ export function flexGrowthSize(
     reasons.push(
       `unequal measured ${dimension}s [${sizes.map(round2).join(",")}] (basis, shrink or content constraints)`,
     );
-  // An admitted row keeps its captured px in fidelity; app mode reflows it (MarkswiftFlexRow).
-  if (axis === "h" && admitFlexRow(parent)) return { kind: "fixed", px: round2(n.bounds.w) };
+  // An admitted flex container keeps its captured px in fidelity; app mode reflows it (MarkswiftFlexRow).
+  const flex = admitFlexRow(parent);
+  if (flex && (flex.axis ?? "h") === axis) return { kind: "fixed", px: round2(axis === "h" ? n.bounds.w : n.bounds.h) };
   addDiagnostic(diagnostics, "approximated", "flex-grow", `${reasons.join("; ")}; measured ${dimension} pinned`);
   return { kind: "fixed", px: round2(axis === "h" ? n.bounds.w : n.bounds.h) };
 }

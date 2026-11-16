@@ -1110,6 +1110,17 @@ export default {
       spec: `${MDN}input`,
     },
     {
+      id: "input: datalist",
+      group: "Forms",
+      class: "approximated",
+      target: "TextField with `.markswiftSuggestions`",
+      ir: "ControlNode { control: textField, suggestions }",
+      via: "attribute",
+      impl: "yes",
+      note: "`<input list>` offers the enabled `<datalist>` options as text suggestions; a list id that is missing from the capture or has no options is reported and the field stays a plain text field.",
+      spec: `${MDN}datalist`,
+    },
+    {
       id: "input: button",
       group: "Forms",
       class: "mapped",

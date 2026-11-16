@@ -1,5 +1,5 @@
 /** Breakpoint planning: which viewport widths capture every CSS width band of a page. */
-import { captureWidth, widthQuery } from "../css/index.ts";
+import { captureWidth, mediaCondition, passes, widthQuery } from "../css/index.ts";
 import type { LayoutCondition } from "../model/layout.ts";
 import type { BandEdge } from "../model/semantic.ts";
 
@@ -52,7 +52,14 @@ export const TAILWIND_CONTAINER_BANDS: Record<number, string> = {
  * `prefix` (`cq_`): container bands, named from Tailwind's container scale. */
 export function bandNames(cssEdges: BandEdge[], prefix = ""): string[] {
   const named = prefix ? TAILWIND_CONTAINER_BANDS : TAILWIND_BANDS;
-  return ["", ...cssEdges.map((e) => prefix + ((e.inclusive && named[e.px]) || `w${captureWidth(e)}`))];
+  return [
+    "",
+    ...cssEdges.map((e) => {
+      if (e.feature === "orientation") return prefix + (e.orientation ?? "landscape");
+      if (e.feature === "height") return `${prefix}h${captureWidth(e)}`;
+      return prefix + ((e.inclusive && named[e.px]) || `w${captureWidth(e)}`);
+    }),
+  ];
 }
 
 /** A width `@container` query attributed to a host node: the conversion reconstructs it at that host. */
@@ -78,9 +85,14 @@ export function planBands(
   const { first, devices, max } = options;
   const notes = new Map<string, string>();
   const all: BandEdge[] = [];
+  const heightEdges: BandEdge[] = [];
+  const orientationEdges: BandEdge[] = [];
+  const candidateDevices = [first, ...devices];
   for (const c of conditions) {
-    const q = c.kind === "media" ? widthQuery(c.query) : undefined;
-    for (const e of q ? [q.above, q.below] : []) {
+    if (c.kind !== "media") continue;
+    const cond = mediaCondition(c.query);
+    if (!cond) continue;
+    for (const e of cond.width ? [cond.width.above, cond.width.below] : []) {
       if (!e) continue;
       const w = captureWidth(e);
       if (w > BAND_MIN && w <= max) all.push(e);
@@ -89,6 +101,31 @@ export function planBands(
           c.query,
           `@media ${c.query}: width threshold ${e.px}px is outside the ${BAND_MIN}–${max}px band range; the view does not switch there`,
         );
+    }
+    for (const e of cond.height ? [cond.height.above, cond.height.below] : []) {
+      if (!e) continue;
+      const edge: BandEdge = { ...e, feature: "height" };
+      const hasDevice = candidateDevices.some((d) => passes(edge, d.width, d.height));
+      if (hasDevice) {
+        if (!heightEdges.some((h) => h.px === edge.px && h.inclusive === edge.inclusive)) heightEdges.push(edge);
+      } else if (!notes.has(c.query)) {
+        notes.set(
+          c.query,
+          `@media ${c.query}: height threshold ${e.px}px is not captured by any device viewport; the view does not switch there`,
+        );
+      }
+    }
+    if (cond.orientation) {
+      const edge: BandEdge = { px: 0, inclusive: true, feature: "orientation", orientation: cond.orientation };
+      const hasDevice = candidateDevices.some((d) => passes(edge, d.width, d.height));
+      if (hasDevice) {
+        if (!orientationEdges.some((o) => o.orientation === edge.orientation)) orientationEdges.push(edge);
+      } else if (!notes.has(c.query)) {
+        notes.set(
+          c.query,
+          `@media ${c.query}: orientation ${cond.orientation} is not captured by any device viewport; the view does not switch there`,
+        );
+      }
     }
   }
   let edges = uniqueEdges(all);
@@ -118,6 +155,19 @@ export function planBands(
     his.push(hi);
     const [near, far] = i === 0 ? [BAND_MIN, hi] : [hi, lo];
     probes.push(near !== capture.width ? near : far !== capture.width ? far : undefined);
+  }
+  // Height and orientation band edges
+  for (const edge of [...heightEdges, ...orientationEdges]) {
+    if (captures.length >= BAND_CAP) break;
+    const dev = devices.find(
+      (d) => passes(edge, d.width, d.height) && !captures.some((c) => c.width === d.width && c.height === d.height),
+    );
+    if (dev) {
+      edges.push(edge);
+      captures.push(dev);
+      probes.push(undefined);
+      his.push(dev.width);
+    }
   }
   // ponytail: a band's captures find a container threshold only when the host crosses it between two of them: with
   // both bounds captured that is any monotonic crossing, except below the capture of band 0 (it carries the open-state

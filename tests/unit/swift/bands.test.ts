@@ -96,3 +96,69 @@ for w: CGFloat in [${widths.join(", ")}] {
   },
   300000,
 );
+nativeTest(
+  "MarkswiftBands selects the right band for height and orientation conditions",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "markswift-bands-height-orient-"));
+    try {
+      await Bun.write(join(directory, "bands.swift"), `import SwiftUI\n\n${bandsRuntime}`);
+      await Bun.write(
+        join(directory, "main.swift"),
+        `import SwiftUI
+
+struct Probe: View {
+    nonisolated(unsafe) static var log: [Int] = []
+    let band: Int
+    var body: some View {
+        Probe.log.append(band)
+        return Text("b\\(band)").frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+let hEdges: [MarkswiftBandEdge] = [.atLeastHeight(900), .aboveHeight(1100)]
+for h: CGFloat in [600, 900, 1200] {
+    Probe.log = []
+    let renderer = ImageRenderer(content: MarkswiftBands(edges: hEdges) { band in Probe(band: band) }.frame(width: 400, height: h))
+    _ = renderer.cgImage
+    print(Set(Probe.log).sorted().map(String.init).joined(separator: ","))
+}
+
+let oEdges: [MarkswiftBandEdge] = [.orientation(.landscape)]
+for (w, h): (CGFloat, CGFloat) in [(390, 844), (844, 390)] {
+    Probe.log = []
+    let renderer = ImageRenderer(content: MarkswiftBands(edges: oEdges) { band in Probe(band: band) }.frame(width: w, height: h))
+    _ = renderer.cgImage
+    print(Set(Probe.log).sorted().map(String.init).joined(separator: ","))
+}
+`,
+      );
+      const sdk = (await command(["xcrun", "--sdk", "macosx", "--show-sdk-path"], undefined, 15_000)).trim();
+      await command(
+        [
+          "xcrun",
+          "swiftc",
+          "-sdk",
+          sdk,
+          "-target",
+          "arm64-apple-macos15.0",
+          "-swift-version",
+          "6",
+          "-strict-concurrency=complete",
+          "-default-isolation",
+          "MainActor",
+          "-o",
+          join(directory, "test-runner"),
+          join(directory, "bands.swift"),
+          join(directory, "main.swift"),
+        ],
+        directory,
+        240_000,
+      );
+      const lines = (await command([join(directory, "test-runner")], directory, 30_000)).trim().split("\n");
+      expect(lines).toEqual(["0", "1", "2", "0", "1"]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  300000,
+);

@@ -95,6 +95,10 @@ export function activatableAction(n: LayoutNode): Action | undefined {
 export interface ControlSpec {
   control: ControlKind;
   value?: string;
+  values?: string[];
+  multiple?: boolean;
+  size?: number;
+  suggestions?: string[];
   swatch?: Color;
   placeholder?: string;
   promptColor?: Color;
@@ -204,11 +208,16 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
       const options: PickerOption[] = [];
       let selected: string | undefined;
       let enabled: string | undefined;
+      const isMultiple = a["multiple"] !== undefined;
+      const selectedValues: string[] = [];
       const all = optionsOf(n);
       for (const { option: o, group } of all) {
         // `@label` overrides the element's text; the text itself may be missing from the snapshot.
-        const label = (o.attrs["label"] ?? textContent(o)).trim();
-        if ("selected" in o.attrs) selected = label;
+        const label = (o.attrs["label"] ?? (textContent(o).trim() || o.attrs["value"] || "")).trim();
+        if ("selected" in o.attrs) {
+          selected = label;
+          if (label) selectedValues.push(label);
+        }
         const off = "disabled" in o.attrs || (group !== undefined && "disabled" in group.attrs);
         enabled ??= off || !label ? undefined : label;
         // A `hidden` option (a "Choose…" placeholder) can be shown while closed but is no choice in the menu.
@@ -220,9 +229,20 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         options.push(option);
       }
       const spec: ControlSpec = { control: "picker", options, diagnostics };
-      // A closed `<select>` shows the selected option; with none selected, the browser selects the first enabled one.
-      const shown = selected || enabled || options[0]?.label;
-      if (shown) spec.value = shown;
+      const size = num(a["size"]);
+      if (isMultiple) {
+        spec.multiple = true;
+        spec.values = selectedValues;
+        if (size !== undefined) spec.size = size;
+      } else {
+        // A closed `<select>` shows the selected option; with none selected, the browser selects the first enabled one.
+        const shown = selected || enabled || options[0]?.label;
+        if (shown) spec.value = shown;
+        if (size !== undefined && size > 1) {
+          spec.size = size;
+          addDiagnostic(diagnostics, "approximated", "select", "<select size> list box without multiple → menu picker");
+        }
+      }
       // Chrome lays the options out in the popup, not in the page, so the snapshot may hold none.
       if (!all.length)
         addDiagnostic(
@@ -231,8 +251,6 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
           "select",
           "<select> option labels are not in the snapshot → picker with no choices",
         );
-      if (a["multiple"] !== undefined || (a["size"] !== undefined && Number(a["size"]) > 1))
-        addDiagnostic(diagnostics, "approximated", "select", "<select multiple/size> list box → menu picker");
       if (disabled) spec.disabled = true;
       return spec;
     }
@@ -350,6 +368,33 @@ export function controlOf(n: LayoutNode, labels?: LabelIndex): ControlSpec | und
         if (mode && Object.hasOwn(INPUT_MODES, mode)) spec.inputMode = mode;
         const enter = a["enterkeyhint"]?.trim().toLowerCase();
         if (enter && Object.hasOwn(ENTER_KEYS, enter)) spec.enterKey = enter;
+        if (a["list"]) {
+          const listId = a["list"].trim();
+          const datalist = labels?.byId.get(listId);
+          if (datalist && datalist.tag === "datalist") {
+            const suggestions: string[] = [];
+            for (const { option: o } of optionsOf(datalist)) {
+              if ("disabled" in o.attrs) continue;
+              const val = (o.attrs["value"] ?? o.attrs["label"] ?? textContent(o)).trim();
+              if (val) suggestions.push(val);
+            }
+            if (suggestions.length) spec.suggestions = suggestions;
+            else
+              addDiagnostic(
+                diagnostics,
+                "approximated",
+                "input: datalist",
+                `<input list="${listId}">: datalist #${listId} has no options`,
+              );
+          } else {
+            addDiagnostic(
+              diagnostics,
+              "approximated",
+              "input: datalist",
+              `<input list="${listId}">: datalist #${listId} not found in capture`,
+            );
+          }
+        }
       }
       if (disabled) spec.disabled = true;
       return spec;

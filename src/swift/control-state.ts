@@ -18,6 +18,10 @@ function stateDecl(n: ControlNode): { type: string; value: string; suffix?: stri
     case "secureField":
     case "textEditor":
     case "picker":
+      if (n.multiple) {
+        const seed = n.values?.length ? `[${n.values.map(str).join(", ")}]` : "[]";
+        return { type: "Set<String>", value: seed };
+      }
       return { type: "String", value: str(n.value ?? "") };
     case "toggle":
     case "radio":

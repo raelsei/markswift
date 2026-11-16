@@ -5,15 +5,21 @@
  */
 import { type Layer, type LayoutDoc, type LayoutNode } from "../model/layout.ts";
 import {
+  type Diagnostic,
   type MenuItem,
   type PickerOption,
   type Presentation,
   type Screen,
+  type SemBase,
   type SemNode,
+  type SvgNode,
   addDiagnostic,
   confidenceOf,
   walk,
 } from "../model/semantic.ts";
+import { buildSvg } from "./svg/build.ts";
+import { styleOf } from "./style.ts";
+import type { BundledFamilies } from "../model/fonts.ts";
 import { parseColor, round2, resolveLength } from "../css/index.ts";
 import { type InferOptions } from "./context.ts";
 import { elementAction } from "./controls.ts";
@@ -157,7 +163,7 @@ function applyLayer(screen: Screen, doc: LayoutDoc, options: InferOptions, allLa
     trigger.opens = { layer: layer.id, kind: "inflow" };
   }
   for (const layer of doc.layers) {
-    if (menus.has(layer)) menu(screen, layer, rest, sem, allLayers);
+    if (menus.has(layer)) menu(screen, layer, rest, sem, allLayers, new Set(), doc, options);
     if (layer.placement === "inflow") continue;
     // A tooltip, a menu, a menubar alone, or a menu `<details>` shows, is no drawn popup.
     const native = isTooltipLayer(layer, doc.root)
@@ -188,14 +194,65 @@ const menuOf = (layer: Layer): LayoutNode | undefined =>
     undefined,
   );
 
-/** An item's text without its `[data-slot$=shortcut]` hint, whitespace collapsed. */
+const isShortcutNode = (d: LayoutNode): boolean =>
+  (d.attrs["data-slot"] ?? "").endsWith("shortcut") ||
+  d.tag === "kbd" ||
+  (d.attrs["class"] ?? "").split(/\s+/).some((c) => c === "shortcut" || c.endsWith("-shortcut"));
+
+const itemShortcut = (n: LayoutNode): string | undefined => {
+  const hit = find(n, isShortcutNode);
+  if (hit) {
+    const of = (d: LayoutNode): string => (d.text ? d.text : d.children.map(of).join(""));
+    const text = of(hit).replace(/\s+/g, " ").trim();
+    if (text) return text;
+  }
+  if (n.children.length > 1) {
+    const last = n.children[n.children.length - 1]!;
+    if (last.tag !== "#text") {
+      const of = (d: LayoutNode): string => (d.text ? d.text : d.children.map(of).join(""));
+      const text = of(last).replace(/\s+/g, " ").trim();
+      if (/^[⇧⌥⌃⌘\s\w+-]+$/.test(text) && /[⇧⌥⌃⌘]|(?:Ctrl|Cmd|Shift|Alt)\b/i.test(text)) {
+        return text;
+      }
+    }
+  }
+  return undefined;
+};
+
+/** A menu item's leading SVG (left of its text), not its indicator: the item's Label icon. */
+const itemIcon = (n: LayoutNode, docRoot: LayoutNode, bundledFamilies: BundledFamilies = {}): SvgNode | undefined => {
+  let textStart = Infinity;
+  const svgs: LayoutNode[] = [];
+  const walkItem = (d: LayoutNode): void => {
+    if (isShortcutNode(d) || (d.attrs["data-slot"] ?? "").includes("indicator")) return;
+    if (d.tag === "#text") {
+      if (d.text?.trim()) textStart = Math.min(textStart, d.bounds.x);
+    } else if (d.tag === "svg") svgs.push(d);
+    else d.children.forEach(walkItem);
+  };
+  n.children.forEach(walkItem);
+  const hit = svgs.find((s) => s.bounds.x + s.bounds.w <= textStart + 1);
+  if (!hit) return undefined;
+
+  const diagnostics: Diagnostic[] = [];
+  const base: SemBase = {
+    id: hit.id ?? "menu-icon",
+    frame: hit.bounds,
+    width: { kind: "fixed", px: hit.bounds.w },
+    height: { kind: "fixed", px: hit.bounds.h },
+    padding: [0, 0, 0, 0],
+    style: styleOf(hit, diagnostics),
+    confidence: confidenceOf(diagnostics),
+    diagnostics,
+    overlays: [],
+  };
+  return buildSvg(hit, base, docRoot, bundledFamilies);
+};
+
+/** An item's text without its shortcut hint or <kbd>, whitespace collapsed. */
 const itemText = (n: LayoutNode): string => {
   const of = (d: LayoutNode): string =>
-    d.tag === "#text"
-      ? (d.text ?? "")
-      : (d.attrs["data-slot"] ?? "").endsWith("shortcut")
-        ? ""
-        : d.children.map(of).join("");
+    d.tag === "#text" ? (d.text ?? "") : isShortcutNode(d) ? "" : d.children.map(of).join("");
   return of(n).replace(/\s+/g, " ").trim();
 };
 const disabled = (n: LayoutNode) => n.attrs["aria-disabled"] === "true" || n.attrs["data-disabled"] !== undefined;
@@ -214,6 +271,8 @@ function menu(
   sem: Map<string, SemNode>,
   layers: Layer[] = [],
   ancestors = new Set<string>(),
+  doc?: LayoutDoc,
+  options?: InferOptions,
 ): void {
   if (ancestors.has(layer.id)) return;
   ancestors = new Set([...ancestors, layer.id]);
@@ -282,13 +341,12 @@ function menu(
     const visit = (n: LayoutNode): void => {
       const role = n.attrs["role"] ?? "";
       const label = role.startsWith("menuitem") ? itemText(n) : "";
-      if (role.startsWith("menuitem")) {
-        if (find(n, (d) => (d.attrs["data-slot"] ?? "").endsWith("shortcut")))
-          notes.add("menu shortcut text is dropped");
-        // A checkbox/radio item's indicator is its native checkmark; a plain item's icon has no counterpart.
-        if (role === "menuitem" && find(n, (d) => d.tag === "svg" || d.tag === "img"))
-          notes.add("menu item icons are dropped");
-      }
+      // A plain item's (or submenu's) leading SVG is its Label icon; a checkbox/radio item's SVG is its indicator,
+      // which the native checkmark replaces.
+      const icon = doc && role === "menuitem" ? itemIcon(n, doc.root, options?.bundledFamilies) : undefined;
+      if (role === "menuitem" && !icon && find(n, (d) => d.tag === "img"))
+        notes.add("menu item image icons are dropped");
+      const shortcut = itemShortcut(n);
       const off = disabled(n) ? { disabled: true as const } : {};
       if (role === "separator") {
         into = items;
@@ -297,9 +355,15 @@ function menu(
       else if (role === "menuitem" && (n.attrs["aria-haspopup"] ?? "false") !== "false") {
         const child = layers.find((l) => l.trigger === n.id && menuOf(l));
         const nestedTrigger: SemNode = { ...trigger, id: n.id!, menu: undefined, action: elementAction(n, label) };
-        if (child) menu(screen, child, rest, new Map([[n.id!, nestedTrigger]]), layers, ancestors);
+        if (child) menu(screen, child, rest, new Map([[n.id!, nestedTrigger]]), layers, ancestors, doc, options);
         const children = nestedTrigger.menu?.items;
-        push({ kind: "submenu", id: n.id!, label, ...(children ? { items: children } : {}) });
+        push({
+          kind: "submenu",
+          id: n.id!,
+          label,
+          ...(children ? { items: children } : {}),
+          ...(icon ? { icon } : {}),
+        });
         if (!children) notes.add(`submenu ${label} items are not captured`);
       } else if (role === "menuitem")
         push({
@@ -309,9 +373,18 @@ function menu(
           action: elementAction(n, label),
           ...off,
           ...(n.attrs["data-variant"] === "destructive" ? { destructive: true as const } : {}),
+          ...(icon ? { icon } : {}),
+          ...(shortcut ? { shortcut } : {}),
         });
       else if (role === "menuitemcheckbox")
-        push({ kind: "toggle", id: n.id!, label, checked: checked(n, "aria-checked"), ...off });
+        push({
+          kind: "toggle",
+          id: n.id!,
+          label,
+          checked: checked(n, "aria-checked"),
+          ...off,
+          ...(shortcut ? { shortcut } : {}),
+        });
       else if (role === "menuitemradio") {
         if (!radio) {
           radio = { kind: "radio", id: n.id!, options: [], selected: -1 };

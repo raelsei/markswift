@@ -70,9 +70,32 @@ describe("planBands", () => {
   test("unattributed container and unparsed media conditions are ignored without a note", () => {
     const conditions: LayoutCondition[] = [
       { kind: "container", query: "(min-width: 400px)", matches: false },
-      ...media("(orientation: landscape)"),
+      ...media("(color-gamut: p3)"),
     ];
     expect(plan(conditions)).toEqual(noEdges);
+  });
+
+  test("orientation: landscape adds a landscape device capture and band edge", () => {
+    const p = plan(media("(orientation: landscape)"));
+    expect(p.edges).toEqual([{ px: 0, inclusive: true, feature: "orientation", orientation: "landscape" }]);
+    expect(p.captures).toEqual([phone, { width: 1210, height: 834 }]);
+    expect(bandNames(p.edges)).toEqual(["", "landscape"]);
+  });
+
+  test("min-height media query selects device reaching the height threshold", () => {
+    const p = plan(media("(min-height: 1000px)"));
+    expect(p.edges).toEqual([{ px: 1000, inclusive: true, feature: "height" }]);
+    expect(p.captures).toEqual([phone, { width: 834, height: 1210 }]);
+    expect(bandNames(p.edges)).toEqual(["", "h1000"]);
+  });
+
+  test("height threshold not reached by any device produces a precise note", () => {
+    const p = plan(media("(min-height: 2500px)"));
+    expect(p.edges).toEqual([]);
+    expect(p.captures).toEqual([phone]);
+    expect(p.notes).toEqual([
+      "@media (min-height: 2500px): height threshold 2500px is not captured by any device viewport; the view does not switch there",
+    ]);
   });
 
   test("container queries add captures at the top of each band, then at the bottom of each band past band 0", () => {

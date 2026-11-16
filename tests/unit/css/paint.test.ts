@@ -98,9 +98,15 @@ describe("parseBackgroundImage", () => {
     expectClose(p.stops[0]!.color, [43, 127, 255, 1]);
   });
 
+  test("image-set layers parse as image paints", () => {
+    expect(parseBackgroundImage("image-set(url(a.png) 1x, url(a@2x.png) 2x)")).toEqual([
+      { kind: "image", url: "a@2x.png", scale: 2 },
+    ]);
+  });
+
   test("unknown layers stay unsupported", () => {
-    expect(parseBackgroundImage("image-set(url(a.png) 1x)")).toEqual([
-      { kind: "unsupported", raw: "image-set(url(a.png) 1x)" },
+    expect(parseBackgroundImage("cross-fade(url(a.png), url(b.png), 50%)")).toEqual([
+      { kind: "unsupported", raw: "cross-fade(url(a.png), url(b.png), 50%)" },
     ]);
     expect(parseBackgroundImage("none")).toEqual([]);
   });

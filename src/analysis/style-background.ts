@@ -67,7 +67,16 @@ export function imagePaint(
   const fit = vb && Math.min(w / vb[2], h / vb[3]);
   const img = svg ? (svg.intrinsic ?? (fit ? { w: vb![2] * fit, h: vb![3] * fit } : undefined)) : rasterSize(url);
   const size = parseBackgroundSize(layerValue(s[`${prop}-size`], i), w, h, img?.w, img?.h);
-  const paint: Paint = { kind: "image", url };
+  const bgScale = s["--markswift-bg-scale"] ? parseFloat(s["--markswift-bg-scale"]) : 1;
+  let scale = bgScale > 1 ? bgScale : 1;
+  if (scale === 1 && img && w > 0 && h > 0) {
+    if (typeof size === "object" && size.w > 0) {
+      if (Math.abs(img.w / size.w - 2) < 0.25) scale = 2;
+    } else if (size === "cover" || size === "contain" || !size) {
+      if (Math.abs(img.w / w - 2) < 0.25 && Math.abs(img.h / h - 2) < 0.25) scale = 2;
+    }
+  }
+  const paint: Paint = { kind: "image", url, ...(scale > 1 ? { scale } : {}) };
   if (svg?.vector) {
     paint.vector = svg.vector;
     for (const d of svg.vector.diagnostics) addDiagnostic(diagnostics, d.level, d.feature, d.message);

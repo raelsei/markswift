@@ -186,3 +186,45 @@ test("an app-mode scroll box paints, frames and clips the ScrollView; its paddin
   expect(outside).toContain(".clipShape(RoundedRectangle(cornerRadius: 12.0");
   expect(outside).toContain("strokeBorder(");
 });
+
+test("a scroll container with sticky headers emits LazyVStack with pinnedViews and Section headers", () => {
+  const header = element(
+    "div",
+    0,
+    0,
+    200,
+    30,
+    { display: "block", position: "sticky", top: "0px", "background-color": "rgb(200, 200, 200)" },
+    [{ tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 0, w: 200, h: 30 }, text: "Header", children: [] }],
+  );
+  const item = element("p", 0, 30, 200, 150, { display: "block", "font-size": "15px", "line-height": "150px" }, [
+    { tag: "#text", attrs: {}, styles: {}, bounds: { x: 0, y: 30, w: 200, h: 150 }, text: "Item", children: [] },
+  ]);
+  const list = element("div", 0, 0, 200, 100, { display: "block", "overflow-y": "auto", height: "100px" }, [
+    header,
+    item,
+  ]);
+  const doc: LayoutDoc = {
+    version: LAYOUT_DOC_VERSION,
+    source: "sticky-test",
+    combo: { screen: "s", theme: "light" },
+    size: { w: 200, h: 100 },
+    viewport: { x: 0, y: 0, w: 200, h: 100 },
+    conditions: [],
+    dpr: 3,
+    canvas: "rgb(255,255,255)",
+    fonts: [],
+    root: element("main", 0, 0, 200, 100, { display: "block" }, [list]),
+  };
+  const appView = emitSwift(inferScreen(doc, "s"), "S", { mode: "app" }).view;
+  expect(appView).toContain("ScrollView(.vertical)");
+  expect(appView).toContain("LazyVStack(alignment: .leading, spacing: 0.0, pinnedViews: [.sectionHeaders])");
+  expect(appView).toContain("Section {");
+  expect(appView).toContain("} header: {");
+
+  const fidelity = emitSwift(inferScreen(doc, "s"), "S", { mode: "fidelity" });
+  expect(fidelity.view).not.toContain("pinnedViews");
+  expect(fidelity.report.flatMap((n) => n.diagnostics).map((d) => d.message)).toContain(
+    "position: sticky (snapshot position)",
+  );
+});

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import wawoff2 from "wawoff2";
+import { assembleSfnt, buildRewrittenNameTable, parseSfnt, readNameTable } from "../../../src/fonts/sfnt.ts";
 import type { FontFace } from "../../../src/model/layout.ts";
 import type { FontConverter, FontToolResult } from "../../../src/fonts/converter.ts";
 import { bundledFamilies } from "../../../src/fonts/metadata.ts";
@@ -78,14 +81,14 @@ describe("packageFonts: faces + bytes in, assets out", () => {
   });
 });
 
-test("a missing python3 leaves the face unbundled with a note and ships no asset", async () => {
-  // Bun.spawn resolves executables from the spawn environment, so PATH is cut in a child Bun.
-  const script = `import { bundledFamilies } from "../../../src/fonts/metadata.ts";
-import { fontOf } from "../../../src/analysis/typography.ts";
+test("font packaging runs without python on PATH", async () => {
+  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
+  const script = `import { readFile } from "node:fs/promises";
 import { packageFonts } from ${JSON.stringify(resolve(import.meta.dir, "../../../src/fonts/package.ts"))};
-const pkg = await packageFonts([{ family: "Probe", style: "normal", weight: [400, 400], loaded: true,
-  src: [{ url: "data:font/ttf;base64,AAEAAAAA" }] }], new Map());
-console.log(JSON.stringify({ notes: pkg.notes, faces: pkg.faces.length, assets: Object.keys(pkg.assets) }));`;
+const bytes = await readFile(${JSON.stringify(geistPath)});
+const pkg = await packageFonts([{ family: "Geist Variable", style: "normal", weight: [100, 900], loaded: true,
+  src: [{ url: "/font.woff2", file: "_fonts/font.woff2" }] }], new Map([["_fonts/font.woff2", bytes]]));
+console.log(JSON.stringify({ faces: pkg.faces.length, assets: Object.keys(pkg.assets), notes: pkg.notes }));`;
   const child = Bun.spawn([process.execPath, "-e", script], {
     env: { PATH: "/nonexistent" },
     stdout: "pipe",
@@ -99,11 +102,75 @@ console.log(JSON.stringify({ notes: pkg.notes, faces: pkg.faces.length, assets: 
   expect(err).toBe("");
   expect(code).toBe(0);
   const result = JSON.parse(out) as { notes: { message: string }[]; faces: number; assets: string[] };
-  expect(result.faces).toBe(0);
-  expect(result.assets).toEqual([]);
-  expect(
-    result.notes.filter((n) => n.message.includes("not bundled") && n.message.includes("python3 not found")),
-  ).toHaveLength(1);
+  expect(result.faces).toBe(1);
+  expect(result.assets).toEqual(["Fonts/GeistVariable.ttf"]);
+  expect(result.notes).toEqual([]);
+});
+
+test("corrupt font bytes leave the face unbundled with a note", async () => {
+  const pkg = await packageFonts(
+    [
+      {
+        family: "Probe",
+        style: "normal",
+        weight: [400, 400],
+        loaded: true,
+        src: [{ url: "data:font/ttf;base64,AAEAAAAA" }],
+      },
+    ],
+    new Map(),
+  );
+  expect(pkg.faces).toHaveLength(0);
+  expect(pkg.assets).toEqual({});
+  expect(pkg.notes.some((n) => n.message.includes("not bundled"))).toBe(true);
+});
+
+test("woff2 decompression and recompression round trip preserves all tables", async () => {
+  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
+  const origWoff2 = await readFile(geistPath);
+  const ttf1 = await wawoff2.decompress(origWoff2);
+  expect(ttf1.length).toBeGreaterThan(origWoff2.length);
+  const sfnt1 = parseSfnt(ttf1);
+  expect(sfnt1.tables.has("head")).toBe(true);
+  expect(sfnt1.tables.has("name")).toBe(true);
+  expect(sfnt1.tables.has("fvar")).toBe(true);
+
+  const woff2 = await wawoff2.compress(ttf1);
+  const ttf2 = await wawoff2.decompress(woff2);
+  const sfnt2 = parseSfnt(ttf2);
+  expect([...sfnt1.tables.keys()].sort()).toEqual([...sfnt2.tables.keys()].sort());
+});
+
+test("a non-ASCII family keeps Windows name records only (Mac Roman cannot spell it)", async () => {
+  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
+  const sfnt = parseSfnt(await wawoff2.decompress(await readFile(geistPath)));
+  const { records } = readNameTable(sfnt.tables.get("name")!.data);
+  const table = buildRewrittenNameTable(records, "Söhne", "Regular", true);
+  const rewritten = readNameTable(table);
+  expect(rewritten.names.get(1)).toBe("Söhne");
+  expect(rewritten.records.filter((r) => r.platformID === 1 && r.nameID === 1)).toEqual([]);
+});
+
+test("name table parsing and rewriting updates CSS family name correctly", async () => {
+  const geistPath = resolve(import.meta.dir, "../../conformance/fixtures/assets/geist-latin-wght-normal.woff2");
+  const ttf = await wawoff2.decompress(await readFile(geistPath));
+  const sfnt = parseSfnt(ttf);
+  const nameTable = sfnt.tables.get("name")!;
+  const { records, names } = readNameTable(nameTable.data);
+  expect(names.get(1)).toBe("Geist");
+
+  // Rewrite name table to custom family name
+  const rewritten = buildRewrittenNameTable(records, "CustomFamily", "Regular", true);
+  sfnt.tables.set("name", { offset: 0, length: rewritten.length, checksum: 0, data: rewritten });
+  const assembled = assembleSfnt(sfnt.sfntVersion, sfnt.tables);
+
+  const sfnt2 = parseSfnt(assembled);
+  const { names: names2 } = readNameTable(sfnt2.tables.get("name")!.data);
+  expect(names2.get(1)).toBe("CustomFamily");
+  expect(names2.get(2)).toBe("Regular");
+  expect(names2.get(4)).toBe("CustomFamily");
+  expect(names2.get(6)).toBe("CustomFamily");
+  expect(names2.get(16)).toBe("CustomFamily");
 });
 
 test("packaged font file stems never collide", () => {

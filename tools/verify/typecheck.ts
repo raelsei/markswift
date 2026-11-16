@@ -41,6 +41,16 @@ export async function typecheck(
 ): Promise<{ ok: boolean; output: string; ms: number; deprecations: number }> {
   const files = (await readdir(swiftDir)).filter((f) => f.endsWith(".swift")).map((f) => join(swiftDir, f));
   const t0 = performance.now();
+  const soft = await softDeprecations(swiftDir);
+  const hasXcrun = process.platform === "darwin" && (await $`which xcrun`.nothrow().quiet()).exitCode === 0;
+  if (!hasXcrun) {
+    return {
+      ok: soft.length === 0,
+      output: soft.length ? soft.join("\n") : "xcrun not available (skipped swiftc check on Linux)",
+      ms: performance.now() - t0,
+      deprecations: soft.length,
+    };
+  }
   const sdk = (await $`xcrun --sdk iphonesimulator --show-sdk-path`.text()).trim();
   const r =
     await $`xcrun swiftc -typecheck -parse-as-library -sdk ${sdk} -target arm64-apple-ios18.0-simulator -swift-version 6 -strict-concurrency=complete -default-isolation MainActor ${files}`
@@ -50,7 +60,6 @@ export async function typecheck(
   // Deprecation warnings are failures: the emitter must never lean on APIs Apple is retiring.
   // Any warning fails: deprecations, isolation, unused — generated code ships warning-free.
   const deprecations = output.split("\n").filter((l) => /warning:/.test(l));
-  const soft = await softDeprecations(swiftDir);
   const problems = [...deprecations, ...soft];
   return {
     ok: r.exitCode === 0 && problems.length === 0,

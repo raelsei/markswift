@@ -53,8 +53,11 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     if (tracks)
       for (const it of tracks.items)
         if (!it.fixed) allocated.set(n.children[it.child]!, it.justify === "stretch" ? "both" : "height");
-    // App mode: MarkswiftFlexRow proposes each item its allocated width; heights stay as the IR says.
-    if (opts.mode === "app" && n.kind === "stack" && n.flex) for (const c of n.children) allocated.set(c, "width");
+    // App mode: MarkswiftFlexRow proposes each item its allocated width (or height for column).
+    if (opts.mode === "app" && n.kind === "stack" && n.flex) {
+      const alloc = n.flex.axis === "v" ? "height" : "width";
+      for (const c of n.children) allocated.set(c, alloc);
+    }
     // App mode: MarkswiftTable proposes every cell and band its slot; captured heights are the Layout's row floors.
     if (opts.mode === "app" && n.kind === "grid" && n.table) for (const c of n.children) allocated.set(c, "both");
   });
@@ -118,6 +121,7 @@ export function emitSwift(screen: Screen, viewName: string, opts: EmitOptions): 
     control,
     tokens: opts.tokens,
     adaptive: opts.adaptive,
+    nativeSheet: opts.nativeSheet,
     scaledFonts,
     statePaint: control.statePaint,
     renderNode: (node) => extraction?.call(node) ?? refOf(node, ctx),

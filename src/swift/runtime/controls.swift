@@ -428,3 +428,36 @@ nonisolated struct MarkswiftPressStyle: ButtonStyle {
         configuration.label.onChange(of: configuration.isPressed) { _, pressed in isPressed.wrappedValue = pressed }
     }
 }
+
+extension View {
+    @ViewBuilder
+    func markswiftSuggestions(_ suggestions: [String], text: Binding<String>) -> some View {
+        #if os(macOS)
+        self.textInputSuggestions {
+            ForEach(suggestions, id: \.self) { item in
+                Button(item) { text.wrappedValue = item }
+            }
+        }
+        #elseif os(iOS)
+        if !suggestions.isEmpty {
+            self.overlay(alignment: .trailing) {
+                Menu {
+                    ForEach(suggestions, id: \.self) { item in
+                        Button(item) { text.wrappedValue = item }
+                    }
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .contentShape(Rectangle())
+                }
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}

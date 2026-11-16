@@ -7,6 +7,7 @@ import {
   type Motion,
   type MotionChannel,
   type MotionTrack,
+  type ScrollMotion,
   type SemBase,
   type StateField,
   type SemNode,
@@ -137,9 +138,10 @@ export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[])
   const captured = n.motion;
   if (!captured?.animations && !captured?.reduced) return undefined;
   const base = baseOf(style);
-  const animations = mapAnimations(captured.animations ?? [], n, base, diagnostics);
+  const { animations, scroll } = mapAnimations(captured.animations ?? [], n, base, diagnostics);
   let reduced: KeyframeMotion[];
-  if (captured.reduced) reduced = mapAnimations(captured.reduced, n, base, diagnostics);
+  let reducedScroll: ScrollMotion | undefined;
+  if (captured.reduced) ({ animations: reduced, scroll: reducedScroll } = mapAnimations(captured.reduced, n, base, []));
   else if (STATUS_ROLES[n.attrs["role"] ?? ""] || n.attrs["aria-busy"] === "true") reduced = animations;
   else
     reduced = animations
@@ -149,11 +151,29 @@ export function motionOf(n: LayoutNode, style: Style, diagnostics: Diagnostic[])
         tracks: Object.fromEntries(Object.entries(a.tracks).filter(([c]) => !MOVEMENT.includes(c as MotionChannel))),
       }))
       .filter((a) => Object.keys(a.tracks).length);
-  if (!animations.length && !reduced.length) return undefined;
-  const driven = new Set([...animations, ...reduced].flatMap((a) => Object.keys(a.tracks) as MotionChannel[]));
+  if (!animations.length && !reduced.length && !scroll) return undefined;
+  const driven = new Set([
+    ...animations.flatMap((a) => Object.keys(a.tracks) as MotionChannel[]),
+    ...reduced.flatMap((a) => Object.keys(a.tracks) as MotionChannel[]),
+    ...(scroll ? (Object.keys(scroll.tracks) as MotionChannel[]) : []),
+  ]);
   const motion: Motion = {
     ...(animations.length ? { animations } : {}),
     ...(JSON.stringify(reduced) !== JSON.stringify(animations) ? { reduced } : {}),
+    ...(scroll ? { scroll } : {}),
+    // Under Reduce Motion: the author's reduced view-timeline animation, else the same one without movement.
+    ...(scroll
+      ? {
+          reducedScroll: captured.reduced
+            ? (reducedScroll ?? { timeline: "view" as const, tracks: {} })
+            : {
+                timeline: "view" as const,
+                tracks: Object.fromEntries(
+                  Object.entries(scroll.tracks).filter(([c]) => !MOVEMENT.includes(c as MotionChannel)),
+                ),
+              },
+        }
+      : {}),
     base: baseFor(driven, base),
   };
   const anchor = anchorOf(n);
@@ -246,7 +266,13 @@ export function layerMotionOf(n: LayoutNode, sem: SemNode, lists: { enter: Anim[
     : { ...n, styles: { ...n.styles, translate: "none", rotate: "none", scale: "none", transform: "none" } };
   const m: Motion = { ...sem.motion };
   const prior = m.animations ?? [];
-  const enter = mapAnimations(lists.enter, src, base, d, new Set(prior.flatMap((a) => Object.keys(a.tracks))));
+  const { animations: enter } = mapAnimations(
+    lists.enter,
+    src,
+    base,
+    d,
+    new Set(prior.flatMap((a) => Object.keys(a.tracks))),
+  );
   if (enter.length) {
     const reduced = [
       ...(m.reduced ?? prior),
@@ -271,7 +297,7 @@ export function layerMotionOf(n: LayoutNode, sem: SemNode, lists: { enter: Anim[
       "animation-name",
       `several exit animations; ${more.map((a) => a.name).join(", ")} not played`,
     );
-  const [exit] = first ? mapAnimations([first], src, base, d) : [];
+  const [exit] = first ? mapAnimations([first], src, base, d).animations : [];
   if (exit) {
     const exact =
       first!.keyframes.length === 2 &&
@@ -293,16 +319,69 @@ function mapAnimations(
   diagnostics: Diagnostic[],
   /** Channels already driven (a layer root's own animations, when its enter joins them). */
   driven = new Set<string>(),
-): KeyframeMotion[] {
+): { animations: KeyframeMotion[]; scroll?: ScrollMotion } {
   const out: KeyframeMotion[] = [];
+  let scroll: ScrollMotion | undefined;
   for (const a of list) {
     if (a.timeline) {
-      addDiagnostic(
-        diagnostics,
-        "unmapped",
-        "animation-timeline",
-        `scroll-driven animation ${a.name} is not translated (rendered settled)`,
-      );
+      // A view timeline maps to SwiftUI's scroll transition phase; a scroll() timeline (container scroll progress)
+      // has no per-view counterpart and stays reported below.
+      if (a.timeline === "ViewTimeline") {
+        if (a.iterations === "infinite") {
+          addDiagnostic(
+            diagnostics,
+            "unmapped",
+            "animation-timeline",
+            `scroll-driven animation ${a.name} is not translated (rendered settled)`,
+          );
+          continue;
+        }
+        if (a.composite) {
+          addDiagnostic(
+            diagnostics,
+            "unmapped",
+            "animation-composition",
+            `animation ${a.name} composites with ${a.composite}; not translated (rendered settled)`,
+          );
+          continue;
+        }
+        const tracks = tracksOf(a, n, base, diagnostics);
+        if (!tracks) {
+          addDiagnostic(
+            diagnostics,
+            "unmapped",
+            "animation-timeline",
+            `scroll-driven animation ${a.name} is not translated (rendered settled)`,
+          );
+          continue;
+        }
+        const clash = Object.keys(tracks).find((c) => driven.has(c));
+        if (clash) {
+          addDiagnostic(
+            diagnostics,
+            "unmapped",
+            "animation-name",
+            `two animations drive ${clash}; ${a.name} is not animated`,
+          );
+          continue;
+        }
+        for (const c of Object.keys(tracks)) driven.add(c);
+        // Several view-timeline animations on disjoint channels share one transition.
+        scroll = { timeline: "view", tracks: { ...scroll?.tracks, ...tracks } };
+        addDiagnostic(
+          diagnostics,
+          "approximated",
+          "animation-timeline",
+          `view() animation ${a.name} follows the scroll transition phase: it completes as the view enters the scroll view (CSS: the cover range)`,
+        );
+      } else {
+        addDiagnostic(
+          diagnostics,
+          "unmapped",
+          "animation-timeline",
+          `scroll-driven animation ${a.name} is not translated (rendered settled)`,
+        );
+      }
       continue;
     }
     // CSS shows the end state of a zero-length animation: the settled look already.
@@ -346,7 +425,7 @@ function mapAnimations(
       tracks,
     });
   }
-  return out;
+  return { animations: out, ...(scroll ? { scroll } : {}) };
 }
 
 /** Keyframes of one animation → channel tracks; undefined (reported) when no channel can be mapped. */

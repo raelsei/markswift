@@ -18,7 +18,7 @@ import { bundledFamilies, metricsForFonts } from "../../src/fonts/metadata.ts";
 import { typecheck } from "../../tools/verify/typecheck.ts";
 import { ensureSimulator, renderIos, renderMacBatch } from "../../tools/verify/native.ts";
 import { command } from "../../tools/verify/process.ts";
-import type { RenderResult } from "../../tools/verify/native-template.ts";
+import type { ForcedState, RenderResult } from "../../tools/verify/native-template.ts";
 import { compare, regionMismatch } from "../../tools/verify/compare.ts";
 import type { ConversionResult } from "../../src/index.ts";
 import type { LayoutDoc, LayoutNode } from "../../src/model/layout.ts";
@@ -34,10 +34,11 @@ import {
 } from "./pilot.ts";
 import { browserTextMetrics, imageInkMetrics } from "./text-metrics.ts";
 
-const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text|breakpoints|components] [--renderer none|mac|ios] [--reflow] [--out <dir>]
+const USAGE = `usage: bun tests/conformance/pilot-run.ts [--all] [--only <id>] [--group text|breakpoints|components] [--renderer none|mac|ios] [--reflow] [--shard i/n] [--out <dir>]
   --all       every fixture under tests/conformance/fixtures/<domain>/ (pilot.json cases keep their expectations)
   --only      one case id
   --group     text: only cases with expected text; breakpoints: only markswift-breakpoints fixtures; components: component fixtures
+  --shard     i/n: 1-based shard index and count (e.g. 1/3); deterministic subset of cases
   --renderer  mac (default): macOS ImageRenderer, the per-PR gate;
               ios: iOS Simulator (UIHostingController + drawHierarchy, batched builds), the release gate; \`@bp\`
               captures render on MARKSWIFT_SIMULATOR_IPAD (default "iPad Pro 13-inch (M5)") after the iPhone batches;
@@ -84,6 +85,20 @@ interface RunEnvironment {
   dpr: number;
   viewportHeight: number;
   rootWidthOverride: string;
+}
+/** Parse `i/n` into 1-based index and total shard count. */
+export function parseShard(shard: string): { index: number; total: number } {
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(shard.trim());
+  if (!match) throw new Error(`invalid shard "${shard}": expected format i/n (e.g. 1/3)`);
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  if (index > total) throw new Error(`invalid shard "${shard}": shard index ${index} exceeds total ${total}`);
+  return { index, total };
+}
+
+/** Deterministic round-robin partition of cases across shards. */
+export function shardCases<T>(cases: T[], index: number, total: number): T[] {
+  return cases.filter((_, idx) => idx % total === index - 1);
 }
 interface RunReport {
   expected: number;
@@ -159,7 +174,7 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
   const [sourceRevision, sourceStatus, xcode] = await Promise.all([
     outputOf(["git", "rev-parse", "HEAD"]),
     outputOf(["git", "status", "--porcelain", "--", "src"]),
-    outputOf(["xcodebuild", "-version"]),
+    outputOf(["xcodebuild", "-version"]).catch(() => "none"),
   ]);
   assertCleanSource(sourceStatus);
   const selected = renderer === "ios" ? await ensureSimulator() : null;
@@ -180,7 +195,7 @@ async function environment(cases: RunCase[], renderer: Renderer, chrome: string)
   const rendererName = selected
     ? `${selected.name} ${selected.runtime}`
     : renderer === "mac"
-      ? `macOS ${await outputOf(["sw_vers", "-productVersion"])} ImageRenderer`
+      ? `macOS ${await outputOf(["sw_vers", "-productVersion"]).catch(() => "unknown")} ImageRenderer`
       : "none";
   return {
     sourceRevision,
@@ -229,6 +244,7 @@ async function run() {
       group: { type: "string" },
       renderer: { type: "string" },
       reflow: { type: "boolean" },
+      shard: { type: "string" },
       out: { type: "string" },
     },
   }).values;
@@ -243,7 +259,8 @@ async function run() {
   if (only && !cases.some((item) => item.id === only)) throw new Error(`unknown pilot case: ${only}`);
   if (group && group !== "text" && group !== "breakpoints" && group !== "components")
     throw new Error(`unknown pilot group: ${group}`);
-  const selected = only
+  const shard = flags.shard ? parseShard(flags.shard) : undefined;
+  const filtered = only
     ? cases.filter((item) => item.id === only)
     : group === "text"
       ? cases.filter((item) => item.expectedText !== undefined)
@@ -252,6 +269,7 @@ async function run() {
         : group === "components"
           ? cases.filter((item) => item.fixture.startsWith("components/"))
           : cases;
+  const selected = shard ? shardCases(filtered, shard.index, shard.total) : filtered;
   await mkdir(dirname(out), { recursive: true });
   try {
     await mkdir(out);
@@ -314,11 +332,13 @@ async function run() {
       }
     }
     const matrix = buildMatrix(selected, reflow, references);
-    const env = await environment(cases, renderer, `Chromium ${browsers.values().next().value!.version}`);
+    const chromeVersion = browsers.values().next().value?.version ?? "Chromium";
+    const env = await environment(cases, renderer, `Chromium ${chromeVersion}`);
     report = { expected: matrix.length, completed: 0, errors: [...bpErrors], environment: env, entries: [] };
     for (const error of bpErrors) console.error(error);
+    const shardNote = shard ? ` (shard ${shard.index}/${shard.total}, ${selected.length} cases)` : "";
     console.log(
-      `expected ${matrix.length} ${renderer === "none" ? "capture/typecheck" : `${env.renderer} comparison`} outputs`,
+      `expected ${matrix.length} ${renderer === "none" ? "capture/typecheck" : `${env.renderer} comparison`} outputs${shardNote}`,
     );
     /** 390 conversions of reflow-tagged cases by `<id>/<theme>/<mode>`; their 320/768 captures re-render them. */
     const reflowSources = new Map<string, ConversionResult>();
@@ -471,7 +491,7 @@ async function run() {
         console.error(`${entry.key}: ${String(error)}`);
       }
     };
-    const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: "reduceMotion" }> = [];
+    const pending: Array<Job & { conversion: RenderResult; time?: number; forced?: ForcedState }> = [];
     /** iOS `@bp` captures: rendered on the iPad after every iPhone batch (one simulator at a time). */
     const ipadPending: typeof pending = [];
     /** Render queued captures (with their reflow views) in native builds of BATCH, then score each. */
@@ -577,7 +597,11 @@ async function run() {
                 for (const file of ["layout.json", "diagnostics.json", "warnings.json", "typecheck.json"])
                   await copyFile(join(sourceDir, file), join(dir, file));
                 const job: Job = { entry, item, dir, layout, textMetrics: undefined, result };
-                const forced = frame.reduced ? ("reduceMotion" as const) : undefined;
+                const forced = frame.reduced
+                  ? ("reduceMotion" as const)
+                  : frame.pressed
+                    ? ("pressed" as const)
+                    : undefined;
                 const source = conversion && open ? { ...conversion, layout, openArg: open.openArg } : conversion;
                 if (!source) {
                   report!.completed++;

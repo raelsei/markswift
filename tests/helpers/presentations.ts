@@ -160,6 +160,27 @@ export const SHEET = () =>
     ],
   });
 
+/** A bottom drawer: inset-x-0 bottom-0, top auto. */
+export const DRAWER = (h = 320) =>
+  presentationDoc({
+    id: "open-drawer",
+    modal: true,
+    nodes: [
+      SCRIM(),
+      fixed(
+        "div",
+        "drawer",
+        [0, 844 - h, 390, h],
+        [text("Drawer Content", [16, 844 - h + 16, 120, 20])],
+        ["auto", "0px", "0px", "0px"],
+        {
+          role: "dialog",
+        },
+        { "background-color": "white" },
+      ),
+    ],
+  });
+
 /** A popper: a fixed 0,0 wrapper translated 4 px under the trigger. */
 export const POPOVER = (activation: Layer["activation"] = "click", side?: string) =>
   presentationDoc(
@@ -296,12 +317,20 @@ export const DROPDOWN = () =>
               "dd-group",
               [20, 80, 216, 84],
               [
-                row("profile", "menuitem", "Profile", 1, {}, [
-                  el("svg", "profile-icon", [28, 60, 16, 16]),
-                  el("span", "profile-shortcut", [200, 60, 30, 16], [text("⇧⌘P", [200, 60, 30, 16])], {
-                    "data-slot": "dropdown-menu-shortcut",
-                  }),
-                ]),
+                // A leading icon: the label starts after it, as in shadcn's `gap-2` item.
+                el(
+                  "div",
+                  "profile",
+                  [20, 80, 216, 28],
+                  [
+                    el("svg", "profile-icon", [28, 86, 16, 16]),
+                    text("Profile", [52, 84, 80, 20]),
+                    el("span", "profile-shortcut", [200, 86, 30, 16], [text("⇧⌘P", [200, 86, 30, 16])], {
+                      "data-slot": "dropdown-menu-shortcut",
+                    }),
+                  ],
+                  { role: "menuitem" },
+                ),
                 row("billing", "menuitem", "Billing", 2),
                 row("settings", "menuitem", "Settings", 3),
               ],
